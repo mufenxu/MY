@@ -1,5 +1,10 @@
 package cn.pxyb.mycontrol.ui.feature.workspace
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.material.icons.outlined.Refresh
+import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -136,6 +141,34 @@ fun TodayScreen(
         }.sortedBy { it.second }
     }
     val isTablet = useTwoPaneLayout()
+    val timetableState = rememberSaveableStateHolder()
+    val workspaceTabs: @Composable () -> Unit = {
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            listOf(
+                CampusWorkspaceSection.Today to "今日安排",
+                CampusWorkspaceSection.Todos to "个人待办",
+                CampusWorkspaceSection.Timetable to "本学期课表",
+                CampusWorkspaceSection.Campus to "校园服务",
+            ).forEach { (section, label) ->
+                AppFilterChip(label = label, selected = campusSection == section, onClick = { campusSection = section })
+            }
+        }
+    }
+    val timetableContent: @Composable (Modifier, Boolean) -> Unit = { modifier, bounded ->
+        timetableState.SaveableStateProvider("timetable") {
+            TermTimetable(
+                courses = state.timetable?.courses.orEmpty(),
+                currentCalendarText = state.timetable?.currentCalendarText,
+                schoolCalendar = state.timetable?.schoolCalendar,
+                modifier = modifier,
+                bounded = bounded,
+            )
+        }
+    }
+    val wideTimetable = campusSection == CampusWorkspaceSection.Timetable && isTablet
 
     val todoItems: androidx.compose.foundation.lazy.LazyListScope.() -> Unit = {
         item(key = "todos-title", contentType = "section") {
@@ -187,8 +220,16 @@ fun TodayScreen(
         contentPadding = contentPadding,
         onBack = onBack,
         refreshing = state.refreshing,
-        onRefresh = onRefresh,
+        onRefresh = if (wideTimetable) null else onRefresh,
         actions = {
+            if (wideTimetable) {
+                AppHeaderIconButton(
+                    icon = Icons.Outlined.Refresh,
+                    contentDescription = "刷新课表",
+                    onClick = onRefresh,
+                    loading = state.refreshing,
+                )
+            }
             AppHeaderIconButton(
                 icon = Icons.Outlined.CalendarMonth,
                 contentDescription = "同步到 Android 日历",
@@ -197,6 +238,23 @@ fun TodayScreen(
                 loading = state.calendarSyncing,
             )
         },
+        body = if (wideTimetable) {
+            {
+                Column(
+                    Modifier.fillMaxSize().padding(horizontal = AppPageHorizontalPadding),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    workspaceTabs()
+                    state.sectionError?.let { message ->
+                        AppFeedbackBanner(message, error = true, onRetry = onRefresh)
+                    }
+                    if (state.offlineMode) {
+                        AppFeedbackBanner("当前展示离线课表，联网后可刷新。", error = false)
+                    }
+                    timetableContent(Modifier.weight(1f), true)
+                }
+            }
+        } else null,
     ) {
         if (state.offlineMode || state.pendingTodoMutations > 0) {
             item(key = "today-offline", contentType = "banner") {
@@ -217,19 +275,7 @@ fun TodayScreen(
         }
 
         item(key = "workspace-sections", contentType = "filter") {
-            Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                listOf(
-                    CampusWorkspaceSection.Today to "今日安排",
-                    CampusWorkspaceSection.Todos to "个人待办",
-                    CampusWorkspaceSection.Timetable to "本学期课表",
-                    CampusWorkspaceSection.Campus to "校园服务",
-                ).forEach { (section, label) ->
-                    AppFilterChip(label = label, selected = campusSection == section, onClick = { campusSection = section })
-                }
-            }
+            workspaceTabs()
         }
 
         when (campusSection) {
@@ -469,11 +515,7 @@ fun TodayScreen(
             }
             CampusWorkspaceSection.Todos -> todoItems()
             CampusWorkspaceSection.Timetable -> item(key = "timetable", contentType = "workspace") {
-                TermTimetable(
-                    courses = state.timetable?.courses.orEmpty(),
-                    currentCalendarText = state.timetable?.currentCalendarText,
-                    schoolCalendar = state.timetable?.schoolCalendar,
-                )
+                timetableContent(Modifier, false)
             }
             CampusWorkspaceSection.Campus -> item(key = "campus-overview", contentType = "workspace") {
                 CampusOverviewSection(

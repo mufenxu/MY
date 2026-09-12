@@ -67,10 +67,7 @@ internal fun GoogleAccountFormDialog(
         errorMessage = localError,
         content = {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 500.dp)
-                    .verticalScroll(rememberScrollState()),
+                modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 AppTextField(value = email, onValueChange = { email = it; localError = null }, label = "主邮箱", keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), enabled = !busy)

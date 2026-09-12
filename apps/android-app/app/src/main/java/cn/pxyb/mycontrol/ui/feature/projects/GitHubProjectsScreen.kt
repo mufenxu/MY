@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -36,6 +37,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +46,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -63,8 +68,11 @@ import cn.pxyb.mycontrol.ui.components.feedback.GlassShimmerList
 import cn.pxyb.mycontrol.ui.components.input.AppSwitch
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
+import cn.pxyb.mycontrol.ui.components.layout.AppAdaptivePanes
+import cn.pxyb.mycontrol.ui.components.layout.AppListDetailMinWidth
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
+import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import coil.compose.AsyncImagePainter
@@ -89,117 +97,154 @@ fun GitHubProjectsScreen(
     onCreateRelease: (owner: String, repo: String, tag: String, name: String, body: String, draft: Boolean, prerelease: Boolean) -> Unit,
     onUpdateVisibility: (owner: String, repo: String, visibility: String) -> Unit,
 ) {
-    var selectedRepo by remember { mutableStateOf<GitHubRepositoryRecord?>(null) }
+    var selectedRepoFullName by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingToggle by remember { mutableStateOf<GitHubRepositoryRecord?>(null) }
-    var createOpen by remember { mutableStateOf(false) }
+    var createOpen by rememberSaveable { mutableStateOf(false) }
 
-    val activeRepo = selectedRepo
-    val dark = isAppInDarkTheme()
-    BackHandler(enabled = activeRepo != null) { selectedRepo = null }
+    val activeRepo = repositories.firstOrNull { it.fullName == selectedRepoFullName }
+    val twoPane = useTwoPaneLayout(AppListDetailMinWidth)
+    BackHandler(enabled = activeRepo != null && !twoPane) { selectedRepoFullName = null }
 
-    if (activeRepo != null) {
-        LaunchedEffect(activeRepo.fullName) {
+    LaunchedEffect(activeRepo?.fullName) {
+        if (activeRepo != null) {
             onLoadReleases(activeRepo.ownerName(), activeRepo.name)
         }
-        GitHubReleasesPane(
-            repo = activeRepo,
-            releases = releases,
-            loaded = releasesLoaded && releasesRepoFullName == activeRepo.fullName,
-            busy = releasesBusy,
-            contentPadding = contentPadding,
-            onBack = { selectedRepo = null },
-            onRefresh = { onLoadReleases(activeRepo.ownerName(), activeRepo.name) },
-            onCreateRelease = { createOpen = true },
-        )
-    } else {
-        AppSubPage(
-            title = "GitHub 项目",
-            subtitle = "账号与仓库管理",
-            onBack = onBack,
-            contentPadding = contentPadding,
-            refreshing = busy,
-            onRefresh = onRefresh,
-            actions = {
-                AppHeaderIconButton(
-                    icon = Icons.Outlined.Refresh,
-                    contentDescription = "刷新",
-                    onClick = onRefresh,
-                    enabled = !busy,
-                    loading = busy,
-                )
-            },
-        ) {
-            when {
-                !profileLoaded && profile == null -> item(key = "github-account-loading") {
-                    AppSkeletonList(
-                        rowCount = 1,
-                        leadingSize = 48.dp,
-                        lineWidths = listOf(0.38f, 0.62f),
-                    )
-                }
-                profile != null -> item(key = "github-account-profile") {
-                    GitHubAccountCard(profile = profile)
-                }
-                repositories.isNotEmpty() -> item(key = "github-account-summary") {
-                    GitHubRepositoriesSummaryCard(repositories = repositories)
-                }
-            }
-            when {
-                !loaded -> item(key = "github-projects-shimmer") {
-                    GlassShimmerList(itemCount = 3, itemHeight = 104.dp)
-                }
-                repositories.isEmpty() -> item(key = "github-projects-empty") {
-                    GitHubEmptyState(onRefresh = onRefresh)
-                }
-                else -> {
-                    items(repositories, key = { it.fullName }) { repository ->
-                        GitHubRepositoryCard(
-                            repository = repository,
-                            enabled = !busy,
-                            onToggleVisibility = { target -> pendingToggle = repository.copy(visibility = target) },
-                            onOpenReleases = { selectedRepo = repository },
-                        )
-                    }
-                }
-            }
-        }
-
-        val toggle = pendingToggle
-        if (toggle != null) {
-            val makingPublic = toggle.visibility == "public"
-            AppDialog(
-                onDismissRequest = { pendingToggle = null },
-                icon = if (makingPublic) Icons.Outlined.Public else Icons.Outlined.Lock,
-                title = if (makingPublic) "设为公开？" else "设为私有？",
-                subtitle = if (makingPublic) {
-                    "「${toggle.fullName}」将变为公开，任何人在 GitHub 上都能访问。"
-                } else {
-                    "「${toggle.fullName}」将变为私有，仅你和有权限的协作者可访问；已有 fork 会与上游脱离。"
-                },
-                footer = {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        AppDialogSecondaryButton(
-                            text = "取消",
-                            onClick = { pendingToggle = null },
-                            modifier = Modifier.weight(1f),
-                        )
-                        AppDialogPrimaryButton(
-                            text = if (makingPublic) "设为公开" else "设为私有",
-                            onClick = {
-                                pendingToggle = null
-                                onUpdateVisibility(toggle.ownerName(), toggle.name, toggle.visibility)
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                },
-            ) { }
+    }
+    LaunchedEffect(loaded, busy, repositories) {
+        if (loaded && !busy && activeRepo == null) {
+            selectedRepoFullName = null
+            createOpen = false
         }
     }
 
+    AppAdaptivePanes(
+        showDetail = activeRepo != null,
+        twoPane = twoPane,
+        listPane = {
+            AppSubPage(
+                title = "GitHub 项目",
+                subtitle = "账号与仓库管理",
+                onBack = onBack,
+                contentPadding = contentPadding,
+                pinHeader = true,
+                refreshing = busy,
+                onRefresh = onRefresh,
+                actions = {
+                    AppHeaderIconButton(
+                        icon = Icons.Outlined.Refresh,
+                        contentDescription = "刷新",
+                        onClick = onRefresh,
+                        enabled = !busy,
+                        loading = busy,
+                    )
+                },
+            ) {
+                when {
+                    !profileLoaded && profile == null -> item(key = "github-account-loading") {
+                        AppSkeletonList(
+                            rowCount = 1,
+                            leadingSize = 48.dp,
+                            lineWidths = listOf(0.38f, 0.62f),
+                        )
+                    }
+                    profile != null -> item(key = "github-account-profile") {
+                        GitHubAccountCard(profile = profile)
+                    }
+                    repositories.isNotEmpty() -> item(key = "github-account-summary") {
+                        GitHubRepositoriesSummaryCard(repositories = repositories)
+                    }
+                }
+                when {
+                    !loaded -> item(key = "github-projects-shimmer") {
+                        GlassShimmerList(itemCount = 3, itemHeight = 104.dp)
+                    }
+                    repositories.isEmpty() -> item(key = "github-projects-empty") {
+                        GitHubEmptyState(onRefresh = onRefresh)
+                    }
+                    else -> {
+                        items(repositories, key = { it.fullName }) { repository ->
+                            GitHubRepositoryCard(
+                                repository = repository,
+                                enabled = !busy,
+                                selected = repository.fullName == selectedRepoFullName,
+                                onToggleVisibility = { target -> pendingToggle = repository.copy(visibility = target) },
+                                onOpenReleases = { selectedRepoFullName = repository.fullName },
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        detailPane = {
+            if (activeRepo != null) {
+                key(activeRepo.fullName) {
+                    GitHubReleasesPane(
+                        repo = activeRepo,
+                        releases = releases,
+                        loaded = releasesLoaded && releasesRepoFullName == activeRepo.fullName,
+                        busy = releasesBusy,
+                        contentPadding = contentPadding,
+                        onBack = { selectedRepoFullName = null },
+                        showBack = !twoPane,
+                        onRefresh = { onLoadReleases(activeRepo.ownerName(), activeRepo.name) },
+                        onCreateRelease = { createOpen = true },
+                    )
+                }
+            } else {
+                AppSubPage(
+                    title = "仓库发布",
+                    subtitle = "选择仓库后查看版本与发布信息",
+                    onBack = onBack,
+                    showBack = false,
+                    pinHeader = true,
+                    contentPadding = contentPadding,
+                ) {
+                    item {
+                        AppEmptyState(
+                            title = "选择一个仓库",
+                            detail = "仓库列表会保留在左侧，方便连续查看不同项目。",
+                            icon = Icons.Outlined.RocketLaunch,
+                        )
+                    }
+                }
+            }
+        },
+    )
+
+    val toggle = pendingToggle
+    if (toggle != null) {
+        val makingPublic = toggle.visibility == "public"
+        AppDialog(
+            onDismissRequest = { pendingToggle = null },
+            icon = if (makingPublic) Icons.Outlined.Public else Icons.Outlined.Lock,
+            title = if (makingPublic) "设为公开？" else "设为私有？",
+            subtitle = if (makingPublic) {
+                "「${toggle.fullName}」将变为公开，任何人在 GitHub 上都能访问。"
+            } else {
+                "「${toggle.fullName}」将变为私有，仅你和有权限的协作者可访问；已有 fork 会与上游脱离。"
+            },
+            footer = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    AppDialogSecondaryButton(
+                        text = "取消",
+                        onClick = { pendingToggle = null },
+                        modifier = Modifier.weight(1f),
+                    )
+                    AppDialogPrimaryButton(
+                        text = if (makingPublic) "设为公开" else "设为私有",
+                        onClick = {
+                            pendingToggle = null
+                            onUpdateVisibility(toggle.ownerName(), toggle.name, toggle.visibility)
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            },
+        ) { }
+    }
     if (createOpen && activeRepo != null) {
         CreateReleaseDialog(
             repo = activeRepo,
@@ -221,6 +266,7 @@ private fun GitHubReleasesPane(
     busy: Boolean,
     contentPadding: PaddingValues,
     onBack: () -> Unit,
+    showBack: Boolean,
     onRefresh: () -> Unit,
     onCreateRelease: () -> Unit,
 ) {
@@ -229,6 +275,8 @@ private fun GitHubReleasesPane(
         subtitle = "Releases 管理",
         onBack = onBack,
         contentPadding = contentPadding,
+        showBack = showBack,
+        pinHeader = true,
         refreshing = busy,
         onRefresh = onRefresh,
         actions = {
@@ -336,15 +384,18 @@ private fun GitHubReleaseCard(release: GitHubReleaseRecord) {
 private fun GitHubRepositoryCard(
     repository: GitHubRepositoryRecord,
     enabled: Boolean,
+    selected: Boolean,
     onToggleVisibility: (String) -> Unit,
     onOpenReleases: () -> Unit,
 ) {
     val isPrivate = repository.visibility == "private"
     val isInternal = repository.visibility == "internal"
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        onClick = onOpenReleases,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth().semantics { this.selected = selected },
         shape = RoundedCornerShape(20.dp),
-        color = glassCardColor(),
+        color = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else glassCardColor(),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
         shadowElevation = 0.dp,
     ) {
@@ -438,6 +489,7 @@ private fun GitHubRepositoryCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 48.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .clickable(onClick = onOpenReleases)
                     .padding(horizontal = 4.dp, vertical = 8.dp),
@@ -687,11 +739,11 @@ private fun CreateReleaseDialog(
     onDismiss: () -> Unit,
     onCreate: (tag: String, name: String, body: String, draft: Boolean, prerelease: Boolean) -> Unit,
 ) {
-    var tag by remember { mutableStateOf("") }
-    var name by remember { mutableStateOf("") }
-    var body by remember { mutableStateOf("") }
-    var draft by remember { mutableStateOf(false) }
-    var prerelease by remember { mutableStateOf(false) }
+    var tag by rememberSaveable { mutableStateOf("") }
+    var name by rememberSaveable { mutableStateOf("") }
+    var body by rememberSaveable { mutableStateOf("") }
+    var draft by rememberSaveable { mutableStateOf(false) }
+    var prerelease by rememberSaveable { mutableStateOf(false) }
     var localError by remember { mutableStateOf<String?>(null) }
 
     AppDialogForm(

@@ -179,7 +179,7 @@ internal fun AutomationRuleEditorDialog(
         loading = busy,
         errorMessage = error,
     ) {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             AppTextField(value = name, onValueChange = { name = it }, label = "规则名称", enabled = !busy)
             Text("监控设备", style = MaterialTheme.typography.labelLarge)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

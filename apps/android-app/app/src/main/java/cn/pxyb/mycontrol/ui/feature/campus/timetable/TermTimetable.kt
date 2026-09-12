@@ -1,5 +1,17 @@
 package cn.pxyb.mycontrol.ui.feature.campus.timetable
 
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalDensity
+import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
+import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
+import cn.pxyb.mycontrol.ui.components.layout.ProvideAppContentLayout
+import cn.pxyb.mycontrol.ui.components.layout.appContentWidth
+import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
+
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -65,141 +77,81 @@ internal fun TermTimetable(
     courses: List<CampusCourse>,
     currentCalendarText: String? = null,
     schoolCalendar: CampusAcademicCalendar? = null,
+    modifier: Modifier = Modifier,
+    bounded: Boolean = false,
 ) {
     val orderedCourses = remember(courses) {
         courses.sortedWith(compareBy(CampusCourse::day).thenBy(CampusCourse::startSection).thenBy(CampusCourse::courseName))
     }
-
-    if (orderedCourses.isEmpty()) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            schoolCalendar?.let { AcademicCalendarSummary(it) }
-            AppEmptyState("课表暂未同步", detail = "连接学校账号后，下拉刷新即可查看本学期全部课程。")
-        }
-        return
-    }
-
     val currentWeekNum = remember(currentCalendarText, schoolCalendar) {
         schoolCalendar?.currentWeek
             ?: Regex("第(\\d+)周").find(currentCalendarText.orEmpty())?.groupValues?.getOrNull(1)?.toIntOrNull()
             ?: 1
     }
-    val officialCurrentWeek = schoolCalendar?.currentWeek
-    var selectedWeek by remember(currentWeekNum) { mutableStateOf(currentWeekNum) }
-    var displayMode by remember { mutableStateOf(TimetableDisplayMode.Grid) }
-    var selectedCourseDetail by remember { mutableStateOf<CampusCourse?>(null) }
-
-    val totalCourseCount = orderedCourses.map(CampusCourse::courseName).distinct().size
-    val currentWeekCourses = remember(orderedCourses, selectedWeek) {
-        orderedCourses.filter { course ->
-            course.weeks.isEmpty() || selectedWeek in course.weeks
+    var selectedWeek by rememberSaveable(currentWeekNum) { mutableStateOf(currentWeekNum) }
+    var displayMode by rememberSaveable { mutableStateOf(TimetableDisplayMode.Grid) }
+    var selectedCourseId by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedCourse = orderedCourses.firstOrNull { it.id == selectedCourseId }
+    val showDetails = bounded && useTwoPaneLayout(1100.dp)
+    val timetableScroll = rememberScrollState()
+    val detailScroll = rememberScrollState()
+    var previousCourseId by rememberSaveable { mutableStateOf(selectedCourseId) }
+    LaunchedEffect(selectedCourseId) {
+        if (previousCourseId != selectedCourseId) {
+            detailScroll.scrollTo(0)
+            previousCourseId = selectedCourseId
         }
     }
 
+    val currentWeekCourses = remember(orderedCourses, selectedWeek) {
+        orderedCourses.filter { it.weeks.isEmpty() || selectedWeek in it.weeks }
+    }
+    val totalCourseCount = orderedCourses.map(CampusCourse::courseName).distinct().size
+    val compactHeader = appContentWidth() < 520.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val displayModes: @Composable (Modifier) -> Unit = { modeModifier ->
+        AppSegmentedControl(
+            options = TimetableDisplayMode.entries,
+            selected = displayMode,
+            onSelect = { displayMode = it },
+            label = { if (it == TimetableDisplayMode.Grid) "周视图" else "列表" },
+            modifier = modeModifier,
+        )
+    }
+
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        // 1. 学校校历卡片
-        schoolCalendar?.let { AcademicCalendarSummary(it) }
-
-        // 2. 周次选择器与模式切换卡片
         AppPanel {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(
-                                "第 $selectedWeek 周课表",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            if (officialCurrentWeek != null && selectedWeek == officialCurrentWeek) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.primary,
-                                    shape = RoundedCornerShape(8.dp),
-                                ) {
-                                    Text(
-                                        "本周",
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                }
-                            }
-                        }
+                    Column(Modifier.weight(1f)) {
                         Text(
-                            "全学期 $totalCourseCount 门课程 · ${if (schoolCalendar?.isHoliday == true) "假期" else "本周 ${currentWeekCourses.size} 节安排"}",
+                            "第 $selectedWeek 周课表" + if (schoolCalendar?.currentWeek == selectedWeek) " · 本周" else "",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            "全学期 $totalCourseCount 门课程 · 本周 ${currentWeekCourses.size} 节安排",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                        shape = RoundedCornerShape(14.dp),
-                    ) {
-                        Row(modifier = Modifier.padding(3.dp)) {
-                            val gridShape = RoundedCornerShape(11.dp)
-                            Surface(
-                                modifier = Modifier
-                                    .clip(gridShape)
-                                    .clickable { displayMode = TimetableDisplayMode.Grid },
-                                color = if (displayMode == TimetableDisplayMode.Grid) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                contentColor = if (displayMode == TimetableDisplayMode.Grid) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                shape = gridShape,
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    Icon(Icons.Outlined.GridView, contentDescription = null, modifier = Modifier.size(15.dp))
-                                    Text("矩阵", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
-                                }
-                            }
-                            val listShape = RoundedCornerShape(11.dp)
-                            Surface(
-                                modifier = Modifier
-                                    .clip(listShape)
-                                    .clickable { displayMode = TimetableDisplayMode.List },
-                                color = if (displayMode == TimetableDisplayMode.List) MaterialTheme.colorScheme.primary else Color.Transparent,
-                                contentColor = if (displayMode == TimetableDisplayMode.List) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                shape = listShape,
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    Icon(Icons.AutoMirrored.Outlined.ViewList, contentDescription = null, modifier = Modifier.size(15.dp))
-                                    Text("列表", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
-                                }
-                            }
-                        }
-                    }
+                    if (!compactHeader) displayModes(Modifier.width(184.dp))
                 }
-
+                if (compactHeader) displayModes(Modifier.fillMaxWidth())
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    val maxTeachingWeeks = schoolCalendar?.teachingWeeks ?: 20
-                    (1..maxTeachingWeeks).forEach { week ->
-                        val isCurrent = officialCurrentWeek == week
-                        val isSelected = week == selectedWeek
+                    (1..(schoolCalendar?.teachingWeeks ?: 20)).forEach { week ->
                         AppFilterChip(
-                            label = if (isCurrent) "第 $week 周 (本周)" else "第 $week 周",
-                            selected = isSelected,
+                            label = "第 $week 周" + if (schoolCalendar?.currentWeek == week) "（本周）" else "",
+                            selected = selectedWeek == week,
                             onClick = { selectedWeek = week },
                         )
                     }
@@ -207,40 +159,76 @@ internal fun TermTimetable(
             }
         }
 
-        // 3. 课表主网格 / 列表卡片
-        if (displayMode == TimetableDisplayMode.Grid) {
-            CourseGridMatrix(
-                courses = orderedCourses,
-                selectedWeek = selectedWeek,
-                currentWeek = currentWeekNum,
-                termStartDate = schoolCalendar?.termStartDate,
-                onCourseClick = { selectedCourseDetail = it },
-            )
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                orderedCourses.groupBy(CampusCourse::day).forEach { (day, sessions) ->
-                    AppSectionHeader(
-                        title = sessions.firstOrNull()?.dayName?.takeIf(String::isNotBlank) ?: weekdayLabel(day),
-                        subtitle = "${sessions.size} 节安排",
-                    )
-                    sessions.forEach { course ->
-                        CourseCard(
-                            course = course,
-                            showWeek = true,
+        Row(
+            modifier = if (bounded) Modifier.weight(1f).fillMaxWidth() else Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ProvideAppContentLayout(
+                modifier = Modifier.weight(1f).then(if (bounded) Modifier.fillMaxHeight() else Modifier),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                        .then(if (bounded) Modifier.verticalScroll(timetableScroll) else Modifier),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    schoolCalendar?.let { AcademicCalendarSummary(it) }
+                    if (orderedCourses.isEmpty()) {
+                        AppEmptyState("课表暂未同步", detail = "连接学校账号并刷新后，可以查看本学期课程。")
+                    } else if (displayMode == TimetableDisplayMode.Grid) {
+                        CourseGridMatrix(
+                            courses = orderedCourses,
                             selectedWeek = selectedWeek,
-                            onClick = { selectedCourseDetail = course },
+                            currentWeek = currentWeekNum,
+                            termStartDate = schoolCalendar?.termStartDate,
+                            onCourseClick = { selectedCourseId = it.id },
+                            selectedCourseId = selectedCourseId,
                         )
+                    } else {
+                        orderedCourses.groupBy(CampusCourse::day).forEach { (day, sessions) ->
+                            AppSectionHeader(
+                                title = sessions.firstOrNull()?.dayName?.takeIf(String::isNotBlank) ?: weekdayLabel(day),
+                                subtitle = "${sessions.size} 节安排",
+                            )
+                            sessions.forEach { course ->
+                                CourseCard(
+                                    course = course,
+                                    showWeek = true,
+                                    selectedWeek = selectedWeek,
+                                    onClick = { selectedCourseId = course.id },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            if (showDetails) {
+                Column(
+                    modifier = Modifier.width(320.dp).fillMaxHeight().verticalScroll(detailScroll),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    AppPanel {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            val course = selectedCourse
+                            if (course == null) {
+                                AppEmptyState("课程详情", detail = "点击左侧课程，查看地点、教师与上课时间。")
+                            } else {
+                                Text(course.courseName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text("${course.dayName} ${course.sectionText}", style = MaterialTheme.typography.bodyMedium)
+                                CourseDetailContent(course, selectedWeek)
+                                AppSecondaryButton(
+                                    text = "清除选择",
+                                    onClick = { selectedCourseId = null },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    selectedCourseDetail?.let { course ->
-        CourseDetailDialog(
-            course = course,
-            selectedWeek = selectedWeek,
-            onDismiss = { selectedCourseDetail = null },
-        )
+    if (!showDetails) selectedCourse?.let { course ->
+        CourseDetailDialog(course, selectedWeek, onDismiss = { selectedCourseId = null })
     }
 }

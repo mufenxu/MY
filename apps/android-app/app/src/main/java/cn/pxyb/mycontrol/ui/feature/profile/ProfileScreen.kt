@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.ui.feature.profile
 
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -87,6 +90,7 @@ import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import cn.pxyb.mycontrol.update.AppUpdatePhase
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileScreen(
     state: ProfileUiState,
@@ -187,16 +191,15 @@ fun ProfileScreen(
             state.sectionError?.let { message ->
                 item(key = "profile-error") { AppFeedbackBanner(message, error = true, onRetry = onRefresh) }
             }
-            if (isTablet) {
-                item(key = "profile-groups") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Column(Modifier.weight(1f)) { accountSections() }
-                        Column(Modifier.weight(1f)) { preferenceSections() }
-                    }
+            item(key = "profile-groups") {
+                FlowRow(
+                    maxItemsInEachRow = if (isTablet) 2 else 1,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Column(Modifier.weight(1f)) { accountSections() }
+                    Column(Modifier.weight(1f)) { preferenceSections() }
                 }
-            } else {
-                item(key = "profile-account-groups") { accountSections() }
-                item(key = "profile-preference-groups") { preferenceSections() }
             }
             item(key = "profile-logout") {
                 AppDangerButton(

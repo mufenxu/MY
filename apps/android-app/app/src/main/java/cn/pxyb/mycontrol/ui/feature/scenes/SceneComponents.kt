@@ -125,7 +125,7 @@ internal fun SceneEditorDialog(
         loading = busy,
         errorMessage = error,
     ) {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             AppTextField(value = name, onValueChange = { name = it }, label = "场景名称", enabled = !busy)
             if (endpoints.isEmpty()) {
                 DialogInfoText("当前没有可配置的继电器设备。")

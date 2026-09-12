@@ -37,6 +37,7 @@ import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
+import cn.pxyb.mycontrol.ui.components.layout.AppListDetailMinWidth
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 
 private const val UNDO_WINDOW_MS = 5_000L
@@ -206,7 +207,7 @@ fun NotificationCenterScreen(
         }
     }
 
-    val isTablet = useTwoPaneLayout()
+    val isTablet = useTwoPaneLayout(AppListDetailMinWidth)
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (isTablet) {

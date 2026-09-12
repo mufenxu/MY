@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.ui.feature.campus.timetable
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -53,6 +56,7 @@ internal fun CourseGridMatrix(
     currentWeek: Int = 1,
     termStartDate: String? = null,
     onCourseClick: (CampusCourse) -> Unit,
+    selectedCourseId: String? = null,
 ) {
     val days = listOf("一", "二", "三", "四", "五", "六", "日")
     val weekDates = remember(selectedWeek, currentWeek, termStartDate) {
@@ -242,12 +246,14 @@ internal fun CourseGridMatrix(
                                     .height(cardHeight)
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(6.dp))
+                                    .semantics { selected = course.id == selectedCourseId }
                                     .clickable { onCourseClick(course) },
                                 color = if (isThisWeek) colorScheme.container.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
                                 shape = RoundedCornerShape(6.dp),
                                 border = BorderStroke(
-                                    0.5.dp,
-                                    if (isThisWeek) colorScheme.foreground.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f),
+                                    if (course.id == selectedCourseId) 1.5.dp else 0.5.dp,
+                                    if (course.id == selectedCourseId) MaterialTheme.colorScheme.onSurface
+                                    else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
                                 ),
                                 shadowElevation = 0.dp,
                             ) {

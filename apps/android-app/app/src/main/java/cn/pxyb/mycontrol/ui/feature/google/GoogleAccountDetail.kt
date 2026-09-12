@@ -37,8 +37,10 @@ import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.GoogleAliasRecord
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
+import cn.pxyb.mycontrol.ui.components.dialog.AppDialogSize
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
+import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 
 @Composable
 internal fun GoogleAccountDetailDialog(
@@ -54,6 +56,8 @@ internal fun GoogleAccountDetailDialog(
 ) {
     AppDialog(
         onDismissRequest = onDismiss,
+        title = "邮箱详情",
+        size = AppDialogSize.Form,
         contentPadding = PaddingValues(0.dp),
         content = {
             GoogleAccountDetail(
@@ -71,7 +75,7 @@ internal fun GoogleAccountDetailDialog(
 }
 
 @Composable
-private fun GoogleAccountDetail(
+internal fun GoogleAccountDetail(
     account: GoogleAccountRecord,
     busy: Boolean,
     onEdit: () -> Unit,
@@ -80,19 +84,18 @@ private fun GoogleAccountDetail(
     onAddAlias: () -> Unit,
     onEditAlias: (GoogleAliasRecord) -> Unit,
     onDeleteAlias: (GoogleAliasRecord) -> Unit,
+    scrollable: Boolean = true,
 ) {
     val clipboard = LocalClipboardManager.current
+    val scrollState = rememberScrollState()
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = 620.dp)
-            .verticalScroll(rememberScrollState())
+            .then(if (scrollable) Modifier.verticalScroll(scrollState) else Modifier)
             .padding(horizontal = 18.dp, vertical = 18.dp),
     ) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("邮箱详情", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -104,34 +107,29 @@ private fun GoogleAccountDetail(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
                         )
-                        IconButton(
+                        AppHeaderIconButton(
+                            icon = Icons.Outlined.ContentCopy,
+                            contentDescription = "复制主邮箱",
                             onClick = { clipboard.setText(AnnotatedString(account.primaryEmail)) },
-                            modifier = Modifier.size(28.dp),
-                        ) {
-                            Icon(
-                                Icons.Outlined.ContentCopy,
-                                contentDescription = "复制主邮箱",
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
+                        )
                     }
                     if (account.displayName.isNotBlank()) {
                         Text(account.displayName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                IconButton(onClick = onEdit, enabled = !busy) {
-                    Icon(Icons.Outlined.Edit, contentDescription = "编辑邮箱")
-                }
-                IconButton(onClick = onDelete, enabled = !busy) {
-                    Icon(Icons.Outlined.DeleteOutline, contentDescription = "删除邮箱", tint = MaterialTheme.colorScheme.error)
-                }
-                IconButton(onClick = onToggleArchive, enabled = !busy) {
-                    Icon(
-                        if (account.archived) Icons.Outlined.Unarchive else Icons.Outlined.Archive,
-                        contentDescription = if (account.archived) "恢复邮箱" else "归档邮箱",
-                    )
-                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+            ) {
+                AppHeaderIconButton(Icons.Outlined.Edit, "编辑邮箱", onEdit, enabled = !busy)
+                AppHeaderIconButton(Icons.Outlined.DeleteOutline, "删除邮箱", onDelete, enabled = !busy, iconTint = MaterialTheme.colorScheme.error)
+                AppHeaderIconButton(
+                    icon = if (account.archived) Icons.Outlined.Unarchive else Icons.Outlined.Archive,
+                    contentDescription = if (account.archived) "恢复邮箱" else "归档邮箱",
+                    onClick = onToggleArchive,
+                    enabled = !busy,
+                )
             }
             Spacer(Modifier.height(10.dp))
             Row(
@@ -219,15 +217,14 @@ private fun GoogleAliasRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            IconButton(onClick = onCopy, enabled = !busy, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Outlined.ContentCopy, contentDescription = "复制别名", modifier = Modifier.size(18.dp))
-            }
-            IconButton(onClick = onEdit, enabled = !busy, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Outlined.Edit, contentDescription = "编辑别名", modifier = Modifier.size(18.dp))
-            }
-            IconButton(onClick = onDelete, enabled = !busy, modifier = Modifier.size(34.dp)) {
-                Icon(Icons.Outlined.DeleteOutline, contentDescription = "删除别名", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+        ) {
+            AppHeaderIconButton(Icons.Outlined.ContentCopy, "复制别名", onCopy, enabled = !busy)
+            AppHeaderIconButton(Icons.Outlined.Edit, "编辑别名", onEdit, enabled = !busy)
+            AppHeaderIconButton(Icons.Outlined.DeleteOutline, "删除别名", onDelete, enabled = !busy, iconTint = MaterialTheme.colorScheme.error)
         }
         Row(
             modifier = Modifier.padding(start = 29.dp, top = 7.dp),

@@ -55,6 +55,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -62,18 +63,23 @@ import androidx.compose.ui.window.DialogWindowProvider
 import androidx.core.view.WindowCompat
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.LocalAdaptiveWindow
+import cn.pxyb.mycontrol.ui.components.layout.ProvideAppContentLayout
 import cn.pxyb.mycontrol.ui.theme.BrandBlue
 import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
-// ---------------- 现代统一弹窗 ----------------
+enum class AppDialogSize(val maxWidth: Dp) {
+    Compact(480.dp),
+    Form(720.dp),
+    Workspace(1040.dp),
+}
 
 /**
  * 全 App 统一的原生极光弹窗体系 (AppDialog / Bottom Sheet Drawer)
  *
  * 1. 手机端自适应为【底部半模态流光抽屉】(Bottom Sheet)，带有顶部 36×4dp 极简拖拽手柄、28dp 大圆角与弹性滑出动效，
  *    彻底解决旧版居中大方块单手难以够到、压迫感强烈的痛点；
- * 2. 平板/折叠大屏端自适应为【沉浸居中悬浮卡片】(最大宽 480dp，四周 24dp 磨砂圆角)，保持大屏视觉焦点；
+ * 2. 大屏居中显示，按确认、表单和工作区分别限宽，内容测量独立于底层页面；
  * 3. 材质纯正：去除旧版粗暴的彩色彩晕与深色脏阴影，采用 App 原生磨砂底色 + 顶部微高光 + 1dp 发丝白描边；
  * 4. 页眉标配轻巧关闭键与精致微标，底部标配 BrandBlue (#2563EB) 高度统一的胶囊按钮组。
  */
@@ -87,6 +93,7 @@ fun AppDialog(
     title: String? = null,
     subtitle: String? = null,
     contentPadding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
+    size: AppDialogSize = AppDialogSize.Compact,
     footer: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
@@ -204,7 +211,7 @@ fun AppDialog(
                 Box(
                     modifier = modifier
                         .then(
-                            if (isTablet) Modifier.widthIn(max = 480.dp).fillMaxWidth()
+                            if (isTablet) Modifier.widthIn(max = size.maxWidth).fillMaxWidth()
                             else Modifier.fillMaxWidth()
                         )
                         .clip(sheetShape)
@@ -298,15 +305,20 @@ fun AppDialog(
                         }
 
                         // 弹窗内容区域
-                        Column(
+                        ProvideAppContentLayout(
                             modifier = Modifier
                                 .weight(1f, fill = false)
                                 .fillMaxWidth()
                                 .padding(contentPadding),
-                            horizontalAlignment = Alignment.Start,
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            contentMaxWidth = size.maxWidth,
                         ) {
-                            content()
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.Start,
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                content()
+                            }
                         }
 
                         // 底部操作区

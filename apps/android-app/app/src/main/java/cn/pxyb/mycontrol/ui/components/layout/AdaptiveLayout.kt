@@ -1,13 +1,20 @@
 package cn.pxyb.mycontrol.ui.components.layout
 
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.focusGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -65,24 +72,78 @@ val LocalAdaptiveWindow = compositionLocalOf {
 }
 
 internal val LocalAppContentWidth = compositionLocalOf<Dp?> { null }
+internal val LocalAppContentHeight = compositionLocalOf<Dp?> { null }
+internal val LocalAppContentMaxWidth = compositionLocalOf { AppTabletContentMaxWidth }
+
+internal val AppWorkspaceContentMaxWidth = 1440.dp
+internal val AppReadingContentMaxWidth = 760.dp
+internal val AppFormContentMaxWidth = 720.dp
+internal val AppListDetailMinWidth = 760.dp
 
 @Composable
 internal fun appContentWidth(): Dp =
     LocalAppContentWidth.current ?: LocalAdaptiveWindow.current.windowWidth
 
 @Composable
-internal fun useTwoPaneLayout(): Boolean =
-    appContentWidth() >= 840.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+internal fun appContentHeight(): Dp =
+    LocalAppContentHeight.current ?: LocalAdaptiveWindow.current.windowHeight
+
+@Composable
+internal fun useTwoPaneLayout(minWidth: Dp = 840.dp): Boolean =
+    appContentWidth() >= minWidth * LocalDensity.current.fontScale.coerceAtLeast(1f)
 
 @Composable
 internal fun ProvideAppContentLayout(
     modifier: Modifier = Modifier,
+    contentMaxWidth: Dp = LocalAppContentMaxWidth.current,
     content: @Composable () -> Unit,
 ) {
     // 页面按扣除侧栏、安全区和最大宽度后的空间布局，弹窗仍使用完整窗口尺寸。
-    BoxWithConstraints(modifier = modifier) {
-        CompositionLocalProvider(LocalAppContentWidth provides maxWidth) {
+    BoxWithConstraints(modifier = modifier.widthIn(max = contentMaxWidth)) {
+        CompositionLocalProvider(
+            LocalAppContentWidth provides maxWidth,
+            LocalAppContentHeight provides maxHeight,
+            LocalAppContentMaxWidth provides contentMaxWidth,
+        ) {
             content()
+        }
+    }
+}
+
+@Composable
+internal fun AppAdaptivePanes(
+    showDetail: Boolean,
+    modifier: Modifier = Modifier,
+    twoPane: Boolean = useTwoPaneLayout(AppListDetailMinWidth),
+    listPane: @Composable () -> Unit,
+    detailPane: @Composable () -> Unit,
+) {
+    val savedState = rememberSaveableStateHolder()
+    val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
+    val listWidth = (appContentWidth() * 0.34f)
+        .coerceIn(320.dp * fontScale, 400.dp * fontScale)
+
+    Row(modifier = modifier.fillMaxSize()) {
+        if (twoPane || !showDetail) {
+            ProvideAppContentLayout(
+                modifier = (if (twoPane) Modifier.width(listWidth) else Modifier.weight(1f))
+                    .fillMaxHeight()
+                    .clipToBounds()
+                    .focusGroup(),
+            ) {
+                savedState.SaveableStateProvider("list") { listPane() }
+            }
+        }
+        if (twoPane || showDetail) {
+            ProvideAppContentLayout(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clipToBounds()
+                    .focusGroup(),
+            ) {
+                savedState.SaveableStateProvider("detail") { detailPane() }
+            }
         }
     }
 }

@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.ui.feature.overview
 
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -50,6 +53,7 @@ import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OverviewScreen(
     state: OverviewUiState,
@@ -84,7 +88,7 @@ fun OverviewScreen(
     val needsAttention = activeIncidents.isNotEmpty() || monitored.any { it.state != "healthy" }
     val isTablet = useTwoPaneLayout()
     val width = appContentWidth()
-    val quickActionWidth = if (isTablet) (width - AppPageHorizontalPadding * 2 - 12.dp) / 2 else width
+    val quickActionWidth = if (isTablet) (width - AppPageHorizontalPadding * 2 - 12.dp) * 0.42f else width
     val quickActionColumns = quickActionColumnCount(quickActionWidth, LocalDensity.current.fontScale)
     val quickActionRows = remember(state.homeQuickActionOrder, state.hiddenHomeQuickActions, quickActionColumns) {
         state.homeQuickActionOrder.filterNot(state.hiddenHomeQuickActions::contains).chunked(quickActionColumns)
@@ -222,16 +226,15 @@ fun OverviewScreen(
                 item(key = "offline-notice") { OfflineSnapshotNotice(state.cachedAtMillis) }
             }
             if (needsAttention) { item(key = "attention-summary") { statusSummary() } }
-            if (isTablet) {
-                item(key = "overview-workspace") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Column(Modifier.weight(1f)) { HomeScheduleCard(state, onOpenWorkspace) }
-                        Column(Modifier.weight(1f)) { quickActions() }
-                    }
+            item(key = "overview-workspace") {
+                FlowRow(
+                    maxItemsInEachRow = if (isTablet) 2 else 1,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Column(Modifier.weight(if (isTablet) 0.58f else 1f)) { HomeScheduleCard(state, onOpenWorkspace) }
+                    Column(Modifier.weight(if (isTablet) 0.42f else 1f)) { quickActions() }
                 }
-            } else {
-                item(key = "today-summary") { HomeScheduleCard(state, onOpenWorkspace) }
-                item(key = "quick-actions") { quickActions() }
             }
             if (!needsAttention) { item(key = "status-summary") { statusSummary() } }
             if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {

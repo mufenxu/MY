@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol.ui.navigation
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -19,6 +20,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -45,17 +47,29 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.dismiss
 import androidx.compose.ui.semantics.liveRegion
@@ -143,6 +157,7 @@ internal fun AuthenticatedShell(
     var toastDragOffset by remember { mutableFloatStateOf(0f) }
     var toastDragging by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
+    var searchFocusRequest by remember { mutableIntStateOf(0) }
     var assistantAnchorSize by remember { mutableStateOf(IntSize.Zero) }
     var initialSetupOpen by remember(showInitialSetup, state.user) {
         mutableStateOf(showInitialSetup && state.user != null)
@@ -315,8 +330,45 @@ internal fun AuthenticatedShell(
     val adaptive = LocalAdaptiveWindow.current
     val isTablet = adaptive.isTabletOrExpanded
     val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val shellFocus = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val backDispatcher = LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+    LaunchedEffect(Unit) { shellFocus.requestFocus() }
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                if (event.isCtrlPressed || event.isMetaPressed) {
+                    when (event.key) {
+                        Key.K -> {
+                            searchFocusRequest++
+                            viewModel.openGlobalSearch()
+                            navigateToSubScreen(AppRoute.Search)
+                        }
+                        Key.One -> navigateToTab(MainTab.Overview)
+                        Key.Two -> navigateToTab(MainTab.Operations)
+                        Key.Three -> navigateToTab(MainTab.Tools)
+                        Key.Four -> navigateToTab(MainTab.Profile)
+                        Key.Comma -> settingsOpen = true
+                        else -> return@onPreviewKeyEvent false
+                    }
+                    true
+                } else if (event.key == Key.Escape) {
+                    if (keyboardVisible) {
+                        keyboard?.hide()
+                        focusManager.clearFocus()
+                    } else if (isSubScreen) {
+                        backDispatcher?.onBackPressed()
+                    } else {
+                        return@onPreviewKeyEvent false
+                    }
+                    true
+                } else false
+            }
+            .focusRequester(shellFocus)
+            .focusable(),
         contentWindowInsets = WindowInsets.safeDrawing.exclude(WindowInsets.ime),
         containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
@@ -385,8 +437,9 @@ internal fun AuthenticatedShell(
                     bottom = if (keyboardVisible) AppPageBottomSpacing else shellInsets.contentBottom,
                 )
                 ProvideAppContentLayout(
+                    contentMaxWidth = contentMaxWidthForRoute(currentRoute),
                     modifier = Modifier
-                        .widthIn(max = AppTabletContentMaxWidth)
+                        .widthIn(max = contentMaxWidthForRoute(currentRoute))
                         .fillMaxSize()
                         .align(Alignment.TopCenter)
                         .padding(top = shellInsets.navigationTop)
@@ -708,6 +761,7 @@ internal fun AuthenticatedShell(
                 composable(AppRoute.Search) {
                     val searchState by viewModel.globalSearchState.collectAsStateWithLifecycle()
                     GlobalSearchScreen(
+                        focusRequest = searchFocusRequest,
                         state = searchState,
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,

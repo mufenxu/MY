@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -162,7 +164,6 @@ internal fun CourseDetailDialog(
     onDismiss: () -> Unit,
 ) {
     val colorScheme = getCourseColorScheme(course.courseName)
-    val isThisWeek = course.weeks.isEmpty() || selectedWeek in course.weeks
 
     AppDialog(
         onDismissRequest = onDismiss,
@@ -179,18 +180,26 @@ internal fun CourseDetailDialog(
             )
         },
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            AppDetailRow(label = "上课地点", value = course.location.ifBlank { "待定" }, icon = Icons.Outlined.LocationOn)
-            AppDetailRow(label = "授课教师", value = course.teacher.ifBlank { "未知" }, icon = Icons.Outlined.Person)
-            AppDetailRow(label = "上课时间", value = course.timeRange.ifBlank { "按照节次" }, icon = Icons.Outlined.Schedule)
-            AppDetailRow(label = "周次范围", value = course.weekText.ifBlank { "全学期" }, icon = Icons.Outlined.Event)
-            AppDetailRow(label = "课程代码", value = course.courseCode.ifBlank { "无" }, icon = Icons.Outlined.Info)
-            AppDetailRow(
-                label = "当前状态",
-                value = if (isThisWeek) "本周 (第 $selectedWeek 周) 有课安排" else "第 $selectedWeek 周无课 (非本周)",
-                icon = Icons.Outlined.CheckCircle,
-            )
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            CourseDetailContent(course, selectedWeek)
         }
+    }
+}
+
+@Composable
+internal fun CourseDetailContent(course: CampusCourse, selectedWeek: Int) {
+    val isThisWeek = course.weeks.isEmpty() || selectedWeek in course.weeks
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        AppDetailRow(label = "上课地点", value = course.location.ifBlank { "待定" }, icon = Icons.Outlined.LocationOn)
+        AppDetailRow(label = "授课教师", value = course.teacher.ifBlank { "未知" }, icon = Icons.Outlined.Person)
+        AppDetailRow(label = "上课时间", value = course.timeRange.ifBlank { "按照节次" }, icon = Icons.Outlined.Schedule)
+        AppDetailRow(label = "周次范围", value = course.weekText.ifBlank { "全学期" }, icon = Icons.Outlined.Event)
+        AppDetailRow(label = "课程代码", value = course.courseCode.ifBlank { "无" }, icon = Icons.Outlined.Info)
+        AppDetailRow(
+            label = "当前状态",
+            value = if (isThisWeek) "本周 (第 $selectedWeek 周) 有课安排" else "第 $selectedWeek 周无课 (非本周)",
+            icon = Icons.Outlined.CheckCircle,
+        )
     }
 }
 

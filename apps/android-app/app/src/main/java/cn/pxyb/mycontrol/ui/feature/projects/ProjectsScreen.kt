@@ -1,5 +1,9 @@
 package cn.pxyb.mycontrol.ui.feature.projects
 
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
+
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -45,6 +49,7 @@ import cn.pxyb.mycontrol.ui.state.blocksAction
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.util.DateTimeUtils.formatPlatformTime
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProjectsScreen(
     state: ProjectsUiState,
@@ -57,6 +62,7 @@ fun ProjectsScreen(
     onTriggerCt8: () -> Unit,
 ) {
     var confirmCt8 by remember { mutableStateOf(false) }
+    val twoPane = useTwoPaneLayout()
     AppSubPage(
         title = "项目与发布",
         subtitle = "仓库、应用发布与自动化任务",
@@ -68,11 +74,15 @@ fun ProjectsScreen(
     ) {
         item(key = "project-tools") {
             AppPanel {
-                AppActionRow("GitHub 项目", subtitle = "仓库公开性与 Release 管理", icon = Icons.Outlined.Code, onClick = onOpenGitHubProjects)
-                AppDivider()
-                AppActionRow("Android 发布管理", subtitle = "构建新版本、发布配置与历史安装包", icon = Icons.Outlined.SystemUpdate, onClick = onOpenAndroidReleases)
-                AppDivider()
-                AppActionRow("容器镜像管理", subtitle = "查看并清理阿里云 ACR 历史镜像", icon = Icons.Outlined.Inventory2, onClick = onOpenRegistryImages)
+                FlowRow(
+                    maxItemsInEachRow = if (twoPane) 3 else 1,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    AppActionRow("GitHub 项目", modifier = Modifier.weight(1f), subtitle = "仓库公开性与 Release 管理", icon = Icons.Outlined.Code, onClick = onOpenGitHubProjects)
+                    AppActionRow("Android 发布管理", modifier = Modifier.weight(1f), subtitle = "构建新版本、发布配置与历史安装包", icon = Icons.Outlined.SystemUpdate, onClick = onOpenAndroidReleases)
+                    AppActionRow("容器镜像管理", modifier = Modifier.weight(1f), subtitle = "查看并清理阿里云 ACR 历史镜像", icon = Icons.Outlined.Inventory2, onClick = onOpenRegistryImages)
+                }
             }
         }
         item(key = "ct8-title") { AppSectionHeader(title = "CT8 任务", subtitle = "GitHub Actions 执行状态与节点结果") }

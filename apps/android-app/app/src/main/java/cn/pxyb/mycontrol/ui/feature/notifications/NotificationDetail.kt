@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
@@ -63,6 +64,8 @@ import cn.pxyb.mycontrol.ui.components.layout.AppPageBottomSpacing
 import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
 import cn.pxyb.mycontrol.ui.components.layout.AppPageTopSpacing
 import cn.pxyb.mycontrol.ui.components.layout.AppSecondaryHeader
+import cn.pxyb.mycontrol.ui.components.layout.AppAdaptivePanes
+import cn.pxyb.mycontrol.ui.components.layout.AppReadingContentMaxWidth
 import cn.pxyb.mycontrol.ui.components.layout.PullToRefresh
 import cn.pxyb.mycontrol.ui.components.layout.auroraBackdrop
 import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
@@ -113,18 +116,15 @@ internal fun NotificationTwoPaneLayout(
                 actions = actions,
             )
         }
-        Row(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-            ) {
+        AppAdaptivePanes(
+            showDetail = true,
+            twoPane = true,
+            listPane = {
                 PullToRefresh(
                     isRefreshing = refreshing,
                     onRefresh = onRefresh,
                     atTop = {
-                        listState.firstVisibleItemIndex == 0 &&
-                            listState.firstVisibleItemScrollOffset == 0
+                        listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
                     },
                 ) {
                     LazyColumn(
@@ -137,40 +137,34 @@ internal fun NotificationTwoPaneLayout(
                             bottom = AppPageBottomSpacing,
                         ),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        listContent()
+                        content = listContent,
+                    )
+                }
+            },
+            detailPane = {
+                Box(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.TopCenter,
+                ) {
+                    val detailModifier = Modifier.widthIn(max = AppReadingContentMaxWidth).fillMaxSize()
+                    if (selectedAlert != null) {
+                        key(selectedAlert.id) {
+                            NotificationDetailPane(
+                                alert = selectedAlert,
+                                onAction = { onAction(selectedAlert, it) },
+                                onMarkRead = onMarkRead,
+                                onMarkUnread = onMarkUnread,
+                                onArchive = onArchive,
+                                onSnooze = onSnooze,
+                                modifier = detailModifier,
+                            )
+                        }
+                    } else {
+                        NotificationDetailPlaceholder(modifier = detailModifier)
                     }
                 }
-            }
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .fillMaxHeight()
-                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-            )
-            Box(
-                modifier = Modifier
-                    .weight(1.2f)
-                    .fillMaxHeight()
-                    .padding(16.dp),
-            ) {
-                if (selectedAlert != null) {
-                    key(selectedAlert.id) {
-                        NotificationDetailPane(
-                            alert = selectedAlert,
-                            onAction = { onAction(selectedAlert, it) },
-                            onMarkRead = onMarkRead,
-                            onMarkUnread = onMarkUnread,
-                            onArchive = onArchive,
-                            onSnooze = onSnooze,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                } else {
-                    NotificationDetailPlaceholder(modifier = Modifier.fillMaxSize())
-                }
-            }
-        }
+            },
+        )
     }
 }
 

@@ -57,7 +57,7 @@ internal val AppPageHorizontalPadding = 16.dp
 internal val AppPageTopSpacing = 6.dp
 internal val AppPageBottomSpacing = 16.dp
 internal val AppPageActionSize = 36.dp
-/** 平板 / 大屏二级页面内容最大宽度：避免超宽屏上单列内容过度拉伸 */
+/** 默认页面宽度；工作台、阅读和表单由外壳按用途覆盖。 */
 internal val AppTabletContentMaxWidth = 1120.dp
 
 internal data class AuthenticatedShellInsets(
@@ -98,6 +98,7 @@ fun AppSecondaryHeader(
     subtitle: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    showBack: Boolean = true,
     actions: (@Composable RowScope.() -> Unit)? = null,
 ) {
     val glass = rememberGlassPalette(radius = 22.dp)
@@ -114,12 +115,14 @@ fun AppSecondaryHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            AppHeaderIconButton(
-                icon = Icons.AutoMirrored.Outlined.ArrowBack,
-                contentDescription = "返回",
-                onClick = onBack,
-                shape = CircleShape,
-            )
+            if (showBack) {
+                AppHeaderIconButton(
+                    icon = Icons.AutoMirrored.Outlined.ArrowBack,
+                    contentDescription = "返回",
+                    onClick = onBack,
+                    shape = CircleShape,
+                )
+            }
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(1.5.dp),
@@ -134,7 +137,7 @@ fun AppSecondaryHeader(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (subtitle.isNotBlank()) {
+                if (subtitle.isNotBlank() && appContentHeight() >= 360.dp) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -240,7 +243,7 @@ fun AppHeaderIconButton(
  *
  * 统一承载所有二级页面的通用布局规范：
  * 1. 导航容器负责系统返回，独立呈现时由脚手架处理；
- * 2. 自动根据平板/折叠屏/手机注入最大内容宽度 AppTabletContentMaxWidth (1120dp) 并居中；
+ * 2. 沿用外壳按页面用途提供的内容宽度，并保持居中；
  * 3. 统一绘制带 drawWithCache 缓存的极光背景 (auroraBackdrop)；
  * 4. 统一处理页面安全区与 appPageContentPadding；
  * 5. 支持 pinHeader：
@@ -261,7 +264,9 @@ fun AppSubPage(
     onRefresh: (() -> Unit)? = null,
     actions: (@Composable RowScope.() -> Unit)? = null,
     listState: LazyListState = rememberLazyListState(),
-    content: LazyListScope.() -> Unit,
+    showBack: Boolean = true,
+    body: (@Composable () -> Unit)? = null,
+    content: LazyListScope.() -> Unit = {},
 ) {
     BackHandler(enabled = !LocalAppNavigationHandlesBack.current, onBack = onBack)
     val dark = isAppInDarkTheme()
@@ -282,10 +287,10 @@ fun AppSubPage(
             contentAlignment = Alignment.TopCenter,
         ) {
             val contentMaxWidthModifier = Modifier
-                .widthIn(max = AppTabletContentMaxWidth)
+                .widthIn(max = LocalAppContentMaxWidth.current)
                 .fillMaxWidth()
 
-            if (pinHeader) {
+            if (pinHeader || body != null) {
                 // 吸顶模式：页头固定于顶部，下方为 LazyColumn
                 Column(
                     modifier = Modifier
@@ -299,16 +304,26 @@ fun AppSubPage(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = AppPageHorizontalPadding)
-                            .padding(bottom = 8.dp),
+                            .padding(bottom = 12.dp),
                     ) {
                         AppSecondaryHeader(
                             title = title,
                             subtitle = subtitle,
                             onBack = onBack,
                             actions = actions,
+                            showBack = showBack,
                         )
                     }
-                    LazyColumn(
+                    if (body != null) {
+                        ProvideAppContentLayout(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .padding(bottom = contentPadding.calculateBottomPadding() + AppPageBottomSpacing),
+                        ) {
+                            body()
+                        }
+                    } else LazyColumn(
                         state = listState,
                         modifier = Modifier
                             .weight(1f)
@@ -339,6 +354,7 @@ fun AppSubPage(
                             subtitle = subtitle,
                             onBack = onBack,
                             actions = actions,
+                            showBack = showBack,
                         )
                     }
                     content()

@@ -102,7 +102,7 @@ internal fun TodoEditorDialog(
         subtitle = "离线时也会安全保存在本机",
         modifier = Modifier.heightIn(max = 720.dp),
     ) {
-        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             AppTextField(value = title, onValueChange = { title = it }, label = "待办内容")
             val dueOptions = listOfNotNull(task?.dueAt?.let { "keep" to formatLocalDateTime(it) }) +
                 listOf("none" to "无", "today" to "今天", "tomorrow" to "明天", "week" to "7 天后")

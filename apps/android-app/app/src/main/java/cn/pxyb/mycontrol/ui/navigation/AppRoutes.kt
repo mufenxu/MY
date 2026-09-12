@@ -1,6 +1,11 @@
 package cn.pxyb.mycontrol.ui.navigation
 
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.ui.unit.Dp
+import cn.pxyb.mycontrol.ui.components.layout.AppFormContentMaxWidth
+import cn.pxyb.mycontrol.ui.components.layout.AppReadingContentMaxWidth
+import cn.pxyb.mycontrol.ui.components.layout.AppTabletContentMaxWidth
+import cn.pxyb.mycontrol.ui.components.layout.AppWorkspaceContentMaxWidth
 import cn.pxyb.mycontrol.ui.feature.auth.AppEntryUiState
 
 internal object AppRoute {
@@ -31,6 +36,17 @@ internal object AppRoute {
     const val Notifications = "notifications"
     const val DailyNews = "daily-news"
     const val Scenes = "scenes"
+}
+
+internal fun contentMaxWidthForRoute(route: String): Dp = when (route) {
+    AppRoute.DailyNews -> AppReadingContentMaxWidth
+    AppRoute.NotificationSettings, AppRoute.LoginSessions, AppRoute.CampusWaterValve -> AppFormContentMaxWidth
+    AppRoute.Overview, AppRoute.Operations, AppRoute.Tools, AppRoute.Today,
+    AppRoute.Timetable, AppRoute.Campus, AppRoute.Todos, AppRoute.FreeClassrooms,
+    AppRoute.Reservation, AppRoute.LibrarySeatReservation, AppRoute.Notifications,
+    AppRoute.GoogleAccounts, AppRoute.GitHubProjects, AppRoute.Projects,
+    AppRoute.RegistryImages, AppRoute.AndroidReleases, AppRoute.Search, AppRoute.Scenes -> AppWorkspaceContentMaxWidth
+    else -> AppTabletContentMaxWidth
 }
 
 internal fun MainTab.route(): String = when (this) {

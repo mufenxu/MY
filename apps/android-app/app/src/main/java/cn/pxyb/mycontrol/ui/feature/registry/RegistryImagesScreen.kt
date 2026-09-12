@@ -1,5 +1,11 @@
 package cn.pxyb.mycontrol.ui.feature.registry
 
+import androidx.compose.ui.platform.LocalDensity
+import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
+import cn.pxyb.mycontrol.ui.components.layout.adaptiveGridColumnCount
+import cn.pxyb.mycontrol.ui.components.layout.appContentWidth
+import cn.pxyb.mycontrol.ui.components.layout.appGridItems
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -132,11 +138,18 @@ internal fun RegistryImagesScreen(
     val catalog = state.catalog
     val deletable = canManage && catalog?.canDelete == true
     val selectedCount = state.selected.size
+    val columns = adaptiveGridColumnCount(
+        appContentWidth() - AppPageHorizontalPadding * 2,
+        LocalDensity.current.fontScale,
+        minCellWidth = 520.dp,
+        maxColumns = 2,
+    )
 
     AppSubPage(
         title = "镜像仓库",
         subtitle = if (selectedCount > 0) "已选 $selectedCount 个历史版本" else "清理阿里云 ACR 历史版本",
         onBack = onBack,
+        pinHeader = true,
         contentPadding = contentPadding,
         refreshing = state.refreshing,
         onRefresh = onRefresh,
@@ -226,9 +239,8 @@ internal fun RegistryImagesScreen(
             item(key = "registry-candidates-title", contentType = "section") {
                 AppSectionHeader(title = "历史候选版本", subtitle = "按构建时间从新到旧排列，点按整行即可选中")
             }
-            catalog.groups.forEach { group ->
+            appGridItems(catalog.groups, columns, { it.prefix }, contentType = "registry-group") { group ->
                 val defaultExpanded = group.tags.size <= REGISTRY_AUTO_EXPAND_LIMIT
-                item(key = "registry-group-${group.prefix}", contentType = "group") {
                     RegistryGroupCard(
                         group = group,
                         expanded = expanded[group.prefix] ?: defaultExpanded,
@@ -238,7 +250,6 @@ internal fun RegistryImagesScreen(
                         onToggleGroup = { selectAll -> onTogglePrefix(group.prefix, selectAll) },
                         onToggleTag = onToggle,
                     )
-                }
             }
         }
 

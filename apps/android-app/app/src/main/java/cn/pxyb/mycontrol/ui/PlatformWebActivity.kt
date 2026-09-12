@@ -53,6 +53,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
@@ -78,6 +79,7 @@ import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import cn.pxyb.mycontrol.util.authenticateDevice
 import java.io.File
 import java.util.UUID
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -467,6 +469,7 @@ private fun PlatformWebScreen(
     var restoredInitialHash by remember { mutableStateOf(false) }
     val dark = isAppInDarkTheme()
     val webBackground = MaterialTheme.colorScheme.background.toArgb()
+    val webTextZoom = (LocalDensity.current.fontScale * 100).roundToInt()
 
     BackHandler {
         if (webView?.canGoBack() == true) {
@@ -490,6 +493,9 @@ private fun PlatformWebScreen(
             // 1. 原生全屏沉浸 WebView 容器
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
+                update = { view ->
+                    if (view.settings.textZoom != webTextZoom) view.settings.textZoom = webTextZoom
+                },
                 factory = { context ->
                     val webContext = ContextThemeWrapper(
                         context,
@@ -503,7 +509,7 @@ private fun PlatformWebScreen(
                             ViewGroup.LayoutParams.MATCH_PARENT,
                         )
                         isVerticalScrollBarEnabled = true
-                        isHorizontalScrollBarEnabled = false
+                        isHorizontalScrollBarEnabled = true
 
                         // Cookie 管理器配置
                         CookieManager.getInstance().let { cm ->
@@ -521,9 +527,9 @@ private fun PlatformWebScreen(
                             databaseEnabled = true
                             useWideViewPort = true
                             loadWithOverviewMode = true
-                            setSupportZoom(false)
+                            setSupportZoom(true)
                             displayZoomControls = false
-                            builtInZoomControls = false
+                            builtInZoomControls = true
                             allowFileAccess = false
                             allowContentAccess = true
                             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW

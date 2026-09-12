@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.ui.feature.tools
 
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -129,6 +132,7 @@ private fun relayTargets() = listOf(
     ),
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ToolsScreen(
     state: ToolsUiState,
@@ -258,16 +262,15 @@ fun ToolsScreen(
             state.sectionError?.let { message ->
                 item(key = "tools-error") { AppFeedbackBanner("设备数据暂不可用：$message", error = true, onRetry = onRefresh) }
             }
-            if (isTablet) {
-                item(key = "device-columns") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Column(Modifier.weight(1f)) { controls() }
-                        Column(Modifier.weight(1f)) { environment() }
-                    }
+            item(key = "device-columns") {
+                FlowRow(
+                    maxItemsInEachRow = if (isTablet) 2 else 1,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Column(Modifier.weight(1f)) { controls() }
+                    Column(Modifier.weight(1f)) { environment() }
                 }
-            } else {
-                item(key = "device-controls") { controls() }
-                item(key = "device-environment") { environment() }
             }
         }
     }

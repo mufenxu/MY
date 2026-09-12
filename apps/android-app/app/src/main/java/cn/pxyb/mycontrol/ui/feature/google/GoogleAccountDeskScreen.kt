@@ -2,6 +2,8 @@ package cn.pxyb.mycontrol.ui.feature.google
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -39,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.key
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -58,6 +61,9 @@ import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.GlassShimmerList
 import cn.pxyb.mycontrol.ui.components.input.AppSearchBar
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
+import cn.pxyb.mycontrol.ui.components.layout.AppAdaptivePanes
+import cn.pxyb.mycontrol.ui.components.layout.AppListDetailMinWidth
+import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppSecondaryHeader
 import cn.pxyb.mycontrol.ui.components.layout.LocalAppNavigationHandlesBack
@@ -66,6 +72,7 @@ import cn.pxyb.mycontrol.ui.components.layout.auroraBackdrop
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun GoogleAccountDeskScreen(
     state: GoogleAccountDeskUiState,
@@ -118,7 +125,7 @@ fun GoogleAccountDeskScreen(
 
     val accounts = state.googleAccounts
     val aliases = accounts.flatMap { it.aliases }
-    val isTablet = useTwoPaneLayout()
+    val isTablet = useTwoPaneLayout(AppListDetailMinWidth)
     val filteredAccounts = accounts.filter { account ->
         val matchesQuery = query.isBlank() ||
             account.primaryEmail.contains(query.trim(), ignoreCase = true) ||
@@ -154,39 +161,23 @@ fun GoogleAccountDeskScreen(
         )
     }
 
-    val dark = isAppInDarkTheme()
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .auroraBackdrop(dark)
-            .imePadding(),
-        contentPadding = appPageContentPadding(contentPadding),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        item {
-            AppSecondaryHeader(
-                title = "Google 邮箱台账",
+    AppAdaptivePanes(
+        showDetail = false,
+        twoPane = isTablet,
+        listPane = {
+            AppSubPage(
+                title = if (isTablet) "邮箱台账" else "Google 邮箱台账",
                 subtitle = "记录主邮箱、别名和 OpenAI 使用状态",
                 onBack = onDismiss,
+                contentPadding = contentPadding,
+                pinHeader = true,
+                refreshing = state.loading,
+                onRefresh = onRefresh,
                 actions = {
-                    AppHeaderIconButton(
-                        icon = Icons.Outlined.Refresh,
-                        contentDescription = "刷新邮箱台账",
-                        onClick = onRefresh,
-                        enabled = !busy,
-                        loading = state.loading,
-                    )
                     AppHeaderIconButton(
                         icon = Icons.Outlined.Add,
                         contentDescription = "添加主邮箱",
                         onClick = { showAddAccount = true },
-                        enabled = !busy && !state.googleAccountMigrationPending,
-                    )
-                    AppHeaderIconButton(
-                        icon = Icons.Outlined.ContentPaste,
-                        contentDescription = "批量导入邮箱",
-                        onClick = { showImportAccounts = true },
                         enabled = !busy && !state.googleAccountMigrationPending,
                     )
                     Box {
@@ -199,6 +190,18 @@ fun GoogleAccountDeskScreen(
                             expanded = actionMenuExpanded,
                             onDismissRequest = { actionMenuExpanded = false },
                         ) {
+                            DropdownMenuItem(
+                                text = { Text("刷新台账") },
+                                leadingIcon = { Icon(Icons.Outlined.Refresh, contentDescription = null) },
+                                enabled = !busy,
+                                onClick = { actionMenuExpanded = false; onRefresh() },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("批量导入邮箱") },
+                                leadingIcon = { Icon(Icons.Outlined.ContentPaste, contentDescription = null) },
+                                enabled = !busy && !state.googleAccountMigrationPending,
+                                onClick = { actionMenuExpanded = false; showImportAccounts = true },
+                            )
                             DropdownMenuItem(
                                 text = { Text(if (selectionMode) "退出批量管理" else "批量管理") },
                                 leadingIcon = { Icon(Icons.Outlined.Checklist, contentDescription = null) },
@@ -235,193 +238,195 @@ fun GoogleAccountDeskScreen(
                         }
                     }
                 },
-            )
-        }
+            ) {
 
-        state.error?.let { message ->
-            item(key = "google-accounts-error") {
-                AppFeedbackBanner(message, error = true, onRetry = onRefresh, autoDismissDurationMillis = null)
-            }
-        }
-
-        item {
-            DeskStatsDashboard(
-                accountsCount = accounts.size,
-                aliasesCount = aliases.size,
-                registeredCount = accounts.count { it.openAiStatus == OPENAI_REGISTERED },
-                pendingCount = accounts.count { it.openAiStatus != OPENAI_REGISTERED },
-            )
-        }
-
-        item {
-            AppSearchBar(
-                query = query,
-                onQueryChange = { query = it }, keyboardType = KeyboardType.Email)
-        }
-
-        item {
-            StatusFilterRow(
-                selected = filter,
-                onSelect = { filter = it },
-                counts = filterCounts,
-            )
-        }
-
-        if (selectionMode) {
-            item {
-                AppPanel {
-                    Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                "已选择 ${selectedAccountIds.size} 个邮箱",
-                                modifier = Modifier.weight(1f),
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            TextButton(onClick = {
-                                val allVisibleIds = sortedAccounts.map { it.id }.toSet()
-                                selectedAccountIds = if (selectedAccountIds.containsAll(allVisibleIds)) emptySet() else allVisibleIds
-                            }) {
-                                Text(if (sortedAccounts.isNotEmpty() && selectedAccountIds.containsAll(sortedAccounts.map { it.id })) "取消全选" else "全选")
-                            }
-                            TextButton(onClick = {
-                                selectionMode = false
-                                selectedAccountIds = emptySet()
-                            }) {
-                                Text("完成")
-                            }
-                        }
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Box {
-                                TextButton(
-                                    onClick = { bulkStatusMenuExpanded = true },
-                                    enabled = selectedAccountIds.isNotEmpty() && !busy,
-                                ) {
-                                    Text("标记状态")
-                                }
-                                DropdownMenu(
-                                    expanded = bulkStatusMenuExpanded,
-                                    onDismissRequest = { bulkStatusMenuExpanded = false },
-                                ) {
-                                    listOf(OPENAI_REGISTERED, OPENAI_UNREGISTERED, OPENAI_VERIFICATION, OPENAI_ABNORMAL).forEach { status ->
-                                        DropdownMenuItem(
-                                            text = { Text(openAiStatusLabel(status)) },
-                                            onClick = {
-                                                onBulkUpdateAccounts(selectedAccountIds, status)
-                                                bulkStatusMenuExpanded = false
-                                                selectionMode = false
-                                                selectedAccountIds = emptySet()
-                                            },
-                                        )
-                                    }
-                                }
-                            }
-                            TextButton(
-                                onClick = {
-                                    onBulkArchiveAccounts(selectedAccountIds, selectedAccounts.any { !it.archived })
-                                    selectionMode = false
-                                    selectedAccountIds = emptySet()
-                                },
-                                enabled = selectedAccountIds.isNotEmpty() && !busy,
-                            ) {
-                                Icon(
-                                    if (selectedAccounts.any { !it.archived }) Icons.Outlined.Archive else Icons.Outlined.Unarchive,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                                Text(if (selectedAccounts.any { !it.archived }) "归档" else "恢复")
-                            }
-                            TextButton(
-                                onClick = { confirmBulkDelete = true },
-                                enabled = selectedAccountIds.isNotEmpty() && !busy,
-                            ) {
-                                Icon(Icons.Outlined.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Text("删除")
-                            }
-                        }
+                state.error?.let { message ->
+                    item(key = "google-accounts-error") {
+                        AppFeedbackBanner(message, error = true, onRetry = onRefresh, autoDismissDurationMillis = null)
                     }
                 }
-            }
-        }
 
-        if (state.loading && accounts.isEmpty()) {
-            item(key = "google-accounts-loading") { GlassShimmerList() }
-        } else if (sortedAccounts.isEmpty()) {
-            item {
-                AppPanel {
-                    AppEmptyState(
-                        if (accounts.isEmpty()) "还没有邮箱记录" else "没有匹配的邮箱",
-                        detail = if (accounts.isEmpty()) "点击右上角添加一个 Google 主邮箱。" else "换一个筛选条件或搜索关键词。",
+                item {
+                    DeskStatsDashboard(
+                        accountsCount = accounts.size,
+                        aliasesCount = aliases.size,
+                        registeredCount = accounts.count { it.openAiStatus == OPENAI_REGISTERED },
+                        pendingCount = accounts.count { it.openAiStatus != OPENAI_REGISTERED },
                     )
                 }
-            }
-        } else if (isTablet) {
-            // 平板双列卡片流
-            val rows = sortedAccounts.chunked(2)
-            items(rows, key = { it.first().id }, contentType = { "google-account-row" }) { rowAccounts ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    rowAccounts.forEach { account ->
-                        Box(modifier = Modifier.weight(1f)) {
-                            GoogleAccountRow(
-                                account = account,
-                                selected = account.id == selectedAccountId && !selectionMode,
-                                selectionMode = selectionMode,
-                                bulkSelected = account.id in selectedAccountIds,
-                                onClick = {
-                                    if (selectionMode) {
-                                        selectedAccountIds = if (account.id in selectedAccountIds) {
-                                            selectedAccountIds - account.id
-                                        } else {
-                                            selectedAccountIds + account.id
-                                        }
-                                    } else {
-                                        selectedAccountId = account.id
-                                        detailAccountId = account.id
+
+                item {
+                    AppSearchBar(
+                        query = query,
+                        onQueryChange = { query = it }, keyboardType = KeyboardType.Email)
+                }
+
+                item {
+                    StatusFilterRow(
+                        selected = filter,
+                        onSelect = { filter = it },
+                        counts = filterCounts,
+                    )
+                }
+
+                if (selectionMode) {
+                    item {
+                        AppPanel {
+                            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        "已选择 ${selectedAccountIds.size} 个邮箱",
+                                        modifier = Modifier.weight(1f),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    TextButton(onClick = {
+                                        val allVisibleIds = sortedAccounts.map { it.id }.toSet()
+                                        selectedAccountIds = if (selectedAccountIds.containsAll(allVisibleIds)) emptySet() else allVisibleIds
+                                    }) {
+                                        Text(if (sortedAccounts.isNotEmpty() && selectedAccountIds.containsAll(sortedAccounts.map { it.id })) "取消全选" else "全选")
                                     }
-                                },
+                                    TextButton(onClick = {
+                                        selectionMode = false
+                                        selectedAccountIds = emptySet()
+                                    }) {
+                                        Text("完成")
+                                    }
+                                }
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    Box {
+                                        TextButton(
+                                            onClick = { bulkStatusMenuExpanded = true },
+                                            enabled = selectedAccountIds.isNotEmpty() && !busy,
+                                        ) {
+                                            Text("标记状态")
+                                        }
+                                        DropdownMenu(
+                                            expanded = bulkStatusMenuExpanded,
+                                            onDismissRequest = { bulkStatusMenuExpanded = false },
+                                        ) {
+                                            listOf(OPENAI_REGISTERED, OPENAI_UNREGISTERED, OPENAI_VERIFICATION, OPENAI_ABNORMAL).forEach { status ->
+                                                DropdownMenuItem(
+                                                    text = { Text(openAiStatusLabel(status)) },
+                                                    onClick = {
+                                                        onBulkUpdateAccounts(selectedAccountIds, status)
+                                                        bulkStatusMenuExpanded = false
+                                                        selectionMode = false
+                                                        selectedAccountIds = emptySet()
+                                                    },
+                                                )
+                                            }
+                                        }
+                                    }
+                                    TextButton(
+                                        onClick = {
+                                            onBulkArchiveAccounts(selectedAccountIds, selectedAccounts.any { !it.archived })
+                                            selectionMode = false
+                                            selectedAccountIds = emptySet()
+                                        },
+                                        enabled = selectedAccountIds.isNotEmpty() && !busy,
+                                    ) {
+                                        Icon(
+                                            if (selectedAccounts.any { !it.archived }) Icons.Outlined.Archive else Icons.Outlined.Unarchive,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                        Text(if (selectedAccounts.any { !it.archived }) "归档" else "恢复")
+                                    }
+                                    TextButton(
+                                        onClick = { confirmBulkDelete = true },
+                                        enabled = selectedAccountIds.isNotEmpty() && !busy,
+                                    ) {
+                                        Icon(Icons.Outlined.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Text("删除")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (state.loading && accounts.isEmpty()) {
+                    item(key = "google-accounts-loading") { GlassShimmerList() }
+                } else if (sortedAccounts.isEmpty()) {
+                    item {
+                        AppPanel {
+                            AppEmptyState(
+                                if (accounts.isEmpty()) "还没有邮箱记录" else "没有匹配的邮箱",
+                                detail = if (accounts.isEmpty()) "点击右上角添加一个 Google 主邮箱。" else "换一个筛选条件或搜索关键词。",
                             )
                         }
                     }
-                    if (rowAccounts.size == 1) {
-                        Spacer(modifier = Modifier.weight(1f))
+                } else {
+                    items(sortedAccounts, key = { it.id }, contentType = { "google-account" }) { account ->
+                        GoogleAccountRow(
+                            account = account,
+                            selected = account.id == selectedAccountId && !selectionMode,
+                            selectionMode = selectionMode,
+                            bulkSelected = account.id in selectedAccountIds,
+                            onClick = {
+                                if (selectionMode) {
+                                    selectedAccountIds = if (account.id in selectedAccountIds) {
+                                        selectedAccountIds - account.id
+                                    } else {
+                                        selectedAccountIds + account.id
+                                    }
+                                } else {
+                                    selectedAccountId = account.id
+                                    detailAccountId = account.id
+                                }
+                            },
+                        )
                     }
                 }
             }
-        } else {
-            items(sortedAccounts, key = { it.id }, contentType = { "google-account" }) { account ->
-                GoogleAccountRow(
-                    account = account,
-                    selected = account.id == selectedAccountId && !selectionMode,
-                    selectionMode = selectionMode,
-                    bulkSelected = account.id in selectedAccountIds,
-                    onClick = {
-                        if (selectionMode) {
-                            selectedAccountIds = if (account.id in selectedAccountIds) {
-                                selectedAccountIds - account.id
-                            } else {
-                                selectedAccountIds + account.id
-                            }
+        },
+        detailPane = {
+            key(detailAccount?.id) {
+                AppSubPage(
+                    title = "邮箱详情",
+                    subtitle = detailAccount?.primaryEmail ?: "选择主邮箱查看状态与别名",
+                    onBack = onDismiss,
+                    showBack = false,
+                    pinHeader = true,
+                    contentPadding = contentPadding,
+                ) {
+                    item {
+                        val account = detailAccount
+                        if (account == null) {
+                            AppEmptyState("选择一个邮箱", detail = "在左侧搜索或筛选邮箱，详情会显示在这里。", icon = Icons.Outlined.Email)
                         } else {
-                            selectedAccountId = account.id
-                            detailAccountId = account.id
+                            AppPanel {
+                                GoogleAccountDetail(
+                                    account = account,
+                                    busy = busy,
+                                    scrollable = false,
+                                    onEdit = { editingAccount = account },
+                                    onDelete = { deletingAccount = account },
+                                    onToggleArchive = {
+                                        onBulkArchiveAccounts(setOf(account.id), !account.archived)
+                                        detailAccountId = null
+                                    },
+                                    onAddAlias = { addingAliasFor = account },
+                                    onEditAlias = { alias -> editingAlias = account.id to alias },
+                                    onDeleteAlias = { alias -> deletingAlias = account.id to alias },
+                                )
+                            }
                         }
-                    },
-                )
+                    }
+                }
             }
-        }
-    }
+        },
+    )
 
-    detailAccount?.let { account ->
+    if (!isTablet) detailAccount?.let { account ->
         GoogleAccountDetailDialog(
             account = account,
             busy = busy,

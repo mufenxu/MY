@@ -1,5 +1,11 @@
 package cn.pxyb.mycontrol.ui.feature.scenes
 
+import androidx.compose.ui.platform.LocalDensity
+import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
+import cn.pxyb.mycontrol.ui.components.layout.adaptiveGridColumnCount
+import cn.pxyb.mycontrol.ui.components.layout.appContentWidth
+import cn.pxyb.mycontrol.ui.components.layout.appGridItems
+
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -59,6 +65,12 @@ fun ScenesScreen(
     var pendingSceneSave by rememberSaveable { mutableStateOf<Int?>(null) }
     var pendingRuleSave by rememberSaveable { mutableStateOf<Int?>(null) }
     val scenes = state.iot?.scenes.orEmpty()
+    val columns = adaptiveGridColumnCount(
+        appContentWidth() - AppPageHorizontalPadding * 2,
+        LocalDensity.current.fontScale,
+        minCellWidth = 400.dp,
+        maxColumns = 3,
+    )
     val rules = state.iot?.rules.orEmpty()
     val editing = scenes.firstOrNull { it.id == editingId }
     val editingRule = rules.firstOrNull { it.id == editingRuleId }
@@ -89,6 +101,7 @@ fun ScenesScreen(
         subtitle = "手动控制场景或配置条件自动联动执行",
         contentPadding = contentPadding,
         onBack = onBack,
+        pinHeader = true,
         refreshing = state.refreshing,
         onRefresh = onRefresh,
         actions = {
@@ -134,7 +147,7 @@ fun ScenesScreen(
                 AppEmptyState("还没有智能场景", detail = "新建场景后，可以把多个设备动作合并为一次操作。")
             }
         } else {
-            items(scenes, key = IotScene::id, contentType = { "scene" }) { scene ->
+            appGridItems(scenes, columns, IotScene::id, contentType = "scene") { scene ->
                 SceneCard(
                     scene = scene,
                     busy = state.busyAction != null,
@@ -181,7 +194,7 @@ fun ScenesScreen(
                 AppEmptyState("还没有自动化规则", detail = "先创建场景，再按设备状态或环境指标配置自动执行条件。")
             }
         } else {
-            items(rules, key = AutomationRule::id, contentType = { "automation-rule" }) { rule ->
+            appGridItems(rules, columns, AutomationRule::id, contentType = "automation-rule") { rule ->
                 AutomationRuleCard(
                     rule = rule,
                     devices = state.iot?.devices.orEmpty(),

@@ -1,5 +1,11 @@
 package cn.pxyb.mycontrol.ui.feature.authenticator
 
+import androidx.compose.ui.platform.LocalDensity
+import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
+import cn.pxyb.mycontrol.ui.components.layout.adaptiveGridColumnCount
+import cn.pxyb.mycontrol.ui.components.layout.appContentWidth
+import cn.pxyb.mycontrol.ui.components.layout.appGridItems
+
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipDescription
@@ -97,6 +103,12 @@ fun AuthenticatorScreen(
     var scannerOpen by remember { mutableStateOf(false) }
     var manualOpen by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<AuthenticatorEntry?>(null) }
+    val columns = adaptiveGridColumnCount(
+        appContentWidth() - AppPageHorizontalPadding * 2,
+        LocalDensity.current.fontScale,
+        minCellWidth = 320.dp,
+        maxColumns = 3,
+    )
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val currentMillis by produceState(initialValue = System.currentTimeMillis(), lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -120,6 +132,7 @@ fun AuthenticatorScreen(
             title = "本地验证器",
             subtitle = "离线生成 TOTP 动态验证码",
             onBack = onBack,
+            pinHeader = true,
             contentPadding = contentPadding,
             actions = {
                 AppHeaderIconButton(
@@ -194,15 +207,11 @@ fun AuthenticatorScreen(
                     )
                 }
             } else {
-                items(
-                    count = state.entries.size,
-                    key = { state.entries[it].id },
-                    contentType = { "authenticator-entry" },
-                ) { index ->
+                appGridItems(state.entries, columns, { it.id }, contentType = "authenticator-entry") { entry ->
                     AuthenticatorEntryCard(
-                        entry = state.entries[index],
+                        entry = entry,
                         currentMillis = currentMillis,
-                        onDelete = { pendingDelete = state.entries[index] },
+                        onDelete = { pendingDelete = entry },
                     )
                 }
             }

@@ -1,5 +1,11 @@
 package cn.pxyb.mycontrol.ui.feature.releases
 
+import androidx.compose.ui.platform.LocalDensity
+import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
+import cn.pxyb.mycontrol.ui.components.layout.adaptiveGridColumnCount
+import cn.pxyb.mycontrol.ui.components.layout.appContentWidth
+import cn.pxyb.mycontrol.ui.components.layout.appGridItems
+
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -19,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FileDownload
@@ -35,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +66,7 @@ import cn.pxyb.mycontrol.ui.components.feedback.AppErrorState
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
+import cn.pxyb.mycontrol.ui.components.layout.AppFormContentMaxWidth
 import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.components.layout.glassShimmer
 import cn.pxyb.mycontrol.ui.components.picker.AppWheelPicker
@@ -87,11 +96,18 @@ internal fun AndroidReleaseScreen(
     LaunchedEffect(Unit) {
         onLoad()
     }
+    val columns = adaptiveGridColumnCount(
+        appContentWidth() - AppPageHorizontalPadding * 2,
+        LocalDensity.current.fontScale,
+        minCellWidth = 440.dp,
+        maxColumns = 3,
+    )
 
     AppSubPage(
         title = "Android 发布管理",
         subtitle = "安装包归档与下一次 Android 发布",
         onBack = onBack,
+        pinHeader = true,
         contentPadding = contentPadding,
         refreshing = state.refreshing,
         onRefresh = onRefresh,
@@ -117,12 +133,16 @@ internal fun AndroidReleaseScreen(
         }
 
         item(key = "android-release-plan", contentType = "plan") {
-            AndroidReleasePlanCard(
-                state = state,
-                canManage = canManage,
-                onSaveDraft = onSaveDraft,
-                onDispatchBuild = onDispatchBuild,
-            )
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                Box(Modifier.widthIn(max = AppFormContentMaxWidth).fillMaxWidth()) {
+                    AndroidReleasePlanCard(
+                        state = state,
+                        canManage = canManage,
+                        onSaveDraft = onSaveDraft,
+                        onDispatchBuild = onDispatchBuild,
+                    )
+                }
+            }
         }
 
         if (state.message != null || state.error != null) {
@@ -150,12 +170,12 @@ internal fun AndroidReleaseScreen(
                 )
             }
         } else {
-            items(
-                count = state.releases.size,
-                key = { index -> state.releases[index].id },
-                contentType = { "android-release" },
-            ) { index ->
-                val record = state.releases[index]
+            appGridItems(
+                values = state.releases,
+                columns = columns,
+                itemKey = { it.id },
+                contentType = "android-release",
+            ) { record ->
                 val recordUpdate = appUpdate.takeIf { it.info?.versionCode == record.versionCode }
                 val downloadingUpdate = recordUpdate?.phase == AppUpdatePhase.Downloading
                 AndroidReleaseCard(
@@ -186,12 +206,12 @@ private fun AndroidReleasePlanCard(
     val currentVersionCode = maxOf(BuildConfig.VERSION_CODE, state.catalog?.latest?.versionCode ?: 0)
     val canSelectVersion = currentVersionCode < Int.MAX_VALUE
     val minimumVersionCode = if (canSelectVersion) currentVersionCode + 1 else Int.MAX_VALUE
-    var versionCode by remember(draft?.id, draft?.versionCode, minimumVersionCode) {
+    var versionCode by rememberSaveable(draft?.id, draft?.versionCode, minimumVersionCode) {
         mutableIntStateOf((draft?.versionCode ?: minimumVersionCode).coerceAtLeast(minimumVersionCode))
     }
     val versionName = androidReleaseVersionName(versionCode)
-    var showVersionPicker by remember { mutableStateOf(false) }
-    var notes by remember(draft?.id ?: "none") {
+    var showVersionPicker by rememberSaveable { mutableStateOf(false) }
+    var notes by rememberSaveable(draft?.id ?: "none") {
         mutableStateOf(draft?.notes.orEmpty())
     }
     val draftDirty = draft == null ||
