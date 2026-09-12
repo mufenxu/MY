@@ -2,6 +2,7 @@ package cn.pxyb.mycontrol.ui
 
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
+import cn.pxyb.mycontrol.ui.components.display.AppDivider
 import cn.pxyb.mycontrol.ui.components.display.AppListCard
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
 import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
@@ -17,6 +18,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -40,7 +42,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.outlined.AccessTime
@@ -81,7 +82,6 @@ import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -102,6 +102,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntOffset
@@ -1469,7 +1470,7 @@ private fun CampusOverviewSection(
     if (overview == null) {
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             CampusQuickToolsGrid(
                 onOpenFreeClassrooms = onOpenFreeClassrooms,
@@ -1484,7 +1485,7 @@ private fun CampusOverviewSection(
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         SmartCardView(
             balance = overview.cardBalance,
@@ -1492,17 +1493,17 @@ private fun CampusOverviewSection(
         )
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             DormEnergyCard(
                 energyBalance = overview.energyBalance,
                 roomName = overview.energyRoom ?: overview.dormitory,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
             )
             AcademicGpaCard(
                 gpa = overview.gpa,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
             )
         }
 
@@ -1520,132 +1521,40 @@ private fun SmartCardView(
     balance: String?,
     waterCode: String?,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = AppCardShape,
-        color = Color(0xFF1D4ED8),
-        contentColor = Color.White,
-        shadowElevation = 5.dp,
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color(0xFF1E3A8A),
-                            Color(0xFF2563EB),
-                            Color(0xFF0284C7),
-                        ),
-                    )
-                )
-                .padding(20.dp)
+    AppPanel {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Surface(
-                            color = Color.White.copy(alpha = 0.18f),
-                            shape = RoundedCornerShape(12.dp),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-                        ) {
-                            Icon(
-                                Icons.Outlined.CreditCard,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.padding(8.dp).size(22.dp),
-                            )
-                        }
-                        Column {
-                            Text(
-                                "校园一卡通",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White,
-                            )
-                            Text(
-                                "智能通行与支付结算",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color.White.copy(alpha = 0.8f),
-                            )
-                        }
-                    }
-
-                    if (!waterCode.isNullOrBlank()) {
-                        Surface(
-                            color = Color.White.copy(alpha = 0.2f),
-                            contentColor = Color.White,
-                            shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Icon(Icons.Outlined.QrCode, contentDescription = null, modifier = Modifier.size(13.dp))
-                                Text(
-                                    "用水码 $waterCode",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
-                                )
-                            }
-                        }
-                    }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                IconTile(Icons.Outlined.CreditCard, ColorTokens.Blue.foreground, ColorTokens.Blue.container)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("校园一卡通", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "校园账户与用水信息",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    Column {
-                        Text(
-                            "卡内可用余额",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.8f),
-                        )
-                        Text(
-                            balance?.let(::formatCampusAmount) ?: "¥ --",
-                            style = MaterialTheme.typography.headlineLarge.copy(
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 32.sp,
-                            ),
-                            color = Color.White,
-                        )
-                    }
-
-                    Surface(
-                        color = Color.White.copy(alpha = 0.18f),
-                        contentColor = Color.White,
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(0xFF4ADE80))
-                            )
-                            Text(
-                                "实时在线",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                    }
-                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    "卡内可用余额",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    balance?.takeIf(String::isNotBlank)?.let(::formatCampusAmount) ?: "¥ --",
+                    style = MaterialTheme.typography.displaySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+            if (!waterCode.isNullOrBlank()) {
+                AppDivider()
+                AppDetailRow(label = "用水码", value = waterCode, icon = Icons.Outlined.QrCode)
             }
         }
     }
@@ -1657,67 +1566,54 @@ private fun DormEnergyCard(
     roomName: String?,
     modifier: Modifier = Modifier,
 ) {
-    val amountVal = energyBalance?.replace(Regex("[^0-9.]"), "")?.toFloatOrNull() ?: 50f
-    val isWarning = amountVal <= 20f
+    val amountVal = energyBalance?.replace(Regex("[^0-9.\\-]"), "")?.toFloatOrNull()
+    val isWarning = amountVal != null && amountVal <= 20f
 
     AppPanel(modifier = modifier) {
         Column(
-            modifier = Modifier
-                .height(180.dp)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconTile(
                     Icons.Outlined.Bolt,
                     if (isWarning) ColorTokens.Amber.foreground else ColorTokens.Sky.foreground,
                     if (isWarning) ColorTokens.Amber.container else ColorTokens.Sky.container,
+                    modifier = Modifier.size(36.dp),
                 )
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    Text(
-                        roomName ?: "宿舍电费",
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                Text("宿舍电费", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("宿舍电费余额", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("可用余额", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    energyBalance?.let(::formatCampusAmount) ?: "¥ --",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
+                    energyBalance?.takeIf(String::isNotBlank)?.let(::formatCampusAmount) ?: "¥ --",
+                    style = MaterialTheme.typography.headlineMedium,
                     color = if (isWarning) ColorTokens.Amber.foreground else MaterialTheme.colorScheme.onSurface,
                 )
             }
 
+            AppDivider()
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        if (isWarning) "电量偏低，建议充值" else "能耗状态良好",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isWarning) ColorTokens.Amber.foreground else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                LinearProgressIndicator(
-                    progress = { (amountVal / 100f).coerceIn(0.1f, 1f) },
-                    modifier = Modifier.fillMaxWidth().height(5.dp),
-                    color = if (isWarning) ColorTokens.Amber.foreground else ColorTokens.Sky.foreground,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                Text(
+                    roomName?.takeIf(String::isNotBlank) ?: "暂未同步宿舍",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    when {
+                        amountVal == null -> "暂未同步余额"
+                        isWarning -> "余额偏低，建议充值"
+                        else -> "余额充足"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isWarning) ColorTokens.Amber.foreground else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -1731,55 +1627,31 @@ private fun AcademicGpaCard(
 ) {
     AppPanel(modifier = modifier) {
         Column(
-            modifier = Modifier
-                .height(180.dp)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconTile(Icons.Outlined.School, ColorTokens.Purple.foreground, ColorTokens.Purple.container)
-                Surface(
-                    color = ColorTokens.Purple.container,
-                    contentColor = ColorTokens.Purple.foreground,
-                    shape = RoundedCornerShape(8.dp),
-                ) {
-                    Text(
-                        "教务系统",
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
+                IconTile(Icons.Outlined.School, ColorTokens.Purple.foreground, ColorTokens.Purple.container, modifier = Modifier.size(36.dp))
+                Text("学业绩点", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("综合 GPA 绩点", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("综合 GPA", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
-                    gpa?.overall ?: "--",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
+                    gpa?.overall?.takeIf(String::isNotBlank) ?: "--",
+                    style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    gpa?.core?.let { "核心 $it" } ?: "暂未同步明细",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    gpa?.required?.let { "必修 $it" } ?: "",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            AppDivider()
+            Column {
+                AppDetailRow(label = "核心", value = gpa?.core.orEmpty())
+                AppDetailRow(label = "必修", value = gpa?.required.orEmpty())
             }
         }
     }
@@ -1795,15 +1667,14 @@ private fun CampusQuickToolsGrid(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SectionHeader("校园快捷服务", "预约、自习与日常用水")
         AppPanel {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    QuickToolItem(Icons.Outlined.MeetingRoom, "空闲教室", ColorTokens.Green.foreground, ColorTokens.Green.container, Modifier.weight(1f), onOpenFreeClassrooms)
-                    QuickToolItem(Icons.Outlined.CalendarMonth, "研讨间预约", ColorTokens.Blue.foreground, ColorTokens.Blue.container, Modifier.weight(1f), onOpenReservation)
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    QuickToolItem(Icons.Outlined.Chair, "座位预约", ColorTokens.Teal.foreground, ColorTokens.Teal.container, Modifier.weight(1f), onOpenLibrarySeatReservation)
-                    QuickToolItem(Icons.Outlined.WaterDrop, "饮水机", MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.tertiaryContainer, Modifier.weight(1f), onOpenWaterValve)
-                }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                QuickToolItem(Icons.Outlined.MeetingRoom, "空闲教室", ColorTokens.Green.foreground, ColorTokens.Green.container, Modifier.weight(1f), onOpenFreeClassrooms)
+                QuickToolItem(Icons.Outlined.CalendarMonth, "研讨间预约", ColorTokens.Blue.foreground, ColorTokens.Blue.container, Modifier.weight(1f), onOpenReservation)
+                QuickToolItem(Icons.Outlined.Chair, "座位预约", ColorTokens.Teal.foreground, ColorTokens.Teal.container, Modifier.weight(1f), onOpenLibrarySeatReservation)
+                QuickToolItem(Icons.Outlined.WaterDrop, "饮水机", MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.tertiaryContainer, Modifier.weight(1f), onOpenWaterValve)
             }
         }
     }
@@ -1827,7 +1698,15 @@ private fun QuickToolItem(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         QuickActionGlassTile(icon, accent, accentPale, modifier = Modifier.size(42.dp))
-        Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+            minLines = 2,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
