@@ -86,7 +86,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.platform.LocalContext
@@ -2430,41 +2429,6 @@ private fun openBrowserLink(context: android.content.Context, url: String) {
         )
     } catch (error: Exception) {
         throw IllegalStateException("系统未找到可用浏览器。", error)
-    }
-}
-
-@Composable
-private fun ServiceJumpIndicator() {
-    val transition = rememberInfiniteTransition(label = "service-jump")
-    val arrowOffset by transition.animateFloat(
-        initialValue = -4f,
-        targetValue = 4f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 620, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "service-jump-arrow",
-    )
-    Row(
-        modifier = Modifier.width(86.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End,
-    ) {
-        Text(
-            "正在进入",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
-        )
-        Icon(
-            Icons.Outlined.ChevronRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .padding(start = 2.dp)
-                .size(18.dp)
-                .graphicsLayer { translationX = arrowOffset },
-        )
     }
 }
 

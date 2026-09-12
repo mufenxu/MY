@@ -2905,79 +2905,6 @@ private fun relativeSyncTime(timestamp: Long): String =
     DateTimeUtils.formatRelativeSyncTime(timestamp)
 
 @Composable
-private fun AppHeader(tab: MainTab) {
-    val primaryColor = MaterialTheme.colorScheme.primary
-    Surface(
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 1.dp,
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            primaryColor.copy(alpha = 0.055f),
-                            Color.Transparent,
-                        ),
-                    )
-                )
-        ) {
-            Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .heightIn(min = 68.dp)
-                .padding(horizontal = 18.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            ) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 2.dp,
-                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
-            ) {
-                androidx.compose.foundation.Image(
-                    painter = painterResource(R.drawable.platform_logo),
-                    contentDescription = "智控中心",
-                    modifier = Modifier
-                        .padding(4.dp)
-                        .size(34.dp),
-                )
-            }
-            Column(modifier = Modifier.weight(1f).padding(start = 14.dp)) {
-                Text(
-                    tabTitle(tab),
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                        letterSpacing = (-0.3).sp
-                    )
-                )
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-                    Box(
-                        Modifier
-                            .size(6.dp)
-                            .background(ColorTokens.Green.foreground, CircleShape)
-                    )
-                    Text(
-                        "生产环境 · 智控中心 LIVE",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 11.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                        modifier = Modifier.padding(start = 6.dp),
-                    )
-                }
-            }
-        }
-        }
-    }
-}
-
-@Composable
 private fun AppBottomNavigation(
     selected: MainTab,
     onSelect: (MainTab) -> Unit,
@@ -3114,15 +3041,3 @@ private fun BrandMark(compact: Boolean = false) {
         }
     }
 }
-
-private fun tabTitle(tab: MainTab): String = when (tab) {
-    MainTab.Overview -> "今日"
-    MainTab.Notifications -> "通知中心"
-    MainTab.Operations -> "状态"
-    MainTab.Tools -> "设备"
-    MainTab.Profile -> "我的"
-}
-
-fun screenPadding(contentPadding: PaddingValues): Modifier = Modifier
-    .fillMaxSize()
-    .padding(contentPadding)

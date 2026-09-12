@@ -56,7 +56,6 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -64,7 +63,6 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -160,13 +158,8 @@ import androidx.core.view.WindowCompat
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
-
-private val PlatformTimeFormatter = DateTimeFormatter.ofPattern("MM-dd HH:mm")
-    .withZone(ZoneId.systemDefault())
 
 @Immutable
 data class StatusStyle(
@@ -178,7 +171,6 @@ data class StatusStyle(
 
 val AppCardShape = RoundedCornerShape(18.dp)
 val AppSearchFieldShape = RoundedCornerShape(20.dp)
-private val AppDialogShape = RoundedCornerShape(24.dp)
 
 /** 统一按压反馈：按下轻微缩放，松开时用柔和弹性恢复。 */
 @Composable
@@ -328,29 +320,6 @@ fun AppNotificationButton(
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                     )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun AdaptiveMetricGrid(
-    itemCount: Int,
-    maxColumns: Int,
-    modifier: Modifier = Modifier,
-    content: @Composable RowScope.(Int) -> Unit,
-) {
-    BoxWithConstraints(modifier = modifier) {
-        val columns = metricGridColumnCount(maxWidth, LocalDensity.current.fontScale, maxColumns)
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            (0 until itemCount).chunked(columns).forEach { rowItems ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    rowItems.forEach { index -> content(index) }
-                    repeat(columns - rowItems.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }

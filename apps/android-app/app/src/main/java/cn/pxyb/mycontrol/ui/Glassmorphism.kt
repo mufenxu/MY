@@ -21,7 +21,6 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.Dp
@@ -99,41 +98,6 @@ fun Modifier.auroraBackdrop(dark: Boolean): Modifier = this.drawWithCache {
         drawCircle(brush = brush2, radius = r2, center = center2)
         drawCircle(brush = brush3, radius = r3, center = center3)
     }
-}
-
-fun DrawScope.drawAurora(dark: Boolean) {
-    val blobAlpha = if (dark) 0.18f else 0.20f
-    drawAuroraBlob(
-        color = if (dark) Color(0xFF3B82F6) else Color(0xFF60A5FA),
-        alpha = blobAlpha,
-        center = Offset(size.width * 0.9f, size.height * 0.08f),
-        radius = 230.dp,
-    )
-    drawAuroraBlob(
-        color = if (dark) Color(0xFF8B5CF6) else Color(0xFFA78BFA),
-        alpha = blobAlpha - 0.04f,
-        center = Offset(size.width * 0.12f, size.height * 0.18f),
-        radius = 260.dp,
-    )
-    drawAuroraBlob(
-        color = if (dark) Color(0xFF14B8A6) else Color(0xFF5EEAD4),
-        alpha = blobAlpha - 0.09f,
-        center = Offset(size.width * 0.88f, size.height * 0.55f),
-        radius = 210.dp,
-    )
-}
-
-private fun DrawScope.drawAuroraBlob(color: Color, alpha: Float, center: Offset, radius: Dp) {
-    val radiusPx = radius.toPx()
-    drawCircle(
-        brush = Brush.radialGradient(
-            colors = listOf(color.copy(alpha = alpha), Color.Transparent),
-            center = center,
-            radius = radiusPx,
-        ),
-        radius = radiusPx,
-        center = center,
-    )
 }
 
 /**

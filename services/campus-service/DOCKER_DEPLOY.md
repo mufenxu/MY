@@ -141,33 +141,8 @@ server {
 3. 保持公网 HTTPS、`HGU_APP_COOKIE_SECURE=true`、`HGU_PUBLIC_ORIGIN=https://hgu.pxyb.cn`，并按前述代理配置传递正确的协议头；在微信里同时测试手输 `hgu.pxyb.cn` 和打开 `https://hgu.pxyb.cn/`。
 4. 确认 `HGU_APP_SESSION_TTL_HOURS=720`，然后使用真实微信客户端完成登录、关闭页面、重新打开和刷新测试。若重新打开后要求登录，检查微信专用持久化令牌逻辑；若登录后立刻返回登录页，先检查镜像版本和脚本版本，再检查 README 中的“微信内置浏览器登录兼容性（维护必读）”约束是否被破坏。
 
-## 6. 构建本地镜像并推送到仓库 (`mufenxu/hgu`)
+## 6. 镜像构建与发布
 
-我们为您提供了两种构建镜像并推送到 Docker Hub 仓库的方式：
+校园服务使用仓库根目录的 [Aliyun ACR 工作流](../../.github/workflows/aliyun-acr.yml) 和 [campus-service.Dockerfile](../../infra/docker/campus-service.Dockerfile) 构建、验证并发布镜像。
 
-### 方式 A：使用本地一键脚本（Windows / Linux）
-
-项目根目录下已为您准备好一键脚本，用于读取版本、打包并推送：
-- **Windows 用户**：直接双击运行 [build-and-push.bat](file:///c:/Users/25912/Desktop/HGU/build-and-push.bat)；
-- **Linux/macOS 用户**：在终端运行：
-  ```bash
-  chmod +x build-and-push.sh
-  ./build-and-push.sh
-  ```
-
-该脚本将自动：
-1. 检查 Docker 状态；
-2. 读取 `package.json` 中的版本号作为镜像 Tag；
-3. 构建 `mufenxu/hgu:<tag>` 镜像；
-4. 引导您通过 `docker login` 完成认证，并将镜像推送到您指定的 Docker 仓库。
-
-### 方式 B：GitHub Actions 自动构建与推送（推荐）
-
-我们已在 [.github/workflows/docker-publish.yml](file:///c:/Users/25912/Desktop/HGU/.github/workflows/docker-publish.yml) 中配置了 CI/CD 工作流。
-
-一旦您将项目托管至 GitHub，只需进行如下设置即可实现“一键自动推送”：
-1. 在 GitHub 仓库设置中，依次进入 `Settings -> Secrets and variables -> Actions`；
-2. 新建两个 Secret 密钥：
-   - `DOCKER_USERNAME`：您的 Docker Hub 用户名（`mufenxu`）；
-   - `DOCKER_PASSWORD`：您的 Docker Hub 访问令牌（Access Token，推荐在 Docker Hub 个人设置中生成）；
-3. 之后当您推送代码到 `main`/`master` 分支，或推送版本 tag（形如 `v0.1.0`）时，GitHub 就会自动编译多平台架构镜像并推送至 `mufenxu/hgu` 仓库。
+配置和发布步骤见 [Aliyun ACR 指南](../../docs/aliyun-acr.md)；手动运行工作流时可选择 `campus` 目标。
