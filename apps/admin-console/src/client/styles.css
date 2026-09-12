@@ -3457,7 +3457,6 @@ input:focus-visible {
   font-weight: 750;
 }
 
-.application-tile footer > a,
 .automation-hero-tools > a {
   display: inline-flex;
   min-height: 36px;
@@ -3471,6 +3470,32 @@ input:focus-visible {
   font-weight: 750;
   text-decoration: none;
   white-space: nowrap;
+}
+
+.application-tile footer > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 9px;
+  background: var(--blue-soft);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  color: var(--blue);
+  font-size: 12.5px;
+  font-weight: 750;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.application-tile footer > a:hover {
+  background: var(--blue);
+  color: #ffffff;
+  border-color: var(--blue);
+  box-shadow: 0 4px 14px var(--blue-glow);
+  transform: translateY(-1px);
 }
 
 .entry-unavailable {
@@ -9377,22 +9402,22 @@ input:focus-visible {
 
 /* Grouped console navigation and consolidated overview */
 .workspace-section-nav {
-  position: sticky;
-  z-index: 20;
-  top: 0;
+  position: relative;
+  z-index: 5;
   display: flex;
-  min-height: 54px;
+  min-height: 46px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 18px;
-  padding: 6px;
-  background: color-mix(in srgb, var(--panel-solid) 78%, transparent);
-  border: 1px solid var(--line);
+  margin-bottom: 20px;
+  padding: 5px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   border-radius: 14px;
-  box-shadow: 0 8px 24px rgba(62, 82, 135, 0.06), inset 0 1px rgba(255, 255, 255, 0.58);
-  backdrop-filter: blur(18px) saturate(125%);
-  -webkit-backdrop-filter: blur(18px) saturate(125%);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  transition: all 0.25s ease;
 }
 
 .workspace-tabs {
@@ -10102,24 +10127,37 @@ input:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  gap: 6px;
+  width: auto;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--glass-bg-subtle);
   color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
   cursor: pointer;
-  transition: all 0.2s ease;
+  flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .sidebar-footer button:hover {
   color: var(--red);
   background: var(--red-soft);
   border-color: rgba(239, 68, 68, 0.3);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.12);
+  transform: translateY(-1px);
 }
 
 .sidebar-footer button > span {
-  display: none;
+  display: inline-block !important;
+  font-size: 11.5px !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
 }
 
 /* 通栏毛玻璃顶栏 (Topbar) */
@@ -10981,6 +11019,7 @@ input:focus-visible {
 .dependency-stage {
   position: relative;
   flex: 1 1 auto;
+  height: 340px;
   min-height: 340px;
   margin: 12px 16px 16px;
   border-radius: 14px;
@@ -11020,7 +11059,8 @@ input:focus-visible {
 }
 
 .dependency-layout {
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 2;
   width: 100%;
   height: 100%;
@@ -11144,14 +11184,16 @@ input:focus-visible {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 180px;
-  padding: 16px 12px;
+  width: 184px;
+  padding: 14px 12px;
   border: 1px solid var(--glass-border);
   border-radius: 16px;
   background: var(--glass-bg);
-  backdrop-filter: blur(14px);
-  box-shadow: 0 12px 32px -4px var(--blue-glow), var(--glass-shadow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 10px 30px -4px var(--blue-glow), var(--glass-shadow);
   text-align: center;
+  z-index: 5;
 }
 
 .dependency-gateway-kicker {
@@ -11454,14 +11496,32 @@ input:focus-visible {
   border-top: 1px solid var(--line);
 }
 
-.application-tile footer a {
+.application-tile footer a,
+.application-tile footer > a {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 9px;
+  background: var(--blue-soft);
+  border: 1px solid rgba(59, 130, 246, 0.25);
   color: var(--blue);
   font-size: 12.5px;
   font-weight: 750;
   text-decoration: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.application-tile footer a:hover,
+.application-tile footer > a:hover {
+  background: var(--blue);
+  color: #ffffff;
+  border-color: var(--blue);
+  box-shadow: 0 4px 14px var(--blue-glow);
+  transform: translateY(-1px);
 }
 
 /* 2. 服务运维页 (ServicesView) */
