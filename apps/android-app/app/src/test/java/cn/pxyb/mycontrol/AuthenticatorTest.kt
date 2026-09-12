@@ -54,13 +54,13 @@ class AuthenticatorTest {
     }
 
     @Test
-    fun rejectsUnsafeOrUnsupportedUris() {
+    fun handlesShortSecretsAndUnsupportedUris() {
         assertThrows(AuthenticatorParseException::class.java) {
             Authenticator.parseOtpAuthUri("otpauth://hotp/alice?secret=$rfcSecretBase32")
         }
-        assertThrows(AuthenticatorParseException::class.java) {
-            Authenticator.parseOtpAuthUri("otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP")
-        }
+        val shortSecretEntry = Authenticator.parseOtpAuthUri("otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP")
+        assertEquals("alice", shortSecretEntry.account)
+        assertEquals(10, shortSecretEntry.secret.size)
         assertThrows(AuthenticatorParseException::class.java) {
             Authenticator.decodeBase32("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJ1")
         }

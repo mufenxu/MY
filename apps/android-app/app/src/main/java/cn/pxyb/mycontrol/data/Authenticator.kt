@@ -58,16 +58,13 @@ object Authenticator {
             parameters["secret"]?.takeIf(String::isNotBlank)
                 ?: throw AuthenticatorParseException("二维码缺少密钥。"),
         )
-        if (secret.size < MIN_SECRET_BYTES) {
-            throw AuthenticatorParseException("密钥强度不足，至少需要 128 位。")
-        }
-
-        val label = decodeUriPart(uri.path.orEmpty().removePrefix("/"))
+        // 标签只解码一次，路径中的加号属于账号本身。
+        val label = decodeUriPart(uri.rawPath.orEmpty().removePrefix("/").replace("+", "%2B"))
         if (label.isBlank()) throw AuthenticatorParseException("二维码缺少账号名称。")
         val labelIssuer = label.takeIf { it.contains(':') }?.substringBefore(':')?.trim().orEmpty()
         val queryIssuer = parameters["issuer"]?.trim().orEmpty()
-        val issuer = decodeUriPart(queryIssuer.ifBlank { labelIssuer })
-        val account = decodeUriPart(label.substringAfter(':', label).trim())
+        val issuer = queryIssuer.ifBlank { labelIssuer }.ifBlank { "未命名服务" }
+        val account = label.substringAfter(':', label).trim()
         if (account.isBlank()) throw AuthenticatorParseException("二维码缺少账号名称。")
 
         return createEntry(
@@ -76,8 +73,12 @@ object Authenticator {
             account = account,
             secret = secret,
             algorithm = parameters["algorithm"] ?: "SHA1",
-            digits = parameters["digits"]?.toIntOrNull() ?: 6,
-            periodSeconds = parameters["period"]?.toIntOrNull() ?: 30,
+            digits = parameters["digits"]?.let {
+                it.trim().toIntOrNull() ?: throw AuthenticatorParseException("验证码位数必须为整数。")
+            } ?: 6,
+            periodSeconds = parameters["period"]?.let {
+                it.trim().toIntOrNull() ?: throw AuthenticatorParseException("刷新周期必须为正整数秒。")
+            } ?: 30,
         )
     }
 
@@ -92,15 +93,15 @@ object Authenticator {
     ): AuthenticatorEntry {
         require(issuer.isNotBlank()) { "请输入服务名称。" }
         require(account.isNotBlank()) { "请输入账号名称。" }
-        require(secret.size >= MIN_SECRET_BYTES) { "密钥强度不足，至少需要 128 位。" }
-        val normalizedAlgorithm = when (algorithm.uppercase()) {
+        require(secret.isNotEmpty()) { "密钥不能为空。" }
+        val normalizedAlgorithm = when (algorithm.trim().uppercase().replace("-", "")) {
             "SHA1" -> ALGORITHM_SHA1
             "SHA256" -> ALGORITHM_SHA256
             "SHA512" -> ALGORITHM_SHA512
             else -> throw AuthenticatorParseException("不支持的哈希算法，请使用 SHA1、SHA256 或 SHA512。")
         }
         require(digits in 6..8) { "验证码位数只支持 6 至 8 位。" }
-        require(periodSeconds in 15..300) { "刷新周期必须在 15 至 300 秒之间。" }
+        require(periodSeconds > 0) { "刷新周期必须为正整数秒。" }
         return AuthenticatorEntry(
             id = id,
             issuer = issuer.trim(),
@@ -143,7 +144,7 @@ object Authenticator {
     fun newId(): String = java.util.UUID.randomUUID().toString()
 
     fun decodeBase32(value: String): ByteArray {
-        val normalized = value.uppercase().filterNot { it == ' ' || it == '-' }
+        val normalized = value.uppercase().filterNot { it.isWhitespace() || it == '-' }
         if (normalized.isEmpty()) throw AuthenticatorParseException("请输入 Base32 密钥。")
         val dataEnd = normalized.indexOf('=')
         if (dataEnd >= 0 && normalized.drop(dataEnd).any { it != '=' }) {
@@ -153,8 +154,18 @@ object Authenticator {
         if (data.isEmpty() || data.any { it !in BASE32_ALPHABET }) {
             throw AuthenticatorParseException("密钥必须为有效的 Base32 字符。")
         }
+        val paddingLength = when (data.length % 8) {
+            0 -> 0
+            2 -> 6
+            4 -> 4
+            5 -> 3
+            7 -> 1
+            else -> throw AuthenticatorParseException("密钥长度无效。")
+        }
+        if (dataEnd >= 0 && normalized.length - dataEnd != paddingLength) {
+            throw AuthenticatorParseException("密钥的填充格式无效。")
+        }
         val bits = data.length * 5
-        if (bits % BYTE_BITS != 0) throw AuthenticatorParseException("密钥长度无效。")
         var buffer = 0
         var bitsInBuffer = 0
         return ByteArray(bits / BYTE_BITS).apply {
@@ -166,6 +177,9 @@ object Authenticator {
                     bitsInBuffer -= BYTE_BITS
                     this[index++] = ((buffer shr bitsInBuffer) and 0xFF).toByte()
                 }
+            }
+            if (bitsInBuffer > 0 && (buffer and ((1 shl bitsInBuffer) - 1)) != 0) {
+                throw AuthenticatorParseException("密钥末尾的填充位无效。")
             }
         }
     }
@@ -186,5 +200,4 @@ object Authenticator {
     private const val BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
     private const val BYTE_BITS = 8
     private const val MILLIS_PER_SECOND = 1000L
-    private const val MIN_SECRET_BYTES = 16
 }

@@ -380,12 +380,7 @@ private fun AuthenticatorManualDialog(
             issuer.isBlank() -> "请输入服务名称。"
             account.isBlank() -> "请输入账号名称。"
             else -> runCatching { Authenticator.decodeBase32(secret) }
-                .fold(
-                    onSuccess = { decoded ->
-                        if (decoded.size < 16) "密钥强度不足，至少需要 128 位。" else null
-                    },
-                    onFailure = { it.message },
-                )
+                .exceptionOrNull()?.message
         }
         if (localError == null) onAdd(issuer, account, secret)
     }
@@ -418,7 +413,7 @@ private fun AuthenticatorManualDialog(
                         localError = null
                     },
                     label = "Base32 密钥",
-                    placeholder = "输入 16 字节以上密钥",
+                    placeholder = "粘贴网站提供的密钥",
                     leadingIcon = Icons.Outlined.Key,
                     isPassword = true,
                 )
