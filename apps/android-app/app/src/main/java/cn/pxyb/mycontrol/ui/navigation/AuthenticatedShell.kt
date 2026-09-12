@@ -961,7 +961,6 @@ internal fun AuthenticatedShell(
                         onLoadMakeLife = { reservationId ->
                             viewModel.librarySeats.loadLibrarySeatMakeLife(reservationId)
                         },
-                        onLoadCredit = { viewModel.librarySeats.loadLibrarySeatCredit() },
                         onCheckIn = viewModel.librarySeats::checkInLibrarySeat,
                         onLeaveSeat = viewModel.librarySeats::leaveLibrarySeat,
                         onStopSeat = viewModel.librarySeats::stopLibrarySeat,

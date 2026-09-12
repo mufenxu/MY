@@ -828,23 +828,6 @@ internal fun parseLibrarySeatTimelinePayload(json: JSONObject): LibrarySeatTimel
     return LibrarySeatTimeline(free = free, marks = marks)
 }
 
-internal fun parseLibrarySeatCreditPayload(json: JSONObject): LibrarySeatCreditProfile {
-    val data = json.optJSONObject("data") ?: json
-    val score = (data.opt("score") as? Number)?.toInt()
-    val superviseAway = (data.opt("superviseAway") as? Number)?.toInt()
-        ?: data.optString("superviseAway").toIntOrNull()
-        ?: 0
-    return LibrarySeatCreditProfile(
-        fullName = data.seatString("fullName", "name", "userName"),
-        score = score,
-        scoreEnabled = data.optBoolean("scoreEnabled", score != null),
-        superviseAway = superviseAway.coerceAtLeast(0),
-        openTime = data.seatString("openTime"),
-        closeTime = data.seatString("closeTime"),
-        ruleText = data.seatString("ruleText", "readText"),
-    )
-}
-
 internal fun parseLibrarySeatReservationRecordsPayload(
     json: JSONObject,
     jsonArray: JSONArray = JSONArray(),

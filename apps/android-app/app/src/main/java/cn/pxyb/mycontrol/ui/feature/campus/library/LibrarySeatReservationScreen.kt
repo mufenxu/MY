@@ -95,7 +95,6 @@ internal fun LibrarySeatReservationScreen(
     onLoadBreaches: () -> Unit,
     onLoadDoorLogs: () -> Unit,
     onLoadMakeLife: (String) -> Unit,
-    onLoadCredit: () -> Unit,
     onCheckIn: () -> Unit,
     onLeaveSeat: () -> Unit,
     onStopSeat: () -> Unit,
@@ -241,11 +240,6 @@ internal fun LibrarySeatReservationScreen(
         onLoadReservations()
         onLoadCurrentUse()
     }
-    // 信用与配额里的开放时段按当前场馆解析，等场馆确定后再加载，避免出现空档。
-    LaunchedEffect(state.selectedVenueId) {
-        if (!state.selectedVenueId.isNullOrBlank()) onLoadCredit()
-    }
-
     LaunchedEffect(state.venues) {
         if (state.venues.isNotEmpty()) {
             if (selectedVenueId.isBlank() || state.venues.none { it.id == selectedVenueId }) {
@@ -735,8 +729,6 @@ internal fun LibrarySeatReservationScreen(
                     makeLifeLoading = state.makeLifeLoading,
                     makeLifeReservationId = state.makeLifeReservationId,
                     usageAction = state.usageAction,
-                    credit = state.credit,
-                    creditLoading = state.creditLoading,
                     onLoadReservations = onLoadReservations,
                     onLoadHistory = onLoadReservationHistory,
                     onLoadBreaches = onLoadBreaches,

@@ -6,7 +6,6 @@ import {
   normalizeLibrarySeatAreasPayload,
   normalizeLibrarySeatBreachPayload,
   normalizeLibrarySeatCancelResult,
-  normalizeLibrarySeatCreditPayload,
   normalizeLibrarySeatCurrentUsePayload,
   normalizeLibrarySeatDoorLogPayload,
   normalizeLibrarySeatLayoutPayload,
@@ -416,77 +415,4 @@ test("builds a deduplicated seat reminder notification payload", () => {
   assert.match(payload.dedupeKey, /^campus-library-seat-[0-9a-f]{48}$/);
   assert.equal(payload.content.title, "座位即将结束");
   assert.equal(buildLibrarySeatReminderPayload(reminder, { appId: "" }), null);
-});
-
-test("normalizes the credit profile and quota policy", () => {
-  assert.deepEqual(
-    normalizeLibrarySeatCreditPayload(
-      { data: { fullName: "张三", score: 96 } },
-      {
-        data: {
-          superviseAway: "30",
-          buildSeTime: { "1744276833606668288": { openTimeStr: "08:00", closeTimeStr: "21:45" } },
-          readText: "<p>图书馆阅览座位</p><p>管理规定 &amp; 违约处理</p>"
-        }
-      },
-      { venueId: "1744276833606668288" }
-    ),
-    {
-      fullName: "张三",
-      score: 96,
-      scoreEnabled: true,
-      superviseAway: 30,
-      openTime: "08:00",
-      closeTime: "21:45",
-      ruleText: "图书馆阅览座位\n管理规定 & 违约处理"
-    }
-  );
-  assert.deepEqual(
-    normalizeLibrarySeatCreditPayload({ data: { score: 0 } }, { data: { superviseAway: 0 } }, { venueId: "9" }),
-    {
-      fullName: "",
-      score: 0,
-      scoreEnabled: true,
-      superviseAway: 0,
-      openTime: "",
-      closeTime: "",
-      ruleText: ""
-    }
-  );
-});
-
-test("calls the credit and policy endpoints", async () => {
-  const calls = [];
-  const client = createLibrarySeatClient({
-    token: "member-token",
-    requestImpl: async (pathname, data) => {
-      calls.push({ pathname, data });
-      if (pathname === "/static/frontApi/user/getUserInfo") {
-        return { payload: { status: true, code: 200, data: { fullName: "张三", score: 88 } }, status: 200, ok: true };
-      }
-      return {
-        payload: {
-          status: true,
-          code: 200,
-          data: {
-            superviseAway: 30,
-            buildSeTime: { "1744276833606668288": { openTimeStr: "08:00", closeTimeStr: "21:45" } }
-          }
-        },
-        status: 200,
-        ok: true
-      };
-    }
-  });
-
-  const profile = await client.getCreditProfile({ venueId: "1744276833606668288" });
-
-  assert.deepEqual(calls.map((call) => call.pathname), [
-    "/static/frontApi/user/getUserInfo",
-    "/static/public/cg/getSysSet/PC"
-  ]);
-  assert.equal(profile.score, 88);
-  assert.equal(profile.superviseAway, 30);
-  assert.equal(profile.openTime, "08:00");
-  assert.equal(profile.closeTime, "21:45");
 });

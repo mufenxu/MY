@@ -26,7 +26,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.LibrarySeatBreachPage
 import cn.pxyb.mycontrol.data.LibrarySeatBreachRecord
-import cn.pxyb.mycontrol.data.LibrarySeatCreditProfile
 import cn.pxyb.mycontrol.data.LibrarySeatDoorLog
 import cn.pxyb.mycontrol.data.LibrarySeatMakeLife
 import cn.pxyb.mycontrol.data.LibrarySeatReservationHistory
@@ -36,7 +35,6 @@ import cn.pxyb.mycontrol.ui.components.button.AppDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppInlineDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
-import cn.pxyb.mycontrol.ui.components.display.AppMetricCell
 import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonInlineRows
@@ -70,8 +68,6 @@ internal fun MySeatReservationsPanel(
     makeLifeLoading: Boolean,
     makeLifeReservationId: String,
     usageAction: LibrarySeatUsageAction?,
-    credit: LibrarySeatCreditProfile,
-    creditLoading: Boolean,
     onLoadReservations: () -> Unit,
     onLoadHistory: () -> Unit,
     onLoadBreaches: () -> Unit,
@@ -110,7 +106,6 @@ internal fun MySeatReservationsPanel(
                 title = "我的座位",
                 subtitle = "官方系统同步 · 使用中的座位、违约与门禁记录",
             )
-            CreditQuotaSummary(profile = credit, loading = creditLoading)
             CurrentSeatUsageCard(
                 record = currentUse,
                 loading = currentUseLoading,
@@ -171,83 +166,6 @@ internal fun MySeatReservationsPanel(
                 onClick = onGoToBookSeat,
                 modifier = Modifier.fillMaxWidth(),
             )
-        }
-    }
-}
-
-@Composable
-private fun CreditQuotaSummary(profile: LibrarySeatCreditProfile, loading: Boolean) {
-    if (!loading && profile.isEmpty) return
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "信用与配额",
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    modifier = Modifier.weight(1f),
-                )
-                if (profile.fullName.isNotBlank()) {
-                    Text(
-                        text = profile.fullName,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                AppMetricCell(
-                    label = "信用积分",
-                    value = when {
-                        loading -> "读取中"
-                        profile.scoreEnabled && profile.score != null -> profile.score.toString()
-                        else -> "未启用"
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                AppMetricCell(
-                    label = "暂离上限",
-                    value = when {
-                        loading -> "读取中"
-                        profile.superviseAway > 0 -> "${profile.superviseAway} 分钟"
-                        else -> "未启用"
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            AppMetricCell(
-                label = "开放预约时间",
-                value = when {
-                    loading -> "读取中"
-                    else -> profile.openTimeRange.ifBlank { "—" }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (profile.ruleText.isNotBlank()) {
-                Text(
-                    text = profile.ruleText,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
         }
     }
 }

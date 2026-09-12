@@ -1,7 +1,6 @@
 package cn.pxyb.mycontrol
 
 import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_AREAS_PATH
-import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_CREDIT_PATH
 import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_OFFICIAL_WEBVIEW_LOGIN_PATH
 import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_OVERVIEW_PATH
 import cn.pxyb.mycontrol.data.CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH
@@ -28,7 +27,6 @@ import cn.pxyb.mycontrol.data.parseLibrarySeatAreasPayload
 import cn.pxyb.mycontrol.data.parseLibrarySeatBreachPayload
 import cn.pxyb.mycontrol.data.parseLibrarySeatCancelResultPayload
 import cn.pxyb.mycontrol.data.parseLibrarySeatCurrentUsePayload
-import cn.pxyb.mycontrol.data.parseLibrarySeatCreditPayload
 import cn.pxyb.mycontrol.data.parseLibrarySeatDoorLogPayload
 import cn.pxyb.mycontrol.data.parseLibrarySeatMakeLifePayload
 import cn.pxyb.mycontrol.data.parseLibrarySeatOverviewPayload
@@ -61,7 +59,6 @@ class CampusReservationModelTest {
         assertEquals("/apps/campus/api/campus/library-seat/reservations", CAMPUS_LIBRARY_SEAT_RESERVATIONS_PATH)
         assertEquals("/apps/campus/api/campus/library-seat/official-webview-login", CAMPUS_LIBRARY_SEAT_OFFICIAL_WEBVIEW_LOGIN_PATH)
         assertEquals("/apps/campus/api/campus/library-seat/timeline", CAMPUS_LIBRARY_SEAT_TIMELINE_PATH)
-        assertEquals("/apps/campus/api/campus/library-seat/credit", CAMPUS_LIBRARY_SEAT_CREDIT_PATH)
     }
 
     @Test
@@ -385,32 +382,6 @@ class CampusReservationModelTest {
         assertEquals("", timeline.marks[1].label)
         assertFalse(timeline.isEmpty)
         assertTrue(parseLibrarySeatTimelinePayload(JSONObject()).isEmpty)
-    }
-
-    @Test
-    fun `library seat credit profile parses score and quota policy`() {
-        val response = JSONObject().put(
-            "data",
-            JSONObject()
-                .put("fullName", "张三")
-                .put("score", 96)
-                .put("scoreEnabled", true)
-                .put("superviseAway", 30)
-                .put("openTime", "08:00")
-                .put("closeTime", "21:45")
-                .put("ruleText", "图书馆阅览座位管理规定"),
-        )
-
-        val profile = parseLibrarySeatCreditPayload(response)
-
-        assertEquals("张三", profile.fullName)
-        assertEquals(96, profile.score)
-        assertEquals(30, profile.superviseAway)
-        assertEquals("08:00 - 21:45", profile.openTimeRange)
-        assertEquals("图书馆阅览座位管理规定", profile.ruleText)
-        assertTrue(profile.scoreEnabled)
-        assertFalse(profile.isEmpty)
-        assertTrue(parseLibrarySeatCreditPayload(JSONObject()).isEmpty)
     }
 
     @Test

@@ -39,11 +39,6 @@ function dataOf(payload) {
   return payload && Object.hasOwn(payload, "data") ? payload.data : payload;
 }
 
-function objectOf(payload) {
-  const data = dataOf(payload);
-  return data && typeof data === "object" && !Array.isArray(data) ? data : {};
-}
-
 function upstreamMessage(payload, fallback) {
   return String(payload?.message || payload?.msg || payload?.error || fallback);
 }
@@ -347,52 +342,6 @@ export function normalizeLibrarySeatStartTimesPayload(payload) {
   }).filter(Boolean);
 }
 
-function librarySeatVenueWindow(buildSeTime, venueId) {
-  const map = buildSeTime && typeof buildSeTime === "object" && !Array.isArray(buildSeTime) ? buildSeTime : {};
-  const keys = Object.keys(map);
-  const id = stringValue(venueId);
-  const entry = (id && map[id]) || (keys.length === 1 ? map[keys[0]] : null);
-  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return { openTime: "", closeTime: "" };
-  return {
-    openTime: firstString(entry, ["openTimeStr"]),
-    closeTime: firstString(entry, ["closeTimeStr"])
-  };
-}
-
-function librarySeatRuleText(value) {
-  return stringValue(value)
-    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|li|tr|h[1-6]|section|table)>/gi, "\n")
-    .replace(/<[^>]*>/g, "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&#39;/gi, "\u0027")
-    .replace(/&quot;/gi, "\"")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&amp;/gi, "&")
-    .replace(/[ \t\f\v\u00a0]+/g, " ")
-    .replace(/ *\n */g, "\n")
-    .replace(/\n{2,}/g, "\n")
-    .trim();
-}
-
-export function normalizeLibrarySeatCreditPayload(userPayload, systemPayload, { venueId = "" } = {}) {
-  const user = objectOf(userPayload);
-  const system = objectOf(systemPayload);
-  const score = Number(user.score ?? user.creditScore ?? user.integral);
-  const window = librarySeatVenueWindow(system.buildSeTime, venueId);
-  return {
-    fullName: firstString(user, ["fullName", "name", "userName"]),
-    score: Number.isFinite(score) ? Math.trunc(score) : null,
-    scoreEnabled: Number.isFinite(score),
-    superviseAway: Math.max(0, intValue(system.superviseAway ?? system.superviseAwayMinute, 0)),
-    openTime: window.openTime,
-    closeTime: window.closeTime,
-    ruleText: librarySeatRuleText(system.ruleText ?? system.readText)
-  };
-}
-
 function normalizeLibrarySeatLayoutSeats(layout) {
   return asArray(layout?.objects).map((object) => {
     const seat = object && typeof object === "object" ? object.seat : null;
@@ -621,18 +570,6 @@ export function createLibrarySeatClient({
       ),
       { roomId: input.roomId ?? input.areaId }
     ),
-    getCreditProfile: async (input = {}) => {
-      const [userResult, systemResult] = await Promise.allSettled([
-        request("/static/frontApi/user/getUserInfo", {}),
-        request("/static/public/cg/getSysSet/PC", {}, { tokenRequired: false })
-      ]);
-      if (userResult.status === "rejected" && systemResult.status === "rejected") throw userResult.reason;
-      return normalizeLibrarySeatCreditPayload(
-        userResult.status === "fulfilled" ? userResult.value : null,
-        systemResult.status === "fulfilled" ? systemResult.value : null,
-        { venueId: input?.venueId }
-      );
-    },
     submitReservation: async (input = {}) => {
       const normalized = normalizeLibrarySeatReservationInput(input);
       return request(

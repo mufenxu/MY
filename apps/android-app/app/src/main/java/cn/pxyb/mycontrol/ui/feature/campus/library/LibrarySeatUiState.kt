@@ -2,7 +2,6 @@ package cn.pxyb.mycontrol.ui.feature.campus.library
 
 import androidx.compose.runtime.Immutable
 import cn.pxyb.mycontrol.data.LibrarySeatArea
-import cn.pxyb.mycontrol.data.LibrarySeatCreditProfile
 import cn.pxyb.mycontrol.data.LibrarySeatBreachPage
 import cn.pxyb.mycontrol.data.LibrarySeatDoorLog
 import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
@@ -58,8 +57,6 @@ data class LibrarySeatUiState(
     val timelineLoading: Boolean = false,
     val timelineSeatId: String = "",
     val timelineDate: String = "",
-    val credit: LibrarySeatCreditProfile = LibrarySeatCreditProfile(),
-    val creditLoading: Boolean = false,
     val waitlists: List<LibrarySeatWaitlistTask> = emptyList(),
     val waitlistsLoading: Boolean = false,
     val waitlistSaving: Boolean = false,
