@@ -12,6 +12,7 @@ import org.json.JSONObject
 import java.time.YearMonth
 
 class CampusRepository internal constructor(private val http: PlatformHttpClient) {
+    val chaoxing = ChaoxingRepository(http)
     private val librarySeatSeatCache = LinkedHashMap<String, Pair<Long, List<LibrarySeatStatus>>>()
 
     suspend fun campusTimetable(): CampusTimetable = withContext(Dispatchers.IO) {

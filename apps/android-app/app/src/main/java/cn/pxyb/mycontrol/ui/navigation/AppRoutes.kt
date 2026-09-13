@@ -33,6 +33,7 @@ internal object AppRoute {
     const val Reservation = "reservation"
     const val LibrarySeatReservation = "library-seat-reservation"
     const val CampusWaterValve = "campus-water-valve"
+    const val Chaoxing = "chaoxing"
     const val Notifications = "notifications"
     const val DailyNews = "daily-news"
     const val Scenes = "scenes"
@@ -43,7 +44,7 @@ internal fun contentMaxWidthForRoute(route: String): Dp = when (route) {
     AppRoute.NotificationSettings, AppRoute.LoginSessions, AppRoute.CampusWaterValve -> AppFormContentMaxWidth
     AppRoute.Overview, AppRoute.Operations, AppRoute.Tools, AppRoute.Today,
     AppRoute.Timetable, AppRoute.Campus, AppRoute.Todos, AppRoute.FreeClassrooms,
-    AppRoute.Reservation, AppRoute.LibrarySeatReservation, AppRoute.Notifications,
+    AppRoute.Reservation, AppRoute.LibrarySeatReservation, AppRoute.Notifications, AppRoute.Chaoxing,
     AppRoute.GoogleAccounts, AppRoute.GitHubProjects, AppRoute.Projects,
     AppRoute.RegistryImages, AppRoute.AndroidReleases, AppRoute.Search, AppRoute.Scenes -> AppWorkspaceContentMaxWidth
     else -> AppTabletContentMaxWidth
@@ -82,7 +83,7 @@ internal fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Overview, AppRoute.Search, AppRoute.Assistant,
     AppRoute.Today, AppRoute.Timetable, AppRoute.Campus, AppRoute.Todos,
     AppRoute.FreeClassrooms, AppRoute.Reservation, AppRoute.LibrarySeatReservation,
-    AppRoute.CampusWaterValve, AppRoute.DailyNews, AppRoute.Notifications -> MainTab.Overview
+    AppRoute.CampusWaterValve, AppRoute.DailyNews, AppRoute.Notifications, AppRoute.Chaoxing -> MainTab.Overview
     AppRoute.Operations, AppRoute.Projects, AppRoute.GitHubProjects,
     AppRoute.AndroidReleases, AppRoute.RegistryImages -> MainTab.Operations
     AppRoute.Tools, AppRoute.Scenes -> MainTab.Tools
@@ -101,11 +102,12 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.Assistant, AppRoute.Notifications, AppRoute.Search,
     AppRoute.Today, AppRoute.Timetable, AppRoute.Campus, AppRoute.Todos,
     AppRoute.FreeClassrooms, AppRoute.Reservation, AppRoute.LibrarySeatReservation,
-    AppRoute.CampusWaterValve, AppRoute.DailyNews -> MainTab.Overview
+    AppRoute.CampusWaterValve, AppRoute.DailyNews, AppRoute.Chaoxing -> MainTab.Overview
     else -> null
 }
 
 internal fun parentRouteForSubScreen(route: String?, previousRoute: String?): String? = when (route) {
+    AppRoute.Chaoxing -> AppRoute.Campus
     AppRoute.GitHubProjects, AppRoute.AndroidReleases, AppRoute.RegistryImages -> AppRoute.Projects
     AppRoute.LoginSessions -> AppRoute.Account
     AppRoute.NotificationSettings -> if (previousRoute == AppRoute.Notifications) AppRoute.Notifications else AppRoute.Profile

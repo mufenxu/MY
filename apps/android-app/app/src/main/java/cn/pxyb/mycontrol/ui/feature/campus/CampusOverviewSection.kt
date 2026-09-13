@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.CampusGpa
 import cn.pxyb.mycontrol.data.CampusOverview
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
+import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppDivider
 import cn.pxyb.mycontrol.ui.components.display.AppIconTile
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
@@ -49,6 +50,7 @@ internal fun CampusOverviewSection(
     onOpenReservation: () -> Unit,
     onOpenLibrarySeatReservation: () -> Unit,
     onOpenWaterValve: () -> Unit,
+    onOpenChaoxing: () -> Unit,
 ) {
     if (overview == null) {
         Column(
@@ -60,6 +62,7 @@ internal fun CampusOverviewSection(
                 onOpenReservation = onOpenReservation,
                 onOpenLibrarySeatReservation = onOpenLibrarySeatReservation,
                 onOpenWaterValve = onOpenWaterValve,
+                onOpenChaoxing = onOpenChaoxing,
             )
             AppEmptyState("校园信息正在同步", detail = "连接学校账号后，会显示成绩、空教室、一卡通和宿舍能耗。")
         }
@@ -95,6 +98,7 @@ internal fun CampusOverviewSection(
             onOpenReservation = onOpenReservation,
             onOpenLibrarySeatReservation = onOpenLibrarySeatReservation,
             onOpenWaterValve = onOpenWaterValve,
+            onOpenChaoxing = onOpenChaoxing,
         )
     }
 }
@@ -246,9 +250,10 @@ private fun CampusQuickToolsGrid(
     onOpenReservation: () -> Unit,
     onOpenLibrarySeatReservation: () -> Unit,
     onOpenWaterValve: () -> Unit,
+    onOpenChaoxing: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        AppSectionHeader(title = "校园快捷服务", subtitle = "预约、自习与日常用水")
+        AppSectionHeader(title = "校园快捷服务", subtitle = "预约、自习、签到与日常用水")
         AppPanel {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
@@ -259,6 +264,8 @@ private fun CampusQuickToolsGrid(
                 QuickToolItem(Icons.Outlined.Chair, "座位预约", ColorTokens.Teal.foreground, ColorTokens.Teal.container, Modifier.weight(1f), onOpenLibrarySeatReservation)
                 QuickToolItem(Icons.Outlined.WaterDrop, "饮水机", MaterialTheme.colorScheme.tertiary, MaterialTheme.colorScheme.tertiaryContainer, Modifier.weight(1f), onOpenWaterValve)
             }
+            AppDivider()
+            AppActionRow("学习通签到", subtitle = "课程活动、位置签到与官方记录", icon = Icons.Outlined.School, onClick = onOpenChaoxing)
         }
     }
 }

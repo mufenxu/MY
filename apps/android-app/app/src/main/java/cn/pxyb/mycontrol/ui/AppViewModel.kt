@@ -58,6 +58,7 @@ import cn.pxyb.mycontrol.ui.feature.assistant.AssistantChatUiState
 import cn.pxyb.mycontrol.ui.feature.auth.toEntryUiState
 import cn.pxyb.mycontrol.ui.feature.auth.toQrLoginUiState
 import cn.pxyb.mycontrol.ui.feature.campus.library.LibrarySeatStateHolder
+import cn.pxyb.mycontrol.ui.feature.campus.chaoxing.ChaoxingStateHolder
 import cn.pxyb.mycontrol.ui.feature.campus.reservation.ReservationStateHolder
 import cn.pxyb.mycontrol.ui.feature.campus.reservation.campusReservationRedirect
 import cn.pxyb.mycontrol.ui.feature.campus.toFreeClassroomUiState
@@ -213,6 +214,12 @@ class AppViewModel(
     val freeClassroomState = deriveState(AppUiState::toFreeClassroomUiState)
     val reservations = ReservationStateHolder(viewModelScope, api.campus, ::forceReauthentication)
     val librarySeats = LibrarySeatStateHolder(viewModelScope, api.campus, ::forceReauthentication)
+    val chaoxing = ChaoxingStateHolder(
+        viewModelScope, api.campus.chaoxing,
+        canRun = { mutableState.value.let { it.user != null && !it.locked && it.busyAction != "logout" } },
+        accountName = sessionStore::readActiveUsername,
+        onSessionExpired = ::forceReauthentication,
+    )
     val notificationCenterState = deriveState(AppUiState::toNotificationCenterUiState)
     private val scenes = ScenesController(viewModelScope, api.iot, actions, mutableState, { refreshIot(force = true) }, ::publishWidget)
     val scenesState = scenes.state
@@ -746,6 +753,7 @@ class AppViewModel(
             reservations.reset()
             librarySeats.reset()
             waterValves.reset()
+            chaoxing.reset()
             featureAccountUsername = username
         }
         notifications.reset()
@@ -784,6 +792,7 @@ class AppViewModel(
         accountRequestScope.coroutineContext.cancelChildren()
         qrLoginJob = null
         waterValves.cancelPending()
+        chaoxing.cancelPending()
         operationalEffectsJob?.cancel()
         operationalEffectsJob = null
         assistantChatMutable.update { it.copy(sending = false) }

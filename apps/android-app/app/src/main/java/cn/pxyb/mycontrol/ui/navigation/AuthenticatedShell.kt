@@ -110,6 +110,7 @@ import cn.pxyb.mycontrol.ui.feature.campus.library.LibrarySeatReservationScreen
 import cn.pxyb.mycontrol.ui.feature.campus.library.LibrarySeatTab
 import cn.pxyb.mycontrol.ui.feature.campus.reservation.ReservationScreen
 import cn.pxyb.mycontrol.ui.feature.campus.water.WaterValveScreen
+import cn.pxyb.mycontrol.ui.feature.campus.chaoxing.ChaoxingScreen
 import cn.pxyb.mycontrol.ui.feature.google.GoogleAccountDeskScreen
 import cn.pxyb.mycontrol.ui.feature.news.DailyNewsScreen
 import cn.pxyb.mycontrol.ui.feature.notifications.NotificationCenterScreen
@@ -840,6 +841,7 @@ internal fun AuthenticatedShell(
                             onOpenWaterValve = {
                                 navigateToSubScreen(AppRoute.CampusWaterValve)
                             },
+                            onOpenChaoxing = { navigateToSubScreen(AppRoute.Chaoxing) },
                             onConsumeSharedDraft = viewModel::consumeSharedTodoDraft,
                             initialSection = destination,
                         )
@@ -861,6 +863,25 @@ internal fun AuthenticatedShell(
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
                         onQuery = viewModel::queryFreeClassrooms,
+                    )
+                }
+                composable(AppRoute.Chaoxing) {
+                    val chaoxingState by viewModel.chaoxing.state.collectAsStateWithLifecycle()
+                    ChaoxingScreen(
+                        state = chaoxingState,
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onRefresh = viewModel.chaoxing::refresh,
+                        onConnect = viewModel.chaoxing::connect,
+                        onDisconnect = viewModel.chaoxing::disconnect,
+                        onSelectCourse = viewModel.chaoxing::selectCourse,
+                        onOpenActivity = viewModel.chaoxing::openActivity,
+                        onRefreshSelected = viewModel.chaoxing::refreshSelected,
+                        onCloseActivity = viewModel.chaoxing::closeActivity,
+                        onLocate = viewModel.chaoxing::locate,
+                        onSign = viewModel.chaoxing::sign,
+                        onReport = viewModel.chaoxing::report,
+                        onClearFeedback = viewModel.chaoxing::clearFeedback,
                     )
                 }
                 composable(AppRoute.CampusWaterValve) {

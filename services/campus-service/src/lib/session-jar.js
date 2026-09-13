@@ -88,7 +88,7 @@ function responseSetCookies(response) {
   return splitSetCookie(response.headers.get("set-cookie"));
 }
 
-export function parseSetCookie(line, requestUrl) {
+export function parseSetCookie(line, requestUrl, allowedDomain = "hgu.edu.cn") {
   const url = new URL(requestUrl);
   const parts = String(line).split(";").map((part) => part.trim());
   const first = parts.shift() || "";
@@ -115,7 +115,7 @@ export function parseSetCookie(line, requestUrl) {
     if (key === "domain" && value) {
       const requestedDomain = value.replace(/^\./, "").toLowerCase();
       const domainMatches = url.hostname === requestedDomain || url.hostname.endsWith(`.${requestedDomain}`);
-      if (!domainMatches || !(requestedDomain === "hgu.edu.cn" || requestedDomain.endsWith(".hgu.edu.cn"))) return null;
+      if (!domainMatches || !(requestedDomain === allowedDomain || requestedDomain.endsWith(`.${allowedDomain}`))) return null;
       cookie.domain = requestedDomain;
       cookie.hostOnly = false;
     }
@@ -153,9 +153,9 @@ export function rememberCookie(jar, cookie) {
   delete jar.deletedCookies[tombstoneKey];
 }
 
-export function updateJarFromResponse(jar, response, requestUrl) {
+export function updateJarFromResponse(jar, response, requestUrl, allowedDomain = "hgu.edu.cn") {
   for (const line of responseSetCookies(response)) {
-    const cookie = parseSetCookie(line, requestUrl);
+    const cookie = parseSetCookie(line, requestUrl, allowedDomain);
     rememberCookie(jar, cookie);
     if (cookie?.domain.endsWith("nrg.hgu.edu.cn") && cookie.name.toUpperCase().includes("JSESSIONID")) {
       jar.meta.nrgCapturedAt = isoNow();

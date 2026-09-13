@@ -48,6 +48,7 @@ export class CampusRepository {
       this.db.collection("users").createIndex({ username: 1 }, { unique: true }),
       this.db.collection("users").createIndex({ created_at: 1 }),
       this.db.collection("school_sessions").createIndex({ user_id: 1 }, { unique: true }),
+      this.db.collection("chaoxing_sessions").createIndex({ user_id: 1 }, { unique: true }),
       this.db.collection("academic_caches").createIndex({ user_id: 1, source_key: 1 }, { unique: true }),
       this.db.collection("calendar_subscriptions").createIndex({ user_id: 1 }, { unique: true }),
       this.db.collection("calendar_subscriptions").createIndex({ token_hash: 1 }, { unique: true }),
@@ -186,6 +187,7 @@ export class CampusRepository {
     try {
       await session.withTransaction(async () => {
         await this.db.collection("school_sessions").deleteMany({ user_id: id }, { session });
+        await this.db.collection("chaoxing_sessions").deleteMany({ user_id: id }, { session });
         await this.db.collection("academic_caches").deleteMany({ user_id: id }, { session });
         await this.db.collection("calendar_subscriptions").deleteMany({ user_id: id }, { session });
         await this.db.collection("reminder_preferences").deleteMany({ user_id: id }, { session });
@@ -272,6 +274,22 @@ export class CampusRepository {
 
   async getSchoolSession(userId) {
     return withoutMongoId(await this.db.collection("school_sessions").findOne({ user_id: userId }));
+  }
+
+  async getChaoxingSession(userId) {
+    return withoutMongoId(await this.db.collection("chaoxing_sessions").findOne({ user_id: userId }));
+  }
+
+  async upsertChaoxingSession(userId, jarJson, timestamp) {
+    await this.db.collection("chaoxing_sessions").updateOne(
+      { user_id: userId },
+      { $set: { jar_json: jarJson, updated_at: timestamp } },
+      { upsert: true }
+    );
+  }
+
+  async deleteChaoxingSession(userId) {
+    await this.db.collection("chaoxing_sessions").deleteOne({ user_id: userId });
   }
 
   async listSchoolSessions() {
@@ -572,6 +590,7 @@ export class MemoryCampusRepository {
   constructor() {
     this.users = new Map();
     this.sessions = new Map();
+    this.chaoxingSessions = new Map();
     this.caches = new Map();
     this.invites = new Map();
     this.calendarSubscriptions = new Map();
@@ -635,6 +654,7 @@ export class MemoryCampusRepository {
   async deleteUser(id) {
     this.users.delete(id);
     this.sessions.delete(id);
+    this.chaoxingSessions.delete(id);
     for (const key of this.caches.keys()) if (key.startsWith(`${id}:`)) this.caches.delete(key);
     this.calendarSubscriptions.delete(id);
     this.reminderPreferences.delete(id);
@@ -665,6 +685,11 @@ export class MemoryCampusRepository {
   }
 
   async getSchoolSession(userId) { return clone(this.sessions.get(userId) || null); }
+  async getChaoxingSession(userId) { return clone(this.chaoxingSessions.get(userId) || null); }
+  async upsertChaoxingSession(userId, jarJson, timestamp) {
+    this.chaoxingSessions.set(userId, { user_id: userId, jar_json: jarJson, updated_at: timestamp });
+  }
+  async deleteChaoxingSession(userId) { this.chaoxingSessions.delete(userId); }
   async listSchoolSessions() { return clone(Array.from(this.sessions.values())); }
   async upsertSchoolSession(userId, jarJson, timestamp) {
     const current = this.sessions.get(userId);

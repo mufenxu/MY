@@ -52,6 +52,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
@@ -65,6 +66,7 @@ import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.MainActivity
 import cn.pxyb.mycontrol.data.AppPreferences
 import cn.pxyb.mycontrol.data.AppThemePreference
+import cn.pxyb.mycontrol.data.ChaoxingRepository
 import cn.pxyb.mycontrol.data.ExternalApplicationAutoLogin
 import cn.pxyb.mycontrol.data.PlatformWebCookie
 import cn.pxyb.mycontrol.data.SessionStore
@@ -84,6 +86,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -229,6 +233,7 @@ class PlatformWebActivity : ComponentActivity() {
                                 it.visibility = if (webUnlocked) View.VISIBLE else View.INVISIBLE
                             },
                             onShowFileChooser = ::showFileChooser,
+                            onConfirmLogin = if (intent.getBooleanExtra(EXTRA_CHAOXING_LOGIN, false) && initialUrl == "https://i.chaoxing.com") ::completeChaoxingLogin else null,
                         )
                     }
                     if (!webUnlocked) {
@@ -247,6 +252,22 @@ class PlatformWebActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun completeChaoxingLogin() {
+        if (!webUnlocked || !sessionStore.hasSession() || sessionStore.isLocked() || sessionStore.readActiveUsername() != webOwner) return
+        val cookies = JSONArray()
+        ChaoxingRepository.cookieOrigins.forEach { origin ->
+            CookieManager.getInstance().getCookie(origin)?.takeIf(String::isNotBlank)?.let { value ->
+                cookies.put(JSONObject().put("url", origin).put("value", value))
+            }
+        }
+        if (cookies.length() == 0) {
+            Toast.makeText(this, "请先在网页中完成学习通登录。", Toast.LENGTH_SHORT).show()
+            return
+        }
+        setResult(Activity.RESULT_OK, Intent().putExtra(RESULT_CHAOXING_SESSION, JSONObject().put("owner", webOwner).put("cookies", cookies).toString()))
+        finish()
     }
 
     private fun returnToApp() {
@@ -410,6 +431,8 @@ class PlatformWebActivity : ComponentActivity() {
     companion object {
         const val EXTRA_URL = "extra_url"
         const val EXTRA_TITLE = "extra_title"
+        const val RESULT_CHAOXING_SESSION = "chaoxing_login_session"
+        private const val EXTRA_CHAOXING_LOGIN = "chaoxing_login"
         private const val EXTRA_TRUSTED_DOWNLOAD_URL = "extra_trusted_download_url"
         private const val EXTRA_INITIAL_COOKIE_URLS = "extra_initial_cookie_urls"
         private const val EXTRA_INITIAL_COOKIE_VALUES = "extra_initial_cookie_values"
@@ -418,6 +441,9 @@ class PlatformWebActivity : ComponentActivity() {
         private const val EXTRA_AUTO_LOGIN_PASSWORD = "extra_auto_login_password"
         private const val EXTRA_AUTO_LOGIN_HOME_URL = "extra_auto_login_home_url"
         private const val WEBVIEW_UPLOAD_CACHE_DIR = "webview-uploads"
+
+        fun createChaoxingLoginIntent(context: Context): Intent =
+            createIntent(context, "https://i.chaoxing.com", "连接学习通").putExtra(EXTRA_CHAOXING_LOGIN, true)
 
         fun createIntent(
             context: Context,
@@ -461,6 +487,7 @@ private fun PlatformWebScreen(
         ValueCallback<Array<Uri>>?,
         WebChromeClient.FileChooserParams,
     ) -> Boolean,
+    onConfirmLogin: (() -> Unit)? = null,
 ) {
     var webView by remember { mutableStateOf<WebView?>(null) }
     var pageLoading by remember { mutableStateOf(true) }
@@ -470,6 +497,8 @@ private fun PlatformWebScreen(
     val dark = isAppInDarkTheme()
     val webBackground = MaterialTheme.colorScheme.background.toArgb()
     val webTextZoom = (LocalDensity.current.fontScale * 100).roundToInt()
+    val density = LocalDensity.current
+    var loginFooterHeight by remember { mutableStateOf(0.dp) }
 
     BackHandler {
         if (webView?.canGoBack() == true) {
@@ -492,7 +521,7 @@ private fun PlatformWebScreen(
         ) {
             // 1. 原生全屏沉浸 WebView 容器
             AndroidView(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().padding(bottom = if (onConfirmLogin != null) loginFooterHeight else 0.dp),
                 update = { view ->
                     if (view.settings.textZoom != webTextZoom) view.settings.textZoom = webTextZoom
                 },
@@ -611,6 +640,19 @@ private fun PlatformWebScreen(
                     }
                     },
                 )
+
+            if (onConfirmLogin != null) {
+                Surface(
+                    modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                        .onSizeChanged { loginFooterHeight = with(density) { it.height.toDp() } },
+                    color = MaterialTheme.colorScheme.background,
+                ) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("请在上方完成学习通登录，然后连接到 MY。", style = MaterialTheme.typography.bodySmall)
+                        AppButton("已登录，连接账号", onClick = onConfirmLogin, modifier = Modifier.fillMaxWidth(), enabled = !pageLoading)
+                    }
+                }
+            }
 
             // 2. 极简悬浮微加载条（仅在页面加载时显示，0 高度占用）
             AnimatedVisibility(

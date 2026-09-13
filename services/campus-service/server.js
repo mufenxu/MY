@@ -1,6 +1,7 @@
 import { createBackgroundSchedulers } from "./src/services/background-schedulers.js";
 import { createIdentityService } from "./src/services/identity-service.js";
 import { createCampusConnectors } from "./src/services/campus-connectors.js";
+import { createChaoxingService } from "./src/services/chaoxing-service.js";
 import { createReservationService } from "./src/services/reservation-service.js";
 import { createAcademicService } from "./src/services/academic-service.js";
 import { createSchoolWebvpnService } from "./src/services/school-webvpn.js";
@@ -43,6 +44,7 @@ import { normalizeLibrarySeatReservationInput } from "./src/lib/library-seat.js"
 import { discardUpstreamResponse, releaseUpstreamResponse, trackUpstreamResponse } from "./src/lib/upstream-response.js";
 import { createCampusRepository } from "./src/storage/campus-repository.js";
 import { handleCampusCoreRoutes } from "./src/routes/campus-core-routes.js";
+import { handleChaoxingRoutes } from "./src/routes/chaoxing-routes.js";
 import { handleLibroomRoutes } from "./src/routes/libroom-routes.js";
 import { handleLibrarySeatRoutes } from "./src/routes/library-seat-routes.js";
 import { handleAcademicRoutes } from "./src/routes/academic-routes.js";
@@ -2593,6 +2595,8 @@ async function handleApiRoutes(req, res, url) {
       return;
     }
 
+    if (await handleChaoxingRoutes(req, res, url, { chaoxing, currentUserId, json, readBodyJson })) return;
+
     if (await handleCampusCoreRoutes(req, res, url, {
       HttpError,
       campusQueryFromSearch,
@@ -2764,6 +2768,8 @@ function respondApiError(req, res, url, error) {
     requestId: context.requestId || null
   });
 }
+
+const chaoxing = createChaoxingService({ repository, sensitiveJson, readUpstreamText });
 
 const {
   requestAcademicHtml,
