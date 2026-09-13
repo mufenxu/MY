@@ -5,6 +5,8 @@ export async function handleChaoxingRoutes(req, res, url, { chaoxing, currentUse
   let data;
   if (path === "session" && req.method === "GET") data = await chaoxing.status(userId);
   else if (path === "session" && req.method === "POST") data = await chaoxing.connect(userId, await readBodyJson(req));
+  else if (path === "sign-provider" && req.method === "POST") data = await chaoxing.connectSignProvider(userId, await readBodyJson(req));
+  else if (path === "sign-provider/disconnect" && req.method === "POST") data = await chaoxing.disconnectSignProvider(userId);
   else if (path === "disconnect" && req.method === "POST") {
     await chaoxing.disconnect(userId);
     data = { connected: false };

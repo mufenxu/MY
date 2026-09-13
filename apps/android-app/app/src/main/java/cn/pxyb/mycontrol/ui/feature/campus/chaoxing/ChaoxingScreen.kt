@@ -54,6 +54,7 @@ import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.GlassShimmerList
 import cn.pxyb.mycontrol.ui.components.input.AppSelectField
 import cn.pxyb.mycontrol.ui.components.input.AppSelectOption
+import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
@@ -70,6 +71,8 @@ fun ChaoxingScreen(
     onRefresh: () -> Unit,
     onConnect: (String) -> Unit,
     onDisconnect: () -> Unit,
+    onConnectSignProvider: (String, String) -> Unit,
+    onDisconnectSignProvider: () -> Unit,
     onSelectCourse: (ChaoxingCourse) -> Unit,
     onOpenActivity: (ChaoxingActivity) -> Unit,
     onRefreshSelected: () -> Unit,
@@ -83,6 +86,7 @@ fun ChaoxingScreen(
     val context = LocalContext.current
     var courseExpanded by remember { mutableStateOf(false) }
     var confirmDisconnect by remember { mutableStateOf(false) }
+    var showSignProvider by remember { mutableStateOf(false) }
     var returningFromOfficial by remember { mutableStateOf(false) }
     var showCaptcha by remember(state.selected?.id) { mutableStateOf(false) }
     val currentRefreshSelected by rememberUpdatedState(onRefreshSelected)
@@ -99,6 +103,9 @@ fun ChaoxingScreen(
         else onReport("位置签到需要精确位置权限，请在系统设置中为 MY 开启后重试。")
     }
     LaunchedEffect(Unit) { onRefresh() }
+    LaunchedEffect(state.session.connected, state.session.signProviderConnected) {
+        if (!state.session.connected || state.session.signProviderConnected) showSignProvider = false
+    }
     DisposableEffect(Unit) { onDispose(onCloseActivity) }
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
@@ -109,6 +116,11 @@ fun ChaoxingScreen(
         }
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer) }
+    }
+
+    fun openSignProvider() {
+        onClearFeedback()
+        showSignProvider = true
     }
 
     fun openOfficial() {
@@ -159,6 +171,13 @@ fun ChaoxingScreen(
                             AppSecondaryButton("重新登录", { loginLauncher.launch(PlatformWebActivity.createChaoxingLoginIntent(context)) }, enabled = !state.busy, modifier = Modifier.weight(1f))
                             AppInlineDangerButton("断开连接", { confirmDisconnect = true }, enabled = !state.busy)
                         }
+                        AppDetailRow("帮你签服务", if (state.session.signProviderConnected) "已连接" else "未连接")
+                        if (state.session.signProviderConnected) {
+                            Text("位置签到通过帮你签服务提交，以学习通官方记录确认结果。", style = MaterialTheme.typography.bodySmall)
+                            AppInlineDangerButton("断开帮你签服务", onDisconnectSignProvider, enabled = !state.busy)
+                        } else {
+                            AppSecondaryButton("连接帮你签服务", ::openSignProvider, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
+                        }
                     }
                 }
             }
@@ -189,6 +208,10 @@ fun ChaoxingScreen(
         }
     }
 
+    if (showSignProvider) {
+        SignProviderConnectionDialog(state, onConnectSignProvider, onDismiss = { showSignProvider = false })
+    }
+
     if (confirmDisconnect) {
         AppDialog(title = "断开学习通连接", subtitle = "将移除服务器保存的学习通会话，之后需要重新连接。",
             onDismissRequest = { confirmDisconnect = false }, footer = {
@@ -197,6 +220,7 @@ fun ChaoxingScreen(
     }
 
     state.selected?.let { activity ->
+        if (showSignProvider) return@let
         if (showCaptcha && state.captchaRequired && activity.canSign && !state.pending && !state.officialRequired) {
             ChaoxingCaptchaDialog(
                 onDismiss = { showCaptcha = false },
@@ -220,11 +244,15 @@ fun ChaoxingScreen(
                         }, { if (state.captchaRequired) showCaptcha = true else onSign() },
                             modifier = Modifier.fillMaxWidth(), busy = state.operation == "sign", enabled = !state.busy && (activity.type != "4" || state.location != null))
                     }
+                    if (activity.type == "4" && activity.active && activity.recordStatus == 0 && !state.session.signProviderConnected && !state.officialRequired && !activity.requiresOfficial) {
+                        AppDialogSecondaryButton("连接帮你签服务", ::openSignProvider, modifier = Modifier.fillMaxWidth(), enabled = !state.busy)
+                    }
                     AppDialogSecondaryButton("刷新官方记录", onRefreshSelected, modifier = Modifier.fillMaxWidth(), enabled = !state.busy, busy = state.operation == "detail")
                 }
             }) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 AppDetailRow("签到类型", activity.typeText)
+                if (activity.type == "4" && state.session.signProviderConnected) AppDetailRow("签到服务", "帮你签")
                 AppDetailRow("官方记录", activity.recordText)
                 AppDetailRow("截止时间", if (activity.endTime > 0) signTime(activity.endTime) else "以老师结束活动为准")
                 if (activity.locationText.isNotBlank()) AppDetailRow("要求地点", activity.locationText)
@@ -244,9 +272,44 @@ fun ChaoxingScreen(
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) onLocate(context)
                         else permissions.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     }, modifier = Modifier.fillMaxWidth(), enabled = !state.busy, loading = state.operation == "locate")
-                    Text("确认签到时，会将本次位置提交至学习通。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (state.session.signProviderConnected) "确认签到时，会将本次位置和账号资料发送至帮你签服务（lovegcu.xyz），并消耗该服务的可用次数。" else "确认签到时，会将本次位置提交至学习通。",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SignProviderConnectionDialog(state: ChaoxingUiState, onConnect: (String, String) -> Unit, onDismiss: () -> Unit) {
+    var phone by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) password = ""
+        }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
+    AppDialog(title = "连接帮你签服务", subtitle = "使用与 ${state.session.name} 相同的学习通账号",
+        onDismissRequest = { if (!state.busy) onDismiss() }, footer = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppDialogPrimaryButton("连接并启用", {
+                    val credential = password
+                    password = ""
+                    onConnect(phone.trim(), credential)
+                }, modifier = Modifier.fillMaxWidth(), busy = state.operation == "provider-connect",
+                    enabled = !state.busy && phone.isNotBlank() && password.isNotEmpty())
+                AppDialogSecondaryButton("取消", onDismiss, modifier = Modifier.fillMaxWidth(), enabled = !state.busy)
+            }
+        }) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("账号和密码将发送至帮你签服务（lovegcu.xyz）用于连接。MY 不保存密码。", style = MaterialTheme.typography.bodyMedium)
+            Text("启用后，位置签到会向该服务发送本次位置和账号资料，并消耗其可用次数。", style = MaterialTheme.typography.bodySmall)
+            AppTextField(phone, { phone = it }, label = "学习通账号", enabled = !state.busy, modifier = Modifier.fillMaxWidth())
+            AppTextField(password, { password = it }, label = "学习通密码", isPassword = true, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
+            if (state.message != null && state.error) AppFeedbackBanner(state.message, error = true, autoDismissDurationMillis = null)
         }
     }
 }

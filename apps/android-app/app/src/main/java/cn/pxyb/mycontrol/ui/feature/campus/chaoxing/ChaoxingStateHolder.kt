@@ -54,8 +54,10 @@ class ChaoxingStateHolder(
                 if (error is ApiException && error.code == "CHAOXING_LOGIN_REQUIRED") {
                     ChaoxingUiState(loaded = true, message = "学习通登录已失效，请重新连接账号。", error = true)
                 } else {
-                    val uncertain = operation == "sign" && (error !is ApiException || error.status >= 500)
+                    val providerError = error is ApiException && error.code.orEmpty().startsWith("CHAOXING_PROVIDER_")
+                    val uncertain = operation == "sign" && !providerError && (error !is ApiException || error.status >= 500)
                     copy(busy = false, operation = "", loaded = true,
+                        session = if (error is ApiException && error.code == "CHAOXING_PROVIDER_LOGIN_REQUIRED") session.copy(signProviderConnected = false) else session,
                         pending = pending || uncertain,
                         message = if (uncertain) "签到结果暂未确认，请先刷新官方记录。" else error.message ?: "操作失败，请稍后重试。", error = true,
                         officialRequired = officialRequired || error is ApiException && error.code == "CHAOXING_OFFICIAL_REQUIRED")
@@ -87,6 +89,18 @@ class ChaoxingStateHolder(
     }
 
     fun disconnect() = run("disconnect", { api.disconnect() }, { ChaoxingUiState(loaded = true) })
+
+    fun connectSignProvider(phone: String, password: String) = run(
+        "provider-connect", { api.connectSignProvider(phone, password) },
+        { session -> copy(session = session, message = "帮你签服务已连接，位置签到将通过该服务提交。", error = false) },
+        afterSuccess = { mutableState.value.selected?.let(::openActivity) },
+    )
+
+    fun disconnectSignProvider() = run(
+        "provider-disconnect", { api.disconnectSignProvider() },
+        { session -> copy(session = session, message = "已断开帮你签服务。", error = false) },
+        afterSuccess = { mutableState.value.selected?.let(::openActivity) },
+    )
 
     fun selectCourse(course: ChaoxingCourse) = run("activities", { api.activities(course) }, { activities ->
         copy(course = course, activities = activities, selected = null, location = null, pending = false, officialRequired = false, captchaRequired = false)

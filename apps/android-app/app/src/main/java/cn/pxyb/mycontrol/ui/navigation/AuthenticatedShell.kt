@@ -874,6 +874,8 @@ internal fun AuthenticatedShell(
                         onRefresh = viewModel.chaoxing::refresh,
                         onConnect = viewModel.chaoxing::connect,
                         onDisconnect = viewModel.chaoxing::disconnect,
+                        onConnectSignProvider = viewModel.chaoxing::connectSignProvider,
+                        onDisconnectSignProvider = viewModel.chaoxing::disconnectSignProvider,
                         onSelectCourse = viewModel.chaoxing::selectCourse,
                         onOpenActivity = viewModel.chaoxing::openActivity,
                         onRefreshSelected = viewModel.chaoxing::refreshSelected,

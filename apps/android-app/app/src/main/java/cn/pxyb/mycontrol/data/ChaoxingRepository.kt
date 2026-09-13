@@ -6,7 +6,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class ChaoxingSession(val connected: Boolean = false, val name: String = "", val school: String = "")
+data class ChaoxingSession(val connected: Boolean = false, val name: String = "", val school: String = "", val signProviderConnected: Boolean = false)
 
 data class ChaoxingCourse(val courseId: String, val classId: String, val name: String, val teacher: String, val className: String) {
     val key: String get() = "$courseId:$classId"
@@ -70,6 +70,15 @@ class ChaoxingRepository internal constructor(private val http: PlatformHttpClie
         Unit
     }
 
+    suspend fun connectSignProvider(phone: String, password: String): ChaoxingSession = withContext(Dispatchers.IO) {
+        http.execute("$PATH/sign-provider", "POST", JSONObject().put("phone", phone).put("password", password))
+            .json.getJSONObject("data").toSession()
+    }
+
+    suspend fun disconnectSignProvider(): ChaoxingSession = withContext(Dispatchers.IO) {
+        http.execute("$PATH/sign-provider/disconnect", "POST", JSONObject()).json.getJSONObject("data").toSession()
+    }
+
     suspend fun courses(): List<ChaoxingCourse> = withContext(Dispatchers.IO) {
         http.execute("$PATH/courses").json.optJSONArray("data").platformObjects().map {
             ChaoxingCourse(it.getString("courseId"), it.getString("classId"), it.optString("name"), it.optString("teacher"), it.optString("className"))
@@ -89,7 +98,7 @@ class ChaoxingRepository internal constructor(private val http: PlatformHttpClie
         val body = JSONObject().put("courseId", activity.courseId).put("classId", activity.classId).put("activeId", activity.id)
         location?.let { body.put("location", it.toJson()) }
         if (validate.isNotBlank()) body.put("validate", validate)
-        val data = http.execute("$PATH/sign", "POST", body, timeoutSeconds = 90).json.getJSONObject("data")
+        val data = http.execute("$PATH/sign", "POST", body, timeoutSeconds = 150).json.getJSONObject("data")
         ChaoxingSignResult(data.optBoolean("confirmed"), data.optBoolean("pending"), data.optBoolean("requiresOfficial"), data.optBoolean("requiresCaptcha"), data.optString("message"), data.getJSONObject("activity").toActivity())
     }
 
@@ -101,7 +110,7 @@ class ChaoxingRepository internal constructor(private val http: PlatformHttpClie
     }
 }
 
-private fun JSONObject.toSession() = ChaoxingSession(optBoolean("connected"), optString("name"), optString("school"))
+private fun JSONObject.toSession() = ChaoxingSession(optBoolean("connected"), optString("name"), optString("school"), optBoolean("signProviderConnected"))
 
 private fun JSONObject.toActivity() = ChaoxingActivity(
     id = getString("id"), courseId = getString("courseId"), classId = getString("classId"), name = optString("name"),
