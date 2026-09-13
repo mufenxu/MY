@@ -242,7 +242,7 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
       const activity = { ...summary, ...record, canSign: !record.signed && record.recordStatus === 0 };
       if (record.signed) return { confirmed: true, message: `官方已确认：${record.recordText}。`, activity };
       const pending = result === "unknown" || /^success/.test(result);
-      const upstreamCode = /^[A-Za-z0-9_\[\]-]{1,80}$/.test(result) ? result : "unrecognized_response";
+      const upstreamCode = /^[A-Za-z0-9_[\]-]{1,80}$/.test(result) ? result : "unrecognized_response";
       return { confirmed: false, pending, upstreamCode, message: pending ? "官方签到记录尚未更新，请先刷新结果。" : `学习通未确认签到，请刷新官方记录。返回状态：${upstreamCode}。`, activity };
     })
   };
