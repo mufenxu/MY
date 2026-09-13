@@ -484,7 +484,7 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
         notify_app_id: String(platformUserId || current?.notify_app_id || preference?.app_recipient_id || "").trim(),
         notify_wecom_id: String(preference?.recipient_id || current?.notify_wecom_id || "").trim()
       };
-      if (times !== undefined || enabled) changes.times = normalizeChaoxingAutoSignTimes(times);
+      if (times !== undefined || enabled) changes.times = normalizeChaoxingAutoSignTimes(times, { allowEmpty: !enabled });
       if (location !== undefined || enabled) changes.location = normalizeChaoxingAutoSignLocation(location);
       // 未提交 course 时保留原选择；提交 null 表示回到全部课程。
       changes.course = body.course === undefined ? (current?.course ?? null) : normalizeChaoxingAutoSignCourse(body.course);

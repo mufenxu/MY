@@ -310,7 +310,7 @@ export class CampusRepository {
       { user_id: userId },
       {
         $set: { ...clone(changes), updated_at: timestamp },
-        $setOnInsert: { user_id: userId, created_at: timestamp, course: null, last_run_key: "", last_run_at: null, last_result: null, run_lock_until: null }
+        $setOnInsert: { user_id: userId, created_at: timestamp, last_run_key: "", last_run_at: null, last_result: null, run_lock_until: null }
       },
       { upsert: true }
     );

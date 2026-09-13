@@ -39,7 +39,7 @@ export function chaoxingAutoSignLocalTime(now = new Date()) {
   };
 }
 
-export function normalizeChaoxingAutoSignTimes(value) {
+export function normalizeChaoxingAutoSignTimes(value, { allowEmpty = false } = {}) {
   if (!Array.isArray(value)) throw fail("请设置签到时刻。", "CHAOXING_AUTO_SIGN_TIMES_REQUIRED");
   const times = new Set();
   for (const entry of value) {
@@ -47,7 +47,11 @@ export function normalizeChaoxingAutoSignTimes(value) {
     if (!TIME_PATTERN.test(time)) throw fail("签到时刻格式不正确，请使用 24 小时制的 HH:MM。", "CHAOXING_AUTO_SIGN_TIME_INVALID");
     times.add(time);
   }
-  if (!times.size) throw fail("请至少设置一个签到时刻。", "CHAOXING_AUTO_SIGN_TIMES_REQUIRED");
+  // 尚未开启定时签到时允许暂不设置时刻，先保存课程或位置。
+  if (!times.size) {
+    if (allowEmpty) return [];
+    throw fail("请至少设置一个签到时刻。", "CHAOXING_AUTO_SIGN_TIMES_REQUIRED");
+  }
   if (times.size > CHAOXING_AUTO_SIGN_MAX_TIMES) throw fail(`签到时刻最多设置 ${CHAOXING_AUTO_SIGN_MAX_TIMES} 个。`, "CHAOXING_AUTO_SIGN_TIMES_LIMIT");
   return [...times].sort();
 }
