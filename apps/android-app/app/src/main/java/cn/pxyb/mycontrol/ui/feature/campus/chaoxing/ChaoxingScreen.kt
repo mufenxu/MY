@@ -19,7 +19,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -34,13 +33,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import cn.pxyb.mycontrol.data.ChaoxingActivity
-import cn.pxyb.mycontrol.data.ChaoxingAutoSign
 import cn.pxyb.mycontrol.data.ChaoxingCourse
 import cn.pxyb.mycontrol.ui.PlatformWebActivity
 import cn.pxyb.mycontrol.ui.components.button.AppButton
@@ -50,26 +50,28 @@ import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppInlineDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
-import cn.pxyb.mycontrol.ui.components.display.AppActionRow
+import cn.pxyb.mycontrol.ui.components.display.AppDivider
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
+import cn.pxyb.mycontrol.ui.components.display.AppIconTile
+import cn.pxyb.mycontrol.ui.components.display.AppListCard
+import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
+import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
+import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.GlassShimmerList
 import cn.pxyb.mycontrol.ui.components.input.AppSelectField
 import cn.pxyb.mycontrol.ui.components.input.AppSelectOption
-import cn.pxyb.mycontrol.ui.components.input.AppSwitch
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.components.picker.AppTimePickerModal
-import cn.pxyb.mycontrol.util.DateTimeUtils
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-
-private const val AUTO_SIGN_TIME_LIMIT = 12
 
 @Composable
 fun ChaoxingScreen(
@@ -102,7 +104,6 @@ fun ChaoxingScreen(
     var confirmDisconnect by remember { mutableStateOf(false) }
     var showSignProvider by remember { mutableStateOf(false) }
     var showAutoSignTimePicker by remember { mutableStateOf(false) }
-    var autoSignCourseExpanded by remember { mutableStateOf(false) }
     var returningFromOfficial by remember { mutableStateOf(false) }
     var showCaptcha by remember(state.selected?.id) { mutableStateOf(false) }
     val currentRefreshSelected by rememberUpdatedState(onRefreshSelected)
@@ -172,10 +173,19 @@ fun ChaoxingScreen(
             item { GlassShimmerList() }
         } else if (!state.session.connected) {
             item {
+                AppSectionHeader(title = "账号", subtitle = "连接后可读取课程与签到活动", accent = ColorTokens.Blue.foreground)
+            }
+            item {
                 AppPanel {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("连接学习通", style = MaterialTheme.typography.titleMedium)
-                        Text("通过学习通官方页面登录，连接后可查看自己的课程、签到活动和官方记录。", style = MaterialTheme.typography.bodyMedium)
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            AppIconTile(Icons.Outlined.School, ColorTokens.Blue.foreground, ColorTokens.Blue.container)
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("连接学习通", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                                Text("使用学习通官方页面登录，连接后可查看课程、签到活动和官方记录。",
+                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                         AppButton("登录学习通", { loginLauncher.launch(PlatformWebActivity.createChaoxingLoginIntent(context)) },
                             modifier = Modifier.fillMaxWidth(), loading = state.operation == "connect", enabled = !state.busy, icon = Icons.Outlined.School)
                     }
@@ -183,75 +193,85 @@ fun ChaoxingScreen(
             }
         } else {
             item {
+                AppSectionHeader(title = "账号", subtitle = "学习通会话与帮你签服务", accent = ColorTokens.Blue.foreground)
+            }
+            item {
                 AppPanel {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(state.session.name, style = MaterialTheme.typography.titleMedium)
-                        if (state.session.school.isNotBlank()) Text(state.session.school, style = MaterialTheme.typography.bodyMedium)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            AppSecondaryButton("重新登录", { loginLauncher.launch(PlatformWebActivity.createChaoxingLoginIntent(context)) }, enabled = !state.busy, modifier = Modifier.weight(1f))
-                            AppInlineDangerButton("断开连接", { confirmDisconnect = true }, enabled = !state.busy)
-                        }
-                        AppDetailRow("帮你签服务", if (state.session.signProviderConnected) "已连接" else "未连接")
-                        if (state.session.signProviderConnected) {
-                            Text("位置签到通过帮你签服务提交，以学习通官方记录确认结果。", style = MaterialTheme.typography.bodySmall)
-                            AppInlineDangerButton("断开帮你签服务", onDisconnectSignProvider, enabled = !state.busy)
-                        } else {
-                            AppSecondaryButton("连接帮你签服务", ::openSignProvider, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
-                        }
-                        AppActionRow(title = "定时签到", subtitle = autoSignSubtitle(state.autoSign), icon = Icons.Outlined.Schedule,
-                            enabled = !state.busy, onClick = { onToggleAutoSign(!state.autoSign.enabled) },
-                            trailingContent = { AppSwitch(state.autoSign.enabled, { onToggleAutoSign(it) }, enabled = !state.busy) })
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            state.autoSign.times.forEach { time ->
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                    Text(time, style = MaterialTheme.typography.bodyLarge)
-                                    AppInlineDangerButton("移除", { onRemoveAutoSignTime(time) }, enabled = !state.busy)
+                    Column(Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            AppIconTile(Icons.Outlined.School, ColorTokens.Blue.foreground, ColorTokens.Blue.container)
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(state.session.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                if (state.session.school.isNotBlank()) {
+                                    Text(state.session.school, style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
-                            if (state.autoSign.times.isEmpty()) Text("尚未设置签到时刻。", style = MaterialTheme.typography.bodyMedium)
-                            AppSecondaryButton("添加签到时刻", { showAutoSignTimePicker = true }, modifier = Modifier.fillMaxWidth(),
-                                enabled = !state.busy && state.autoSign.times.size < AUTO_SIGN_TIME_LIMIT)
+                            AppStatusBadge(
+                                label = if (state.session.signProviderConnected) "帮你签已连接" else "帮你签未连接",
+                                semantic = if (state.session.signProviderConnected) AppStatusSemantic.Success else AppStatusSemantic.Neutral,
+                            )
                         }
-                        val autoSignCourseOptions: List<AppSelectOption<String?>> = buildList {
-                            add(AppSelectOption(null, "全部课程", "在全部课程中查找最新未签到活动"))
-                            state.courses.forEach { option -> add(AppSelectOption(option.key, option.name, listOf(option.teacher, option.className).filter(String::isNotBlank).joinToString(" · "))) }
-                            val saved = state.autoSign.course
-                            if (saved != null && state.courses.none { it.key == saved.key }) add(AppSelectOption(saved.key, saved.name.ifBlank { "已选课程" }, "该课程当前不在课程列表中"))
-                        }
-                        AppSelectField("签到课程", state.autoSign.course?.key, autoSignCourseOptions,
-                            onValueChange = { key ->
-                                autoSignCourseExpanded = false
-                                val picked = state.courses.firstOrNull { it.key == key }
-                                if (picked != null || key == null) onSelectAutoSignCourse(picked)
-                            },
-                            expanded = autoSignCourseExpanded, onExpandedChange = { autoSignCourseExpanded = it }, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
-                        AppDetailRow("签到位置", state.autoSign.location?.address ?: "尚未保存")
-                        AppSecondaryButton(if (state.autoSign.location == null) "使用当前位置保存" else "更新签到位置", {
-                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) onSaveAutoSignLocation(context)
-                            else autoSignPermissions.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-                        }, modifier = Modifier.fillMaxWidth(), enabled = !state.busy, loading = state.operation == "auto-sign-location")
-                        state.autoSign.lastResult?.let { result ->
-                            AppDetailRow("最近一次", listOf(autoSignStatusText(result.status), result.activityName, result.courseName).filter(String::isNotBlank).joinToString(" · "))
-                            if (result.message.isNotBlank()) {
-                                Text(result.message, style = MaterialTheme.typography.bodySmall,
-                                    color = if (result.failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                        AppDivider()
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            AppDetailRow("帮你签服务",
+                                if (state.session.signProviderConnected) "已连接 · 位置签到由帮你签提交" else "未连接 · 位置签到需要先连接帮你签")
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                AppSecondaryButton("重新登录", { loginLauncher.launch(PlatformWebActivity.createChaoxingLoginIntent(context)) },
+                                    enabled = !state.busy, modifier = Modifier.weight(1f))
+                                if (state.session.signProviderConnected) {
+                                    AppInlineDangerButton("断开帮你签", onDisconnectSignProvider, enabled = !state.busy)
+                                } else {
+                                    AppSecondaryButton("连接帮你签", ::openSignProvider, enabled = !state.busy, modifier = Modifier.weight(1f))
+                                }
                             }
+                            AppInlineDangerButton("断开学习通连接", { confirmDisconnect = true }, enabled = !state.busy)
                         }
-                        state.autoSign.lastRunAt?.let { AppDetailRow("执行时间", DateTimeUtils.formatPlatformTime(it)) }
-                        AppSecondaryButton("立即执行一次", onRunAutoSign, modifier = Modifier.fillMaxWidth(),
-                            enabled = !state.busy && state.autoSign.enabled, loading = state.operation == "auto-sign-run")
-                        if (!state.autoSign.notifyConfigured) {
-                            Text("尚未关联失败提醒收件人，签到失败时可能收不到企业微信消息，请先在提醒设置中填写企业微信成员账号。",
-                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                        }
-                        Text("定时签到在设定的时刻检查所选课程里最新的未签到活动，用保存的位置调用帮你签服务；失败会通过企业微信与通知中心提醒。",
-                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
+            item {
+                AppSectionHeader(
+                    title = "定时签到",
+                    subtitle = listOfNotNull(
+                        if (state.autoSign.enabled) "已开启" else "未开启",
+                        state.autoSign.times.takeIf { it.isNotEmpty() }?.joinToString("、"),
+                    ).joinToString(" · "),
+                    accent = ColorTokens.Purple.foreground,
+                )
+            }
+            item {
+                ChaoxingAutoSignPanel(
+                    state = state,
+                    onToggleAutoSign = onToggleAutoSign,
+                    onRequestAddTime = { showAutoSignTimePicker = true },
+                    onRemoveAutoSignTime = onRemoveAutoSignTime,
+                    onSelectAutoSignCourse = onSelectAutoSignCourse,
+                    onRequestLocation = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) onSaveAutoSignLocation(context)
+                        else autoSignPermissions.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                    },
+                    onRunAutoSign = onRunAutoSign,
+                )
+            }
             if (state.courses.isEmpty()) {
+                item {
+                    AppSectionHeader(title = "课程活动", subtitle = "选择课程查看签到活动", accent = ColorTokens.Green.foreground)
+                }
                 item { AppEmptyState("暂无课程", detail = "当前学习通账号未返回课程，可以刷新或重新连接账号。") }
             } else {
+                item {
+                    AppSectionHeader(
+                        title = "课程活动",
+                        subtitle = state.course?.name?.takeIf(String::isNotBlank) ?: "选择课程查看签到活动",
+                        accent = ColorTokens.Green.foreground,
+                    )
+                }
                 item {
                     AppSelectField("选择课程", state.course?.key,
                         state.courses.map { AppSelectOption(it.key, it.name, listOf(it.teacher, it.className).filter(String::isNotBlank).joinToString(" · ")) },
@@ -264,11 +284,25 @@ fun ChaoxingScreen(
                     item { AppEmptyState("暂无签到活动", detail = "当前课程没有返回签到活动，请在老师发起后刷新。") }
                 } else {
                     items(state.activities, key = { it.id }) { activity ->
-                        AppPanel {
-                            AppActionRow(title = activity.name, icon = if (activity.type == "4") Icons.Outlined.LocationOn else Icons.Outlined.CheckCircle,
-                                subtitle = "${activity.typeText} · ${if (activity.active) "进行中" else "已结束或未开始"}\n${activity.recordText} · ${signTime(activity.startTime)}",
-                                enabled = !state.busy, onClick = { onOpenActivity(activity) })
-                        }
+                        val accent = if (activity.type == "4") ColorTokens.Sky else ColorTokens.Teal
+                        AppListCard(
+                            title = activity.name,
+                            subtitle = listOfNotNull(
+                                activity.typeText.takeIf(String::isNotBlank),
+                                if (activity.active) "进行中" else "已结束或未开始",
+                                signTime(activity.startTime).takeIf { activity.startTime > 0 },
+                            ).joinToString(" · "),
+                            leading = {
+                                AppIconTile(
+                                    icon = if (activity.type == "4") Icons.Outlined.LocationOn else Icons.Outlined.CheckCircle,
+                                    tint = accent.foreground,
+                                    background = accent.container,
+                                )
+                            },
+                            trailing = { AppStatusBadge(label = activity.recordText, semantic = recordSemantic(activity)) },
+                            enabled = !state.busy,
+                            onClick = { onOpenActivity(activity) },
+                        )
                     }
                 }
                 if (state.busy && state.operation == "detail" && state.selected == null) item { GlassShimmerList(itemCount = 1) }
@@ -332,18 +366,26 @@ fun ChaoxingScreen(
                 }
             }) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                AppDetailRow("签到类型", activity.typeText)
-                if (activity.type == "4" && state.session.signProviderConnected) AppDetailRow("签到服务", "帮你签")
-                AppDetailRow("官方记录", activity.recordText)
-                AppDetailRow("截止时间", if (activity.endTime > 0) signTime(activity.endTime) else "以老师结束活动为准")
-                if (activity.locationText.isNotBlank()) AppDetailRow("要求地点", activity.locationText)
-                if (activity.locationRange > 0) AppDetailRow("签到范围", "${activity.locationRange} 米")
-                if (activity.requirements.isNotEmpty()) AppDetailRow("附加要求", activity.requirements.joinToString("、"))
-                if (state.captchaRequired && !activity.signed) AppDetailRow("安全验证", "在 MY 内完成学习通验证码后继续签到")
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    AppDetailRow("签到类型", activity.typeText)
+                    if (activity.type == "4" && state.session.signProviderConnected) AppDetailRow("签到服务", "帮你签")
+                    AppDetailRow("官方记录", activity.recordText)
+                    AppDetailRow("截止时间", if (activity.endTime > 0) signTime(activity.endTime) else "以老师结束活动为准")
+                    if (state.captchaRequired && !activity.signed) AppDetailRow("安全验证", "在 MY 内完成学习通验证码后继续签到")
+                }
+                if (activity.locationText.isNotBlank() || activity.locationRange > 0 || activity.requirements.isNotEmpty()) {
+                    AppDivider(paddingStart = 0.dp, paddingEnd = 0.dp)
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        if (activity.locationText.isNotBlank()) AppDetailRow("要求地点", activity.locationText)
+                        if (activity.locationRange > 0) AppDetailRow("签到范围", "${activity.locationRange} 米")
+                        if (activity.requirements.isNotEmpty()) AppDetailRow("附加要求", activity.requirements.joinToString("、"))
+                    }
+                }
                 if (state.message != null) AppFeedbackBanner(state.message, state.error, onRetry = onRefreshSelected, retryText = "刷新记录", autoDismissDurationMillis = null, onDismiss = onClearFeedback)
                 if (activity.active && activity.recordStatus == 0 && (state.officialRequired || activity.requiresOfficial)) {
                     Text("请在学习通中使用与 ${state.session.name} 相同的账号完成此活动，返回后可在此刷新官方记录。", style = MaterialTheme.typography.bodyMedium)
                 } else if (activity.canSign && activity.type == "4" && !state.pending) {
+                    AppDivider(paddingStart = 0.dp, paddingEnd = 0.dp)
                     state.location?.let { location ->
                         AppDetailRow("当前位置", location.address)
                         AppDetailRow("定位精度", "约 ${location.accuracy.toInt()} 米")
@@ -398,20 +440,8 @@ private fun SignProviderConnectionDialog(state: ChaoxingUiState, onConnect: (Str
 private fun signTime(value: Long): String = if (value <= 0) "时间未知" else
     DateTimeFormatter.ofPattern("MM-dd HH:mm", Locale.CHINA).withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(value))
 
-private fun autoSignSubtitle(autoSign: ChaoxingAutoSign): String {
-    val base = when {
-        autoSign.enabled && autoSign.times.isNotEmpty() -> "已开启 · ${autoSign.times.joinToString("、")}"
-        autoSign.enabled -> "已开启"
-        autoSign.times.isNotEmpty() -> "未开启 · ${autoSign.times.joinToString("、")}"
-        else -> "未开启"
-    }
-    val course = autoSign.course?.name?.takeIf { it.isNotBlank() } ?: return base
-    return "$base · $course"
-}
-
-private fun autoSignStatusText(status: String): String = when (status) {
-    "success" -> "签到成功"
-    "failed" -> "签到失败"
-    "skipped" -> "已跳过"
-    else -> "已执行"
+private fun recordSemantic(activity: ChaoxingActivity): AppStatusSemantic = when {
+    activity.signed -> AppStatusSemantic.Success
+    activity.active -> AppStatusSemantic.Warning
+    else -> AppStatusSemantic.Neutral
 }
