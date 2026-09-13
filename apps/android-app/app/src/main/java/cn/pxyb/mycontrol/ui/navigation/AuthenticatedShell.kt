@@ -891,6 +891,7 @@ internal fun AuthenticatedShell(
                         onAddAutoSignTime = viewModel.chaoxing::addAutoSignTime,
                         onRemoveAutoSignTime = viewModel.chaoxing::removeAutoSignTime,
                         onSaveAutoSignLocation = viewModel.chaoxing::saveAutoSignLocation,
+                        onSelectAutoSignCourse = viewModel.chaoxing::selectAutoSignCourse,
                         onRunAutoSign = viewModel.chaoxing::runAutoSign,
                         onReport = viewModel.chaoxing::report,
                         onClearFeedback = viewModel.chaoxing::clearFeedback,

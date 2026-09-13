@@ -73,9 +73,14 @@ data class ChaoxingAutoSignResult(
     val failed: Boolean get() = status == "failed"
 }
 
+data class ChaoxingAutoSignCourse(val courseId: String, val classId: String, val name: String) {
+    val key: String get() = "$courseId:$classId"
+}
+
 data class ChaoxingAutoSign(
     val enabled: Boolean = false,
     val times: List<String> = emptyList(),
+    val course: ChaoxingAutoSignCourse? = null,
     val location: ChaoxingAutoSignLocation? = null,
     val lastResult: ChaoxingAutoSignResult? = null,
     val lastRunAt: String? = null,
@@ -133,8 +138,9 @@ class ChaoxingRepository internal constructor(private val http: PlatformHttpClie
         http.execute("$PATH/auto-sign").json.getJSONObject("data").toAutoSign()
     }
 
-    suspend fun saveAutoSign(enabled: Boolean, times: List<String>, location: ChaoxingAutoSignLocation?): ChaoxingAutoSign = withContext(Dispatchers.IO) {
+    suspend fun saveAutoSign(enabled: Boolean, times: List<String>, location: ChaoxingAutoSignLocation?, course: ChaoxingAutoSignCourse?): ChaoxingAutoSign = withContext(Dispatchers.IO) {
         val body = JSONObject().put("enabled", enabled).put("times", JSONArray(times))
+        body.put("course", course?.let { JSONObject().put("courseId", it.courseId).put("classId", it.classId).put("name", it.name) } ?: JSONObject.NULL)
         location?.let { current ->
             body.put("location", JSONObject().put("latitude", current.latitude).put("longitude", current.longitude)
                 .put("accuracy", current.accuracy).put("address", current.address).put("isMock", current.isMock))
@@ -173,6 +179,8 @@ private fun JSONObject.toAutoSignResult() = ChaoxingAutoSignResult(
 private fun JSONObject.toAutoSign() = ChaoxingAutoSign(
     enabled = optBoolean("enabled"),
     times = (optJSONArray("times") ?: JSONArray()).let { array -> List(array.length()) { array.optString(it) } }.filter { it.isNotBlank() },
+    course = optJSONObject("course")?.takeIf { it.optString("courseId").isNotBlank() && it.optString("classId").isNotBlank() }
+        ?.let { ChaoxingAutoSignCourse(it.optString("courseId"), it.optString("classId"), it.optString("name")) },
     location = optJSONObject("location")?.let { current ->
         ChaoxingAutoSignLocation(current.optDouble("latitude"), current.optDouble("longitude"), current.optDouble("accuracy").toFloat(), current.optString("address"), current.optBoolean("isMock"))
     },

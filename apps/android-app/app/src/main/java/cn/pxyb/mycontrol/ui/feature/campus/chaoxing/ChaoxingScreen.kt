@@ -92,6 +92,7 @@ fun ChaoxingScreen(
     onAddAutoSignTime: (String) -> Unit,
     onRemoveAutoSignTime: (String) -> Unit,
     onSaveAutoSignLocation: (Context) -> Unit,
+    onSelectAutoSignCourse: (ChaoxingCourse?) -> Unit,
     onRunAutoSign: () -> Unit,
     onReport: (String) -> Unit,
     onClearFeedback: () -> Unit,
@@ -101,6 +102,7 @@ fun ChaoxingScreen(
     var confirmDisconnect by remember { mutableStateOf(false) }
     var showSignProvider by remember { mutableStateOf(false) }
     var showAutoSignTimePicker by remember { mutableStateOf(false) }
+    var autoSignCourseExpanded by remember { mutableStateOf(false) }
     var returningFromOfficial by remember { mutableStateOf(false) }
     var showCaptcha by remember(state.selected?.id) { mutableStateOf(false) }
     val currentRefreshSelected by rememberUpdatedState(onRefreshSelected)
@@ -199,40 +201,51 @@ fun ChaoxingScreen(
                         AppActionRow(title = "定时签到", subtitle = autoSignSubtitle(state.autoSign), icon = Icons.Outlined.Schedule,
                             enabled = !state.busy, onClick = { onToggleAutoSign(!state.autoSign.enabled) },
                             trailingContent = { AppSwitch(state.autoSign.enabled, { onToggleAutoSign(it) }, enabled = !state.busy) })
-                        if (state.autoSign.enabled || state.autoSign.times.isNotEmpty() || state.autoSign.location != null) {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                state.autoSign.times.forEach { time ->
-                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                        Text(time, style = MaterialTheme.typography.bodyLarge)
-                                        AppInlineDangerButton("移除", { onRemoveAutoSignTime(time) }, enabled = !state.busy)
-                                    }
-                                }
-                                if (state.autoSign.times.isEmpty()) Text("尚未设置签到时刻。", style = MaterialTheme.typography.bodyMedium)
-                                AppSecondaryButton("添加签到时刻", { showAutoSignTimePicker = true }, modifier = Modifier.fillMaxWidth(),
-                                    enabled = !state.busy && state.autoSign.times.size < AUTO_SIGN_TIME_LIMIT)
-                            }
-                            AppDetailRow("签到位置", state.autoSign.location?.address ?: "尚未保存")
-                            AppSecondaryButton(if (state.autoSign.location == null) "使用当前位置保存" else "更新签到位置", {
-                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) onSaveAutoSignLocation(context)
-                                else autoSignPermissions.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-                            }, modifier = Modifier.fillMaxWidth(), enabled = !state.busy, loading = state.operation == "auto-sign-location")
-                            state.autoSign.lastResult?.let { result ->
-                                AppDetailRow("最近一次", listOf(autoSignStatusText(result.status), result.activityName, result.courseName).filter(String::isNotBlank).joinToString(" · "))
-                                if (result.message.isNotBlank()) {
-                                    Text(result.message, style = MaterialTheme.typography.bodySmall,
-                                        color = if (result.failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            state.autoSign.times.forEach { time ->
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text(time, style = MaterialTheme.typography.bodyLarge)
+                                    AppInlineDangerButton("移除", { onRemoveAutoSignTime(time) }, enabled = !state.busy)
                                 }
                             }
-                            state.autoSign.lastRunAt?.let { AppDetailRow("执行时间", DateTimeUtils.formatPlatformTime(it)) }
-                            AppSecondaryButton("立即执行一次", onRunAutoSign, modifier = Modifier.fillMaxWidth(),
-                                enabled = !state.busy && state.autoSign.enabled, loading = state.operation == "auto-sign-run")
-                            if (!state.autoSign.notifyConfigured) {
-                                Text("尚未关联失败提醒收件人，签到失败时可能收不到企业微信消息，请先在提醒设置中填写企业微信成员账号。",
-                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                            }
-                            Text("定时签到在设定的时刻检查课程里最新的未签到活动，用保存的位置调用帮你签服务；失败会通过企业微信与通知中心提醒。",
-                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (state.autoSign.times.isEmpty()) Text("尚未设置签到时刻。", style = MaterialTheme.typography.bodyMedium)
+                            AppSecondaryButton("添加签到时刻", { showAutoSignTimePicker = true }, modifier = Modifier.fillMaxWidth(),
+                                enabled = !state.busy && state.autoSign.times.size < AUTO_SIGN_TIME_LIMIT)
                         }
+                        val autoSignCourseOptions: List<AppSelectOption<String?>> = buildList {
+                            add(AppSelectOption(null, "全部课程", "在全部课程中查找最新未签到活动"))
+                            state.courses.forEach { option -> add(AppSelectOption(option.key, option.name, listOf(option.teacher, option.className).filter(String::isNotBlank).joinToString(" · "))) }
+                            val saved = state.autoSign.course
+                            if (saved != null && state.courses.none { it.key == saved.key }) add(AppSelectOption(saved.key, saved.name.ifBlank { "已选课程" }, "该课程当前不在课程列表中"))
+                        }
+                        AppSelectField("签到课程", state.autoSign.course?.key, autoSignCourseOptions,
+                            onValueChange = { key ->
+                                autoSignCourseExpanded = false
+                                val picked = state.courses.firstOrNull { it.key == key }
+                                if (picked != null || key == null) onSelectAutoSignCourse(picked)
+                            },
+                            expanded = autoSignCourseExpanded, onExpandedChange = { autoSignCourseExpanded = it }, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
+                        AppDetailRow("签到位置", state.autoSign.location?.address ?: "尚未保存")
+                        AppSecondaryButton(if (state.autoSign.location == null) "使用当前位置保存" else "更新签到位置", {
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) onSaveAutoSignLocation(context)
+                            else autoSignPermissions.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                        }, modifier = Modifier.fillMaxWidth(), enabled = !state.busy, loading = state.operation == "auto-sign-location")
+                        state.autoSign.lastResult?.let { result ->
+                            AppDetailRow("最近一次", listOf(autoSignStatusText(result.status), result.activityName, result.courseName).filter(String::isNotBlank).joinToString(" · "))
+                            if (result.message.isNotBlank()) {
+                                Text(result.message, style = MaterialTheme.typography.bodySmall,
+                                    color = if (result.failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        state.autoSign.lastRunAt?.let { AppDetailRow("执行时间", DateTimeUtils.formatPlatformTime(it)) }
+                        AppSecondaryButton("立即执行一次", onRunAutoSign, modifier = Modifier.fillMaxWidth(),
+                            enabled = !state.busy && state.autoSign.enabled, loading = state.operation == "auto-sign-run")
+                        if (!state.autoSign.notifyConfigured) {
+                            Text("尚未关联失败提醒收件人，签到失败时可能收不到企业微信消息，请先在提醒设置中填写企业微信成员账号。",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        }
+                        Text("定时签到在设定的时刻检查所选课程里最新的未签到活动，用保存的位置调用帮你签服务；失败会通过企业微信与通知中心提醒。",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -385,11 +398,15 @@ private fun SignProviderConnectionDialog(state: ChaoxingUiState, onConnect: (Str
 private fun signTime(value: Long): String = if (value <= 0) "时间未知" else
     DateTimeFormatter.ofPattern("MM-dd HH:mm", Locale.CHINA).withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(value))
 
-private fun autoSignSubtitle(autoSign: ChaoxingAutoSign): String = when {
-    autoSign.enabled && autoSign.times.isNotEmpty() -> "已开启 · ${autoSign.times.joinToString("、")}"
-    autoSign.enabled -> "已开启"
-    autoSign.times.isNotEmpty() -> "未开启 · ${autoSign.times.joinToString("、")}"
-    else -> "未开启"
+private fun autoSignSubtitle(autoSign: ChaoxingAutoSign): String {
+    val base = when {
+        autoSign.enabled && autoSign.times.isNotEmpty() -> "已开启 · ${autoSign.times.joinToString("、")}"
+        autoSign.enabled -> "已开启"
+        autoSign.times.isNotEmpty() -> "未开启 · ${autoSign.times.joinToString("、")}"
+        else -> "未开启"
+    }
+    val course = autoSign.course?.name?.takeIf { it.isNotBlank() } ?: return base
+    return "$base · $course"
 }
 
 private fun autoSignStatusText(status: String): String = when (status) {

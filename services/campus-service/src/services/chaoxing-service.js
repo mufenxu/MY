@@ -1,6 +1,6 @@
 import { HttpError } from "../lib/http.js";
 import { KeyedSerialQueue } from "../lib/keyed-serial-queue.js";
-import { buildChaoxingAutoSignFailure, chaoxingAutoSignPublic, normalizeChaoxingAutoSignLocation, normalizeChaoxingAutoSignTimes } from "../lib/chaoxing-auto-sign.js";
+import { buildChaoxingAutoSignFailure, chaoxingAutoSignPublic, normalizeChaoxingAutoSignCourse, normalizeChaoxingAutoSignLocation, normalizeChaoxingAutoSignTimes } from "../lib/chaoxing-auto-sign.js";
 import { enqueueCampusNotification, sendCampusNotification } from "../lib/notification-client.js";
 import { cookieHeaderFor, emptySessionJar, parseSetCookie, rememberCookie, updateJarFromResponse } from "../lib/session-jar.js";
 import { randomUUID } from "node:crypto";
@@ -229,10 +229,26 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
     return { summary, ext: listing.ext };
   }
 
-  async function autoSignCandidates(jar) {
+  // 指定课程后只读取该课程，避免遍历全部课程。
+  async function autoSignScope(jar, row) {
+    let saved = null;
+    try {
+      saved = normalizeChaoxingAutoSignCourse(row?.course);
+    } catch {
+      throw fail(409, "定时签到保存的课程信息无效，请重新选择课程。", "CHAOXING_AUTO_SIGN_COURSE_INVALID");
+    }
+    const available = await courses(jar);
+    if (!saved) return { courses: available, scoped: null };
+    const match = available.find(item => item.courseId === saved.courseId && item.classId === saved.classId);
+    if (!match) throw fail(409, "定时签到指定的课程已不在当前学习通账号中，请重新选择课程。", "CHAOXING_AUTO_SIGN_COURSE_NOT_FOUND");
+    return { courses: [match], scoped: match };
+  }
+
+  async function autoSignCandidates(jar, row) {
+    const scope = await autoSignScope(jar, row);
     const candidates = [];
     let lastError = null;
-    for (const course of await courses(jar)) {
+    for (const course of scope.courses) {
       let listing;
       try {
         listing = await activitiesForCourse(jar, course);
@@ -248,7 +264,7 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
     }
     // 单个课程读取失败不该让整轮看起来“没有待签到活动”。
     if (!candidates.length && lastError) throw lastError;
-    return candidates.sort((left, right) => (right.startTime || 0) - (left.startTime || 0));
+    return { candidates: candidates.sort((left, right) => (right.startTime || 0) - (left.startTime || 0)), scoped: scope.scoped };
   }
 
   async function submitProviderSign(jar, summary, { location, validate = "" }) {
@@ -308,6 +324,7 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
 
   async function runAutoSign(jar, row) {
     const empty = { courseName: "", activityName: "", activityId: "" };
+    const scopedName = String(row?.course?.name || "").trim().slice(0, 120);
     const failed = (message, target = empty) => ({ ...empty, ...target, status: "failed", message });
     let location;
     try {
@@ -319,15 +336,18 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
     if (!provider || provider.expired || provider.uid !== jar.meta.profile.uid) {
       return failed("「帮你签」服务未连接或已失效，请重新连接后等待下一次定时签到。");
     }
-    let candidates;
+    let plan;
     try {
-      candidates = await autoSignCandidates(jar);
+      plan = await autoSignCandidates(jar, row);
     } catch (error) {
       if (error.code === "CHAOXING_LOGIN_REQUIRED") jar.meta.expired = true;
-      return failed(error.message || "无法读取学习通课程活动。");
+      return failed(error.message || "无法读取学习通课程活动。", { ...empty, courseName: scopedName });
     }
-    if (!candidates.length) return { ...empty, status: "skipped", message: "当前没有检测到未签到的活动。" };
-    const candidate = candidates[0];
+    if (!plan.candidates.length) {
+      return { ...empty, courseName: plan.scoped?.name || "", status: "skipped",
+        message: plan.scoped ? `「${plan.scoped.name}」中没有检测到未签到的活动。` : "当前没有检测到未签到的活动。" };
+    }
+    const candidate = plan.candidates[0];
     const target = { courseName: candidate.courseName, activityName: candidate.name, activityId: candidate.id };
     let summary;
     try {
@@ -466,6 +486,8 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
       };
       if (times !== undefined || enabled) changes.times = normalizeChaoxingAutoSignTimes(times);
       if (location !== undefined || enabled) changes.location = normalizeChaoxingAutoSignLocation(location);
+      // 未提交 course 时保留原选择；提交 null 表示回到全部课程。
+      changes.course = body.course === undefined ? (current?.course ?? null) : normalizeChaoxingAutoSignCourse(body.course);
       const row = await repository.upsertChaoxingAutoSign(userId, changes, new Date().toISOString());
       return chaoxingAutoSignPublic(row, { signProviderConnected: await signProviderConnectedFor(userId) });
     },

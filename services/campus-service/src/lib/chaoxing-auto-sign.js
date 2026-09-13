@@ -69,6 +69,17 @@ export function normalizeChaoxingAutoSignLocation(value) {
   return { latitude, longitude, accuracy, address, coordinateSystem: "bd09ll", isMock: value.isMock === true };
 }
 
+// 未保存课程表示在全部课程中查找；保存后只读取该课程，不再遍历其它课程。
+export function normalizeChaoxingAutoSignCourse(value) {
+  if (value === null || value === undefined) return null;
+  const courseId = value && typeof value === "object" ? trimmed(value.courseId, 20) : "";
+  const classId = value && typeof value === "object" ? trimmed(value.classId, 20) : "";
+  if (!/^\d{1,20}$/.test(courseId) || !/^\d{1,20}$/.test(classId)) {
+    throw fail("签到课程信息无效，请重新选择课程。", "CHAOXING_AUTO_SIGN_COURSE_INVALID");
+  }
+  return { courseId, classId, name: trimmed(value.name, 120) };
+}
+
 export function chaoxingAutoSignRunKey(now = new Date()) {
   const current = chaoxingAutoSignLocalTime(now);
   return `${current.date}|${current.time}`;
@@ -90,9 +101,12 @@ export function chaoxingAutoSignRunPlan(row, now = new Date()) {
 export function chaoxingAutoSignPublic(row, { signProviderConnected = false } = {}) {
   const times = Array.isArray(row?.times) ? row.times.filter((time) => TIME_PATTERN.test(String(time))) : [];
   const location = row?.location;
+  let course = null;
+  try { course = normalizeChaoxingAutoSignCourse(row?.course); } catch { course = null; }
   return {
     enabled: Boolean(row?.enabled),
     times,
+    course,
     location: location && typeof location === "object" ? {
       address: trimmed(location.address),
       latitude: finiteNumber(location.latitude),
