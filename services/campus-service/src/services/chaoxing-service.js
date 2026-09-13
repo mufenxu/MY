@@ -13,6 +13,10 @@ const HOSTS = new Set(["passport2.chaoxing.com", "sso.chaoxing.com", "mooc1-api.
 const STATUS_TEXT = { 0: "未签到", 1: "已签到", 2: "教师代签", 4: "请假", 5: "缺勤", 7: "病假", 8: "事假", 9: "迟到", 10: "早退", 11: "签到已过期", 12: "公假" };
 const TYPE_TEXT = { 0: "普通签到", 2: "二维码签到", 3: "手势签到", 4: "位置签到", 5: "签到码签到" };
 const AUTO_SIGN_LOCK_MS = 5 * 60 * 1000;
+// 每个时刻最多核对几个活动的官方记录，避免列表状态不可靠时无限请求。
+const AUTO_SIGN_MAX_RECORD_CHECKS = 5;
+// 活动列表里进行中的活动数量有限，仍然限制一次刷新的核对次数。
+const ACTIVITY_RECORD_REFRESH_LIMIT = 5;
 
 function fail(status, message, code) { return new HttpError(status, message, null, code); }
 function loginRequired() { return fail(409, "学习通登录已失效，请重新连接学习通账号。", "CHAOXING_LOGIN_REQUIRED"); }
@@ -201,6 +205,16 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
     return { recordStatus, recordText: STATUS_TEXT[recordStatus] || "未知状态", signed: [1, 2, 9].includes(recordStatus) };
   }
 
+  // 活动列表的 userStatus 与实际签到记录并不总是一致，凡是判断“是否已签”都用官方记录接口。
+  async function officialRecordStatus(jar, activeId) {
+    try {
+      return (await attend(jar, activeId)).recordStatus;
+    } catch (error) {
+      if (error.code === "CHAOXING_LOGIN_REQUIRED") throw error;
+      return null;
+    }
+  }
+
   async function detail(jar, query) {
     const listing = await courseActivities(jar, query);
     const activeId = id(query.activeId);
@@ -259,12 +273,28 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
       }
       for (const item of listing.items) {
         const summary = activitySummary(item, course);
-        if (summary.active && summary.recordStatus === 0) candidates.push({ ...summary, courseName: course.name });
+        // 列表状态只用于排序（列表显示未签到的先核对），是否已签一律由官方记录决定。
+        if (summary.active) candidates.push({ ...summary, courseName: course.name });
       }
     }
     // 单个课程读取失败不该让整轮看起来“没有待签到活动”。
     if (!candidates.length && lastError) throw lastError;
-    return { candidates: candidates.sort((left, right) => (right.startTime || 0) - (left.startTime || 0)), scoped: scope.scoped };
+    return {
+      candidates: candidates.sort((left, right) => Number(right.recordStatus === 0) - Number(left.recordStatus === 0) || (right.startTime || 0) - (left.startTime || 0)),
+      scoped: scope.scoped
+    };
+  }
+
+  async function pickUnsignedCandidate(jar, candidates) {
+    for (const candidate of candidates.slice(0, AUTO_SIGN_MAX_RECORD_CHECKS)) {
+      const recordStatus = await officialRecordStatus(jar, candidate.id);
+      if (recordStatus === null) {
+        if (candidate.recordStatus === 0) return candidate;
+        continue;
+      }
+      if (recordStatus === 0) return candidate;
+    }
+    return null;
   }
 
   async function submitProviderSign(jar, summary, { location, validate = "" }) {
@@ -345,9 +375,20 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
     }
     if (!plan.candidates.length) {
       return { ...empty, courseName: plan.scoped?.name || "", status: "skipped",
-        message: plan.scoped ? `「${plan.scoped.name}」中没有检测到未签到的活动。` : "当前没有检测到未签到的活动。" };
+        message: plan.scoped ? `「${plan.scoped.name}」中没有进行中的签到活动。` : "当前没有进行中的签到活动。" };
     }
-    const candidate = plan.candidates[0];
+    let candidate;
+    try {
+      candidate = await pickUnsignedCandidate(jar, plan.candidates);
+    } catch (error) {
+      if (error.code === "CHAOXING_LOGIN_REQUIRED") jar.meta.expired = true;
+      return failed(error.message || "无法读取学习通签到记录。", { ...empty, courseName: plan.scoped?.name || scopedName });
+    }
+    if (!candidate) {
+      const total = plan.candidates.length;
+      return { ...empty, courseName: plan.scoped?.name || "", status: "skipped",
+        message: plan.scoped ? `「${plan.scoped.name}」中 ${total} 个进行中的活动都已签到。` : `${total} 个进行中的活动都已签到。` };
+    }
     const target = { courseName: candidate.courseName, activityName: candidate.name, activityId: candidate.id };
     let summary;
     try {
@@ -453,7 +494,16 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
     courses: userId => withSession(userId, courses),
     activities: (userId, query) => withSession(userId, async jar => {
       const listing = await courseActivities(jar, query);
-      return listing.items.map(item => activitySummary(item, listing.course)).sort((a, b) => Number(b.active) - Number(a.active) || (b.startTime || 0) - (a.startTime || 0));
+      const items = listing.items.map(item => activitySummary(item, listing.course)).sort((a, b) => Number(b.active) - Number(a.active) || (b.startTime || 0) - (a.startTime || 0));
+      // 进行中的活动以官方记录为准，否则列表可能把没签到的活动显示成已签到。
+      await Promise.all(items.filter(item => item.active).slice(0, ACTIVITY_RECORD_REFRESH_LIMIT).map(async item => {
+        const recordStatus = await officialRecordStatus(jar, item.id);
+        if (recordStatus === null) return;
+        item.recordStatus = recordStatus;
+        item.recordText = STATUS_TEXT[recordStatus] || item.recordText;
+        item.signed = [1, 2, 9].includes(recordStatus);
+      }));
+      return items;
     }),
     detail: (userId, query) => withSession(userId, async jar => (await detail(jar, query)).summary),
     sign: (userId, body) => withSession(userId, async jar => {

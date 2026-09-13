@@ -723,11 +723,13 @@ export function createBackgroundSchedulers({
             const result = await chaoxing.autoSign(userId, { runKey: plan.runKey });
             if (result?.status === "success") {
               chaoxingAutoSignOperation.completed += 1;
+              logger.info("chaoxing_auto_sign_completed", { userId, runKey: plan.runKey, activityId: result.activityId, courseName: result.courseName, activityName: result.activityName });
             } else if (result?.status === "failed") {
               chaoxingAutoSignOperation.failed += 1;
               logger.warn("chaoxing_auto_sign_failed", { userId, message: result?.message });
             } else {
               chaoxingAutoSignOperation.skipped += 1;
+              logger.info("chaoxing_auto_sign_skipped", { userId, runKey: plan.runKey, message: result?.message });
             }
           } catch (error) {
             chaoxingAutoSignOperation.failed += 1;
