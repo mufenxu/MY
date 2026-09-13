@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.School
@@ -44,12 +45,14 @@ import cn.pxyb.mycontrol.data.ChaoxingActivity
 import cn.pxyb.mycontrol.data.ChaoxingCourse
 import cn.pxyb.mycontrol.ui.PlatformWebActivity
 import cn.pxyb.mycontrol.ui.components.button.AppButton
+import cn.pxyb.mycontrol.ui.components.button.AppDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppInlineDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
+import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppDivider
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
 import cn.pxyb.mycontrol.ui.components.display.AppIconTile
@@ -218,19 +221,36 @@ fun ChaoxingScreen(
                             )
                         }
                         AppDivider()
-                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            AppDetailRow("帮你签服务",
-                                if (state.session.signProviderConnected) "已连接 · 位置签到由帮你签提交" else "未连接 · 位置签到需要先连接帮你签")
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                AppSecondaryButton("重新登录", { loginLauncher.launch(PlatformWebActivity.createChaoxingLoginIntent(context)) },
-                                    enabled = !state.busy, modifier = Modifier.weight(1f))
-                                if (state.session.signProviderConnected) {
+                        if (state.session.signProviderConnected) {
+                            AppActionRow(
+                                title = "帮你签服务",
+                                subtitle = "已连接 · 位置签到由帮你签提交",
+                                icon = Icons.Outlined.CloudSync,
+                                enabled = !state.busy,
+                                onClick = null,
+                                trailingContent = {
                                     AppInlineDangerButton("断开帮你签", onDisconnectSignProvider, enabled = !state.busy)
-                                } else {
-                                    AppSecondaryButton("连接帮你签", ::openSignProvider, enabled = !state.busy, modifier = Modifier.weight(1f))
-                                }
-                            }
-                            AppInlineDangerButton("断开学习通连接", { confirmDisconnect = true }, enabled = !state.busy)
+                                },
+                            )
+                        } else {
+                            AppActionRow(
+                                title = "帮你签服务",
+                                subtitle = "未连接 · 连接后位置签到由帮你签提交",
+                                icon = Icons.Outlined.CloudSync,
+                                enabled = !state.busy,
+                                onClick = ::openSignProvider,
+                            )
+                        }
+                        AppDivider()
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            AppSecondaryButton("重新登录", { loginLauncher.launch(PlatformWebActivity.createChaoxingLoginIntent(context)) },
+                                enabled = !state.busy, modifier = Modifier.weight(1f))
+                            AppDangerButton("断开学习通", { confirmDisconnect = true },
+                                enabled = !state.busy, modifier = Modifier.weight(1f))
                         }
                     }
                 }
