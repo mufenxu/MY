@@ -13,7 +13,7 @@ const TYPE_TEXT = { 0: "普通签到", 2: "二维码签到", 3: "手势签到", 
 function fail(status, message, code) { return new HttpError(status, message, null, code); }
 function loginRequired() { return fail(409, "学习通登录已失效，请重新连接学习通账号。", "CHAOXING_LOGIN_REQUIRED"); }
 function providerLoginRequired() { return fail(409, "帮你签服务登录已失效，请重新连接帮你签服务。", "CHAOXING_PROVIDER_LOGIN_REQUIRED"); }
-function providerProtocolChanged() { return fail(502, "帮你签服务返回的数据不完整，请稍后重试。", "CHAOXING_PROVIDER_PROTOCOL_CHANGED"); }
+function providerProtocolChanged(stage = "") { return fail(502, "帮你签服务返回的数据不完整，请稍后重试。", `CHAOXING_PROVIDER_PROTOCOL_CHANGED${stage ? `_${stage}` : ""}`); }
 function id(value) {
   const text = String(value ?? "");
   if (!/^\d{1,20}$/.test(text)) throw fail(400, "学习通活动参数不完整，请刷新后重试。", "CHAOXING_INVALID_ID");
@@ -102,8 +102,8 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
       if (!response.ok) throw fail(502, "帮你签服务暂时不可用，请稍后重试。", "CHAOXING_PROVIDER_UNAVAILABLE");
       const text = await readUpstreamText(response);
       let payload;
-      try { payload = JSON.parse(text); } catch { throw providerProtocolChanged(); }
-      if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw providerProtocolChanged();
+      try { payload = JSON.parse(text); } catch { throw providerProtocolChanged("JSON"); }
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw providerProtocolChanged("ENVELOPE");
       if (!enabled(payload.success)) {
         if (path === "/http/chaoxing") throw loginFailed();
         const message = String(payload.message || "");
@@ -244,13 +244,17 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
       }
       const data = await providerRequest("/http/chaoxing", { method: "POST", body: { phone, password } });
       const profile = data?.result;
-      if (!profile || !/^\d{1,20}$/.test(String(profile.uid ?? ""))) throw providerProtocolChanged();
+      if (!profile || typeof profile !== "object" || Array.isArray(profile)) throw providerProtocolChanged("LOGIN_RESULT");
+      if (!/^\d{1,20}$/.test(String(profile.uid ?? ""))) throw providerProtocolChanged(`UID_${profile.uid == null ? "MISSING" : typeof profile.uid}`.toUpperCase());
       if (String(profile.uid) !== jar.meta.profile.uid) {
         throw fail(409, "账号不一致，请使用与当前已连接学习通相同的账号。", "CHAOXING_PROVIDER_ACCOUNT_MISMATCH");
       }
-      if (typeof profile.phone !== "string" || !profile.phone.trim() || profile.phone.length > 128 || !/^\d{1,20}$/.test(String(profile.dxfid ?? ""))) throw providerProtocolChanged();
+      const account = typeof profile.phone === "number" ? String(profile.phone) : profile.phone;
+      if (typeof account !== "string" || !account.trim() || account.length > 128) throw providerProtocolChanged(`PHONE_${profile.phone == null ? "MISSING" : typeof profile.phone}`.toUpperCase());
+      // The mini program passes dxfid through as an optional value; it is not the account identity.
+      if (profile.dxfid != null && !["string", "number"].includes(typeof profile.dxfid)) throw providerProtocolChanged("FID_TYPE");
       // The provider keeps its own login session; MY only retains the identity needed for signing.
-      jar.meta.signProvider = { phone: profile.phone.trim(), uid: String(profile.uid), fid: String(profile.dxfid), name: String(profile.realname || jar.meta.profile.name) };
+      jar.meta.signProvider = { phone: account.trim(), uid: String(profile.uid), fid: profile.dxfid, name: String(profile.realname || jar.meta.profile.name) };
       return profileSummary(jar);
     }),
     disconnectSignProvider: userId => withSession(userId, async jar => {
