@@ -49,6 +49,8 @@ export class CampusRepository {
       this.db.collection("users").createIndex({ created_at: 1 }),
       this.db.collection("school_sessions").createIndex({ user_id: 1 }, { unique: true }),
       this.db.collection("chaoxing_sessions").createIndex({ user_id: 1 }, { unique: true }),
+      this.db.collection("chaoxing_auto_sign").createIndex({ user_id: 1 }, { unique: true }),
+      this.db.collection("chaoxing_auto_sign").createIndex({ enabled: 1, run_lock_until: 1 }),
       this.db.collection("academic_caches").createIndex({ user_id: 1, source_key: 1 }, { unique: true }),
       this.db.collection("calendar_subscriptions").createIndex({ user_id: 1 }, { unique: true }),
       this.db.collection("calendar_subscriptions").createIndex({ token_hash: 1 }, { unique: true }),
@@ -188,6 +190,7 @@ export class CampusRepository {
       await session.withTransaction(async () => {
         await this.db.collection("school_sessions").deleteMany({ user_id: id }, { session });
         await this.db.collection("chaoxing_sessions").deleteMany({ user_id: id }, { session });
+        await this.db.collection("chaoxing_auto_sign").deleteMany({ user_id: id }, { session });
         await this.db.collection("academic_caches").deleteMany({ user_id: id }, { session });
         await this.db.collection("calendar_subscriptions").deleteMany({ user_id: id }, { session });
         await this.db.collection("reminder_preferences").deleteMany({ user_id: id }, { session });
@@ -290,6 +293,64 @@ export class CampusRepository {
 
   async deleteChaoxingSession(userId) {
     await this.db.collection("chaoxing_sessions").deleteOne({ user_id: userId });
+  }
+
+  async getChaoxingAutoSign(userId) {
+    return withoutMongoId(await this.db.collection("chaoxing_auto_sign").findOne({ user_id: userId }));
+  }
+
+  async listEnabledChaoxingAutoSign() {
+    return this.db.collection("chaoxing_auto_sign")
+      .find({ enabled: true }, { projection: { _id: 0 } })
+      .toArray();
+  }
+
+  async upsertChaoxingAutoSign(userId, changes, timestamp) {
+    await this.db.collection("chaoxing_auto_sign").updateOne(
+      { user_id: userId },
+      {
+        $set: { ...clone(changes), updated_at: timestamp },
+        $setOnInsert: { user_id: userId, created_at: timestamp, last_run_key: "", last_run_at: null, last_result: null, run_lock_until: null }
+      },
+      { upsert: true }
+    );
+    return this.getChaoxingAutoSign(userId);
+  }
+
+  async deleteChaoxingAutoSign(userId) {
+    await this.db.collection("chaoxing_auto_sign").deleteOne({ user_id: userId });
+  }
+
+  async claimChaoxingAutoSignRun(userId, runKey, now, lockUntil) {
+    return this.claimChaoxingAutoSign(userId, { last_run_key: runKey, run_lock_until: lockUntil }, now, { enabled: true, last_run_key: { $ne: runKey } });
+  }
+
+  async claimChaoxingAutoSignLock(userId, now, lockUntil) {
+    return this.claimChaoxingAutoSign(userId, { run_lock_until: lockUntil }, now);
+  }
+
+  async claimChaoxingAutoSign(userId, changes, now, guard = {}) {
+    const result = await this.db.collection("chaoxing_auto_sign").findOneAndUpdate(
+      {
+        user_id: userId,
+        ...guard,
+        $or: [
+          { run_lock_until: { $exists: false } },
+          { run_lock_until: null },
+          { run_lock_until: { $lte: now } }
+        ]
+      },
+      { $set: changes },
+      { returnDocument: "after", projection: { _id: 0 } }
+    );
+    return result?.value || result || null;
+  }
+
+  async finishChaoxingAutoSignRun(userId, result, timestamp) {
+    await this.db.collection("chaoxing_auto_sign").updateOne(
+      { user_id: userId },
+      { $set: { last_result: clone(result), last_run_at: timestamp, run_lock_until: null } }
+    );
   }
 
   async listSchoolSessions() {
@@ -591,6 +652,7 @@ export class MemoryCampusRepository {
     this.users = new Map();
     this.sessions = new Map();
     this.chaoxingSessions = new Map();
+    this.chaoxingAutoSign = new Map();
     this.caches = new Map();
     this.invites = new Map();
     this.calendarSubscriptions = new Map();
@@ -655,6 +717,7 @@ export class MemoryCampusRepository {
     this.users.delete(id);
     this.sessions.delete(id);
     this.chaoxingSessions.delete(id);
+    this.chaoxingAutoSign.delete(id);
     for (const key of this.caches.keys()) if (key.startsWith(`${id}:`)) this.caches.delete(key);
     this.calendarSubscriptions.delete(id);
     this.reminderPreferences.delete(id);
@@ -690,6 +753,45 @@ export class MemoryCampusRepository {
     this.chaoxingSessions.set(userId, { user_id: userId, jar_json: jarJson, updated_at: timestamp });
   }
   async deleteChaoxingSession(userId) { this.chaoxingSessions.delete(userId); }
+
+  async getChaoxingAutoSign(userId) { return clone(this.chaoxingAutoSign.get(userId) || null); }
+
+  async listEnabledChaoxingAutoSign() {
+    return clone(Array.from(this.chaoxingAutoSign.values()).filter((row) => row.enabled));
+  }
+
+  async upsertChaoxingAutoSign(userId, changes, timestamp) {
+    const current = this.chaoxingAutoSign.get(userId) || {
+      user_id: userId, created_at: timestamp, last_run_key: "", last_run_at: null, last_result: null, run_lock_until: null
+    };
+    this.chaoxingAutoSign.set(userId, { ...current, ...clone(changes), updated_at: timestamp });
+    return clone(this.chaoxingAutoSign.get(userId));
+  }
+
+  async deleteChaoxingAutoSign(userId) { this.chaoxingAutoSign.delete(userId); }
+
+  async claimChaoxingAutoSignRun(userId, runKey, now, lockUntil) {
+    return this.claimChaoxingAutoSign(userId, { last_run_key: runKey, run_lock_until: lockUntil }, now, (row) => !row.enabled || row.last_run_key === runKey);
+  }
+
+  async claimChaoxingAutoSignLock(userId, now, lockUntil) {
+    return this.claimChaoxingAutoSign(userId, { run_lock_until: lockUntil }, now);
+  }
+
+  async claimChaoxingAutoSign(userId, changes, now, alreadyClaimed = () => false) {
+    const row = this.chaoxingAutoSign.get(userId);
+    if (!row || !row.enabled || alreadyClaimed(row)) return null;
+    const lockUntil = Date.parse(row.run_lock_until || "");
+    if (Number.isFinite(lockUntil) && lockUntil > Date.parse(now)) return null;
+    this.chaoxingAutoSign.set(userId, { ...row, ...clone(changes) });
+    return clone(this.chaoxingAutoSign.get(userId));
+  }
+
+  async finishChaoxingAutoSignRun(userId, result, timestamp) {
+    const row = this.chaoxingAutoSign.get(userId);
+    if (!row) return;
+    this.chaoxingAutoSign.set(userId, { ...row, last_result: clone(result), last_run_at: timestamp, run_lock_until: null });
+  }
   async listSchoolSessions() { return clone(Array.from(this.sessions.values())); }
   async upsertSchoolSession(userId, jarJson, timestamp) {
     const current = this.sessions.get(userId);

@@ -270,6 +270,7 @@ internal fun AuthenticatedShell(
         state.assistantOpen,
         state.workspaceDestination,
         state.pendingLibrarySeatMyReservations,
+        state.pendingChaoxingOpen,
     ) {
         val targetRoute = state.requestedRoute()
         if (targetRoute != currentRoute && targetRoute !in setOf(AppRoute.Overview, AppRoute.Operations, AppRoute.Tools, AppRoute.Profile)) {
@@ -867,6 +868,9 @@ internal fun AuthenticatedShell(
                 }
                 composable(AppRoute.Chaoxing) {
                     val chaoxingState by viewModel.chaoxing.state.collectAsStateWithLifecycle()
+                    LaunchedEffect(state.pendingChaoxingOpen) {
+                        if (state.pendingChaoxingOpen) viewModel.consumePendingChaoxingOpen()
+                    }
                     ChaoxingScreen(
                         state = chaoxingState,
                         contentPadding = contentPadding,
@@ -883,6 +887,11 @@ internal fun AuthenticatedShell(
                         onLocate = viewModel.chaoxing::locate,
                         onSign = viewModel.chaoxing::sign,
                         onCaptchaVerified = viewModel.chaoxing::signWithCaptcha,
+                        onToggleAutoSign = viewModel.chaoxing::toggleAutoSign,
+                        onAddAutoSignTime = viewModel.chaoxing::addAutoSignTime,
+                        onRemoveAutoSignTime = viewModel.chaoxing::removeAutoSignTime,
+                        onSaveAutoSignLocation = viewModel.chaoxing::saveAutoSignLocation,
+                        onRunAutoSign = viewModel.chaoxing::runAutoSign,
                         onReport = viewModel.chaoxing::report,
                         onClearFeedback = viewModel.chaoxing::clearFeedback,
                     )

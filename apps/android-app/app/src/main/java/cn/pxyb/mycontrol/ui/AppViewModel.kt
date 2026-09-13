@@ -891,6 +891,7 @@ class AppViewModel(
                     assistantOpen = assistantOpen,
                     workspaceDestination = workspaceDestination,
                     pendingLibrarySeatMyReservations = false,
+                    pendingChaoxingOpen = false,
                 )
             }
         }
@@ -992,6 +993,31 @@ class AppViewModel(
     fun consumePendingLibrarySeatMyReservations() {
         mutableState.update {
             if (it.pendingLibrarySeatMyReservations) it.copy(pendingLibrarySeatMyReservations = false) else it
+        }
+    }
+
+    fun openChaoxing() {
+        mutableState.update {
+            it.copy(
+                selectedTab = MainTab.Overview,
+                pendingTabNavigation = null,
+                accountManagementOpen = false,
+                googleAccountDeskOpen = false,
+                githubProjectsOpen = false,
+                globalSearchOpen = false,
+                assistantOpen = false,
+                workspaceDestination = null,
+                pendingLibrarySeatMyReservations = false,
+                pendingChaoxingOpen = true,
+                error = null,
+                message = null,
+            )
+        }
+    }
+
+    fun consumePendingChaoxingOpen() {
+        mutableState.update {
+            if (it.pendingChaoxingOpen) it.copy(pendingChaoxingOpen = false) else it
         }
     }
 
@@ -2251,6 +2277,10 @@ class AppViewModel(
         uri.getQueryParameter("destination")?.let { destination ->
             if (destination == "library-seat-reservation") {
                 openLibrarySeatMyReservations()
+                return true
+            }
+            if (destination == "chaoxing") {
+                openChaoxing()
                 return true
             }
             parseWorkspaceDestination(destination)?.let { workspace ->

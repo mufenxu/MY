@@ -105,6 +105,7 @@ data class AppUiState(
     val assistantButtonVisible: Boolean = true,
     val workspaceDestination: WorkspaceDestination? = null,
     val pendingLibrarySeatMyReservations: Boolean = false,
+    val pendingChaoxingOpen: Boolean = false,
     val googleAccounts: List<GoogleAccountRecord> = emptyList(),
     val googleAccountsLoaded: Boolean = false,
     val googleAccountsLoading: Boolean = false,

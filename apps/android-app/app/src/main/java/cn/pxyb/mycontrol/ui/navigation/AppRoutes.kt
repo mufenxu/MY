@@ -70,6 +70,7 @@ internal fun WorkspaceDestination.route(): String = when (this) {
 
 internal fun AppEntryUiState.requestedRoute(): String = when {
     pendingLibrarySeatMyReservations -> AppRoute.LibrarySeatReservation
+    pendingChaoxingOpen -> AppRoute.Chaoxing
     workspaceDestination != null -> workspaceDestination.route()
     globalSearchOpen -> AppRoute.Search
     googleAccountDeskOpen -> AppRoute.GoogleAccounts

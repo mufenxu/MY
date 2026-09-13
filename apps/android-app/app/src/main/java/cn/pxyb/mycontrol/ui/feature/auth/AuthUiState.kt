@@ -49,6 +49,7 @@ data class AppEntryUiState(
     val assistantButtonVisible: Boolean,
     val workspaceDestination: WorkspaceDestination?,
     val pendingLibrarySeatMyReservations: Boolean,
+    val pendingChaoxingOpen: Boolean,
     val error: String?,
     val message: String?,
 )
@@ -97,6 +98,7 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
     assistantButtonVisible = assistantButtonVisible,
     workspaceDestination = workspaceDestination,
     pendingLibrarySeatMyReservations = pendingLibrarySeatMyReservations,
+    pendingChaoxingOpen = pendingChaoxingOpen,
     error = error,
     message = message,
 )

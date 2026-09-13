@@ -56,6 +56,33 @@ data class ChaoxingSignResult(
     val activity: ChaoxingActivity,
 )
 
+data class ChaoxingAutoSignLocation(
+    val latitude: Double,
+    val longitude: Double,
+    val accuracy: Float,
+    val address: String,
+    val isMock: Boolean,
+)
+
+data class ChaoxingAutoSignResult(
+    val status: String,
+    val message: String,
+    val courseName: String,
+    val activityName: String,
+) {
+    val failed: Boolean get() = status == "failed"
+}
+
+data class ChaoxingAutoSign(
+    val enabled: Boolean = false,
+    val times: List<String> = emptyList(),
+    val location: ChaoxingAutoSignLocation? = null,
+    val lastResult: ChaoxingAutoSignResult? = null,
+    val lastRunAt: String? = null,
+    val notifyConfigured: Boolean = false,
+    val signProviderConnected: Boolean = false,
+)
+
 class ChaoxingRepository internal constructor(private val http: PlatformHttpClient) {
     suspend fun session(): ChaoxingSession = withContext(Dispatchers.IO) {
         http.execute("$PATH/session").json.getJSONObject("data").toSession()
@@ -102,6 +129,23 @@ class ChaoxingRepository internal constructor(private val http: PlatformHttpClie
         ChaoxingSignResult(data.optBoolean("confirmed"), data.optBoolean("pending"), data.optBoolean("requiresOfficial"), data.optBoolean("requiresCaptcha"), data.optString("message"), data.getJSONObject("activity").toActivity())
     }
 
+    suspend fun autoSign(): ChaoxingAutoSign = withContext(Dispatchers.IO) {
+        http.execute("$PATH/auto-sign").json.getJSONObject("data").toAutoSign()
+    }
+
+    suspend fun saveAutoSign(enabled: Boolean, times: List<String>, location: ChaoxingAutoSignLocation?): ChaoxingAutoSign = withContext(Dispatchers.IO) {
+        val body = JSONObject().put("enabled", enabled).put("times", JSONArray(times))
+        location?.let { current ->
+            body.put("location", JSONObject().put("latitude", current.latitude).put("longitude", current.longitude)
+                .put("accuracy", current.accuracy).put("address", current.address).put("isMock", current.isMock))
+        }
+        http.execute("$PATH/auto-sign", "PUT", body).json.getJSONObject("data").toAutoSign()
+    }
+
+    suspend fun runAutoSign(): ChaoxingAutoSignResult = withContext(Dispatchers.IO) {
+        http.execute("$PATH/auto-sign/run", "POST", JSONObject(), timeoutSeconds = 150).json.getJSONObject("data").toAutoSignResult()
+    }
+
     private fun query(courseId: String, classId: String) = "courseId=${Uri.encode(courseId)}&classId=${Uri.encode(classId)}"
 
     companion object {
@@ -119,4 +163,21 @@ private fun JSONObject.toActivity() = ChaoxingActivity(
     canSign = optBoolean("canSign"), requiresOfficial = optBoolean("requiresOfficial"), requiresCaptcha = optBoolean("requiresCaptcha"),
     requirements = (optJSONArray("requirements") ?: JSONArray()).let { array -> List(array.length()) { array.optString(it) } },
     locationText = optString("locationText"), locationRange = optInt("locationRange"),
+)
+
+private fun JSONObject.toAutoSignResult() = ChaoxingAutoSignResult(
+    status = optString("status"), message = optString("message"),
+    courseName = optString("courseName"), activityName = optString("activityName"),
+)
+
+private fun JSONObject.toAutoSign() = ChaoxingAutoSign(
+    enabled = optBoolean("enabled"),
+    times = (optJSONArray("times") ?: JSONArray()).let { array -> List(array.length()) { array.optString(it) } }.filter { it.isNotBlank() },
+    location = optJSONObject("location")?.let { current ->
+        ChaoxingAutoSignLocation(current.optDouble("latitude"), current.optDouble("longitude"), current.optDouble("accuracy").toFloat(), current.optString("address"), current.optBoolean("isMock"))
+    },
+    lastResult = optJSONObject("lastResult")?.toAutoSignResult(),
+    lastRunAt = optString("lastRunAt").takeIf { it.isNotBlank() && it != "null" },
+    notifyConfigured = optBoolean("notifyConfigured"),
+    signProviderConnected = optBoolean("signProviderConnected"),
 )

@@ -2595,7 +2595,7 @@ async function handleApiRoutes(req, res, url) {
       return;
     }
 
-    if (await handleChaoxingRoutes(req, res, url, { chaoxing, currentUserId, json, readBodyJson })) return;
+    if (await handleChaoxingRoutes(req, res, url, { chaoxing, currentUserId, json, platformUserId: appSession.platformUserId, readBodyJson })) return;
 
     if (await handleCampusCoreRoutes(req, res, url, {
       HttpError,
@@ -2769,7 +2769,7 @@ function respondApiError(req, res, url, error) {
   });
 }
 
-const chaoxing = createChaoxingService({ repository, sensitiveJson, readUpstreamText });
+const chaoxing = createChaoxingService({ repository, sensitiveJson, readUpstreamText, logger });
 
 const {
   requestAcademicHtml,
@@ -2957,13 +2957,15 @@ const {
   wakeLibrarySeatWaitlistScheduler,
   startLibrarySeatWaitlistScheduler,
   wakeLibrarySeatReminderScheduler,
-  startLibrarySeatReminderScheduler
+  startLibrarySeatReminderScheduler,
+  startChaoxingAutoSignScheduler
 } = createBackgroundSchedulers({
   academicEvaluationAutoCapacitySnapshot,
   academicEvaluationAutoTasks,
   activeUpstreamRequestCount: () => activeUpstreamRequests,
   cachedAcademicTimetableForUser,
   CAS_ORIGIN,
+  chaoxing,
   getAcademicTimetable,
   getLibrarySeatCurrentUse: async () => (await librarySeatClient()).getCurrentUse(),
   isCasLoginRequiredError,
@@ -3080,6 +3082,7 @@ server.listen(PORT, HOST, () => {
   startLibroomAutoReservationScheduler();
   startLibrarySeatWaitlistScheduler();
   startLibrarySeatReminderScheduler();
+  startChaoxingAutoSignScheduler();
 });
 
 let shuttingDown = false;

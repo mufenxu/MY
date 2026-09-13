@@ -2,6 +2,7 @@ import { ACADEMIC_TIMETABLE_SOURCES } from "../lib/academic-config.js";
 import { autoReservationNextScanDelay, autoReservationRunPlan } from "../lib/libroom-auto-reservation.js";
 import { buildCourseOccurrences } from "../lib/academic-calendar.js";
 import { buildCourseReminderDelivery, enqueueCampusNotification, sendCampusNotification } from "../lib/notification-client.js";
+import { chaoxingAutoSignRunPlan } from "../lib/chaoxing-auto-sign.js";
 import { cookieHeaderFor } from "../lib/session-jar.js";
 import { iterateTaskPages, mapWithConcurrency } from "../lib/bounded-concurrency.js";
 import { cachedLibrarySeatToken } from "../lib/library-seat.js";
@@ -27,6 +28,7 @@ export function createBackgroundSchedulers({
   activeUpstreamRequestCount,
   cachedAcademicTimetableForUser,
   CAS_ORIGIN,
+  chaoxing,
   getAcademicTimetable,
   getLibrarySeatCurrentUse,
   isCasLoginRequiredError,
@@ -56,6 +58,12 @@ export function createBackgroundSchedulers({
   const LIBROOM_AUTO_RESERVATION_INTERVAL_MS = Number(process.env.CAMPUS_LIBROOM_AUTO_RESERVATION_INTERVAL_MS || 15 * 1000);
 
   const LIBROOM_AUTO_RESERVATION_START_DELAY_MS = Number(process.env.CAMPUS_LIBROOM_AUTO_RESERVATION_START_DELAY_MS || 0);
+
+  const CHAOXING_AUTO_SIGN_INTERVAL_MS = Number(process.env.CAMPUS_CHAOXING_AUTO_SIGN_INTERVAL_MS || 30 * 1000);
+
+  const CHAOXING_AUTO_SIGN_START_DELAY_MS = Number(process.env.CAMPUS_CHAOXING_AUTO_SIGN_START_DELAY_MS || 45 * 1000);
+
+  const CHAOXING_AUTO_SIGN_CONCURRENCY = 2;
 
   const LIBRARY_SEAT_WAITLIST_FAST_INTERVAL_MS = Number(process.env.CAMPUS_LIBRARY_SEAT_WAITLIST_FAST_INTERVAL_MS || 20 * 1000);
 
@@ -120,6 +128,12 @@ export function createBackgroundSchedulers({
   let libroomAutoReservationRunning = false;
 
   let libroomAutoReservationRescheduleRequested = false;
+
+  let chaoxingAutoSignTimer = null;
+
+  let chaoxingAutoSignRunning = false;
+
+  let chaoxingAutoSignRescheduleRequested = false;
 
   let librarySeatWaitlistTimer = null;
 
@@ -199,6 +213,22 @@ export function createBackgroundSchedulers({
     lastError: null
   };
 
+  const chaoxingAutoSignOperation = {
+    running: false,
+    skippedRuns: 0,
+    lastReason: null,
+    lastStartedAt: null,
+    lastFinishedAt: null,
+    lastDurationMs: null,
+    scanned: 0,
+    completed: 0,
+    failed: 0,
+    skipped: 0,
+    truncated: 0,
+    timedOut: false,
+    lastError: null
+  };
+
   function stopBackgroundSchedulers() {
     if (academicRefreshStartTimer) clearTimeout(academicRefreshStartTimer);
     if (academicRefreshInterval) clearInterval(academicRefreshInterval);
@@ -207,6 +237,7 @@ export function createBackgroundSchedulers({
     if (libroomAutoReservationTimer) clearTimeout(libroomAutoReservationTimer);
     if (librarySeatWaitlistTimer) clearTimeout(librarySeatWaitlistTimer);
     if (librarySeatReminderTimer) clearTimeout(librarySeatReminderTimer);
+    if (chaoxingAutoSignTimer) clearTimeout(chaoxingAutoSignTimer);
   }
 
   function beginBackgroundOperation(state, reason) {
@@ -271,6 +302,11 @@ export function createBackgroundSchedulers({
         intervalMs: LIBRARY_SEAT_REMINDER_INTERVAL_MS,
         userScanLimit: LIBRARY_SEAT_REMINDER_MAX_USERS,
         checkpoint: LIBRARY_SEAT_REMINDER_CHECKPOINT
+      },
+      chaoxingAutoSign: {
+        ...chaoxingAutoSignOperation,
+        concurrency: CHAOXING_AUTO_SIGN_CONCURRENCY,
+        intervalMs: CHAOXING_AUTO_SIGN_INTERVAL_MS
       },
       trackedTasks: backgroundTasks.size + academicEvaluationAutoTasks.size
     };
@@ -642,6 +678,83 @@ export function createBackgroundSchedulers({
     scheduleLibroomAutoReservationScan("startup", Math.max(0, LIBROOM_AUTO_RESERVATION_START_DELAY_MS));
   }
 
+  function chaoxingAutoSignSchedulerEnabled() {
+    return Boolean(chaoxing) && Number.isFinite(CHAOXING_AUTO_SIGN_INTERVAL_MS) && CHAOXING_AUTO_SIGN_INTERVAL_MS > 0;
+  }
+
+  function scheduleChaoxingAutoSignScan(reason, delayMs) {
+    if (isShuttingDown() || !chaoxingAutoSignSchedulerEnabled()) return;
+    if (chaoxingAutoSignTimer) clearTimeout(chaoxingAutoSignTimer);
+    const delay = Math.max(0, Math.trunc(Number(delayMs) || 0));
+    chaoxingAutoSignTimer = setTimeout(() => {
+      chaoxingAutoSignTimer = null;
+      trackBackgroundTask(() => runChaoxingAutoSignScheduler(reason));
+    }, delay);
+  }
+
+  async function runChaoxingAutoSignScheduler(reason) {
+    if (isShuttingDown() || !chaoxingAutoSignSchedulerEnabled()) return;
+    if (chaoxingAutoSignRunning) {
+      chaoxingAutoSignRescheduleRequested = true;
+      return;
+    }
+    chaoxingAutoSignRunning = true;
+    const startedAt = beginBackgroundOperation(chaoxingAutoSignOperation, reason);
+    let operationError = null;
+    try {
+      const now = new Date();
+      const rows = await repository.listEnabledChaoxingAutoSign();
+      chaoxingAutoSignOperation.scanned = rows.length;
+      await mapWithConcurrency(rows, CHAOXING_AUTO_SIGN_CONCURRENCY, async (row) => {
+        const userId = String(row?.user_id || "").trim();
+        // 只有当前时刻命中用户设置的签到时刻才会真正执行，一轮最多一次。
+        const plan = chaoxingAutoSignRunPlan(row, now);
+        if (!userId || plan.state !== "ready") {
+          chaoxingAutoSignOperation.skipped += 1;
+          return;
+        }
+        const user = await repository.findUserById(userId);
+        if (!user || user.disabled) {
+          chaoxingAutoSignOperation.skipped += 1;
+          return;
+        }
+        return userContextStorage.run({ requestId: `chaoxing-auto-sign-${randomUUID()}`, user }, async () => {
+          try {
+            const result = await chaoxing.autoSign(userId, { runKey: plan.runKey });
+            if (result?.status === "success") {
+              chaoxingAutoSignOperation.completed += 1;
+            } else if (result?.status === "failed") {
+              chaoxingAutoSignOperation.failed += 1;
+              logger.warn("chaoxing_auto_sign_failed", { userId, message: result?.message });
+            } else {
+              chaoxingAutoSignOperation.skipped += 1;
+            }
+          } catch (error) {
+            chaoxingAutoSignOperation.failed += 1;
+            logger.warn("chaoxing_auto_sign_user_failed", { userId, error: error?.message });
+          }
+        });
+      });
+      if (reason !== "interval" && chaoxingAutoSignOperation.scanned) {
+        logger.info("chaoxing_auto_sign_scan_completed", { reason, users: chaoxingAutoSignOperation.scanned, completed: chaoxingAutoSignOperation.completed, failed: chaoxingAutoSignOperation.failed });
+      }
+    } catch (error) {
+      operationError = error;
+      logger.warn("chaoxing_auto_sign_scan_failed", { reason, error: error?.message });
+    } finally {
+      chaoxingAutoSignRunning = false;
+      finishBackgroundOperation(chaoxingAutoSignOperation, startedAt, operationError);
+      const delay = chaoxingAutoSignRescheduleRequested ? 0 : CHAOXING_AUTO_SIGN_INTERVAL_MS;
+      chaoxingAutoSignRescheduleRequested = false;
+      scheduleChaoxingAutoSignScan("interval", delay);
+    }
+  }
+
+  function startChaoxingAutoSignScheduler() {
+    if (!chaoxingAutoSignSchedulerEnabled()) return;
+    scheduleChaoxingAutoSignScan("startup", Math.max(0, CHAOXING_AUTO_SIGN_START_DELAY_MS));
+  }
+
   function librarySeatWaitlistSchedulerEnabled() {
     return Number.isFinite(LIBRARY_SEAT_WAITLIST_FAST_INTERVAL_MS) && LIBRARY_SEAT_WAITLIST_FAST_INTERVAL_MS > 0;
   }
@@ -920,6 +1033,7 @@ export function createBackgroundSchedulers({
     wakeLibrarySeatWaitlistScheduler,
     startLibrarySeatWaitlistScheduler,
     wakeLibrarySeatReminderScheduler,
-    startLibrarySeatReminderScheduler
+    startLibrarySeatReminderScheduler,
+    startChaoxingAutoSignScheduler
   };
 }

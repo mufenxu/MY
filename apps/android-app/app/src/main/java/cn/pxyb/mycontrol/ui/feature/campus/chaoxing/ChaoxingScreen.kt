@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -31,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -38,6 +40,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import cn.pxyb.mycontrol.data.ChaoxingActivity
+import cn.pxyb.mycontrol.data.ChaoxingAutoSign
 import cn.pxyb.mycontrol.data.ChaoxingCourse
 import cn.pxyb.mycontrol.ui.PlatformWebActivity
 import cn.pxyb.mycontrol.ui.components.button.AppButton
@@ -54,14 +57,19 @@ import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.GlassShimmerList
 import cn.pxyb.mycontrol.ui.components.input.AppSelectField
 import cn.pxyb.mycontrol.ui.components.input.AppSelectOption
+import cn.pxyb.mycontrol.ui.components.input.AppSwitch
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
+import cn.pxyb.mycontrol.ui.components.picker.AppTimePickerModal
+import cn.pxyb.mycontrol.util.DateTimeUtils
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+
+private const val AUTO_SIGN_TIME_LIMIT = 12
 
 @Composable
 fun ChaoxingScreen(
@@ -80,6 +88,11 @@ fun ChaoxingScreen(
     onLocate: (Context) -> Unit,
     onSign: () -> Unit,
     onCaptchaVerified: (String, String) -> Unit,
+    onToggleAutoSign: (Boolean) -> Unit,
+    onAddAutoSignTime: (String) -> Unit,
+    onRemoveAutoSignTime: (String) -> Unit,
+    onSaveAutoSignLocation: (Context) -> Unit,
+    onRunAutoSign: () -> Unit,
     onReport: (String) -> Unit,
     onClearFeedback: () -> Unit,
 ) {
@@ -87,6 +100,7 @@ fun ChaoxingScreen(
     var courseExpanded by remember { mutableStateOf(false) }
     var confirmDisconnect by remember { mutableStateOf(false) }
     var showSignProvider by remember { mutableStateOf(false) }
+    var showAutoSignTimePicker by remember { mutableStateOf(false) }
     var returningFromOfficial by remember { mutableStateOf(false) }
     var showCaptcha by remember(state.selected?.id) { mutableStateOf(false) }
     val currentRefreshSelected by rememberUpdatedState(onRefreshSelected)
@@ -101,6 +115,10 @@ fun ChaoxingScreen(
     val permissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
         if (granted[Manifest.permission.ACCESS_FINE_LOCATION] == true) onLocate(context)
         else onReport("位置签到需要精确位置权限，请在系统设置中为 MY 开启后重试。")
+    }
+    val autoSignPermissions = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+        if (granted[Manifest.permission.ACCESS_FINE_LOCATION] == true) onSaveAutoSignLocation(context)
+        else onReport("定时签到需要精确位置权限，请在系统设置中为 MY 开启后重试。")
     }
     LaunchedEffect(Unit) { onRefresh() }
     LaunchedEffect(state.session.connected, state.session.signProviderConnected) {
@@ -178,6 +196,43 @@ fun ChaoxingScreen(
                         } else {
                             AppSecondaryButton("连接帮你签服务", ::openSignProvider, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
                         }
+                        AppActionRow(title = "定时签到", subtitle = autoSignSubtitle(state.autoSign), icon = Icons.Outlined.Schedule,
+                            enabled = !state.busy, onClick = { onToggleAutoSign(!state.autoSign.enabled) },
+                            trailingContent = { AppSwitch(state.autoSign.enabled, { onToggleAutoSign(it) }, enabled = !state.busy) })
+                        if (state.autoSign.enabled || state.autoSign.times.isNotEmpty() || state.autoSign.location != null) {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                state.autoSign.times.forEach { time ->
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                        Text(time, style = MaterialTheme.typography.bodyLarge)
+                                        AppInlineDangerButton("移除", { onRemoveAutoSignTime(time) }, enabled = !state.busy)
+                                    }
+                                }
+                                if (state.autoSign.times.isEmpty()) Text("尚未设置签到时刻。", style = MaterialTheme.typography.bodyMedium)
+                                AppSecondaryButton("添加签到时刻", { showAutoSignTimePicker = true }, modifier = Modifier.fillMaxWidth(),
+                                    enabled = !state.busy && state.autoSign.times.size < AUTO_SIGN_TIME_LIMIT)
+                            }
+                            AppDetailRow("签到位置", state.autoSign.location?.address ?: "尚未保存")
+                            AppSecondaryButton(if (state.autoSign.location == null) "使用当前位置保存" else "更新签到位置", {
+                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) onSaveAutoSignLocation(context)
+                                else autoSignPermissions.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                            }, modifier = Modifier.fillMaxWidth(), enabled = !state.busy, loading = state.operation == "auto-sign-location")
+                            state.autoSign.lastResult?.let { result ->
+                                AppDetailRow("最近一次", listOf(autoSignStatusText(result.status), result.activityName, result.courseName).filter(String::isNotBlank).joinToString(" · "))
+                                if (result.message.isNotBlank()) {
+                                    Text(result.message, style = MaterialTheme.typography.bodySmall,
+                                        color = if (result.failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            state.autoSign.lastRunAt?.let { AppDetailRow("执行时间", DateTimeUtils.formatPlatformTime(it)) }
+                            AppSecondaryButton("立即执行一次", onRunAutoSign, modifier = Modifier.fillMaxWidth(),
+                                enabled = !state.busy && state.autoSign.enabled, loading = state.operation == "auto-sign-run")
+                            if (!state.autoSign.notifyConfigured) {
+                                Text("尚未关联失败提醒收件人，签到失败时可能收不到企业微信消息，请先在提醒设置中填写企业微信成员账号。",
+                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                            }
+                            Text("定时签到在设定的时刻检查课程里最新的未签到活动，用保存的位置调用帮你签服务；失败会通过企业微信与通知中心提醒。",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
                 }
             }
@@ -212,6 +267,12 @@ fun ChaoxingScreen(
         SignProviderConnectionDialog(state, onConnectSignProvider, onDismiss = { showSignProvider = false })
     }
 
+    if (showAutoSignTimePicker) {
+        AppTimePickerModal(title = "添加签到时刻", currentTime = state.autoSign.times.lastOrNull() ?: "08:00",
+            onDismiss = { showAutoSignTimePicker = false },
+            onConfirm = { time -> showAutoSignTimePicker = false; onAddAutoSignTime(time) })
+    }
+
     if (confirmDisconnect) {
         AppDialog(title = "断开学习通连接", subtitle = "将移除服务器保存的学习通会话，之后需要重新连接。",
             onDismissRequest = { confirmDisconnect = false }, footer = {
@@ -237,15 +298,22 @@ fun ChaoxingScreen(
                     if (activity.active && activity.recordStatus == 0 && (state.officialRequired || activity.requiresOfficial)) {
                         AppDialogPrimaryButton("打开学习通", ::openOfficial, modifier = Modifier.fillMaxWidth(), enabled = !state.busy)
                     } else if (activity.canSign && !state.pending) {
+                        val providerReady = activity.type == "4" && state.session.signProviderConnected
                         AppDialogPrimaryButton(when {
+                            activity.type != "4" -> "打开学习通"
+                            !providerReady -> "连接帮你签服务"
                             state.captchaRequired -> "验证并继续签到"
-                            activity.type == "4" -> "使用当前位置签到"
-                            else -> "确认签到"
-                        }, { if (state.captchaRequired) showCaptcha = true else onSign() },
-                            modifier = Modifier.fillMaxWidth(), busy = state.operation == "sign", enabled = !state.busy && (activity.type != "4" || state.location != null))
-                    }
-                    if (activity.type == "4" && activity.active && activity.recordStatus == 0 && !state.session.signProviderConnected && !state.officialRequired && !activity.requiresOfficial) {
-                        AppDialogSecondaryButton("连接帮你签服务", ::openSignProvider, modifier = Modifier.fillMaxWidth(), enabled = !state.busy)
+                            else -> "使用当前位置签到"
+                        }, {
+                            when {
+                                activity.type != "4" -> openOfficial()
+                                !providerReady -> openSignProvider()
+                                state.captchaRequired -> showCaptcha = true
+                                else -> onSign()
+                            }
+                        },
+                            modifier = Modifier.fillMaxWidth(), busy = state.operation == "sign",
+                            enabled = !state.busy && (activity.type != "4" || !providerReady || state.location != null))
                     }
                     AppDialogSecondaryButton("刷新官方记录", onRefreshSelected, modifier = Modifier.fillMaxWidth(), enabled = !state.busy, busy = state.operation == "detail")
                 }
@@ -272,7 +340,7 @@ fun ChaoxingScreen(
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) onLocate(context)
                         else permissions.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     }, modifier = Modifier.fillMaxWidth(), enabled = !state.busy, loading = state.operation == "locate")
-                    Text(if (state.session.signProviderConnected) "确认签到时，会将本次位置和账号资料发送至帮你签服务（lovegcu.xyz），并消耗该服务的可用次数。" else "确认签到时，会将本次位置提交至学习通。",
+                    Text("确认签到时，会将本次位置和账号资料发送至帮你签服务（lovegcu.xyz），并消耗该服务的可用次数。",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -316,3 +384,17 @@ private fun SignProviderConnectionDialog(state: ChaoxingUiState, onConnect: (Str
 
 private fun signTime(value: Long): String = if (value <= 0) "时间未知" else
     DateTimeFormatter.ofPattern("MM-dd HH:mm", Locale.CHINA).withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(value))
+
+private fun autoSignSubtitle(autoSign: ChaoxingAutoSign): String = when {
+    autoSign.enabled && autoSign.times.isNotEmpty() -> "已开启 · ${autoSign.times.joinToString("、")}"
+    autoSign.enabled -> "已开启"
+    autoSign.times.isNotEmpty() -> "未开启 · ${autoSign.times.joinToString("、")}"
+    else -> "未开启"
+}
+
+private fun autoSignStatusText(status: String): String = when (status) {
+    "success" -> "签到成功"
+    "failed" -> "签到失败"
+    "skipped" -> "已跳过"
+    else -> "已执行"
+}

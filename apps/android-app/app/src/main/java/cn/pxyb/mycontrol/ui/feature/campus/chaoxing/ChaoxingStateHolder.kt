@@ -3,6 +3,8 @@ package cn.pxyb.mycontrol.ui.feature.campus.chaoxing
 import android.content.Context
 import cn.pxyb.mycontrol.data.ApiException
 import cn.pxyb.mycontrol.data.ChaoxingActivity
+import cn.pxyb.mycontrol.data.ChaoxingAutoSign
+import cn.pxyb.mycontrol.data.ChaoxingAutoSignLocation
 import cn.pxyb.mycontrol.data.ChaoxingCourse
 import cn.pxyb.mycontrol.data.ChaoxingLocation
 import cn.pxyb.mycontrol.data.ChaoxingRepository
@@ -12,6 +14,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.update
 import org.json.JSONObject
 
+private const val AUTO_SIGN_MAX_TIMES = 12
+
 data class ChaoxingUiState(
     val session: ChaoxingSession = ChaoxingSession(),
     val courses: List<ChaoxingCourse> = emptyList(),
@@ -19,6 +23,7 @@ data class ChaoxingUiState(
     val activities: List<ChaoxingActivity> = emptyList(),
     val selected: ChaoxingActivity? = null,
     val location: ChaoxingLocation? = null,
+    val autoSign: ChaoxingAutoSign = ChaoxingAutoSign(),
     val busy: Boolean = false,
     val operation: String = "",
     val loaded: Boolean = false,
@@ -75,7 +80,7 @@ class ChaoxingStateHolder(
             val courses = api.courses()
             val course = courses.firstOrNull { it.key == previous.course?.key } ?: courses.firstOrNull()
             val activities = course?.let { api.activities(it) }.orEmpty()
-            ChaoxingUiState(session = session, courses = courses, course = course, activities = activities)
+            ChaoxingUiState(session = session, courses = courses, course = course, activities = activities, autoSign = api.autoSign())
         }, success = { result -> result })
     }
 
@@ -159,6 +164,47 @@ class ChaoxingStateHolder(
         if (mutableState.value.operation in listOf("locate", "detail")) cancelPending()
         mutableState.update { it.copy(selected = null, location = null, pending = false, officialRequired = false, captchaRequired = false, message = null) }
     }
+
+    fun toggleAutoSign(enabled: Boolean) {
+        val settings = mutableState.value.autoSign
+        if (enabled && settings.times.isEmpty()) return report("请先添加签到时刻，再开启定时签到。")
+        if (enabled && settings.location == null) return report("请先保存签到位置，再开启定时签到。")
+        saveAutoSign(enabled, settings.times, settings.location)
+    }
+
+    fun addAutoSignTime(time: String) {
+        val settings = mutableState.value.autoSign
+        if (settings.times.size >= AUTO_SIGN_MAX_TIMES) return report("签到时刻最多设置 $AUTO_SIGN_MAX_TIMES 个。")
+        if (settings.times.contains(time)) return report("$time 已经在签到时刻中。")
+        saveAutoSign(settings.enabled, (settings.times + time).sorted(), settings.location)
+    }
+
+    fun removeAutoSignTime(time: String) {
+        val settings = mutableState.value.autoSign
+        if (settings.times.size <= 1) return report("请至少保留一个签到时刻。")
+        saveAutoSign(settings.enabled, settings.times - time, settings.location)
+    }
+
+    fun saveAutoSignLocation(context: Context) {
+        val settings = mutableState.value.autoSign
+        run("auto-sign-location", action = {
+            val fix = currentChaoxingLocation(context.applicationContext)
+            api.saveAutoSign(settings.enabled, settings.times, ChaoxingAutoSignLocation(fix.latitude, fix.longitude, fix.accuracy, fix.address, fix.isMock))
+        }, success = { result -> copy(autoSign = result, message = "签到位置已保存，定时签到会使用该位置。", error = false) })
+    }
+
+    fun runAutoSign() {
+        if (!mutableState.value.autoSign.enabled) return report("请先开启定时签到。")
+        run("auto-sign-run", action = { api.runAutoSign() to api.autoSign() }, success = { (result, settings) ->
+            copy(autoSign = settings, message = result.message.ifBlank { "定时签到已执行。" }, error = result.failed)
+        })
+    }
+
+    private fun saveAutoSign(enabled: Boolean, times: List<String>, location: ChaoxingAutoSignLocation?) = run(
+        "auto-sign-save", action = { api.saveAutoSign(enabled, times, location) },
+        success = { result -> copy(autoSign = result, message = if (result.enabled) "定时签到已开启。" else "定时签到已关闭。", error = false) },
+    )
+
     fun report(message: String) { mutableState.update { it.copy(message = message, error = true) } }
     fun clearFeedback() { mutableState.update { it.copy(message = null) } }
 }
