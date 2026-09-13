@@ -27,6 +27,7 @@ data class ChaoxingActivity(
     val signed: Boolean,
     val canSign: Boolean = false,
     val requiresOfficial: Boolean = false,
+    val requiresCaptcha: Boolean = false,
     val requirements: List<String> = emptyList(),
     val locationText: String = "",
     val locationRange: Int = 0,
@@ -50,6 +51,7 @@ data class ChaoxingSignResult(
     val confirmed: Boolean,
     val pending: Boolean,
     val requiresOfficial: Boolean,
+    val requiresCaptcha: Boolean,
     val message: String,
     val activity: ChaoxingActivity,
 )
@@ -83,11 +85,12 @@ class ChaoxingRepository internal constructor(private val http: PlatformHttpClie
             .json.getJSONObject("data").toActivity()
     }
 
-    suspend fun sign(activity: ChaoxingActivity, location: ChaoxingLocation?): ChaoxingSignResult = withContext(Dispatchers.IO) {
+    suspend fun sign(activity: ChaoxingActivity, location: ChaoxingLocation?, validate: String = ""): ChaoxingSignResult = withContext(Dispatchers.IO) {
         val body = JSONObject().put("courseId", activity.courseId).put("classId", activity.classId).put("activeId", activity.id)
         location?.let { body.put("location", it.toJson()) }
+        if (validate.isNotBlank()) body.put("validate", validate)
         val data = http.execute("$PATH/sign", "POST", body, timeoutSeconds = 90).json.getJSONObject("data")
-        ChaoxingSignResult(data.optBoolean("confirmed"), data.optBoolean("pending"), data.optBoolean("requiresOfficial"), data.optString("message"), data.getJSONObject("activity").toActivity())
+        ChaoxingSignResult(data.optBoolean("confirmed"), data.optBoolean("pending"), data.optBoolean("requiresOfficial"), data.optBoolean("requiresCaptcha"), data.optString("message"), data.getJSONObject("activity").toActivity())
     }
 
     private fun query(courseId: String, classId: String) = "courseId=${Uri.encode(courseId)}&classId=${Uri.encode(classId)}"
@@ -104,7 +107,7 @@ private fun JSONObject.toActivity() = ChaoxingActivity(
     id = getString("id"), courseId = getString("courseId"), classId = getString("classId"), name = optString("name"),
     type = optString("type"), typeText = optString("typeText"), active = optBoolean("active"), startTime = optLong("startTime"), endTime = optLong("endTime"),
     recordStatus = optInt("recordStatus", -1), recordText = optString("recordText", "待查询"), signed = optBoolean("signed"),
-    canSign = optBoolean("canSign"), requiresOfficial = optBoolean("requiresOfficial"),
+    canSign = optBoolean("canSign"), requiresOfficial = optBoolean("requiresOfficial"), requiresCaptcha = optBoolean("requiresCaptcha"),
     requirements = (optJSONArray("requirements") ?: JSONArray()).let { array -> List(array.length()) { array.optString(it) } },
     locationText = optString("locationText"), locationRange = optInt("locationRange"),
 )

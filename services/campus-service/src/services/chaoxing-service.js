@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { HttpError } from "../lib/http.js";
 import { KeyedSerialQueue } from "../lib/keyed-serial-queue.js";
 import { cookieHeaderFor, emptySessionJar, parseSetCookie, rememberCookie, updateJarFromResponse } from "../lib/session-jar.js";
@@ -153,7 +152,7 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
     const type = String(info.otherId ?? activity.otherId ?? "");
     const requirements = [];
     if (enabled(info.openCheckFaceFlag)) requirements.push("人脸识别");
-    if (enabled(info.ifNeedVCode) || enabled(info.showVCode)) requirements.push("验证码");
+    const requiresCaptcha = enabled(info.ifNeedVCode) || enabled(info.showVCode);
     if (enabled(info.ifphoto)) requirements.push("现场照片");
     if (enabled(info.openPreventCheatFlag)) requirements.push("客户端校验");
     if (enabled(info.openCheckWeChatFlag)) requirements.push("微信校验");
@@ -166,7 +165,7 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
     const active = Number(info.status ?? activity.status) === 1 && (!endTime || now <= endTime) && (!startTime || now >= startTime);
     const summary = { ...activitySummary(activity, listing.course), ...record, type, typeText: TYPE_TEXT[type] || "其他签到", active, startTime, endTime,
       locationText: String(info.locationText || ""), locationRange: Number(info.locationRange) > 0 ? Number(info.locationRange) : null,
-      requiresOfficial: requirements.length > 0, requirements, canSign: active && record.recordStatus === 0 && requirements.length === 0 };
+      requiresCaptcha, requiresOfficial: requirements.length > 0, requirements, canSign: active && record.recordStatus === 0 && requirements.length === 0 };
     return { summary, ext: listing.ext };
   }
 
@@ -191,7 +190,7 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
         const payload = await json(jar, PROFILE);
         const profile = payload.msg;
         if (!profile || !/^\d+$/.test(String(profile.puid || ""))) throw loginRequired();
-        jar.meta = { profile: { uid: id(profile.puid), fid: String(profile.fid ?? 0), name: String(profile.name || "学习通用户"), school: String(profile.schoolname || "") }, connectedAt: new Date().toISOString(), deviceCode: randomUUID() };
+        jar.meta = { profile: { uid: id(profile.puid), fid: String(profile.fid ?? 0), name: String(profile.name || "学习通用户"), school: String(profile.schoolname || "") }, connectedAt: new Date().toISOString() };
         await repository.upsertChaoxingSession(userId, sensitiveJson.encode(jar), new Date().toISOString());
         return profileSummary(jar);
       });
@@ -204,30 +203,35 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
     }),
     detail: (userId, query) => withSession(userId, async jar => (await detail(jar, query)).summary),
     sign: (userId, body) => withSession(userId, async jar => {
-      const { summary, ext } = await detail(jar, body);
+      const { summary } = await detail(jar, body);
       if (summary.recordStatus !== 0) return { confirmed: summary.signed, message: `官方当前记录：${summary.recordText}。`, activity: summary };
       if (!summary.active) throw fail(409, "该签到尚未开始或已经结束，请刷新活动。", "CHAOXING_ACTIVITY_CLOSED");
       if (summary.requiresOfficial) return { confirmed: false, requiresOfficial: true, message: `该活动需要${summary.requirements.join("、")}，请在学习通客户端完成。`, activity: summary };
+      const validate = body.validate ?? "";
+      if (typeof validate !== "string" || validate.length > 8192) throw fail(400, "验证码结果无效，请重新验证。", "CHAOXING_INVALID_CAPTCHA");
+      if (summary.requiresCaptcha && !validate) return { confirmed: false, requiresCaptcha: true, message: "请在 MY 内完成学习通安全验证后继续签到。", activity: summary };
       const location = summary.type === "4" ? normalizeChaoxingLocation(body.location) : null;
       const profile = jar.meta.profile;
       const preSign = apiUrl("/newsign/preSign", { courseId: summary.courseId, classId: summary.classId, activePrimaryId: summary.id, uid: profile.uid, general: 1, sys: 1, ls: 1, appType: 15, isTeacherViewOpen: 0 });
-      await request(jar, preSign, { method: "POST", form: { ext: typeof ext === "string" ? ext : JSON.stringify(ext) } });
-      const analysis = await request(jar, apiUrl("/pptSign/analysis", { aid: summary.id, vs: 1, DB_STRATEGY: "RANDOM" }));
-      const code = /code\s*=\s*['"]\+'([a-f0-9]+)'/i.exec(analysis)?.[1];
-      if (!code) throw fail(409, "学习通签到预校验发生变化，请在官方客户端完成。", "CHAOXING_OFFICIAL_REQUIRED");
-      await request(jar, apiUrl("/pptSign/analysis2", { code, DB_STRATEGY: "RANDOM" }));
-      const form = { activeId: summary.id, courseId: summary.courseId, uid: profile.uid, fid: profile.fid, name: profile.name, appType: "15", ifTiJiao: "1", clientip: "", deviceCode: jar.meta.deviceCode, validate: "", latitude: "-1", longitude: "-1", address: "" };
+      await request(jar, preSign);
+      const form = { activeId: summary.id, courseId: summary.courseId, uid: profile.uid, fid: profile.fid, name: profile.name, appType: "15", ifTiJiao: "1", clientip: "", useragent: "", objectId: "", validate, latitude: "-1", longitude: "-1", address: "" };
       if (location) {
         normalizeChaoxingLocation(location);
-        Object.assign(form, { latitude: String(location.latitude), longitude: String(location.longitude), address: location.address, locationResult: JSON.stringify(location) });
+        // The public mini-program uses the legacy location field. locationResult is the native client's signed payload.
+        Object.assign(form, { latitude: String(location.latitude), longitude: String(location.longitude), address: location.address, location: JSON.stringify(location) });
       }
       let result;
-      try { result = (await request(jar, apiUrl("/pptSign/stuSignajax"), { method: "POST", form, referer: preSign })).trim(); }
+      try { result = (await request(jar, apiUrl("/pptSign/stuSignajax", form), { referer: preSign })).trim(); }
       catch (error) {
         if (error.code === "CHAOXING_LOGIN_REQUIRED") throw error;
         result = "unknown";
       }
-      if (/^locationAuthError|^validate|^\[face\]/i.test(result)) return { confirmed: false, requiresOfficial: true, message: "学习通要求额外的客户端校验，请打开学习通完成本次签到。", activity: summary };
+      if (/^validate/i.test(result)) return { confirmed: false, requiresCaptcha: true, upstreamCode: "validate", message: "学习通要求安全验证，请在 MY 内完成验证后继续签到。", activity: summary };
+      if (/^locationAuthError/i.test(result)) {
+        const upstreamCode = /^locationAuthError(?:_[A-Za-z0-9-]{1,48})?/i.exec(result)[0];
+        return { confirmed: false, upstreamCode, message: `学习通拒绝了定位请求（${upstreamCode}）。本次尚未确认签到，请保留此错误码以便排查。`, activity: { ...summary, canSign: false } };
+      }
+      if (/^\[face\]/i.test(result)) return { confirmed: false, requiresOfficial: true, upstreamCode: "face", message: "该活动要求人脸校验，MY 暂未接入此流程。", activity: summary };
       if (/^errorLocation/.test(result)) throw fail(409, "当前位置未通过签到范围校验，请核对地点后重新定位。", "CHAOXING_OUT_OF_RANGE");
       let record;
       try { record = await attend(jar, summary.id); }
@@ -238,7 +242,8 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
       const activity = { ...summary, ...record, canSign: !record.signed && record.recordStatus === 0 };
       if (record.signed) return { confirmed: true, message: `官方已确认：${record.recordText}。`, activity };
       const pending = result === "unknown" || /^success/.test(result);
-      return { confirmed: false, pending, requiresOfficial: !pending, message: pending ? "官方签到记录尚未更新，请先刷新结果。" : "学习通未确认签到成功，请打开官方客户端核对活动要求。", activity };
+      const upstreamCode = /^[A-Za-z0-9_\[\]-]{1,80}$/.test(result) ? result : "unrecognized_response";
+      return { confirmed: false, pending, upstreamCode, message: pending ? "官方签到记录尚未更新，请先刷新结果。" : `学习通未确认签到，请刷新官方记录。返回状态：${upstreamCode}。`, activity };
     })
   };
 }

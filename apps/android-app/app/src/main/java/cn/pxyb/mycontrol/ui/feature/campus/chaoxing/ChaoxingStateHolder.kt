@@ -24,6 +24,7 @@ data class ChaoxingUiState(
     val loaded: Boolean = false,
     val pending: Boolean = false,
     val officialRequired: Boolean = false,
+    val captchaRequired: Boolean = false,
     val message: String? = null,
     val error: Boolean = false,
 )
@@ -88,12 +89,12 @@ class ChaoxingStateHolder(
     fun disconnect() = run("disconnect", { api.disconnect() }, { ChaoxingUiState(loaded = true) })
 
     fun selectCourse(course: ChaoxingCourse) = run("activities", { api.activities(course) }, { activities ->
-        copy(course = course, activities = activities, selected = null, location = null, pending = false, officialRequired = false)
+        copy(course = course, activities = activities, selected = null, location = null, pending = false, officialRequired = false, captchaRequired = false)
     })
 
     fun openActivity(activity: ChaoxingActivity) {
         run("detail", { api.detail(activity) }, { detail ->
-            copy(selected = detail, location = null, pending = false, officialRequired = detail.requiresOfficial,
+            copy(selected = detail, location = null, pending = false, officialRequired = detail.requiresOfficial, captchaRequired = detail.requiresCaptcha,
                 activities = activities.map { if (it.id == detail.id) detail else it })
         })
     }
@@ -102,6 +103,7 @@ class ChaoxingStateHolder(
         val current = mutableState.value.selected ?: return
         run("detail", { api.detail(current) }, { detail ->
             copy(selected = if (selected?.id == detail.id) detail else selected, pending = false,
+                captchaRequired = !detail.signed && (captchaRequired || detail.requiresCaptcha),
                 activities = activities.map { if (it.id == detail.id) detail else it },
                 message = "官方当前记录：${detail.recordText}。", error = false)
         })
@@ -114,7 +116,15 @@ class ChaoxingStateHolder(
         })
     }
 
-    fun sign() {
+    fun sign() = submitSign("")
+
+    fun signWithCaptcha(activeId: String, validate: String) {
+        val current = mutableState.value
+        if (current.selected?.id != activeId || !current.captchaRequired || validate.isBlank()) return
+        submitSign(validate)
+    }
+
+    private fun submitSign(validate: String) {
         val state = mutableState.value
         val activity = state.selected ?: return
         if (!activity.canSign || state.pending || state.officialRequired) return
@@ -122,17 +132,18 @@ class ChaoxingStateHolder(
             report("请先获取当前位置。")
             return
         }
-        run("sign", { api.sign(activity, state.location) }, { result ->
+        run("sign", { api.sign(activity, state.location, validate) }, { result ->
             copy(selected = if (selected?.id == activity.id) result.activity else selected,
                 activities = activities.map { if (it.id == activity.id) result.activity else it },
-                location = null, pending = result.pending, officialRequired = result.requiresOfficial,
-                message = result.message, error = !result.confirmed)
+                location = if (result.requiresCaptcha) location else null, pending = result.pending, officialRequired = result.requiresOfficial,
+                captchaRequired = result.requiresCaptcha,
+                message = result.message, error = !result.confirmed && !result.requiresCaptcha)
         })
     }
 
     fun closeActivity() {
         if (mutableState.value.operation in listOf("locate", "detail")) cancelPending()
-        mutableState.update { it.copy(selected = null, location = null, pending = false, officialRequired = false, message = null) }
+        mutableState.update { it.copy(selected = null, location = null, pending = false, officialRequired = false, captchaRequired = false, message = null) }
     }
     fun report(message: String) { mutableState.update { it.copy(message = message, error = true) } }
     fun clearFeedback() { mutableState.update { it.copy(message = null) } }

@@ -76,6 +76,7 @@ fun ChaoxingScreen(
     onCloseActivity: () -> Unit,
     onLocate: (Context) -> Unit,
     onSign: () -> Unit,
+    onCaptchaVerified: (String, String) -> Unit,
     onReport: (String) -> Unit,
     onClearFeedback: () -> Unit,
 ) {
@@ -83,6 +84,7 @@ fun ChaoxingScreen(
     var courseExpanded by remember { mutableStateOf(false) }
     var confirmDisconnect by remember { mutableStateOf(false) }
     var returningFromOfficial by remember { mutableStateOf(false) }
+    var showCaptcha by remember(state.selected?.id) { mutableStateOf(false) }
     val currentRefreshSelected by rememberUpdatedState(onRefreshSelected)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val loginLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -195,13 +197,27 @@ fun ChaoxingScreen(
     }
 
     state.selected?.let { activity ->
+        if (showCaptcha && state.captchaRequired && activity.canSign && !state.pending && !state.officialRequired) {
+            ChaoxingCaptchaDialog(
+                onDismiss = { showCaptcha = false },
+                onVerified = { validate ->
+                    showCaptcha = false
+                    onCaptchaVerified(activity.id, validate)
+                },
+            )
+            return@let
+        }
         AppDialog(title = activity.name, subtitle = state.course?.name, onDismissRequest = onCloseActivity,
             footer = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (activity.active && activity.recordStatus == 0 && (state.officialRequired || activity.requiresOfficial)) {
                         AppDialogPrimaryButton("打开学习通", ::openOfficial, modifier = Modifier.fillMaxWidth(), enabled = !state.busy)
                     } else if (activity.canSign && !state.pending) {
-                        AppDialogPrimaryButton(if (activity.type == "4") "使用当前位置签到" else "确认签到", onSign,
+                        AppDialogPrimaryButton(when {
+                            state.captchaRequired -> "验证并继续签到"
+                            activity.type == "4" -> "使用当前位置签到"
+                            else -> "确认签到"
+                        }, { if (state.captchaRequired) showCaptcha = true else onSign() },
                             modifier = Modifier.fillMaxWidth(), busy = state.operation == "sign", enabled = !state.busy && (activity.type != "4" || state.location != null))
                     }
                     AppDialogSecondaryButton("刷新官方记录", onRefreshSelected, modifier = Modifier.fillMaxWidth(), enabled = !state.busy, busy = state.operation == "detail")
@@ -214,6 +230,7 @@ fun ChaoxingScreen(
                 if (activity.locationText.isNotBlank()) AppDetailRow("要求地点", activity.locationText)
                 if (activity.locationRange > 0) AppDetailRow("签到范围", "${activity.locationRange} 米")
                 if (activity.requirements.isNotEmpty()) AppDetailRow("附加要求", activity.requirements.joinToString("、"))
+                if (state.captchaRequired && !activity.signed) AppDetailRow("安全验证", "在 MY 内完成学习通验证码后继续签到")
                 if (state.message != null) AppFeedbackBanner(state.message, state.error, onRetry = onRefreshSelected, retryText = "刷新记录", autoDismissDurationMillis = null, onDismiss = onClearFeedback)
                 if (activity.active && activity.recordStatus == 0 && (state.officialRequired || activity.requiresOfficial)) {
                     Text("请在学习通中使用与 ${state.session.name} 相同的账号完成此活动，返回后可在此刷新官方记录。", style = MaterialTheme.typography.bodyMedium)

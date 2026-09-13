@@ -880,6 +880,7 @@ internal fun AuthenticatedShell(
                         onCloseActivity = viewModel.chaoxing::closeActivity,
                         onLocate = viewModel.chaoxing::locate,
                         onSign = viewModel.chaoxing::sign,
+                        onCaptchaVerified = viewModel.chaoxing::signWithCaptcha,
                         onReport = viewModel.chaoxing::report,
                         onClearFeedback = viewModel.chaoxing::clearFeedback,
                     )
