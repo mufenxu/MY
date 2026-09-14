@@ -55,10 +55,8 @@ import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.data.CampusReservationTimeWindow
 import cn.pxyb.mycontrol.ui.components.button.AppButton
-import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
-import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
-import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
@@ -136,68 +134,53 @@ internal fun SingleReservationPanel(
 
     // 现代统一提交确认弹窗
     if (showConfirmDialog) {
-        AppDialog(
-            onDismissRequest = { showConfirmDialog = false },
-            icon = Icons.Outlined.MeetingRoom,
-            iconTint = MaterialTheme.colorScheme.primary,
-            iconBackground = MaterialTheme.colorScheme.primaryContainer,
+        AppConfirmDialog(
             title = "提交前确认",
-            subtitle = "请核对研讨间预约详情，确认无误后提交",
-            footer = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    AppDialogSecondaryButton(
-                        text = "返回修改",
-                        onClick = { showConfirmDialog = false },
-                        modifier = Modifier.weight(1f),
-                    )
-                    AppDialogPrimaryButton(
-                        text = "确认提交",
-                        onClick = {
-                            showConfirmDialog = false
-                            val req = CampusReservationRequest(
-                                areaId = selectedSpaceId,
-                                date = selectedDate,
-                                startTime = startTime,
-                                endTime = endTime,
-                                title = title.trim(),
-                                content = content.trim(),
-                                mobile = mobile.trim(),
-                                open = open,
-                            )
-                            onSubmit(req) {}
-                        },
-                        modifier = Modifier.weight(1f),
-                        busy = submitLoading,
-                    )
-                }
+            detail = "请核对研讨间预约详情，确认无误后提交。",
+            confirmLabel = "确认提交",
+            dismissLabel = "返回修改",
+            icon = Icons.Outlined.MeetingRoom,
+            busy = submitLoading,
+            onDismiss = { showConfirmDialog = false },
+            onConfirm = {
+                showConfirmDialog = false
+                val req = CampusReservationRequest(
+                    areaId = selectedSpaceId,
+                    date = selectedDate,
+                    startTime = startTime,
+                    endTime = endTime,
+                    title = title.trim(),
+                    content = content.trim(),
+                    mobile = mobile.trim(),
+                    open = open,
+                )
+                onSubmit(req) {}
             },
-        ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-            ) {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+            extraContent = {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
                 ) {
-                    AppDetailRow("预约空间", selectedSpaceName)
-                    AppDetailRow("预约日期", "$selectedDate (${weekdayName(today.plusDays(dayOffset.toLong()))})")
-                    AppDetailRow("预约时段", "$startTime - $endTime (${durationMin?.let { "${it / 60}小时${if (it % 60 > 0) "${it % 60}分" else ""}" } ?: ""})")
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                    AppDetailRow("申请主题", title)
-                    AppDetailRow("联系电话", mobile)
-                    AppDetailRow("公开申请", if (open) "是" else "否")
-                    if (content.isNotBlank()) {
-                        AppDetailRow("申请用途", content)
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        AppDetailRow("预约空间", selectedSpaceName)
+                        AppDetailRow("预约日期", "$selectedDate (${weekdayName(today.plusDays(dayOffset.toLong()))})")
+                        AppDetailRow("预约时段", "$startTime - $endTime (${durationMin?.let { "${it / 60}小时${if (it % 60 > 0) "${it % 60}分" else ""}" } ?: ""})")
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        AppDetailRow("申请主题", title)
+                        AppDetailRow("联系电话", mobile)
+                        AppDetailRow("公开申请", if (open) "是" else "否")
+                        if (content.isNotBlank()) {
+                            AppDetailRow("申请用途", content)
+                        }
                     }
                 }
-            }
-        }
+            },
+        )
     }
 
     val isTablet = useTwoPaneLayout()

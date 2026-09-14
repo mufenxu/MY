@@ -13,13 +13,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Chair
+import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,6 +40,7 @@ import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
@@ -377,6 +381,7 @@ private fun CurrentSeatUsageCard(
     onCancelReservation: (String) -> Unit,
     onShowSeatMap: (Int, String) -> Unit,
 ) {
+    var pendingSeatAction by remember { mutableStateOf<String?>(null) }
     if (!loading && record == null) return
     val busy = usageAction != null
     Surface(
@@ -479,7 +484,7 @@ private fun CurrentSeatUsageCard(
                         )
                         AppDangerButton(
                             text = "取消预约",
-                            onClick = { onCancelReservation(record.id) },
+                            onClick = { pendingSeatAction = "cancel" },
                             modifier = Modifier.weight(1f),
                             enabled = !busy,
                             loading = usageAction == LibrarySeatUsageAction.Cancel,
@@ -497,7 +502,7 @@ private fun CurrentSeatUsageCard(
                         )
                         AppDangerButton(
                             text = "结束使用",
-                            onClick = onStopSeat,
+                            onClick = { pendingSeatAction = "stop" },
                             modifier = Modifier.weight(1f),
                             enabled = !busy,
                             loading = usageAction == LibrarySeatUsageAction.Stop,
@@ -515,7 +520,7 @@ private fun CurrentSeatUsageCard(
                         )
                         AppDangerButton(
                             text = "结束使用",
-                            onClick = onStopSeat,
+                            onClick = { pendingSeatAction = "stop" },
                             modifier = Modifier.weight(1f),
                             enabled = !busy,
                             loading = usageAction == LibrarySeatUsageAction.Stop,
@@ -524,6 +529,42 @@ private fun CurrentSeatUsageCard(
                     }
                 }
             }
+        }
+    }
+    record?.let { current ->
+        val seatText = listOf(
+            if (current.seatLabel.isNotBlank()) "${current.seatLabel}号座位" else "座位",
+            listOf(current.date, timeRangeLabel(current.startTime, current.endTime))
+                .filter(String::isNotBlank)
+                .joinToString(" "),
+        ).filter(String::isNotBlank).joinToString(" · ")
+        when (pendingSeatAction) {
+            "cancel" -> AppConfirmDialog(
+                title = "取消预约",
+                detail = "$seatText\n取消后座位立即释放，需要重新预约。",
+                confirmLabel = "确认取消",
+                icon = Icons.Outlined.EventBusy,
+                danger = true,
+                busy = usageAction == LibrarySeatUsageAction.Cancel,
+                onDismiss = { pendingSeatAction = null },
+                onConfirm = {
+                    pendingSeatAction = null
+                    onCancelReservation(current.id)
+                },
+            )
+            "stop" -> AppConfirmDialog(
+                title = "结束使用",
+                detail = "$seatText\n结束后座位立即释放，其他同学可以预约。",
+                confirmLabel = "结束使用",
+                icon = Icons.Outlined.Stop,
+                danger = true,
+                busy = usageAction == LibrarySeatUsageAction.Stop,
+                onDismiss = { pendingSeatAction = null },
+                onConfirm = {
+                    pendingSeatAction = null
+                    onStopSeat()
+                },
+            )
         }
     }
 }

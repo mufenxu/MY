@@ -19,8 +19,10 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.EditCalendar
 import androidx.compose.material.icons.outlined.EventAvailable
+import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -28,7 +30,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +46,7 @@ import cn.pxyb.mycontrol.data.CampusMyReservation
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
@@ -242,6 +248,7 @@ private fun ReservationCard(
     val ending = endingReservationId == reservation.id
     val rescheduling = reschedulingReservationId == reservation.id
     val busy = cancellingReservationId != null || endingReservationId != null || reschedulingReservationId != null
+    var pendingAction by remember { mutableStateOf<String?>(null) }
     val actionable = reservation.id.isNotBlank() &&
         !reservation.id.startsWith("local_") &&
         !reservation.id.startsWith("remote_") &&
@@ -368,7 +375,7 @@ private fun ReservationCard(
                     if (reservation.canEndUse) {
                         AppDangerButton(
                             text = "结束使用",
-                            onClick = { onEnd(reservation.id) },
+                            onClick = { pendingAction = "end" },
                             modifier = Modifier.weight(1f),
                             enabled = !busy,
                             loading = ending,
@@ -389,7 +396,7 @@ private fun ReservationCard(
                         if (reservation.canCancel) {
                             AppDangerButton(
                                 text = "取消预约",
-                                onClick = { onCancel(reservation.id) },
+                                onClick = { pendingAction = "cancel" },
                                 modifier = Modifier.weight(1f),
                                 enabled = !busy,
                                 loading = cancelling,
@@ -401,5 +408,33 @@ private fun ReservationCard(
             }
 
         }
+    }
+    when (pendingAction) {
+        "cancel" -> AppConfirmDialog(
+            title = "取消预约",
+            detail = "${reservation.spaceName} · ${reservation.date} ${reservation.startTime}-${reservation.endTime}\n取消后空间立即释放，需要重新提交申请。",
+            confirmLabel = "确认取消",
+            icon = Icons.Outlined.EventBusy,
+            danger = true,
+            busy = cancelling,
+            onDismiss = { pendingAction = null },
+            onConfirm = {
+                pendingAction = null
+                onCancel(reservation.id)
+            },
+        )
+        "end" -> AppConfirmDialog(
+            title = "结束使用",
+            detail = "${reservation.spaceName} · ${reservation.date} ${reservation.startTime}-${reservation.endTime}\n结束后空间立即释放，其他同学可以预约。",
+            confirmLabel = "结束使用",
+            icon = Icons.Outlined.Stop,
+            danger = true,
+            busy = ending,
+            onDismiss = { pendingAction = null },
+            onConfirm = {
+                pendingAction = null
+                onEnd(reservation.id)
+            },
+        )
     }
 }

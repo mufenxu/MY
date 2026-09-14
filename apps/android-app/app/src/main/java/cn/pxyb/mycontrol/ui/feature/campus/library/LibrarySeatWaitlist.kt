@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +46,7 @@ import cn.pxyb.mycontrol.ui.components.button.AppDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
@@ -89,6 +91,7 @@ internal fun LibrarySeatWaitlistPanel(
     }
     var showSeatDialog by remember { mutableStateOf(false) }
     var hint by remember { mutableStateOf<String?>(null) }
+    var pendingWaitlist by remember { mutableStateOf<LibrarySeatWaitlistRequest?>(null) }
 
     val startMinute = parseTimeMinutes(startTime)
     val endMinute = parseTimeMinutes(endTime)
@@ -283,19 +286,17 @@ internal fun LibrarySeatWaitlistPanel(
                             hint = "座位号需为 1 至 999 的整数，且最小号不能大于最大号。"
                         else -> {
                             onClearFeedback()
-                            onCreateWaitlist(
-                                LibrarySeatWaitlistRequest(
-                                    venueId = venue.id,
-                                    floorId = floor.id,
-                                    venueName = venue.name,
-                                    floorName = floor.name,
-                                    date = selectedDate,
-                                    startMinute = start,
-                                    endMinute = end,
-                                    minLabel = if (selectionMode == "specified") labels.first() else min ?: 1,
-                                    maxLabel = if (selectionMode == "specified") labels.last() else max ?: 45,
-                                    seatLabels = if (selectionMode == "specified") labels else emptyList(),
-                                ),
+                            pendingWaitlist = LibrarySeatWaitlistRequest(
+                                venueId = venue.id,
+                                floorId = floor.id,
+                                venueName = venue.name,
+                                floorName = floor.name,
+                                date = selectedDate,
+                                startMinute = start,
+                                endMinute = end,
+                                minLabel = if (selectionMode == "specified") labels.first() else min ?: 1,
+                                maxLabel = if (selectionMode == "specified") labels.last() else max ?: 45,
+                                seatLabels = if (selectionMode == "specified") labels else emptyList(),
                             )
                         }
                     }
@@ -338,6 +339,34 @@ internal fun LibrarySeatWaitlistPanel(
                 }
             }
         }
+    }
+
+    pendingWaitlist?.let { request ->
+        val seatScope = if (request.seatLabels.isEmpty()) {
+            "${request.minLabel}-${request.maxLabel} 号座位"
+        } else {
+            "指定 ${request.seatLabels.sorted().joinToString("、")} 号座位"
+        }
+        AppConfirmDialog(
+            title = "开启候补监听",
+            detail = listOf(
+                listOf(request.venueName, request.floorName)
+                    .filter(String::isNotBlank)
+                    .joinToString(" · "),
+                "${request.date}  ${formatMinutesToTime(request.startMinute)} - ${formatMinutesToTime(request.endMinute)}",
+                seatScope,
+                "检测到范围内释放座位后会自动预约，并发送 App 消息与企业微信提醒。",
+            ).filter(String::isNotBlank).joinToString("\n"),
+            confirmLabel = "开启监听",
+            icon = Icons.Outlined.NotificationsActive,
+            busy = state.waitlistSaving,
+            onDismiss = { pendingWaitlist = null },
+            onConfirm = {
+                val target = request
+                pendingWaitlist = null
+                onCreateWaitlist(target)
+            },
+        )
     }
 
     if (showSeatDialog) {
@@ -416,6 +445,8 @@ private fun WaitlistTaskCard(
 ) {
     val listening = task.enabled && task.status == "listening"
     val success = task.status == "success"
+    var confirmResume by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
@@ -487,7 +518,7 @@ private fun WaitlistTaskCard(
                 } else if (!deleting && (task.status == "stopped" || task.status == "failed")) {
                     AppButton(
                         text = "重新开启",
-                        onClick = onResume,
+                        onClick = { confirmResume = true },
                         enabled = !busy,
                         height = 36.dp,
                     )
@@ -495,11 +526,47 @@ private fun WaitlistTaskCard(
                 Spacer(Modifier.width(8.dp))
                 AppDangerButton(
                     text = if (deleting) "删除中..." else "删除",
-                    onClick = onDelete,
+                    onClick = { confirmDelete = true },
                     enabled = !busy && !deleting,
                     height = 36.dp,
                 )
             }
         }
     }
+    if (confirmResume) {
+        AppConfirmDialog(
+            title = "重新开启候补监听",
+            detail = "将恢复监听 ${task.date} ${formatMinutesToTime(task.startMinute)} - ${formatMinutesToTime(task.endMinute)}、${waitlistSeatScopeText(task)}。",
+            confirmLabel = "重新开启",
+            icon = Icons.Outlined.NotificationsActive,
+            busy = busy,
+            onDismiss = { confirmResume = false },
+            onConfirm = {
+                confirmResume = false
+                onResume()
+            },
+        )
+    }
+    if (confirmDelete) {
+        AppConfirmDialog(
+            title = "删除候补任务",
+            detail = "将删除 ${task.date} ${formatMinutesToTime(task.startMinute)} - ${formatMinutesToTime(task.endMinute)}、${waitlistSeatScopeText(task)} 的候补监听，删除后需要重新配置。",
+            confirmLabel = "删除",
+            icon = Icons.Outlined.Delete,
+            danger = true,
+            busy = deleting,
+            onDismiss = { confirmDelete = false },
+            onConfirm = {
+                confirmDelete = false
+                onDelete()
+            },
+        )
+    }
 }
+
+private fun waitlistSeatScopeText(task: LibrarySeatWaitlistTask): String =
+    if (task.seatLabels.isEmpty()) {
+        "${task.minLabel}-${task.maxLabel} 号座位"
+    } else {
+        "指定 ${task.seatLabels.sorted().joinToString("、")} 号座位"
+    }

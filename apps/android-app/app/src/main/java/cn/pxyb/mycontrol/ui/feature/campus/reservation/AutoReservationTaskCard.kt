@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MeetingRoom
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -29,7 +30,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +46,7 @@ import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
@@ -87,6 +92,7 @@ internal fun AutoTaskCard(
         else -> Icons.Outlined.Info
     }
     val terminalStatus = task.status in setOf("succeeded", "failed", "auth_required", "expired", "invalid", "disabled")
+    var confirmEnable by remember { mutableStateOf(false) }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -138,7 +144,9 @@ internal fun AutoTaskCard(
 
                 AppSwitch(
                     checked = task.enabled,
-                    onCheckedChange = { _: Boolean -> onToggle() }.takeIf { !terminalStatus },
+                    onCheckedChange = { checked: Boolean ->
+                        if (checked) confirmEnable = true else onToggle()
+                    }.takeIf { !terminalStatus },
                 )
             }
 
@@ -443,5 +451,18 @@ internal fun AutoTaskCard(
                 )
             }
         }
+    }
+    if (confirmEnable) {
+        AppConfirmDialog(
+            title = "启用自动任务",
+            detail = "“${task.name}”启用后，服务端会在目标日期按候选时段自动尝试预约，成功后自动结束任务。",
+            confirmLabel = "启用",
+            icon = Icons.Outlined.PlayArrow,
+            onDismiss = { confirmEnable = false },
+            onConfirm = {
+                confirmEnable = false
+                onToggle()
+            },
+        )
     }
 }
