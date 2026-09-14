@@ -151,6 +151,7 @@ internal fun SecondFloorSeatMap(
     floorSeats: List<LibrarySeatFloorSeat>,
     selectedLabels: Set<Int> = emptySet(),
     allowMissingSeats: Boolean = false,
+    readOnly: Boolean = false,
     onSeatClick: (LibrarySeatFloorSeat) -> Unit,
 ) {
     val seatByLabel = remember(floorSeats) {
@@ -176,23 +177,27 @@ internal fun SecondFloorSeatMap(
                         floorSeat = floorSeat,
                         faceDown = col % 2 == 0,
                         selected = label in selectedLabels,
-                        onClick = floorSeat?.let { seat -> { onSeatClick(seat) } }
-                            ?: if (allowMissingSeats) {
-                                {
-                                    onSeatClick(
-                                        LibrarySeatFloorSeat(
-                                            areaId = "",
-                                            areaName = "",
-                                            seat = LibrarySeatStatus(
-                                                id = label.toString(),
-                                                label = label.toString(),
-                                            ),
+                        onClick = if (readOnly) {
+                            null
+                        } else {
+                            floorSeat?.let { seat -> { onSeatClick(seat) } }
+                                ?: if (allowMissingSeats) {
+                                    {
+                                        onSeatClick(
+                                            LibrarySeatFloorSeat(
+                                                areaId = "",
+                                                areaName = "",
+                                                seat = LibrarySeatStatus(
+                                                    id = label.toString(),
+                                                    label = label.toString(),
+                                                ),
+                                            )
                                         )
-                                    )
+                                    }
+                                } else {
+                                    null
                                 }
-                            } else {
-                                null
-                            },
+                        },
                         modifier = Modifier.weight(1f),
                     )
                 }

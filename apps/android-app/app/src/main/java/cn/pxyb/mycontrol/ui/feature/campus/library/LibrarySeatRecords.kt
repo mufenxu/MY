@@ -8,8 +8,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Chair
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -32,7 +35,9 @@ import cn.pxyb.mycontrol.data.LibrarySeatReservationHistory
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRecord
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppDangerButton
+import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
+import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
@@ -43,6 +48,19 @@ private val activeSeatReservationStatuses = setOf("RESERVE", "CHECK_IN", "AWAY",
 
 internal fun isActiveSeatReservation(record: LibrarySeatReservationRecord): Boolean =
     record.status.uppercase() in activeSeatReservationStatuses
+
+private val secondFloorMarkers = listOf("二层", "二楼", "2层", "2楼")
+
+/**
+ * 二层 1-45 号座位在座位图中按行优先排列，只有落在这个范围的预约才显示位置图。
+ */
+private fun secondFloorSeatMapLabel(record: LibrarySeatReservationRecord): Int? {
+    val label = record.seatLabel.trim().toIntOrNull() ?: return null
+    if (label !in 1..45) return null
+    val onSecondFloor = listOf(record.floorName, record.roomName, record.location)
+        .any { text -> secondFloorMarkers.any { marker -> text.contains(marker) } }
+    return if (onSecondFloor) label else null
+}
 
 private enum class SeatRecordTab(val label: String) {
     Today("今日预约"),
@@ -80,6 +98,12 @@ internal fun MySeatReservationsPanel(
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(SeatRecordTab.Today) }
     var expandedReservationId by rememberSaveable { mutableStateOf("") }
+    var seatMapLabel by rememberSaveable { mutableStateOf(0) }
+    var seatMapPlace by rememberSaveable { mutableStateOf("") }
+    val showSeatMap: (Int, String) -> Unit = { label, place ->
+        seatMapLabel = label
+        seatMapPlace = place
+    }
     val recordCard: @Composable (LibrarySeatReservationRecord) -> Unit = { record ->
         SeatReservationRecordCard(
             record = record,
@@ -94,6 +118,7 @@ internal fun MySeatReservationsPanel(
                     onLoadMakeLife(record.id)
                 }
             },
+            onShowSeatMap = showSeatMap,
         )
     }
     AppPanel {
@@ -113,6 +138,7 @@ internal fun MySeatReservationsPanel(
                 onLeaveSeat = onLeaveSeat,
                 onStopSeat = onStopSeat,
                 onCancelReservation = onCancelReservation,
+                onShowSeatMap = showSeatMap,
             )
             AppSegmentedControl(
                 options = SeatRecordTab.entries.toList(),
@@ -167,6 +193,13 @@ internal fun MySeatReservationsPanel(
             )
         }
     }
+    if (seatMapLabel > 0) {
+        SecondFloorSeatMapDialog(
+            seatLabel = seatMapLabel,
+            place = seatMapPlace,
+            onDismiss = { seatMapLabel = 0 },
+        )
+    }
 }
 
 @Composable
@@ -176,6 +209,7 @@ private fun SeatReservationRecordCard(
     makeLife: List<LibrarySeatMakeLife>,
     makeLifeLoading: Boolean,
     onToggleMakeLife: () -> Unit,
+    onShowSeatMap: (Int, String) -> Unit,
 ) {
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -250,13 +284,37 @@ private fun SeatReservationRecordCard(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            AppSecondaryButton(
-                text = if (expanded) "收起变更记录" else "变更记录",
-                onClick = onToggleMakeLife,
-                compact = true,
-                height = 36.dp,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            val seatMapLabel = secondFloorSeatMapLabel(record)
+            if (seatMapLabel == null) {
+                AppSecondaryButton(
+                    text = if (expanded) "收起变更记录" else "变更记录",
+                    onClick = onToggleMakeLife,
+                    compact = true,
+                    height = 36.dp,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    AppSecondaryButton(
+                        text = "查看座位位置",
+                        icon = Icons.Outlined.Chair,
+                        onClick = { onShowSeatMap(seatMapLabel, location) },
+                        compact = true,
+                        height = 36.dp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    AppSecondaryButton(
+                        text = if (expanded) "收起变更记录" else "变更记录",
+                        onClick = onToggleMakeLife,
+                        compact = true,
+                        height = 36.dp,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
             if (expanded) {
                 when {
                     makeLifeLoading -> AppSkeletonInlineRows(
@@ -317,6 +375,7 @@ private fun CurrentSeatUsageCard(
     onLeaveSeat: () -> Unit,
     onStopSeat: () -> Unit,
     onCancelReservation: (String) -> Unit,
+    onShowSeatMap: (Int, String) -> Unit,
 ) {
     if (!loading && record == null) return
     val busy = usageAction != null
@@ -393,6 +452,17 @@ private fun CurrentSeatUsageCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            val seatMapLabel = secondFloorSeatMapLabel(record)
+            if (seatMapLabel != null) {
+                AppSecondaryButton(
+                    text = "查看座位位置",
+                    icon = Icons.Outlined.Chair,
+                    onClick = { onShowSeatMap(seatMapLabel, location) },
+                    compact = true,
+                    height = 36.dp,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -454,6 +524,54 @@ private fun CurrentSeatUsageCard(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SecondFloorSeatMapDialog(
+    seatLabel: Int,
+    place: String,
+    onDismiss: () -> Unit,
+) {
+    AppDialog(
+        onDismissRequest = onDismiss,
+        icon = Icons.Outlined.Chair,
+        title = "二层 1-45 号座位图",
+        subtitle = listOf(place.takeIf(String::isNotBlank), "${seatLabel} 号座位")
+            .filterNotNull()
+            .joinToString(" · "),
+        footer = {
+            AppDialogPrimaryButton(
+                text = "知道了",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = "蓝色描边方块是你的 ${seatLabel} 号座位，其余为同区域座位位置。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            SecondFloorSeatMap(
+                floorSeats = emptyList(),
+                selectedLabels = setOf(seatLabel),
+                allowMissingSeats = true,
+                readOnly = true,
+                onSeatClick = {},
+            )
+            Text(
+                text = "座位号从左到右、从上到下依次递增，隔板标记可帮你判断属于哪一排。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
