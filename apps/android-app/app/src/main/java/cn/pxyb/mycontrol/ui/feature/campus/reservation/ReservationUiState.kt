@@ -31,6 +31,7 @@ data class ReservationUiState(
     val myReservationsLoading: Boolean = false,
     val cancellingReservationId: String? = null,
     val endingReservationId: String? = null,
+    val reschedulingReservationId: String? = null,
     val identityCode: CampusIdentityCode? = null,
     val identityCodeLoading: Boolean = false,
     val identityCodeError: String? = null,

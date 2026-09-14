@@ -32,7 +32,6 @@ import cn.pxyb.mycontrol.data.LibrarySeatReservationHistory
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRecord
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppDangerButton
-import cn.pxyb.mycontrol.ui.components.button.AppInlineDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
@@ -408,12 +407,13 @@ private fun CurrentSeatUsageCard(
                             loading = usageAction == LibrarySeatUsageAction.CheckIn,
                             height = 40.dp,
                         )
-                        AppInlineDangerButton(
+                        AppDangerButton(
                             text = "取消预约",
                             onClick = { onCancelReservation(record.id) },
                             modifier = Modifier.weight(1f),
                             enabled = !busy,
                             loading = usageAction == LibrarySeatUsageAction.Cancel,
+                            height = 40.dp,
                         )
                     }
                     "CHECK_IN" -> {

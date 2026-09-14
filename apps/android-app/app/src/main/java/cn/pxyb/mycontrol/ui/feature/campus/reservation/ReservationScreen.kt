@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
+import cn.pxyb.mycontrol.data.CampusMyReservation
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
@@ -57,7 +59,7 @@ fun ReservationScreen(
     onOpenOfficialReservation: () -> Unit,
     onRefreshIdentityCode: () -> Unit,
     onQueryRulesAndAvailability: (Int, String) -> Unit,
-    onQuerySpacesByTime: (String, String, String) -> Unit,
+    onQuerySpacesByTime: (String, String, String, String?) -> Unit,
     onSubmitReservation: (CampusReservationRequest, () -> Unit) -> Unit,
     onLoadAutoTasks: () -> Unit,
     onSaveAutoTask: (CampusAutoReservationTask, () -> Unit) -> Unit,
@@ -65,10 +67,12 @@ fun ReservationScreen(
     onDeleteAutoTask: (String) -> Unit,
     onCancelReservation: (String) -> Unit,
     onEndReservation: (String) -> Unit,
+    onRescheduleReservation: (String, CampusReservationRequest, () -> Unit) -> Unit,
     onClearFeedback: () -> Unit,
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(ReservationTab.Single) }
     var showIdentityCodeDialog by rememberSaveable { mutableStateOf(false) }
+    var rescheduleTarget by remember { mutableStateOf<CampusMyReservation?>(null) }
 
     LaunchedEffect(Unit) {
         onLoadSpaces()
@@ -83,6 +87,20 @@ fun ReservationScreen(
             error = state.identityCodeError,
             onRefresh = onRefreshIdentityCode,
             onDismiss = { showIdentityCodeDialog = false },
+        )
+    }
+
+    rescheduleTarget?.let { target ->
+        RescheduleReservationDialog(
+            reservation = target,
+            spaces = state.spaces,
+            availableSpaces = state.availableSpaces,
+            availableSpacesQueryText = state.availableSpacesQueryText,
+            availableSpacesLoading = state.availableSpacesLoading,
+            submitting = state.reschedulingReservationId == target.id,
+            onQuerySpacesByTime = onQuerySpacesByTime,
+            onDismiss = { if (state.reschedulingReservationId == null) rescheduleTarget = null },
+            onConfirm = { request -> onRescheduleReservation(target.id, request) { rescheduleTarget = null } },
         )
     }
 
@@ -233,10 +251,12 @@ fun ReservationScreen(
                         loading = state.myReservationsLoading,
                         cancellingReservationId = state.cancellingReservationId,
                         endingReservationId = state.endingReservationId,
+                        reschedulingReservationId = state.reschedulingReservationId,
                         onRefresh = onLoadMyReservations,
                         onGoToSingleReservation = { selectedTab = ReservationTab.Single },
                         onCancelReservation = onCancelReservation,
                         onEndReservation = onEndReservation,
+                        onRescheduleReservation = { reservation -> rescheduleTarget = reservation },
                     )
                 }
             }

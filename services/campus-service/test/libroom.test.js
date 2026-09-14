@@ -8,6 +8,8 @@ import {
   libroomCasFromCallback,
   libroomRequiresCasTicket,
   resolveLibroomCasCallback,
+  libroomAvailabilityCovers,
+  libroomIsFutureSlot,
   normalizeReservationInput,
   normalizeLibroomMyReservationRecord,
   clearLibroomLastError,
@@ -289,10 +291,83 @@ test("normalizes active official seminar reservation records for app display", (
     statusCode: "",
     canCancel: true,
     canEndUse: false,
+    canReschedule: true,
     createdAt: "2026-08-27 07:00:00"
   });
   assert.equal(used, null);
   assert.equal(unknown, null);
+});
+
+test("treats in-progress reservations as endable rather than reschedulable", () => {
+  const record = normalizeLibroomMyReservationRecord({
+    id: "442",
+    nameMerge: "图书馆-二楼-单人学习间18",
+    begin_time: "2026-08-29 08:00",
+    end_time: "2026-08-29 12:00",
+    status: "3"
+  });
+
+  assert.equal(record.canEndUse, true);
+  assert.equal(record.canReschedule, false);
+  assert.equal(record.statusCode, "3");
+});
+
+test("checks whether a target window is fully covered by free availability", () => {
+  const availability = {
+    freeWindows: [{ start: "08:00", end: "12:00" }, { start: "14:00", end: "21:45" }],
+    busyWindows: [{ start: "12:00", end: "14:00" }]
+  };
+  assert.equal(libroomAvailabilityCovers(availability, { startTime: "09:00", endTime: "11:00" }), true);
+  assert.equal(libroomAvailabilityCovers(availability, { startTime: "11:00", endTime: "13:00" }), false);
+  assert.equal(libroomAvailabilityCovers(availability, { startTime: "13:00", endTime: "15:00" }), false);
+  assert.equal(libroomAvailabilityCovers(availability, { startTime: "09:00", endTime: "09:00" }), false);
+  assert.equal(
+    libroomAvailabilityCovers({ freeWindows: [], busyWindows: [], source: "unrecognized" }, { startTime: "09:00", endTime: "11:00" }),
+    false
+  );
+
+  // 改期：同一研讨间同日时，自身占用的时段会在取消后释放
+  const withSelf = {
+    freeWindows: [{ start: "08:00", end: "17:30" }, { start: "21:30", end: "21:45" }],
+    busyWindows: [{ start: "17:30", end: "21:30" }]
+  };
+  assert.equal(libroomAvailabilityCovers(withSelf, { startTime: "18:00", endTime: "20:00" }), false);
+  assert.equal(
+    libroomAvailabilityCovers(withSelf, {
+      startTime: "18:00",
+      endTime: "20:00",
+      excludeWindow: { start: "17:30", end: "21:30" }
+    }),
+    true
+  );
+  assert.equal(
+    libroomAvailabilityCovers(withSelf, {
+      startTime: "16:00",
+      endTime: "18:00",
+      excludeWindow: { start: "17:30", end: "21:30" }
+    }),
+    true
+  );
+
+  // 自身预约相邻的时段已被他人占用时仍然拒绝
+  assert.equal(
+    libroomAvailabilityCovers(withSelf, {
+      startTime: "18:00",
+      endTime: "20:00",
+      excludeWindow: { start: "17:30", end: "19:30" }
+    }),
+    false
+  );
+});
+
+test("only treats not-yet-started slots as valid reschedule targets", () => {
+  const now = new Date("2026-09-14T14:30:00+08:00");
+  assert.equal(libroomIsFutureSlot({ date: "2026-09-15", startTime: "09:00", now }), true);
+  assert.equal(libroomIsFutureSlot({ date: "2026-09-14", startTime: "15:00", now }), true);
+  assert.equal(libroomIsFutureSlot({ date: "2026-09-14", startTime: "14:30", now }), false);
+  assert.equal(libroomIsFutureSlot({ date: "2026-09-14", startTime: "09:00", now }), false);
+  assert.equal(libroomIsFutureSlot({ date: "2026-09-13", startTime: "09:00", now }), false);
+  assert.equal(libroomIsFutureSlot({ date: "2026-09-15", startTime: "", now }), false);
 });
 
 test("derives free reservation windows from occupied periods", () => {

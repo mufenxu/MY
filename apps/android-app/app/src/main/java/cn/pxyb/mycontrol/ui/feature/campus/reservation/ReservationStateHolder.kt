@@ -26,6 +26,7 @@ class ReservationStateHolder(
         deletingTaskId = null,
         cancellingReservationId = null,
         endingReservationId = null,
+        reschedulingReservationId = null,
         identityCode = null,
         identityCodeLoading = false,
         identityCodeError = null,
@@ -104,7 +105,13 @@ class ReservationStateHolder(
         }
     }
 
-    fun queryAvailableSpacesByTime(date: String, startTime: String, endTime: String) = launchAction(
+    // excludeReservationId 用于改期查询：排除待改期预约自身占用的时段，该预约会在改期时先取消。
+    fun queryAvailableSpacesByTime(
+        date: String,
+        startTime: String,
+        endTime: String,
+        excludeReservationId: String? = null,
+    ) = launchAction(
         isBusy = {
             date.isBlank() || startTime.isBlank() || endTime.isBlank() || availableSpacesLoading
         },
@@ -116,7 +123,14 @@ class ReservationStateHolder(
                 error = null,
             )
         },
-        action = { campus.campusReservationSpaces(date = date, startTime = startTime, endTime = endTime) },
+        action = {
+            campus.campusReservationSpaces(
+                date = date,
+                startTime = startTime,
+                endTime = endTime,
+                excludeReservationId = excludeReservationId,
+            )
+        },
         success = { spaces -> copy(availableSpaces = spaces, availableSpacesLoading = false) },
         failure = { error ->
             copy(
@@ -208,6 +222,41 @@ class ReservationStateHolder(
             onSuccess()
         },
     )
+
+    // 学校预约系统没有修改预约的接口，改期由服务端按「先取消、再创建」执行。
+    // 失败时可能是「原预约已取消、新预约未成功」，因此成功与失败都重新拉取列表以对齐学校系统。
+    fun rescheduleMyReservation(
+        reservationId: String,
+        request: CampusReservationRequest,
+        onSuccess: () -> Unit = {},
+    ) {
+        if (reservationId.isBlank() || mutableState.value.reschedulingReservationId != null) return
+        scope.launch {
+            mutableState.update {
+                it.copy(reschedulingReservationId = reservationId, error = null, message = null)
+            }
+            try {
+                campus.rescheduleCampusReservation(reservationId, request)
+                mutableState.update {
+                    it.copy(
+                        reschedulingReservationId = null,
+                        message = "已改期到 ${request.date} ${request.startTime} - ${request.endTime}。",
+                    )
+                }
+                loadMyReservations(force = true)
+                onSuccess()
+            } catch (error: Throwable) {
+                handleRequestFailure(error)
+                mutableState.update {
+                    it.copy(
+                        reschedulingReservationId = null,
+                        error = error.message ?: "更改预约时间失败，请重试。",
+                    )
+                }
+                loadMyReservations(force = true)
+            }
+        }
+    }
 
     fun loadAutoReservationTasks(force: Boolean = false) = launchAction(
         isBusy = { autoTasksLoading },

@@ -1530,6 +1530,7 @@ internal fun JSONObject.toCampusMyReservation(): CampusMyReservation = CampusMyR
     statusCode = optString("statusCode", optString("status_code", optString("status", ""))),
     canCancel = optBoolean("canCancel", true),
     canEndUse = optBoolean("canEndUse", false),
+    canReschedule = optBoolean("canReschedule", false),
     createdAt = optString("createdAt", optString("created_at", "")),
 )
 

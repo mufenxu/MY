@@ -166,11 +166,13 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         date: String? = null,
         startTime: String? = null,
         endTime: String? = null,
+        excludeReservationId: String? = null,
     ): List<CampusReservationSpace> = withContext(Dispatchers.IO) {
         val queryParams = mutableListOf<String>()
         if (!date.isNullOrBlank()) queryParams.add("date=${Uri.encode(date.trim())}")
         if (!startTime.isNullOrBlank()) queryParams.add("startTime=${Uri.encode(startTime.trim())}")
         if (!endTime.isNullOrBlank()) queryParams.add("endTime=${Uri.encode(endTime.trim())}")
+        if (!excludeReservationId.isNullOrBlank()) queryParams.add("excludeReservationId=${Uri.encode(excludeReservationId.trim())}")
         val queryString = if (queryParams.isNotEmpty()) "?${queryParams.joinToString("&")}" else ""
         val response = http.execute("$CAMPUS_LIBROOM_SPACES_PATH$queryString")
         parseCampusReservationSpacesPayload(response.json, response.jsonArray)
@@ -388,17 +390,27 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
     }
 
     suspend fun submitCampusReservation(request: CampusReservationRequest): Unit = withContext(Dispatchers.IO) {
-        val body = JSONObject()
-            .put("areaId", request.areaId)
-            .put("date", request.date)
-            .put("startTime", request.startTime)
-            .put("endTime", request.endTime)
-            .put("title", request.title)
-            .put("content", request.content)
-            .put("mobile", request.mobile)
-            .put("open", request.open)
-        http.execute(CAMPUS_LIBROOM_RESERVATIONS_PATH, method = "POST", body = body)
+        http.execute(CAMPUS_LIBROOM_RESERVATIONS_PATH, method = "POST", body = request.toReservationBody())
     }
+
+    // 学校预约系统没有修改预约的接口，改期由服务端按「先取消、再创建」执行。
+    suspend fun rescheduleCampusReservation(
+        reservationId: String,
+        request: CampusReservationRequest,
+    ): Unit = withContext(Dispatchers.IO) {
+        val path = "$CAMPUS_LIBROOM_RESERVATIONS_PATH/${encodePath(reservationId)}/reschedule"
+        http.execute(path, method = "POST", body = request.toReservationBody())
+    }
+
+    private fun CampusReservationRequest.toReservationBody(): JSONObject = JSONObject()
+        .put("areaId", areaId)
+        .put("date", date)
+        .put("startTime", startTime)
+        .put("endTime", endTime)
+        .put("title", title)
+        .put("content", content)
+        .put("mobile", mobile)
+        .put("open", open)
 
     suspend fun campusMyReservations(): List<CampusMyReservation> = withContext(Dispatchers.IO) {
         val response = http.execute(CAMPUS_LIBROOM_RESERVATIONS_PATH)

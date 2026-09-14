@@ -93,7 +93,7 @@ internal fun SingleReservationPanel(
     myReservations: List<CampusMyReservation>,
     onReloadSpaces: () -> Unit,
     onQuery: (Int, String) -> Unit,
-    onQuerySpacesByTime: (String, String, String) -> Unit,
+    onQuerySpacesByTime: (String, String, String, String?) -> Unit,
     onSubmit: (CampusReservationRequest, () -> Unit) -> Unit,
     onNavigateToMyReservations: () -> Unit,
     onClearFeedback: () -> Unit,
@@ -568,7 +568,7 @@ internal fun SingleReservationPanel(
                                 return@AppButton
                             }
                             formValidationNotice = null
-                            onQuerySpacesByTime(selectedDate, startTime, endTime)
+                            onQuerySpacesByTime(selectedDate, startTime, endTime, null)
                         },
                         loading = availableSpacesLoading,
                         enabled = !availableSpacesLoading && isDurationValid,

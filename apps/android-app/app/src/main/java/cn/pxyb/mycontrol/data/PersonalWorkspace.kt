@@ -456,6 +456,7 @@ data class CampusMyReservation(
     val statusCode: String = "",
     val canCancel: Boolean = true,
     val canEndUse: Boolean = false,
+    val canReschedule: Boolean = false,
     val createdAt: String = "",
 )
 

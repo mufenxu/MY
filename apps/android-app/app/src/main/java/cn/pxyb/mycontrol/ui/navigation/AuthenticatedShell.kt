@@ -946,6 +946,7 @@ internal fun AuthenticatedShell(
                         onDeleteAutoTask = viewModel.reservations::deleteAutoReservationTask,
                         onCancelReservation = viewModel.reservations::cancelMyReservation,
                         onEndReservation = viewModel.reservations::endMyReservation,
+                        onRescheduleReservation = viewModel.reservations::rescheduleMyReservation,
                         onClearFeedback = viewModel.reservations::clearReservationFeedback,
                     )
                 }

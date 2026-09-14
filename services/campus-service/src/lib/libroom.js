@@ -263,6 +263,59 @@ export function summarizeLibroomAvailability(raw, { bookableWindows = LIBROOM_DE
   };
 }
 
+// 判断目标时段是否完整空闲。改期预检可传入 excludeWindow 排除自身预约占用的时段，
+// 因为该预约会在改期流程中被先取消、再重新创建。
+export function libroomAvailabilityCovers(availability, { startTime, endTime, excludeWindow = null } = {}) {
+  const start = parseLooseTime(startTime);
+  const end = parseLooseTime(endTime);
+  if (start === null || end === null || end <= start) return false;
+
+  const toMinutes = (windows) => (Array.isArray(windows) ? windows : [])
+    .map((window) => ({ start: parseLooseTime(window?.start), end: parseLooseTime(window?.end) }))
+    .filter((window) => window.start !== null && window.end !== null && window.end > window.start);
+
+  const free = toMinutes(normalizeTimeWindows(availability?.freeWindows || []));
+  const busy = toMinutes(normalizeTimeWindows(availability?.busyWindows || []));
+  const self = toMinutes(normalizeTimeWindows(excludeWindow ? [excludeWindow] : []));
+
+  const selfBusy = self.length
+    ? busy.filter((window) => self.some((own) => own.start <= window.start && own.end >= window.end))
+    : [];
+  const blocking = busy.filter((window) => !selfBusy.includes(window) && window.start < end && window.end > start);
+  if (blocking.length) return false;
+
+  let covered = start;
+  for (const window of [...free, ...selfBusy].sort((a, b) => a.start - b.start)) {
+    if (window.start > covered) break;
+    covered = Math.max(covered, window.end);
+    if (covered >= end) return true;
+  }
+  return false;
+}
+
+// 学校预约时段按 Asia/Shanghai 计算。改期会先取消原预约，因此目标时段必须尚未开始，
+// 否则取消成功、重建必然被学校拒绝，用户会白白丢失原预约。
+export function libroomIsFutureSlot({ date, startTime, now = new Date() } = {}) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).formatToParts(now).reduce((accumulator, part) => ({ ...accumulator, [part.type]: part.value }), {});
+  const today = `${parts.year}-${parts.month}-${parts.day}`;
+  const targetDate = String(date || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) return false;
+  const start = parseLooseTime(startTime);
+  if (start === null) return false;
+  if (targetDate > today) return true;
+  if (targetDate < today) return false;
+  const nowMinutes = Number(parts.hour) * 60 + Number(parts.minute);
+  return start > nowMinutes;
+}
+
 function localDate(now) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai",
@@ -427,6 +480,7 @@ export function normalizeLibroomMyReservationRecord(record, { activeOnly = true 
     ? isTruthyFlag(record.cancel_ok ?? record.cancelOk)
     : activeOfficialReservation(record, statusText);
   const canEndUse = officialReservationInUse(record);
+  const canReschedule = canCancel && !canEndUse;
   if (activeOnly && !canCancel && !canEndUse) return null;
 
   const begin = officialRecordDateTime(firstString(record, ["begin_time", "beginTime", "start_time", "startTime"]));
@@ -446,6 +500,7 @@ export function normalizeLibroomMyReservationRecord(record, { activeOnly = true 
     statusCode,
     canCancel,
     canEndUse,
+    canReschedule,
     createdAt: firstString(record, ["createdAt", "created_at", "create_time"])
   };
 }
@@ -627,19 +682,17 @@ export function createLibroomClient({
     return [];
   }
 
+  // 学校 H5 的「取消预约」是 POST /v4/seminar/cancel 且只提交 { id }；
+  // /v4/order/cancel 未出现在官方前端，只在 /v4/seminar/cancel 返回 404 时兜底。
   async function cancelReservation(id) {
     const orderId = String(id || "").trim();
-    const endpoints = ["/v4/order/cancel", "/v4/seminar/cancel"];
-    let lastError = null;
-    for (const endpoint of endpoints) {
-      try {
-        return await request(endpoint, { id: orderId, order_id: orderId });
-      } catch (err) {
-        lastError = err;
-      }
+    if (!orderId) fail(400, "预约记录标识不正确。", "INVALID_RESERVATION_ID");
+    try {
+      return await request("/v4/seminar/cancel", { id: orderId });
+    } catch (err) {
+      if (!(err instanceof HttpError) || err.status !== 404) throw err;
+      return request("/v4/order/cancel", { id: orderId, order_id: orderId });
     }
-    if (lastError) throw lastError;
-    return { success: true };
   }
 
   // 官方 H5 的「结束使用」对应 /v4/seminar/leave，与「取消预约」/v4/seminar/cancel 是两个不同动作。

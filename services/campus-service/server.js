@@ -36,6 +36,8 @@ import { platformRoleAllowsRequest } from "./src/lib/platform-role.js";
 import { invalidateRequestMemo, requestMemo, setRequestMemo } from "./src/lib/request-memo.js";
 import { createStaticAssetHandler } from "./src/lib/static-assets.js";
 import {
+  libroomAvailabilityCovers,
+  libroomIsFutureSlot,
   normalizeReservationInput,
   normalizeLibroomMyReservationRecord,
   summarizeLibroomAvailability
@@ -2637,8 +2639,10 @@ async function handleApiRoutes(req, res, url) {
       getLibroomOfficialLoginUrl,
       getLibroomOfficialWebViewLogin,
       json,
+      libroomAvailabilityCovers,
       libroomClient,
       libroomDate,
+      libroomIsFutureSlot,
       libroomSpaceId,
       logger,
       normalizeLibroomMyReservationRecord,
