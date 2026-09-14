@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -173,7 +174,7 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Surface(color = Color.Black.copy(alpha = 0.46f), shape = CircleShape) {
@@ -210,7 +211,8 @@ private fun QrConfirmationScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding(),
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(
@@ -294,7 +296,8 @@ private fun QrApprovedScreen(target: QrLoginTarget, onClose: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding(),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -406,7 +409,7 @@ private fun QrApprovedDetailRow(icon: ImageVector, label: String, value: String)
 
 @Composable
 private fun QrLoadingScreen(onClose: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
         QrHeader("正在核验二维码", onClose)
         Column(modifier = Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
             AppOrbitLoader(size = 46.dp, strokeWidth = 3.5.dp)
@@ -422,7 +425,7 @@ private fun QrLoadingScreen(onClose: () -> Unit) {
 
 @Composable
 private fun QrErrorScreen(error: String, onRetry: () -> Unit, onClose: () -> Unit) {
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
         QrHeader("扫码登录", onClose)
         Column(
             modifier = Modifier
