@@ -55,6 +55,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import cn.pxyb.mycontrol.data.Authenticator
@@ -98,6 +100,9 @@ fun AuthenticatorScreen(
     onAddFromUri: (String) -> Unit,
     onAddManual: (String, String, String) -> Unit,
     onDelete: (String) -> Unit,
+    onUnlock: () -> Unit,
+    onLock: () -> Unit,
+    onLeave: () -> Unit,
     onPendingQrUriConsumed: () -> Unit,
 ) {
     var scannerOpen by remember { mutableStateOf(false) }
@@ -110,6 +115,22 @@ fun AuthenticatorScreen(
         maxColumns = 3,
     )
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(Unit) { onUnlock() }
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                onLock()
+                scannerOpen = false
+                manualOpen = false
+                pendingDelete = null
+            }
+        }
+        lifecycle.addObserver(observer)
+        onDispose {
+            lifecycle.removeObserver(observer)
+            onLeave()
+        }
+    }
     val currentMillis by produceState(initialValue = System.currentTimeMillis(), lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
@@ -120,8 +141,8 @@ fun AuthenticatorScreen(
         }
     }
 
-    LaunchedEffect(pendingQrUri, state.busy) {
-        if (pendingQrUri != null && !state.busy) {
+    LaunchedEffect(pendingQrUri, state.busy, state.locked) {
+        if (pendingQrUri != null && !state.busy && !state.locked) {
             onAddFromUri(pendingQrUri)
             onPendingQrUriConsumed()
         }
@@ -138,13 +159,13 @@ fun AuthenticatorScreen(
                 AppHeaderIconButton(
                     icon = Icons.Outlined.QrCodeScanner,
                     contentDescription = "扫码添加验证器",
-                    onClick = { scannerOpen = true },
+                    onClick = { if (state.locked) onUnlock() else scannerOpen = true },
                 )
                 Spacer(Modifier.width(6.dp))
                 AppHeaderIconButton(
                     icon = Icons.Outlined.Key,
                     contentDescription = "手动添加验证器",
-                    onClick = { manualOpen = true },
+                    onClick = { if (state.locked) onUnlock() else manualOpen = true },
                 )
             },
         ) {
@@ -193,6 +214,11 @@ fun AuthenticatorScreen(
                             modifier = Modifier.padding(16.dp),
                         )
                     }
+                }
+            } else if (state.locked) {
+                item(key = "authenticator-locked", contentType = "empty") {
+                    AppEmptyState(title = "验证器已锁定", detail = "验证设备身份后查看或修改动态验证码。",
+                        icon = Icons.Outlined.Security, actionText = "验证身份", onAction = onUnlock)
                 }
             } else if (state.entries.isEmpty()) {
                 item(key = "authenticator-empty", contentType = "empty") {

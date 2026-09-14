@@ -42,13 +42,13 @@ function parseOrigin(value) {
   }
 }
 
-function parseAndroidCertificateFingerprints(value) {
+function parseAndroidCertificateFingerprints(value, name = 'PLATFORM_ANDROID_APP_CERT_SHA256') {
   const fingerprints = String(value || '')
     .split(/[,;\n]+/)
     .map((item) => item.trim().toUpperCase())
     .filter(Boolean);
   if (fingerprints.some((item) => !/^(?:[0-9A-F]{2}:){31}[0-9A-F]{2}$/.test(item))) {
-    throw new Error('PLATFORM_ANDROID_APP_CERT_SHA256 must contain comma-separated SHA-256 certificate fingerprints.');
+    throw new Error(`${name} must contain comma-separated SHA-256 certificate fingerprints.`);
   }
   return [...new Set(fingerprints)];
 }
@@ -189,6 +189,13 @@ export function loadConfig(env = process.env) {
     webauthnRpId: String(env.PLATFORM_WEBAUTHN_RP_ID || '').trim().toLowerCase(),
     androidAppPackage: String(env.PLATFORM_ANDROID_APP_PACKAGE || 'cn.pxyb.mycontrol').trim(),
     androidAppCertFingerprints: parseAndroidCertificateFingerprints(env.PLATFORM_ANDROID_APP_CERT_SHA256),
+    androidRequireDeviceProof: parseBoolean(env.PLATFORM_ANDROID_REQUIRE_DEVICE_PROOF, true),
+    androidAccessTtlSeconds: parseInteger(env.PLATFORM_ANDROID_ACCESS_TTL_SECONDS, 900, { min: 60, max: 900 }),
+    androidRequireIntegrity: parseBoolean(env.PLATFORM_ANDROID_REQUIRE_INTEGRITY, false),
+    androidAttestationRootSha256: parseAndroidCertificateFingerprints(env.PLATFORM_ANDROID_ATTESTATION_ROOT_SHA256, 'PLATFORM_ANDROID_ATTESTATION_ROOT_SHA256'),
+    androidMinVersionCode: parseInteger(env.PLATFORM_ANDROID_MIN_VERSION_CODE, 0, { min: 0, max: 2100000000 }),
+    androidMaxPatchAgeDays: parseInteger(env.PLATFORM_ANDROID_MAX_PATCH_AGE_DAYS, 180, { min: 30, max: 730 }),
+    androidAttestationMaxAgeHours: parseInteger(env.PLATFORM_ANDROID_ATTESTATION_MAX_AGE_HOURS, 24, { min: 1, max: 24 * 30 }),
     serviceTimeoutMs: parseInteger(env.PLATFORM_SERVICE_TIMEOUT_MS, 8000, { min: 1000, max: 30000 }),
     monitorIntervalMs: parseInteger(env.PLATFORM_MONITOR_INTERVAL_MS, 30000, { min: 10000, max: 300000 }),
     statusRetentionDays: parseInteger(env.PLATFORM_STATUS_RETENTION_DAYS, 30, { min: 1, max: 365 }),

@@ -1,31 +1,60 @@
 package cn.pxyb.mycontrol.ui
 
-import android.app.DownloadManager
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.provider.DocumentsContract
 import android.util.Base64
 import android.webkit.CookieManager
-import android.webkit.JavascriptInterface
+import android.webkit.WebMessage
+import android.webkit.WebMessagePort
 import android.webkit.URLUtil
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.lifecycleScope
+import cn.pxyb.mycontrol.core.network.HttpClientProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.CancellationException
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import okhttp3.Request
 import java.io.File
+import java.util.UUID
+import org.json.JSONObject
 
 internal class PlatformWebDownloadSupport(
     private val activity: PlatformWebActivity,
     private val currentWebView: () -> WebView?,
 ) {
     private var pendingLegacyImage: PendingImage? = null
+    private var imageDownloadOrigin: String? = null
+    private var imageDownloadPort: WebMessagePort? = null
+    private var pendingDownload: PendingDownload? = null
+
+    private val createDownloadDocument = activity.registerForActivityResult(
+        ActivityResultContracts.CreateDocument("*/*"),
+    ) { destination ->
+        val download = pendingDownload.also { pendingDownload = null } ?: return@registerForActivityResult
+        if (destination == null) return@registerForActivityResult
+        activity.lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) { saveDownload(download, destination) }
+                showToast("文件已保存")
+            } catch (error: Exception) {
+                runCatching { DocumentsContract.deleteDocument(activity.contentResolver, destination) }
+                if (error is CancellationException) throw error
+                showToast("安全下载失败，请确认网络与登录状态后重试")
+            }
+        }
+    }
 
     private val createImageDocument = activity.registerForActivityResult(
         ActivityResultContracts.CreateDocument("image/*"),
@@ -48,15 +77,54 @@ internal class PlatformWebDownloadSupport(
             enqueueHttpDownload(url, userAgent, contentDisposition, mimeType)
         }
 
-        normalizedHttpsOrigin(trustedDownloadUrl)?.let { trustedOrigin ->
-            webView.addJavascriptInterface(
-                ImageDownloadBridge { dataUrl, fileName ->
-                    activity.runOnUiThread {
-                        acceptImageDownload(trustedOrigin, dataUrl, fileName)
-                    }
-                },
-                BRIDGE_NAME,
-            )
+        imageDownloadOrigin = normalizedHttpsOrigin(trustedDownloadUrl)
+    }
+
+    fun closeMessagePort() {
+        imageDownloadPort?.close()
+        imageDownloadPort = null
+    }
+
+    fun close() {
+        closeMessagePort()
+        pendingDownload = null
+        pendingLegacyImage = null
+    }
+
+    fun connectImageDownloadPort(webView: WebView) {
+        closeMessagePort()
+        val origin = imageDownloadOrigin ?: return
+        if (normalizedHttpsOrigin(webView.url) != origin) return
+        val handshake = "my-download-${UUID.randomUUID()}"
+        val ports = webView.createWebMessageChannel()
+        imageDownloadPort = ports[0]
+        ports[0].setWebMessageCallback(object : WebMessagePort.WebMessageCallback() {
+            override fun onMessage(port: WebMessagePort, message: WebMessage) {
+                val raw = message.data ?: return
+                if (raw.length > MAX_DATA_URL_LENGTH + 1024) return
+                val payload = runCatching { JSONObject(raw) }.getOrNull() ?: return
+                acceptImageDownload(origin, payload.optString("dataUrl"), payload.optString("fileName"))
+            }
+        })
+        // Transfer the capability only to the trusted top frame, never to every iframe as a JS interface would.
+        webView.evaluateJavascript("""
+            (function () {
+              function connect(event) {
+                if (event.data !== ${JSONObject.quote(handshake)} || event.ports.length !== 1) return;
+                window.removeEventListener('message', connect);
+                var port = event.ports[0];
+                window.$BRIDGE_NAME = { saveImage: function (dataUrl, fileName) {
+                  port.postMessage(JSON.stringify({dataUrl: dataUrl, fileName: fileName}));
+                }};
+              }
+              window.addEventListener('message', connect);
+            })();
+        """.trimIndent()) {
+            if (imageDownloadPort === ports[0] && normalizedHttpsOrigin(webView.url) == origin) {
+                webView.postWebMessage(WebMessage(handshake, arrayOf(ports[1])), Uri.parse(origin))
+            } else {
+                ports[1].close()
+            }
         }
     }
 
@@ -66,37 +134,58 @@ internal class PlatformWebDownloadSupport(
         contentDisposition: String?,
         mimeType: String?,
     ) {
-        val uri = rawUrl?.let(Uri::parse) ?: return
-        if (uri.scheme != "https" && uri.scheme != "http") {
-            showToast("当前下载格式不受支持")
+        val url = rawUrl?.toHttpUrlOrNull() ?: return
+        if (!url.isHttps || url.username.isNotEmpty() || url.password.isNotEmpty()) {
+            showToast("为保护下载内容，仅支持 HTTPS 下载")
             return
         }
 
         val fileName = safeFileName(URLUtil.guessFileName(rawUrl, contentDisposition, mimeType), mimeType)
-        val request = DownloadManager.Request(uri)
-            .setTitle(fileName)
-            .setDescription("正在下载文件")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setAllowedOverMetered(true)
-            .setAllowedOverRoaming(false)
-
-        mimeType?.takeIf { it.isNotBlank() }?.let(request::setMimeType)
-        userAgent?.takeIf { it.isNotBlank() }?.let { request.addRequestHeader("User-Agent", it) }
-        CookieManager.getInstance().getCookie(rawUrl)?.takeIf { it.isNotBlank() }?.let {
-            request.addRequestHeader("Cookie", it)
+        val sameOrigin = normalizedHttpsOrigin(rawUrl) == normalizedHttpsOrigin(currentWebView()?.url)
+        pendingDownload = PendingDownload(url.toString(), userAgent,
+            if (sameOrigin) CookieManager.getInstance().getCookie(rawUrl)?.takeIf { it.isNotBlank() } else null)
+        runCatching { createDownloadDocument.launch(fileName) }.onFailure {
+            pendingDownload = null
+            showToast("无法打开文件保存位置")
         }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
-        } else {
-            request.setDestinationInExternalFilesDir(activity, Environment.DIRECTORY_DOWNLOADS, fileName)
-        }
-
-        val manager = activity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        runCatching { manager.enqueue(request) }
-            .onSuccess { showToast("已开始下载") }
-            .onFailure { showToast("下载启动失败，请重试") }
     }
+
+    private suspend fun saveDownload(download: PendingDownload, destination: Uri) {
+        val client = HttpClientProvider.newBuilder().followRedirects(false).followSslRedirects(false).build()
+        var url = requireNotNull(download.url.toHttpUrlOrNull())
+        repeat(6) {
+            currentCoroutineContext().ensureActive()
+            val request = Request.Builder().url(url).get()
+            download.userAgent?.let { request.header("User-Agent", it) }
+            download.cookie?.let { request.header("Cookie", it) }
+            client.newCall(request.build()).execute().use { response ->
+                if (response.code in setOf(301, 302, 303, 307, 308)) {
+                    val redirected = response.header("Location")?.let(url::resolve) ?: error("下载重定向无效")
+                    require(redirected.isHttps && redirected.username.isEmpty() && redirected.password.isEmpty())
+                    if (download.cookie != null) require(normalizedHttpsOrigin(redirected.toString()) == normalizedHttpsOrigin(download.url))
+                    url = redirected
+                } else {
+                    check(response.isSuccessful) { "下载失败" }
+                    val body = requireNotNull(response.body)
+                    activity.contentResolver.openOutputStream(destination, "w")?.use { output ->
+                        body.byteStream().use { input ->
+                            val buffer = ByteArray(16 * 1024)
+                            while (true) {
+                                currentCoroutineContext().ensureActive()
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                output.write(buffer, 0, count)
+                            }
+                        }
+                    } ?: error("无法保存文件")
+                    return
+                }
+            }
+        }
+        error("下载重定向次数过多")
+    }
+
+    private class PendingDownload(val url: String, val userAgent: String?, val cookie: String?)
 
     private fun acceptImageDownload(trustedOrigin: String, dataUrl: String, requestedFileName: String) {
         if (normalizedHttpsOrigin(currentWebView()?.url) != trustedOrigin) {
@@ -154,15 +243,6 @@ internal class PlatformWebDownloadSupport(
         Toast.makeText(activity, message, Toast.LENGTH_SHORT).show()
     }
 
-    private class ImageDownloadBridge(
-        private val onSaveImage: (String, String) -> Unit,
-    ) {
-        @JavascriptInterface
-        fun saveImage(dataUrl: String, fileName: String) {
-            onSaveImage(dataUrl, fileName)
-        }
-    }
-
     private data class PendingImage(
         val bytes: ByteArray,
         val mimeType: String,
@@ -181,11 +261,9 @@ internal class PlatformWebDownloadSupport(
         )
 
         fun normalizedHttpsOrigin(rawUrl: String?): String? {
-            val uri = rawUrl?.let(Uri::parse) ?: return null
-            if (!uri.scheme.equals("https", ignoreCase = true)) return null
-            val host = uri.host?.lowercase()?.takeIf { it.isNotBlank() } ?: return null
-            val port = uri.port.takeIf { it != -1 && it != 443 }?.let { ":$it" }.orEmpty()
-            return "https://$host$port"
+            val url = rawUrl?.toHttpUrlOrNull() ?: return null
+            if (!url.isHttps || url.username.isNotEmpty() || url.password.isNotEmpty()) return null
+            return url.newBuilder().encodedPath("/").query(null).fragment(null).build().toString().removeSuffix("/")
         }
 
         fun decodeImageDataUrl(dataUrl: String, requestedFileName: String): PendingImage? {

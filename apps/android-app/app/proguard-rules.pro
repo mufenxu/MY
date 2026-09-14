@@ -1,6 +1,10 @@
 -dontwarn okhttp3.**
 -dontwarn okio.**
 
--keepclassmembers class * {
-    @android.webkit.JavascriptInterface <methods>;
+-renamesourcefileattribute SourceFile
+
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
 }

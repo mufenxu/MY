@@ -40,4 +40,8 @@ internal fun shouldInvalidatePlatformSession(status: Int, code: String): Boolean
         "UNAUTHORIZED",
         "PLATFORM_SESSION_REQUIRED",
         "ACCOUNT_DISABLED",
+        "SESSION_REFRESH_INVALID",
+        "DEVICE_BINDING_REQUIRED",
+        "DEVICE_KEY_UNAVAILABLE",
+        "DEVICE_RISK_DETECTED",
     )

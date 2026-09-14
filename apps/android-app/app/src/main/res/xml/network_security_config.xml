@@ -1,5 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain>pxyb.cn</domain>
+        <pin-set>
+            <pin digest="SHA-256">nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E=</pin>
+            <pin digest="SHA-256">fk6IOKit1ild5647BH06ujSIq5XbCgqlbYl6ANhhi88=</pin>
+        </pin-set>
+    </domain-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain>7n.pxyb.cn</domain>
+        <pin-set>
+            <pin digest="SHA-256">Wt2ZC+IE3Cpf6hRflokHnxyZR+ZD82TqFkj1/fmYndc=</pin>
+            <pin digest="SHA-256">ViiHLiRf5mFIuAut6snED2JS5kL6lZWuzks+ili4/UY=</pin>
+        </pin-set>
+    </domain-config>
     <domain-config cleartextTrafficPermitted="true">
         <!-- 蜜雪后台(mxwk.shop)仅支持 HTTP，HTTPS 不可用，必须保留明文豁免。 -->
         <domain includeSubdomains="true">mxwk.shop</domain>

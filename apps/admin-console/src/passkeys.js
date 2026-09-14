@@ -65,7 +65,7 @@ export function createPasskeyService({ authStore, rpName, rpID, origin } = {}) {
       return { verified: saved };
     },
 
-    async authenticationOptions(username, { purpose = 'authentication', sessionNonce = '' } = {}) {
+    async authenticationOptions(username, { purpose = 'authentication', sessionNonce = '', binding = '' } = {}) {
       const normalizedUsername = String(username || '').trim();
       const passkeys = normalizedUsername
         ? (await authStore.findAccount(normalizedUsername))?.active ? await authStore.getPasskeys(normalizedUsername) : []
@@ -82,15 +82,15 @@ export function createPasskeyService({ authStore, rpName, rpID, origin } = {}) {
       const account = normalizedUsername ? await authStore.findAccount(normalizedUsername) : null;
       const challengeId = await authStore.saveChallenge({
         kind: `passkey_${purpose}`, username: normalizedUsername,
-        challenge: { value: options.challenge, sessionNonce, accountId: account?.id, authVersion: account?.authVersion || 0 },
+        challenge: { value: options.challenge, sessionNonce, binding, accountId: account?.id, authVersion: account?.authVersion || 0 },
       });
       return { challengeId, options };
     },
 
-    async verifyAuthentication(username, { challengeId, response } = {}, { purpose = 'authentication', sessionNonce = '' } = {}) {
+    async verifyAuthentication(username, { challengeId, response } = {}, { purpose = 'authentication', sessionNonce = '', binding = '' } = {}) {
       const normalizedUsername = String(username || '').trim();
       const challenge = await authStore.consumeChallenge(challengeId, `passkey_${purpose}`, normalizedUsername);
-      if (!challenge || !response?.id || challenge.sessionNonce !== sessionNonce) return { verified: false };
+      if (!challenge || !response?.id || challenge.sessionNonce !== sessionNonce || (challenge.binding || '') !== binding) return { verified: false };
       const resolved = normalizedUsername
         ? { username: normalizedUsername, passkey: (await authStore.getPasskeys(normalizedUsername)).find((item) => item.id === response.id) }
         : await authStore.findPasskey(response.id);

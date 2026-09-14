@@ -20,6 +20,7 @@ import okhttp3.Request
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
+import java.security.cert.CertificateFactory
 import java.util.concurrent.CancellationException
 import java.util.concurrent.TimeUnit
 import java.util.UUID
@@ -50,6 +51,7 @@ sealed interface AppInstallResult {
 }
 
 class AppUpdateManager(private val context: Context) {
+    private val updatePreferences = context.getSharedPreferences("app_update_security", Context.MODE_PRIVATE)
     private val client = HttpClientProvider.newBuilder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS)
@@ -213,7 +215,18 @@ class AppUpdateManager(private val context: Context) {
             require(!source.request(MAX_MANIFEST_BYTES + 1L)) { "版本清单大小无效" }
             val raw = source.readUtf8()
             require(raw.isNotBlank()) { "版本清单为空" }
-            return parseAppUpdateManifest(raw)
+            val signingInfo = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES).signingInfo
+                ?: throw IOException("应用签名信息不可用")
+            val trustedKeys = signingInfo.apkContentsSigners.map {
+                CertificateFactory.getInstance("X.509").generateCertificate(it.toByteArray().inputStream()).publicKey
+            }
+            return synchronized(updateStateLock) {
+                // Concurrent checks must never let an older response lower the remembered version.
+                val minimumVersion = maxOf(BuildConfig.VERSION_CODE, updatePreferences.getInt("highest_seen_version", 0))
+                verifySignedAppUpdateManifest(raw, trustedKeys, minimumVersion).also {
+                    check(updatePreferences.edit().putInt("highest_seen_version", it.versionCode).commit()) { "无法保存更新安全状态" }
+                }
+            }
         }
     }
 
@@ -307,6 +320,7 @@ class AppUpdateManager(private val context: Context) {
         .joinToString(separator = "") { byte -> "%02x".format(byte) }
 
     private companion object {
+        val updateStateLock = Any()
         const val MAX_MANIFEST_BYTES = 512 * 1024
     }
 }

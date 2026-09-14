@@ -1533,13 +1533,11 @@ class AppViewModel(
 
     fun approveQrLogin(
         requestCredential: suspend (String) -> String,
-        requestBiometric: suspend () -> Boolean,
     ) {
         val target = mutableState.value.qrLoginTarget ?: return
         if (mutableState.value.let { it.qrLoginBusy || it.user == null || it.locked || it.busyAction == "logout" } || target.status == "approved") return
         if (
-            target.confirmationMethod == "unavailable" ||
-            target.confirmationMethod == "passkey" && !mutableState.value.androidPasskeySupported
+            target.confirmationMethod != "passkey" || !mutableState.value.androidPasskeySupported
         ) {
             mutableState.update { it.copy(qrLoginError = "服务器尚未关联当前 Android App 的签名证书。") }
             return
@@ -1548,17 +1546,12 @@ class AppViewModel(
             mutableState.update { it.copy(qrLoginBusy = true, qrLoginError = null) }
             try {
                 val approved = api.withRequestMetadata(allowCache = false) {
-                    if (target.confirmationMethod == "passkey") {
-                        val challenge = api.auth.beginQrPasskey(target.requestId)
-                        api.auth.approveQrWithPasskey(
-                            target.requestId,
-                            challenge,
-                            requestCredential(challenge.optionsJson),
-                        )
-                    } else {
-                        if (!requestBiometric()) throw IllegalStateException("身份验证已取消，未批准网页登录。")
-                        api.auth.approveQrWithBiometric(target.requestId)
-                    }
+                    val challenge = api.auth.beginQrPasskey(target.requestId)
+                    api.auth.approveQrWithPasskey(
+                        target.requestId,
+                        challenge,
+                        requestCredential(challenge.optionsJson),
+                    )
                 }.value
                 mutableState.update {
                     it.copy(qrLoginTarget = approved, message = "网页登录已安全批准。")

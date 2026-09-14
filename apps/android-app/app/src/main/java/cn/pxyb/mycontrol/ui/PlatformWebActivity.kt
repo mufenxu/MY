@@ -188,6 +188,11 @@ class PlatformWebActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        try { cn.pxyb.mycontrol.data.RuntimeSecurity.requireSafeEnvironment() } catch (error: cn.pxyb.mycontrol.data.ApiException) {
+            Toast.makeText(this, error.message, Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
         enableEdgeToEdge()
         webOwner = sessionStore.readActiveUsername()
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -203,6 +208,11 @@ class PlatformWebActivity : ComponentActivity() {
                 password = intent.getStringExtra(EXTRA_AUTO_LOGIN_PASSWORD).orEmpty(),
                 homeUrl = intent.getStringExtra(EXTRA_AUTO_LOGIN_HOME_URL)?.takeIf { it.isNotBlank() },
             )
+        }
+        if (autoLogin != null && !isAutoLoginPage(initialUrl, autoLogin.loginUrl)) {
+            Toast.makeText(this, "自动登录地址未通过安全验证，请为外部应用配置 HTTPS。", Toast.LENGTH_LONG).show()
+            finish()
+            return
         }
         val initialCookies = intent.getStringArrayListExtra(EXTRA_INITIAL_COOKIE_URLS).orEmpty()
             .zip(intent.getStringArrayListExtra(EXTRA_INITIAL_COOKIE_VALUES).orEmpty())
@@ -395,6 +405,7 @@ class PlatformWebActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) window.setHideOverlayWindows(true)
         webViewInstance?.onResume()
         resumeProtectedPage()
     }
@@ -411,6 +422,7 @@ class PlatformWebActivity : ComponentActivity() {
 
     override fun onDestroy() {
         unlockJob?.cancel()
+        if (::webDownloadSupport.isInitialized) webDownloadSupport.close()
         filePathCallback?.onReceiveValue(null)
         filePathCallback = null
         webViewInstance?.let { wv ->
@@ -426,6 +438,11 @@ class PlatformWebActivity : ComponentActivity() {
                 .forEach(intent::removeExtra)
         }
         super.onDestroy()
+    }
+
+    override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (event.flags and (android.view.MotionEvent.FLAG_WINDOW_IS_OBSCURED or android.view.MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED) != 0) return true
+        return super.dispatchTouchEvent(event)
     }
 
     companion object {
@@ -543,7 +560,7 @@ private fun PlatformWebScreen(
                         // Cookie 管理器配置
                         CookieManager.getInstance().let { cm ->
                             cm.setAcceptCookie(true)
-                            cm.setAcceptThirdPartyCookies(this, true)
+                            cm.setAcceptThirdPartyCookies(this, false)
                             initialCookies.forEach { cookie ->
                                 cm.setCookie(cookie.url, cookie.value)
                             }
@@ -560,7 +577,7 @@ private fun PlatformWebScreen(
                             displayZoomControls = false
                             builtInZoomControls = true
                             allowFileAccess = false
-                            allowContentAccess = true
+                            allowContentAccess = false
                             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                             cacheMode = WebSettings.LOAD_DEFAULT
                             defaultTextEncodingName = "UTF-8"
@@ -580,6 +597,7 @@ private fun PlatformWebScreen(
 
                         webViewClient = object : WebViewClient() {
                             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                                webDownloadSupport.closeMessagePort()
                                 super.onPageStarted(view, url, favicon)
                                 pageLoading = true
                                 canGoBack = view?.canGoBack() == true
@@ -587,6 +605,7 @@ private fun PlatformWebScreen(
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 super.onPageFinished(view, url)
+                                view?.let(webDownloadSupport::connectImageDownloadPort)
                                 if (shouldRestoreInitialHash(initialUrl, url, restoredInitialHash)) {
                                     restoredInitialHash = true
                                     view?.loadUrl(initialUrl)
@@ -681,32 +700,30 @@ private fun shouldRestoreInitialHash(initialUrl: String, currentUrl: String?, al
     return currentUrl == initialUrl.substring(0, initialHashIndex)
 }
 
-private fun isAutoLoginPage(currentUrl: String?, loginUrl: String): Boolean {
+internal fun isAutoLoginPage(currentUrl: String?, loginUrl: String): Boolean {
     if (currentUrl.isNullOrBlank()) return false
     return runCatching {
-        val current = Uri.parse(currentUrl)
-        val target = Uri.parse(loginUrl)
-        current.host.equals(target.host, ignoreCase = true) && current.path == target.path
+        val current = java.net.URI(currentUrl)
+        val target = java.net.URI(loginUrl)
+        current.scheme.equals("https", ignoreCase = true) && target.scheme.equals("https", ignoreCase = true) &&
+            !current.host.isNullOrBlank() && current.host.equals(target.host, ignoreCase = true) &&
+            current.rawUserInfo == null && target.rawUserInfo == null &&
+            (current.port.takeIf { it != -1 } ?: 443) == (target.port.takeIf { it != -1 } ?: 443) &&
+            current.rawPath == target.rawPath
     }.getOrDefault(false)
 }
 
-private fun escapeAutoLoginValue(value: String): String = value
-    .replace("\\", "\\\\")
-    .replace("\"", "\\\"")
-    .replace("\r", "\\r")
-    .replace("\n", "\\n")
-
 private fun buildAutoLoginScript(autoLogin: ExternalApplicationAutoLogin): String {
-    val username = escapeAutoLoginValue(autoLogin.username)
-    val password = escapeAutoLoginValue(autoLogin.password)
-    val homeUrl = autoLogin.homeUrl?.let { escapeAutoLoginValue(it) }
+    val username = JSONObject.quote(autoLogin.username)
+    val password = JSONObject.quote(autoLogin.password)
+    val homeUrl = autoLogin.homeUrl?.let(JSONObject::quote)
     return buildString {
         append("(function () {")
         append("if (window.__my_auto_login_done) return;")
         append("window.__my_auto_login_done = true;")
         append("var body = new URLSearchParams();")
-        append("body.set('user', \"$username\");")
-        append("body.set('pass', \"$password\");")
+        append("body.set('user', $username);")
+        append("body.set('pass', $password);")
         append("fetch('/apisub.php?act=login', {")
         append("method: 'POST',")
         append("headers: { 'Content-Type': 'application/x-www-form-urlencoded' },")
@@ -715,7 +732,7 @@ private fun buildAutoLoginScript(autoLogin: ExternalApplicationAutoLogin): Strin
         append("}).then(function (r) { return r.json(); }).then(function (d) {")
         append("if (d && d.code === 1) {")
         if (homeUrl != null) {
-            append("location.href = \"$homeUrl\";")
+            append("location.href = $homeUrl;")
         } else {
             append("location.reload();")
         }

@@ -1,4 +1,6 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.security.KeyStore
+import java.security.MessageDigest
 
 plugins {
     alias(libs.plugins.android.application)
@@ -19,6 +21,11 @@ val releaseSigningConfigured = releaseSigningProperties.all { !it.isNullOrBlank(
 require(releaseSigningConfigured || releaseSigningProperties.all { it.isNullOrBlank() }) {
     "Android release signing properties must either all be configured or all be omitted."
 }
+val releaseSigningFingerprint = if (releaseSigningConfigured) {
+    val store = KeyStore.getInstance(file(releaseSigningProperties[0]!!), releaseSigningProperties[2]!!.toCharArray())
+    val certificate = requireNotNull(store.getCertificate(releaseSigningProperties[1])) { "Release signing certificate is missing." }
+    MessageDigest.getInstance("SHA-256").digest(certificate.encoded).joinToString("") { "%02x".format(it) }
+} else ""
 
 android {
     namespace = "cn.pxyb.mycontrol"
@@ -30,6 +37,7 @@ android {
         targetSdk = 36
         versionCode = appVersionCode.get()
         versionName = appVersionName.get()
+        buildConfigField("String", "APP_SIGNING_CERT_SHA256", "\"$releaseSigningFingerprint\"")
 
         buildConfigField("String", "PLATFORM_BASE_URL", "\"https://pxyb.cn\"")
         buildConfigField(
@@ -66,6 +74,7 @@ android {
 
     buildTypes {
         release {
+            isDebuggable = false
             isMinifyEnabled = true
             isShrinkResources = true
             if (releaseSigningConfigured) {

@@ -123,6 +123,10 @@ export function registerExternalAppRoutes(app, {
       if (application.kind === 'direct') {
         loginUrl = application.launchUrl;
       } else if (application.autoLogin) {
+        const credentialUrl = new URL(application.autoLogin.loginUrl);
+        if (credentialUrl.protocol !== 'https:' || credentialUrl.username || credentialUrl.password) {
+          return res.status(409).json({ error: '该外部应用未配置安全的 HTTPS 登录地址，已阻止发送账号密码。', code: 'INSECURE_AUTO_LOGIN' });
+        }
         const secrets = await externalApplications.revealApplicationSecrets(application.id);
         autoLogin = secrets?.autoLogin || null;
         loginUrl = application.autoLogin.loginUrl;

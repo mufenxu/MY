@@ -245,7 +245,7 @@ internal fun AuthenticatedShell(
                     QrScanDestination.Login, QrScanDestination.Unsupported -> Unit
                 }
             },
-            onApprove = { viewModel.approveQrLogin(onPasskeyRequest, onBiometricConfirmation) },
+            onApprove = { viewModel.approveQrLogin(onPasskeyRequest) },
             onReject = viewModel::rejectQrLogin,
             onRetry = viewModel::resetQrScanner,
             onClose = viewModel::closeQrLogin,
@@ -575,9 +575,12 @@ internal fun AuthenticatedShell(
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
                         pendingQrUri = state.pendingAuthenticatorUri,
-                        onAddFromUri = authenticatorViewModel::addFromUri,
-                        onAddManual = authenticatorViewModel::addManual,
-                        onDelete = authenticatorViewModel::delete,
+                        onAddFromUri = { authenticatorViewModel.addFromUri(it, onSensitiveActionConfirmation) },
+                        onAddManual = { issuer, account, secret -> authenticatorViewModel.addManual(issuer, account, secret, onSensitiveActionConfirmation) },
+                        onDelete = { authenticatorViewModel.delete(it, onSensitiveActionConfirmation) },
+                        onUnlock = { authenticatorViewModel.unlock(onSensitiveActionConfirmation) },
+                        onLock = authenticatorViewModel::lock,
+                        onLeave = authenticatorViewModel::leave,
                         onPendingQrUriConsumed = viewModel::consumePendingAuthenticatorUri,
                     )
                 }

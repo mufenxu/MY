@@ -6,6 +6,7 @@ import { createApp } from '../src/app.js';
 import { createPasswordHash } from '../src/auth.js';
 import { createMemoryAuthStore } from '../src/auth-store.js';
 import { loadConfig } from '../src/config.js';
+import { createTestDevice } from './helpers/native-device.js';
 
 async function withServer(app, callback) {
   const server = app.listen(0, '127.0.0.1');
@@ -36,7 +37,7 @@ function legacyPasswordHash(password) {
   return `scrypt$${salt.toString('base64url')}$${hash.toString('base64url')}`;
 }
 
-test('production login enforces HTTPS, mandatory MFA enrollment, and host-only secure cookies', async () => {
+test('production login enforces HTTPS, mandatory MFA enrollment, and host-only secure cookies', async (t) => {
   const password = 'security-test-password';
   const passwordHash = await createPasswordHash(password, Buffer.alloc(16, 8));
   const encryptionKey = Buffer.alloc(32, 9).toString('base64url');
@@ -79,6 +80,19 @@ test('production login enforces HTTPS, mandatory MFA enrollment, and host-only s
       'X-Platform-Request': 'console',
       'X-Forwarded-Proto': 'https',
     };
+    const log = t.mock.method(console, 'error', () => {});
+    try {
+      const malformed = await fetch(`${origin}/api/auth/login`, {
+        method: 'POST', headers, body: '{"password":"test-secret-must-not-be-logged",',
+      });
+      assert.equal(malformed.status, 400);
+      assert.equal((await malformed.json()).code, 'INVALID_REQUEST_BODY');
+      const oversized = await fetch(`${origin}/api/auth/login`, {
+        method: 'POST', headers, body: JSON.stringify({ password: 'x'.repeat(129 * 1024) }),
+      });
+      assert.equal(oversized.status, 413);
+      assert.equal(log.mock.callCount(), 0);
+    } finally { log.mock.restore(); }
     const first = await fetch(`${origin}/api/auth/login`, {
       method: 'POST',
       headers,
@@ -114,22 +128,55 @@ test('production login enforces HTTPS, mandatory MFA enrollment, and host-only s
     assert.equal(statusBody.authenticated, true);
     assert.equal(statusBody.mfaRequired, true);
 
-    const androidFirst = await fetch(`${origin}/api/auth/login`, {
+    const unboundAndroid = await fetch(`${origin}/api/auth/login`, {
       method: 'POST',
       headers: { ...headers, 'User-Agent': 'MY-Control-Android/1.0.0' },
       body: JSON.stringify({ username: 'admin', password }),
     });
+    assert.equal(unboundAndroid.status, 403);
+    const device = createTestDevice(config.publicOrigin);
+    const deviceRegistration = await device.registration(origin, headers);
+    const androidFirst = await device.request(origin, '/api/auth/login', {
+      headers, body: { username: 'admin', password, deviceRegistration },
+    });
     assert.equal(androidFirst.status, 202);
     const androidChallenge = (await androidFirst.json()).details;
-    const androidLogin = await fetch(`${origin}/api/auth/login/complete`, {
-      method: 'POST',
-      headers: { ...headers, 'User-Agent': 'MY-Control-Android/1.0.0' },
-      body: JSON.stringify({ challengeId: androidChallenge.challengeId, recoveryCode: session.recoveryCodes[0] }),
+    const androidLogin = await device.request(origin, '/api/auth/login/complete', {
+      headers, body: { challengeId: androidChallenge.challengeId, recoveryCode: session.recoveryCodes[0], deviceRegistration },
     });
     assert.equal(androidLogin.status, 200);
     const androidSession = await androidLogin.json();
     assert.equal(androidSession.session.idleTimeoutMinutes, 1440);
-    assert.match(androidLogin.headers.get('set-cookie'), /Max-Age=2592000/i);
+    assert.match(androidLogin.headers.get('set-cookie'), /Max-Age=900/i);
+    assert.equal(androidSession.session.deviceBound, true);
+    assert.equal(androidSession.session.deviceIntegrity, 'unverified');
+    const nativeCookie = androidLogin.headers.get('set-cookie').split(';', 1)[0];
+    const copied = await fetch(`${origin}/api/auth/status`, { headers: { ...headers, Cookie: nativeCookie } });
+    assert.equal(copied.status, 403);
+    const owned = await device.request(origin, '/api/auth/status', { method: 'GET', headers, cookie: nativeCookie });
+    assert.equal((await owned.json()).authenticated, true);
+    const wrongDevice = await createTestDevice(config.publicOrigin).request(origin, '/api/auth/status', { method: 'GET', headers, cookie: nativeCookie });
+    assert.equal(wrongDevice.status, 403);
+    const refreshed = await device.request(origin, '/api/auth/native/refresh', { headers, body: { refreshToken: androidSession.session.refreshToken } });
+    assert.equal(refreshed.status, 200);
+    const renewed = await refreshed.json();
+    assert.notEqual(renewed.session.refreshToken, androidSession.session.refreshToken);
+    const refreshedCookie = refreshed.headers.get('set-cookie').split(';', 1)[0];
+    const reusedRefresh = await device.request(origin, '/api/auth/native/refresh', { headers, body: { refreshToken: androidSession.session.refreshToken } });
+    assert.equal(reusedRefresh.status, 401);
+    const revokedNative = await device.request(origin, '/api/auth/status', { method: 'GET', headers, cookie: refreshedCookie });
+    assert.equal((await revokedNative.json()).authenticated, false);
+
+    const reauthenticated = await fetch(`${origin}/api/auth/reauth`, {
+      method: 'POST', headers: { ...headers, Cookie: cookie },
+      body: JSON.stringify({ password, recoveryCode: session.recoveryCodes[1] }),
+    });
+    assert.equal(reauthenticated.status, 200);
+    const reusedElevation = await fetch(`${origin}/api/auth/reauth`, {
+      method: 'POST', headers: { ...headers, Cookie: cookie }, body: '{}',
+    });
+    assert.equal(reusedElevation.status, 403);
+    assert.equal((await reusedElevation.json()).code, 'REAUTHENTICATION_FAILED');
 
     const changed = await fetch(`${origin}/api/security/password`, {
       method: 'POST',

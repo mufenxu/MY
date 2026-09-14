@@ -6,6 +6,7 @@ import { createMemoryAuthStore } from '../src/auth-store.js';
 import { createPasswordHash } from '../src/auth.js';
 import { loadConfig } from '../src/config.js';
 import { createMemoryQrLoginStore } from '../src/qr-login-store.js';
+import { createTestDevice } from './helpers/native-device.js';
 
 async function withServer(app, callback) {
   const server = app.listen(0, '127.0.0.1');
@@ -54,14 +55,15 @@ test('Android QR login requires Passkey confirmation and a device-bound requeste
   const app = createApp({ config, authStore, qrLoginStore });
 
   await withServer(app, async (origin) => {
+    const requester = createTestDevice();
+    const approver = createTestDevice();
     const jsonHeaders = {
       'Content-Type': 'application/json',
       'X-Platform-Request': 'console',
       'User-Agent': 'MY-Control-Android/1.1.0',
       'X-Platform-Device-Id': 'android-device-001',
     };
-    const createdResponse = await fetch(`${origin}/api/auth/qr/requests`, {
-      method: 'POST',
+    const createdResponse = await requester.request(origin, '/api/auth/qr/requests', {
       headers: jsonHeaders,
       body: JSON.stringify({ clientKind: 'android', confirmationMethod: 'passkey' }),
     });
@@ -71,8 +73,7 @@ test('Android QR login requires Passkey confirmation and a device-bound requeste
     assert.match(created.requesterVerifier, /^android-requester-secret-value/);
     assert.match(created.qrDataUrl, /^data:image\/png;base64,/);
 
-    const statusResponse = await fetch(`${origin}/api/auth/qr/requests/${created.requestId}/status`, {
-      method: 'POST',
+    const statusResponse = await requester.request(origin, `/api/auth/qr/requests/${created.requestId}/status`, {
       headers: jsonHeaders,
       body: JSON.stringify({ requesterVerifier: created.requesterVerifier }),
     });
@@ -85,6 +86,10 @@ test('Android QR login requires Passkey confirmation and a device-bound requeste
       body: JSON.stringify({ requesterVerifier: created.requesterVerifier }),
     });
     assert.equal(wrongDevice.status, 410);
+    const copiedIdentifier = await createTestDevice().request(origin, `/api/auth/qr/requests/${created.requestId}/status`, {
+      headers: jsonHeaders, body: { requesterVerifier: created.requesterVerifier },
+    });
+    assert.equal(copiedIdentifier.status, 403);
 
     const biometric = await fetch(`${origin}/api/auth/qr/requests`, {
       method: 'POST',
@@ -94,17 +99,15 @@ test('Android QR login requires Passkey confirmation and a device-bound requeste
     assert.equal(biometric.status, 400);
     assert.equal((await biometric.json()).code, 'QR_LOGIN_INVALID_CONFIRMATION');
 
-    const loginResponse = await fetch(`${origin}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' },
-      body: JSON.stringify({ username: 'operator', password }),
+    const deviceRegistration = await approver.registration(origin);
+    const loginResponse = await approver.request(origin, '/api/auth/login', {
+      body: { username: 'operator', password, deviceRegistration },
     });
     assert.equal(loginResponse.status, 200);
     const appCookie = loginResponse.headers.get('set-cookie').split(';', 1)[0];
 
-    const scanResponse = await fetch(`${origin}/api/auth/qr/requests/${created.requestId}/scan`, {
-      method: 'POST',
-      headers: { ...jsonHeaders, Cookie: appCookie },
+    const scanResponse = await approver.request(origin, `/api/auth/qr/requests/${created.requestId}/scan`, {
+      headers: jsonHeaders, cookie: appCookie,
       body: JSON.stringify({ scanToken: 'android-scan-secret-value-that-is-long-enough' }),
     });
     assert.equal(scanResponse.status, 200);

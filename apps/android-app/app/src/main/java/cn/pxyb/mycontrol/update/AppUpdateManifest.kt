@@ -2,6 +2,10 @@ package cn.pxyb.mycontrol.update
 
 import org.json.JSONObject
 import java.net.URI
+import java.security.PublicKey
+import java.security.Signature
+import java.time.Instant
+import java.util.Base64
 
 private const val APPLICATION_ID = "cn.pxyb.mycontrol"
 private const val VERSION_PART_FACTOR = 1_000
@@ -104,10 +108,47 @@ fun parseAppUpdateManifest(raw: String): AppUpdateInfo {
     )
 }
 
+internal fun verifySignedAppUpdateManifest(
+    raw: String,
+    trustedKeys: List<PublicKey>,
+    minimumVersionCode: Int,
+    now: Long = System.currentTimeMillis(),
+): AppUpdateInfo {
+    val envelope = JSONObject(raw)
+    val algorithm = envelope.getString("signatureAlgorithm")
+    require(algorithm in setOf("SHA256withRSA", "SHA256withECDSA")) { "更新清单签名算法无效" }
+    val encoded = envelope.getString("signedPayload")
+    require(encoded.length <= 180 * 1024) { "更新清单签名内容过大" }
+    val payload = Base64.getUrlDecoder().decode(encoded)
+    val signature = Base64.getUrlDecoder().decode(envelope.getString("signature"))
+    require(signature.size in 8..1024) { "更新清单签名无效" }
+    val verified = trustedKeys.any { key ->
+        runCatching {
+            Signature.getInstance(algorithm).run {
+                initVerify(key)
+                update("MY-ANDROID-UPDATE-V1\n".toByteArray(Charsets.US_ASCII))
+                update(payload)
+                verify(signature)
+            }
+        }.getOrDefault(false)
+    }
+    require(verified) { "更新清单签名与当前应用不匹配" }
+    val signedJson = String(payload, Charsets.UTF_8)
+    val metadata = JSONObject(signedJson)
+    require(metadata.getInt("manifestVersion") == 1) { "更新清单版本不受支持" }
+    val publishedAt = Instant.parse(metadata.getString("publishedAt")).toEpochMilli()
+    val expiresAt = Instant.parse(metadata.getString("expiresAt")).toEpochMilli()
+    require(publishedAt <= now + 300_000 && expiresAt > now && expiresAt > publishedAt &&
+        expiresAt - publishedAt <= 90L * 24 * 3600 * 1000) { "更新清单已过期或设备时间不正确" }
+    return parseAppUpdateManifest(signedJson).also {
+        require(it.versionCode >= minimumVersionCode) { "检测到旧版本更新清单，已阻止回退" }
+    }
+}
+
 private fun String.requireHttpsUrl(fieldName: String): String {
     val uri = runCatching { URI(this) }
         .getOrElse { throw IllegalArgumentException("Invalid $fieldName", it) }
-    require(uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank()) {
+    require(uri.scheme.equals("https", ignoreCase = true) && !uri.host.isNullOrBlank() && uri.userInfo == null) {
         "$fieldName must use HTTPS"
     }
     return this

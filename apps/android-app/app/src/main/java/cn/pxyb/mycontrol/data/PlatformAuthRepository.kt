@@ -16,9 +16,11 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
         challengeToken: String = "",
         deviceName: String = "",
     ): PasswordLoginResponse = withContext(Dispatchers.IO) {
+        http.beginDeviceRegistration()
         val body = JSONObject()
             .put("username", username.trim())
             .put("password", password)
+            .put("deviceRegistration", http.deviceRegistration().body)
         if (challengeToken.isNotBlank()) body.put("challengeToken", challengeToken)
         if (deviceName.isNotBlank()) body.put("deviceName", deviceName)
 
@@ -42,7 +44,8 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
         val field = if (challenge.enrollment != null) "enrollmentCode" else if (recovery) "recoveryCode" else "totp"
         val response = http.execute(
             "/api/auth/login/complete", "POST",
-            JSONObject().put("challengeId", challenge.challengeId).put(field, factor.trim()).put("deviceName", deviceName),
+            JSONObject().put("challengeId", challenge.challengeId).put(field, factor.trim()).put("deviceName", deviceName)
+                .put("deviceRegistration", http.deviceRegistration().body),
             authenticated = false,
         )
         response.toLoginResult(response.json.optJSONObject("user").toPlatformUser(), response.json.optJSONArray("recoveryCodes").toStringList())
@@ -59,6 +62,7 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
     }
 
     suspend fun beginPasskeyLogin(username: String, challengeToken: String = ""): PasskeyChallenge = withContext(Dispatchers.IO) {
+        http.beginDeviceRegistration()
         val normalizedUsername = username.trim()
         val json = http.execute(
             "/api/auth/passkey/options",
@@ -83,6 +87,7 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
             .put("username", challenge.username)
             .put("challengeId", challenge.challengeId)
             .put("response", JSONObject(responseJson))
+            .put("deviceRegistration", http.deviceRegistration().body)
         if (deviceName.isNotBlank()) body.put("deviceName", deviceName)
         val response = http.execute(
             "/api/auth/passkey/verify",
@@ -94,19 +99,17 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
     }
 
     suspend fun persistLogin(result: LoginResult): Unit = withContext(Dispatchers.IO) {
-        sessionStore.writeCookie(
-            result.sessionCookie,
-            result.sessionExpiresAtMillis,
-            result.sessionIdleMinutes,
-            result.user.username,
-        )
+        sessionStore.writeLogin(result)
+        http.finishDeviceRegistration(result.deviceKeyAlias)
         snapshotStore.setAccount(result.user.username)
     }
 
     suspend fun discardLogin(result: LoginResult): Unit = withContext(Dispatchers.IO) {
         runCatching {
-            http.execute("/api/auth/logout", "POST", JSONObject(), authenticated = false, cookieOverride = result.sessionCookie)
-        }.onFailure { if (it is CancellationException) throw it }
+            http.execute("/api/auth/logout", "POST", JSONObject(), authenticated = false,
+                cookieOverride = result.sessionCookie, deviceKeyAlias = result.deviceKeyAlias)
+        }.also { http.finishDeviceRegistration(result.deviceKeyAlias, discard = true) }
+            .onFailure { if (it is CancellationException) throw it }
     }
 
     suspend fun scanQrLogin(requestId: String, scanToken: String): QrLoginTarget = withContext(Dispatchers.IO) {
@@ -118,6 +121,7 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
     }
 
     suspend fun createQrLoginRequest(): QrLoginRequest = withContext(Dispatchers.IO) {
+        http.beginDeviceRegistration()
         val json = http.execute(
             "/api/auth/qr/requests",
             "POST",
@@ -157,6 +161,7 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
         deviceName: String = "",
     ): LoginResult = withContext(Dispatchers.IO) {
         val body = JSONObject().put("requesterVerifier", requesterVerifier)
+            .put("deviceRegistration", http.deviceRegistration().body)
         if (deviceName.isNotBlank()) body.put("deviceName", deviceName)
         val response = http.execute(
             "/api/auth/qr/requests/${encodePath(requestId)}/consume",
@@ -195,14 +200,6 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
                     .put("challengeId", challenge.challengeId)
                     .put("response", JSONObject(responseJson)),
             ),
-        ).json.toQrLoginTarget()
-    }
-
-    suspend fun approveQrWithBiometric(requestId: String): QrLoginTarget = withContext(Dispatchers.IO) {
-        http.execute(
-            "/api/auth/qr/requests/${encodePath(requestId)}/approve",
-            "POST",
-            JSONObject().put("localConfirmation", true),
         ).json.toQrLoginTarget()
     }
 
@@ -255,15 +252,17 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
             http.currentSession().also { session ->
                 sessionStore.withRequestSession(session) {
                     snapshotStore.clear(scope = session.accountScope)
-                    sessionStore.clear()
+                    sessionStore.clear(deleteDeviceKey = false)
                 }
             }
         }
         onLocalSessionCleared()
         withContext(Dispatchers.IO) {
             runCatching {
-                http.execute("/api/auth/logout", "POST", JSONObject(), authenticated = false, cookieOverride = session.cookie)
-            }.onFailure { if (it is CancellationException) throw it }
+                http.execute("/api/auth/logout", "POST", JSONObject(), authenticated = false,
+                    cookieOverride = session.cookie, deviceKeyAlias = session.credentials?.deviceKeyAlias, timeoutSeconds = 5)
+            }.also { DeviceProof.delete(session.credentials?.deviceKeyAlias) }
+                .onFailure { if (it is CancellationException) throw it }
         }
     }
 
@@ -413,10 +412,15 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
     ): LoginResult {
         val cookie = cookie ?: throw ApiException("服务器未返回安全会话。", 500, "SESSION_MISSING")
         val session = json.optJSONObject("session") ?: JSONObject()
+        if (!session.optBoolean("deviceBound") || session.optString("refreshToken").isBlank()) {
+            throw ApiException("服务端尚未启用设备安全会话，请更新服务端后登录。", 503, "DEVICE_BINDING_REQUIRED")
+        }
+        val accessExpiresAtMillis = session.nullableString("accessExpiresAt")
+            ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() } ?: 0L
         val expiresAtMillis = session.nullableString("expiresAt")
             ?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
             ?: decodeSessionExpiry(cookie)
-        if (expiresAtMillis <= System.currentTimeMillis()) {
+        if (expiresAtMillis <= System.currentTimeMillis() || accessExpiresAtMillis <= System.currentTimeMillis()) {
             throw ApiException("服务器返回的会话有效期无效。", 500, "SESSION_EXPIRY_INVALID")
         }
         return LoginResult(
@@ -424,6 +428,9 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
             sessionCookie = cookie,
             sessionExpiresAtMillis = expiresAtMillis,
             sessionIdleMinutes = session.optInt("idleTimeoutMinutes", 30).coerceAtLeast(1),
+            refreshToken = session.getString("refreshToken"),
+            accessExpiresAtMillis = accessExpiresAtMillis,
+            deviceKeyAlias = http.deviceRegistration().alias,
             recoveryCodes = recoveryCodes,
         )
     }

@@ -9,6 +9,21 @@ import org.junit.Test
 
 class ExternalApplicationParsingTest {
     @Test
+    fun `automatic credentials require the exact HTTPS origin and path`() {
+        val target = "https://accounts.example.com/login"
+        assertTrue(cn.pxyb.mycontrol.ui.isAutoLoginPage("https://accounts.example.com:443/login?next=home", target))
+        listOf(
+            "http://accounts.example.com/login",
+            "https://accounts.example.com:8443/login",
+            "https://accounts.example.com.evil.test/login",
+            "https://user@accounts.example.com/login",
+            "https://accounts.example.com/other",
+            "not a URL",
+        ).forEach { assertFalse(cn.pxyb.mycontrol.ui.isAutoLoginPage(it, target)) }
+        assertFalse(cn.pxyb.mycontrol.ui.isAutoLoginPage("http://accounts.example.com/login", "http://accounts.example.com/login"))
+    }
+
+    @Test
     fun `external application list keeps launch and health metadata`() {
         val applications = parseExternalApplications(
             JSONObject(

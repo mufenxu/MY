@@ -28,6 +28,9 @@ data class LoginResult(
     val sessionCookie: String,
     val sessionExpiresAtMillis: Long,
     val sessionIdleMinutes: Int,
+    val refreshToken: String,
+    val accessExpiresAtMillis: Long,
+    val deviceKeyAlias: String,
     val recoveryCodes: List<String> = emptyList(),
 ) : PasswordLoginResponse
 

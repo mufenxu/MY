@@ -5,6 +5,7 @@ import { createApp } from '../src/app.js';
 import { createMemoryAuthStore } from '../src/auth-store.js';
 import { createPasswordHash } from '../src/auth.js';
 import { loadConfig } from '../src/config.js';
+import { createTestPasskey } from './helpers/native-device.js';
 import { createMemoryQrLoginStore } from '../src/qr-login-store.js';
 
 async function withServer(app, callback) {
@@ -19,7 +20,7 @@ async function withServer(app, callback) {
   }
 }
 
-test('authenticated Android approval issues a browser-bound central session', async () => {
+test('QR approval requires a request-bound Passkey for every role', async () => {
   const password = 'qr-login-security-password';
   const passwordHash = await createPasswordHash(password, Buffer.alloc(16, 4));
   const encryptionKey = Buffer.alloc(32, 5).toString('base64url');
@@ -58,6 +59,8 @@ test('authenticated Android approval issues a browser-bound central session', as
     webauthnRpId: 'pxyb.cn',
   };
   const app = createApp({ config, authStore, qrLoginStore });
+  const passkey = await createTestPasskey(authStore, 'operator');
+  config.androidAppCertFingerprints = ['AA:'.repeat(31) + 'AA'];
 
   await withServer(app, async (origin) => {
     const consoleHeaders = { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' };
@@ -88,15 +91,25 @@ test('authenticated Android approval issues a browser-bound central session', as
     assert.equal(scanResponse.status, 200);
     const scanned = await scanResponse.json();
     assert.equal(scanned.status, 'scanned');
-    assert.equal(scanned.confirmationMethod, 'biometric');
+    assert.equal(scanned.confirmationMethod, 'passkey');
 
     const hijackStatus = await fetch(`${origin}/api/auth/qr/requests/${created.requestId}`);
     assert.equal(hijackStatus.status, 410);
 
-    const approvedResponse = await fetch(`${origin}/api/auth/qr/requests/${created.requestId}/approve`, {
+    const bypassResponse = await fetch(`${origin}/api/auth/qr/requests/${created.requestId}/approve`, {
       method: 'POST',
       headers: { ...consoleHeaders, Cookie: appCookie },
       body: JSON.stringify({ localConfirmation: true }),
+    });
+    assert.equal(bypassResponse.status, 403);
+    const optionsResponse = await fetch(`${origin}/api/auth/qr/requests/${created.requestId}/passkey/options`, {
+      method: 'POST', headers: { ...consoleHeaders, Cookie: appCookie }, body: '{}',
+    });
+    assert.equal(optionsResponse.status, 200);
+    const options = await optionsResponse.json();
+    const approvedResponse = await fetch(`${origin}/api/auth/qr/requests/${created.requestId}/approve`, {
+      method: 'POST', headers: { ...consoleHeaders, Cookie: appCookie },
+      body: JSON.stringify({ passkey: { challengeId: options.challengeId, response: passkey.assertion(options.options.challenge) } }),
     });
     assert.equal(approvedResponse.status, 200);
 
@@ -118,6 +131,7 @@ test('authenticated Android approval issues a browser-bound central session', as
     assert.equal((await reused.json()).code, 'QR_LOGIN_NOT_APPROVED');
 
     await authStore.updateAccount('operator', { role: 'super_admin' });
+    config.androidAppCertFingerprints = [];
     const refreshedLogin = await fetch(`${origin}/api/auth/login`, {
       method: 'POST', headers: consoleHeaders,
       body: JSON.stringify({ username: 'operator', password }),

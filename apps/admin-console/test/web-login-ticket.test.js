@@ -6,8 +6,7 @@ import { createMemoryAuthStore } from '../src/auth-store.js';
 import { createPasswordHash } from '../src/auth.js';
 import { loadConfig } from '../src/config.js';
 import { createMemoryWebLoginTicketStore } from '../src/web-login-ticket-store.js';
-
-const ANDROID_UA = 'MY-Control-Android/1.0.0';
+import { createTestDevice } from './helpers/native-device.js';
 
 async function withServer(app, callback) {
   const server = app.listen(0, '127.0.0.1');
@@ -50,17 +49,13 @@ async function createFixture() {
 }
 
 async function androidLogin(origin, password) {
-  const response = await fetch(`${origin}/api/auth/login`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Platform-Request': 'console',
-      'User-Agent': ANDROID_UA,
-    },
-    body: JSON.stringify({ username: 'operator', password }),
+  const device = createTestDevice();
+  const deviceRegistration = await device.registration(origin);
+  const response = await device.request(origin, '/api/auth/login', {
+    body: { username: 'operator', password, deviceRegistration },
   });
   assert.equal(response.status, 200);
-  return response.headers.get('set-cookie').split(';', 1)[0];
+  return { device, appCookie: response.headers.get('set-cookie').split(';', 1)[0] };
 }
 
 function directAppLoginUrl(origin, loginUrl) {
@@ -73,15 +68,9 @@ test('Android app can exchange its session for a one-time browser login ticket',
   const { app, password } = await createFixture();
 
   await withServer(app, async (origin) => {
-    const appCookie = await androidLogin(origin, password);
-    const createdResponse = await fetch(`${origin}/api/auth/web-login-tickets`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Platform-Request': 'console',
-        'User-Agent': ANDROID_UA,
-        Cookie: appCookie,
-      },
+    const { appCookie, device } = await androidLogin(origin, password);
+    const createdResponse = await device.request(origin, '/api/auth/web-login-tickets', {
+      cookie: appCookie,
       body: JSON.stringify({ redirect: 'https://pxyb.cn/apps/core/' }),
     });
     assert.equal(createdResponse.status, 201);
@@ -97,6 +86,7 @@ test('Android app can exchange its session for a one-time browser login ticket',
     assert.equal(consumeResponse.status, 200);
     assert.equal(consumeResponse.headers.get('location'), 'https://pxyb.cn/apps/core/');
     assert.match(consumeResponse.headers.get('set-cookie'), /my_platform_session=/);
+    assert.match(consumeResponse.headers.get('set-cookie'), /Max-Age=900/);
     const html = await consumeResponse.text();
     assert.match(html, /正在进入管理后台/);
     assert.match(html, /身份凭据验证成功/);
@@ -116,7 +106,7 @@ test('web login tickets reject unsafe callers and redirects', async () => {
   const { app, password } = await createFixture();
 
   await withServer(app, async (origin) => {
-    const appCookie = await androidLogin(origin, password);
+    const { appCookie, device } = await androidLogin(origin, password);
     const baseHeaders = {
       'Content-Type': 'application/json',
       'X-Platform-Request': 'console',
@@ -131,9 +121,8 @@ test('web login tickets reject unsafe callers and redirects', async () => {
     assert.equal(browserCaller.status, 403);
     assert.equal((await browserCaller.json()).code, 'WEB_LOGIN_ANDROID_REQUIRED');
 
-    const externalRedirect = await fetch(`${origin}/api/auth/web-login-tickets`, {
-      method: 'POST',
-      headers: { ...baseHeaders, 'User-Agent': ANDROID_UA },
+    const externalRedirect = await device.request(origin, '/api/auth/web-login-tickets', {
+      cookie: appCookie,
       body: JSON.stringify({ redirect: 'https://example.com/apps/core/' }),
     });
     assert.equal(externalRedirect.status, 400);

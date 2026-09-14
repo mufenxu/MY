@@ -26,6 +26,7 @@ import {
 } from './auth.js';
 import { createMemoryAuthStore } from './auth-store.js';
 import { createMemoryAuthRiskStore } from './auth-risk-store.js';
+import { createNativeDeviceSecurity, DeviceSecurityError, proofDigest } from './native-device-security.js';
 import { BackupOperationError, createBackupManager, createBackupRunnerClient } from './backups.js';
 import { verifyTurnstileToken } from './bot-challenge.js';
 import { createChangeCalendar } from './change-calendar.js';
@@ -71,7 +72,7 @@ const WEB_LOGIN_ALLOWED_PATHS = [
 ];
 
 function isAndroidAppRequest(req) {
-  return String(req.get('user-agent') || '').startsWith(ANDROID_APP_USER_AGENT_PREFIX);
+  return String(req.headers['user-agent'] || '').startsWith(ANDROID_APP_USER_AGENT_PREFIX);
 }
 
 function requestDeviceId(req) {
@@ -399,7 +400,9 @@ export function createApp({
   }
 
   async function readSession(req) {
-    return app.locals.verifyConsoleSession(readSessionToken(req));
+    const token = readSessionToken(req);
+    const session = await app.locals.verifyConsoleSession(token);
+    return app.locals.verifyConsoleRequest(req, session, token);
   }
 
   async function readExternalPrincipal(req) {
@@ -455,12 +458,10 @@ export function createApp({
     };
   }
 
-  function appQrResponse(record, role) {
+  function appQrResponse(record) {
     const androidPasskeyConfigured = (config.androidAppCertFingerprints || []).length > 0;
     const clientKind = record.clientKind || 'browser';
-    const confirmationMethod = clientKind === 'android' || role === 'super_admin'
-      ? (androidPasskeyConfigured ? 'passkey' : 'unavailable')
-      : 'biometric';
+    const confirmationMethod = androidPasskeyConfigured ? 'passkey' : 'unavailable';
     return {
       requestId: record.id,
       status: record.status,
@@ -498,9 +499,9 @@ export function createApp({
     });
   }
 
-  async function verifyReauthentication(req) {
+  async function verifyReauthentication(req, { allowRecent = true } = {}) {
     if (config.authDisabled) return true;
-    if (req.consoleSession?.reauthenticatedUntil > Math.floor(Date.now() / 1000)) return true;
+    if (allowRecent && req.consoleSession?.reauthenticatedUntil > Math.floor(Date.now() / 1000)) return true;
     const account = await accounts.findAccount(req.consoleUser?.username);
     if (!account?.active || !await verifyPassword(String(req.body?.password || ''), account.passwordHash)) return false;
     if (!account.totpEnabled) return !config.requireMfa || !account.passkeyCount;
@@ -576,12 +577,17 @@ export function createApp({
   }
 
   async function issueSessionCookie(req, res, account, authenticationMethod, options = {}) {
-    const policy = options.policy || sessionPolicyForRequest(req, config);
-    const sessionKind = options.sessionKind || (isAndroidAppRequest(req) ? 'native_app' : 'browser');
+    const sessionKind = options.sessionKind || (isAndroidAppRequest(req) || req.body?.deviceRegistration ? 'native_app' : 'browser');
+    const policy = options.policy || (sessionKind === 'native_app'
+      ? { ttlHours: config.androidSessionTtlHours, idleMinutes: config.androidSessionIdleMinutes }
+      : sessionPolicyForRequest(req, config));
     const deviceId = options.deviceId || requestDeviceId(req);
     const deviceName = options.deviceName || requestDeviceName(req);
     const now = Date.now();
-    const token = await sessions.issue({
+    const nativeSecurity = sessionKind === 'native_app' && (config.androidRequireDeviceProof || req.headers.dpop)
+      ? await deviceSecurity.register(await deviceSecurity.proof(req), req.body?.deviceRegistration)
+      : null;
+    const issued = await sessions.issue({
       username: account.username,
       accountId: account.id,
       authVersion: account.authVersion || 0,
@@ -595,10 +601,14 @@ export function createApp({
       deviceId,
       deviceName,
       replaceExisting: options.replaceExisting ?? (sessionKind === 'native_app' && Boolean(deviceId)),
+      nativeSecurity,
+      accessTtlSeconds: config.androidAccessTtlSeconds,
       now,
     });
+    const token = typeof issued === 'string' ? issued : issued.token;
     await app.locals.onConsoleSessionsChanged();
-    res.cookie(sessionCookieName(config.isProduction), token, sessionCookieOptions(config, policy.ttlHours));
+    res.cookie(sessionCookieName(config.isProduction), token, sessionCookieOptions(config,
+      nativeSecurity ? config.androidAccessTtlSeconds / 3600 : policy.ttlHours));
     if (config.isProduction) {
       res.clearCookie(SESSION_COOKIE_NAME, { ...sessionCookieOptions(config), maxAge: 0 });
     }
@@ -614,11 +624,16 @@ export function createApp({
     if (loginIp.newIp) {
       notifier.sendSecurityAlert({ type: 'new_ip_login', username: account.username, ip: req.ip }).catch(() => {});
     }
-    return { now, policy };
+    return { now, policy, native: nativeSecurity ? {
+      refreshToken: issued.refreshToken,
+      accessExpiresAt: new Date(issued.accessExpiresAt * 1000).toISOString(),
+      deviceBound: true,
+      deviceIntegrity: nativeSecurity.integrity,
+    } : {} };
   }
 
   async function issueAuthenticatedSession(req, res, account, authenticationMethod, extra = {}) {
-    const { now, policy } = await issueSessionCookie(req, res, account, authenticationMethod);
+    const { now, policy, native } = await issueSessionCookie(req, res, account, authenticationMethod);
     return res.json({
       authenticated: true,
       authDisabled: false,
@@ -628,6 +643,7 @@ export function createApp({
       session: {
         expiresAt: new Date(now + policy.ttlHours * 60 * 60 * 1000).toISOString(),
         idleTimeoutMinutes: policy.idleMinutes,
+        ...native,
       },
       ...extra,
     });
@@ -657,13 +673,40 @@ export function createApp({
   }
 
   const proxyAuditTimes = new Map();
+  const deviceSecurity = createNativeDeviceSecurity({ config, authStore: accounts, fetchImpl });
+  async function nativeLoginProof(req) {
+    return (isAndroidAppRequest(req) && config.androidRequireDeviceProof) || req.headers.dpop
+      ? deviceSecurity.proof(req) : null;
+  }
+  function nativeIntegrityAllowed(session, now = Date.now()) {
+    if ((session.nativeVersionCode || 0) < config.androidMinVersionCode) return false;
+    return !config.androidRequireIntegrity || (
+      session.nativeIntegrity === 'verified' && session.nativeVersionCode >= config.androidMinVersionCode &&
+      session.nativeAttestedAt > now - config.androidAttestationMaxAgeHours * 3600_000
+    );
+  }
   app.locals.verifyConsoleSession = async (token, now) => {
     const session = await sessions.verify(token, now);
     if (!session) return null;
     const account = await accounts.findAccount(session.sub);
     if (!account?.active || (config.requireMfa && !strongFactorEnabled(account))) return null;
     if ((session.accountId && session.accountId !== account.id) || (session.authVersion || 0) !== (account.authVersion || 0)) return null;
+    if (session.sessionKind === 'native_app' && (
+      (config.androidRequireDeviceProof && !session.nativeKeyThumbprint) || !nativeIntegrityAllowed(session, now)
+    )) return null;
     return { ...session, role: account.role, accountId: account.id, serviceBindings: account.serviceBindings };
+  };
+  app.locals.verifyConsoleRequest = async (req, session, token) => {
+    if (!session) return null;
+    if (session.nativeKeyThumbprint || session.cnf?.jkt) {
+      const proof = await deviceSecurity.proof(req, token);
+      if (proof.thumbprint !== session.nativeKeyThumbprint || proof.thumbprint !== session.cnf?.jkt) {
+        throw new DeviceSecurityError('DEVICE_KEY_MISMATCH', '当前会话与设备不匹配，请重新登录。');
+      }
+    } else if (config.androidRequireDeviceProof && isAndroidAppRequest(req)) {
+      throw new DeviceSecurityError('DEVICE_BINDING_REQUIRED', '请更新应用并重新登录以建立设备安全绑定。', 401);
+    }
+    return session;
   };
   app.locals.onConsoleSessionRevoked = () => {};
   app.locals.onConsoleSessionChanged = () => {};
@@ -798,7 +841,12 @@ export function createApp({
       }
     },
   );
-  app.use(express.json({ limit: '32kb' }));
+  app.use(express.json({ limit: '128kb', verify: (req, res, body) => {
+    if (req.headers.dpop && req.headers['content-encoding'] && req.headers['content-encoding'] !== 'identity') {
+      throw new DeviceSecurityError('DEVICE_BODY_ENCODING', '设备请求不支持压缩正文。', 415);
+    }
+    req.bodyDigest = proofDigest(body);
+  } }));
   app.use('/api', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     next();
@@ -973,6 +1021,12 @@ export function createApp({
       mfaEnrollmentRequired: Boolean(account?.active && !mfaCompliant),
       passkeySupported: true,
       androidPasskeySupported: (config.androidAppCertFingerprints || []).length > 0,
+      deviceSecurity: {
+        proofRequired: Boolean(config.androidRequireDeviceProof),
+        attestationConfigured: Boolean(config.androidAttestationRootSha256?.length),
+        integrityRequired: Boolean(config.androidRequireIntegrity),
+        integrity: session?.nativeIntegrity || 'unverified',
+      },
       botProtectionConfigured: Boolean(config.turnstileSiteKey && config.turnstileSecretKey),
       turnstileSiteKey: config.turnstileSiteKey || undefined,
       user: session && account?.active && mfaCompliant ? authUser(account) : null,
@@ -1009,6 +1063,37 @@ export function createApp({
     message: { error: '扫码确认请求过于频繁，请稍后再试。', code: 'QR_LOGIN_RATE_LIMITED' },
   });
 
+  app.post('/api/auth/device/challenge', qrCreateLimiter, requireConsoleRequest, async (req, res) => {
+    return res.json(await deviceSecurity.challenge());
+  });
+
+  app.post('/api/auth/native/refresh', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
+    const refreshToken = req.body?.refreshToken;
+    if (typeof refreshToken !== 'string' || !/^[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{43}$/.test(refreshToken)) {
+      return res.status(401).json({ error: '登录会话已失效，请重新登录。', code: 'SESSION_REFRESH_INVALID' });
+    }
+    const proof = await deviceSecurity.proof(req);
+    const refreshed = await sessions.refreshNative(refreshToken, {
+      thumbprint: proof.thumbprint, accessTtlSeconds: config.androidAccessTtlSeconds,
+    });
+    await app.locals.onConsoleSessionsChanged();
+    const account = refreshed ? await accounts.findAccount(refreshed.sub) : null;
+    if (!refreshed || !account?.active || (config.requireMfa && !strongFactorEnabled(account)) ||
+        refreshed.accountId !== account.id || (refreshed.authVersion || 0) !== (account.authVersion || 0) ||
+        !nativeIntegrityAllowed(refreshed)) {
+      if (refreshed) await app.locals.revokeConsoleSessions({ subject: refreshed.sub, nonce: refreshed.nonce });
+      clearSessionCookies(res, config);
+      return res.status(401).json({ error: '登录会话已失效或设备证明已过期，请重新登录。', code: 'SESSION_REFRESH_INVALID' });
+    }
+    res.cookie(sessionCookieName(config.isProduction), refreshed.token, sessionCookieOptions(config, config.androidAccessTtlSeconds / 3600));
+    return res.json({ session: {
+      refreshToken: refreshed.refreshToken,
+      accessExpiresAt: new Date(refreshed.accessExpiresAt * 1000).toISOString(),
+      expiresAt: new Date(refreshed.expiresAt * 1000).toISOString(),
+      deviceBound: true, deviceIntegrity: refreshed.nativeIntegrity,
+    } });
+  });
+
   app.post('/api/auth/login', loginLimiter, requireConsoleRequest, async (req, res) => {
     if (config.authDisabled) {
       return res.json({
@@ -1019,6 +1104,7 @@ export function createApp({
       });
     }
 
+    const deviceProof = await nativeLoginProof(req);
     const username = String(req.body?.username || '').trim();
     const password = String(req.body?.password || '');
     const riskState = await risk.assess({ username, ip: req.ip });
@@ -1060,6 +1146,7 @@ export function createApp({
         step: enrollment ? 'enrollment' : 'totp',
         enrollmentId: enrollment?.id,
         deviceId: requestDeviceId(req), android: isAndroidAppRequest(req),
+        deviceKeyThumbprint: deviceProof?.thumbprint || '',
       },
     });
     if (enrollment) await recordAudit(req, { actor: username, action: 'security.totp_enrollment_started', targetType: 'account', targetId: username });
@@ -1079,6 +1166,8 @@ export function createApp({
     const pending = await accounts.findChallenge(req.body?.challengeId, 'password_login');
     if (!pending) return invalidChallenge();
     const { username, challenge } = pending;
+    const deviceProof = await nativeLoginProof(req);
+    if ((challenge.deviceKeyThumbprint || '') !== (deviceProof?.thumbprint || '')) return invalidChallenge();
     const account = await accounts.findAccount(username);
     if (!account?.active || account.id !== challenge.accountId || (account.authVersion || 0) !== challenge.authVersion
       || challenge.android !== isAndroidAppRequest(req) || challenge.deviceId !== requestDeviceId(req)) return invalidChallenge();
@@ -1115,6 +1204,7 @@ export function createApp({
   });
 
   app.post('/api/auth/passkey/options', loginLimiter, requireConsoleRequest, async (req, res) => {
+    const deviceProof = await nativeLoginProof(req);
     const username = String(req.body?.username || '').trim();
     const riskState = await risk.assess({ username, ip: req.ip });
     if (riskState.blocked) return sendRiskResponse(res, riskState);
@@ -1134,7 +1224,7 @@ export function createApp({
         });
       }
     }
-    const result = await passkeys.authenticationOptions(username);
+    const result = await passkeys.authenticationOptions(username, { binding: deviceProof?.thumbprint || '' });
     if (!result) {
       await recordLoginFailure(req, username, 'passkey_unavailable');
       return res.status(400).json({ error: '该账号没有可用的 Passkey。', code: 'PASSKEY_UNAVAILABLE' });
@@ -1143,11 +1233,12 @@ export function createApp({
   });
 
   app.post('/api/auth/passkey/verify', loginLimiter, requireConsoleRequest, async (req, res) => {
+    const deviceProof = await nativeLoginProof(req);
     const requestedUsername = String(req.body?.username || '').trim();
     const riskState = await risk.assess({ username: requestedUsername, ip: req.ip });
     if (riskState.blocked) return sendRiskResponse(res, riskState);
     try {
-      const verification = await passkeys.verifyAuthentication(requestedUsername, req.body);
+      const verification = await passkeys.verifyAuthentication(requestedUsername, req.body, { binding: deviceProof?.thumbprint || '' });
       const username = verification.username || requestedUsername;
       const account = verification.verified ? await accounts.findAccount(username) : null;
       if (!verification.verified || !account?.active || verification.accountId !== account.id || verification.authVersion !== (account.authVersion || 0)) {
@@ -1182,11 +1273,13 @@ export function createApp({
       if (androidRequester && !requesterDeviceId) {
         return res.status(400).json({ error: 'Android 登录二维码缺少设备标识。', code: 'QR_LOGIN_DEVICE_MISSING' });
       }
+      const deviceProof = androidRequester ? await nativeLoginProof(req) : null;
       const created = await qrLogins.create({
         browserIp: req.ip,
         browserUserAgent: req.get('user-agent'),
         clientKind,
         requesterDeviceId,
+        requesterKeyThumbprint: deviceProof?.thumbprint || '',
       });
       const loginUrl = new URL('/app/qr-login', publicUrl.origin);
       loginUrl.searchParams.set('requestId', created.requestId);
@@ -1230,6 +1323,10 @@ export function createApp({
     const requesterVerifier = String(req.body?.requesterVerifier || '');
     const record = await qrLogins.getForRequester(requestId, requesterVerifier, requestDeviceId(req));
     if (!record) return res.status(410).json({ error: '二维码已过期，请重新发起登录。', code: 'QR_LOGIN_EXPIRED' });
+    const deviceProof = await nativeLoginProof(req);
+    if ((record.requesterKeyThumbprint || '') !== (deviceProof?.thumbprint || '')) {
+      throw new DeviceSecurityError('DEVICE_KEY_MISMATCH', '二维码登录请求与当前设备不匹配。');
+    }
     return res.json(browserQrResponse(record));
   });
 
@@ -1242,6 +1339,12 @@ export function createApp({
     const browserVerifier = androidRequester ? requesterVerifier : readQrBrowserVerifier(req, requestId);
     if (!record) record = await qrLogins.getForBrowser(requestId, browserVerifier);
     if (!record) return res.status(410).json({ error: '二维码已过期，请刷新后重试。', code: 'QR_LOGIN_EXPIRED' });
+    if (androidRequester) {
+      const deviceProof = await nativeLoginProof(req);
+      if ((record.requesterKeyThumbprint || '') !== (deviceProof?.thumbprint || '')) {
+        throw new DeviceSecurityError('DEVICE_KEY_MISMATCH', '二维码登录请求与当前设备不匹配。');
+      }
+    }
     if (record.status !== 'approved') {
       return res.status(409).json({ error: 'App 尚未完成登录确认。', code: 'QR_LOGIN_NOT_APPROVED', details: { status: record.status } });
     }
@@ -1342,11 +1445,11 @@ export function createApp({
       }
       const embeddedWebSession = consumed.sessionKind === 'embedded_web';
       await issueSessionCookie(req, res, account, 'android_web_ticket', embeddedWebSession ? {
-        policy: { ttlHours: config.sessionTtlHours, idleMinutes: Math.min(config.sessionIdleMinutes, 5) },
+        policy: { ttlHours: 0.25, idleMinutes: Math.min(config.sessionIdleMinutes, 5) },
         sessionKind: 'embedded_web',
         parentSessionNonce: consumed.appSessionNonce,
         replaceExisting: true,
-      } : { sessionKind: 'browser', parentSessionNonce: consumed.appSessionNonce });
+      } : { policy: { ttlHours: 0.25, idleMinutes: 5 }, sessionKind: 'browser', parentSessionNonce: consumed.appSessionNonce });
       await recordAudit(req, {
         actor: account.username,
         action: 'auth.web_login_ticket.consume',
@@ -1367,7 +1470,7 @@ export function createApp({
 
   app.post('/api/auth/logout', requireConsoleRequest, async (req, res) => {
     const token = readSessionToken(req);
-    const session = await sessions.verify(token);
+    const session = await readSession(req);
     if (session) await app.locals.revokeConsoleSessions({ subject: session.sub, nonce: session.nonce });
     await app.locals.onConsoleSessionRevoked(token);
     clearSessionCookies(res, config);
@@ -1470,16 +1573,14 @@ export function createApp({
     if (!record || record.status !== 'scanned') {
       return res.status(409).json({ error: '扫码请求当前不可确认。', code: 'QR_LOGIN_NOT_SCANNED' });
     }
-    const androidPasskeyRequest = record.clientKind === 'android';
-    if (!androidPasskeyRequest && req.consoleUser.role !== 'super_admin') {
-      return res.status(400).json({ error: '当前账号使用设备生物识别确认。', code: 'QR_PASSKEY_NOT_REQUIRED' });
-    }
     if ((config.androidAppCertFingerprints || []).length === 0) {
       return res.status(503).json({ error: 'Android Passkey 尚未配置应用签名证书。', code: 'QR_ANDROID_PASSKEY_UNAVAILABLE' });
     }
-    const result = await passkeys.authenticationOptions(req.consoleUser.username);
+    const result = await passkeys.authenticationOptions(req.consoleUser.username, {
+      purpose: 'qr_approval', sessionNonce: req.consoleSession.nonce, binding: requestId,
+    });
     if (!result) {
-      return res.status(403).json({ error: '超级管理员必须先绑定 Passkey 才能使用扫码登录。', code: 'QR_PASSKEY_REQUIRED' });
+      return res.status(403).json({ error: '请先绑定 Passkey，再使用扫码批准登录。', code: 'QR_PASSKEY_REQUIRED' });
     }
     return res.json(result);
   });
@@ -1492,28 +1593,24 @@ export function createApp({
       return res.status(409).json({ error: '扫码请求当前不可确认。', code: 'QR_LOGIN_NOT_SCANNED' });
     }
 
-    const androidPasskeyRequest = record.clientKind === 'android';
-    let confirmationMethod = 'biometric';
-    if (androidPasskeyRequest || req.consoleUser.role === 'super_admin') {
-      if ((config.androidAppCertFingerprints || []).length === 0) {
-        return res.status(503).json({ error: 'Android Passkey 尚未配置应用签名证书。', code: 'QR_ANDROID_PASSKEY_UNAVAILABLE' });
-      }
-      try {
-        const verification = await passkeys.verifyAuthentication(req.consoleUser.username, req.body?.passkey);
-        if (!verification.verified) throw new Error('Passkey verification failed.');
-        confirmationMethod = 'passkey';
-      } catch {
-        await recordAudit(req, {
-          action: 'auth.qr_approve',
-          outcome: 'failure',
-          targetType: 'qr_login',
-          targetId: requestId,
-          details: { reason: 'invalid_passkey' },
-        });
-        return res.status(403).json({ error: 'Passkey 验证失败，未批准网页登录。', code: 'QR_PASSKEY_INVALID' });
-      }
-    } else if (req.body?.localConfirmation !== true) {
-      return res.status(400).json({ error: '请先完成设备生物识别。', code: 'QR_BIOMETRIC_REQUIRED' });
+    const confirmationMethod = 'passkey';
+    if ((config.androidAppCertFingerprints || []).length === 0) {
+      return res.status(503).json({ error: 'Android Passkey 尚未配置应用签名证书。', code: 'QR_ANDROID_PASSKEY_UNAVAILABLE' });
+    }
+    try {
+      const verification = await passkeys.verifyAuthentication(req.consoleUser.username, req.body?.passkey, {
+        purpose: 'qr_approval', sessionNonce: req.consoleSession.nonce, binding: requestId,
+      });
+      if (!verification.verified) throw new Error('Passkey verification failed.');
+    } catch {
+      await recordAudit(req, {
+        action: 'auth.qr_approve',
+        outcome: 'failure',
+        targetType: 'qr_login',
+        targetId: requestId,
+        details: { reason: 'invalid_passkey' },
+      });
+      return res.status(403).json({ error: 'Passkey 验证失败，未批准网页登录。', code: 'QR_PASSKEY_INVALID' });
     }
 
     const approved = await qrLogins.approve(requestId, req.consoleUser.username, confirmationMethod);
@@ -1561,7 +1658,8 @@ export function createApp({
   });
 
   app.post('/api/auth/reauth', loginLimiter, requireConsoleRequest, async (req, res) => {
-    if (!await verifyReauthentication(req)) {
+    // Extending the elevated window always requires a fresh factor, including after Passkey authentication.
+    if (!await verifyReauthentication(req, { allowRecent: false })) {
       await recordAudit(req, {
         action: 'auth.reauthenticate',
         outcome: 'failure',
@@ -1680,6 +1778,14 @@ export function createApp({
 
   app.use((error, req, res, next) => {
     if (res.headersSent) return next(error);
+    if (error instanceof DeviceSecurityError) {
+      return res.status(error.status).json({ error: error.message, code: error.code });
+    }
+    // Parser errors retain raw bodies and snippets in their messages, including login or refresh credentials.
+    if (['entity.parse.failed', 'entity.too.large', 'encoding.unsupported', 'charset.unsupported', 'request.aborted', 'request.size.invalid'].includes(error.type)) {
+      return res.status([400, 413, 415].includes(error.status) ? error.status : 400)
+        .json({ error: '请求正文格式、编码或大小不符合要求。', code: 'INVALID_REQUEST_BODY', requestId: req.requestId });
+    }
     console.error(`[${req.requestId}]`, error);
     operations.recordAudit({
       actor: req.consoleUser?.username || 'anonymous',

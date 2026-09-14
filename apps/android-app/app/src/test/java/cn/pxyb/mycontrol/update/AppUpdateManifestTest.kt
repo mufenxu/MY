@@ -4,8 +4,39 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.json.JSONObject
+import java.security.KeyPairGenerator
+import java.security.Signature
+import java.security.spec.ECGenParameterSpec
+import java.time.Instant
+import java.util.Base64
 
 class AppUpdateManifestTest {
+    @Test
+    fun `signed metadata rejects tampering wrong signers expiry and rollback`() {
+        val keys = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
+        val other = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
+        val payload = JSONObject(validManifest).put("manifestVersion", 1).put("expiresAt", "2026-09-18T11:00:00Z").toString()
+        val signature = Signature.getInstance("SHA256withECDSA").run {
+            initSign(keys.private)
+            update("MY-ANDROID-UPDATE-V1\n".toByteArray(Charsets.US_ASCII))
+            update(payload.toByteArray(Charsets.UTF_8))
+            sign()
+        }
+        val envelope = JSONObject().put("signatureAlgorithm", "SHA256withECDSA")
+            .put("signedPayload", Base64.getUrlEncoder().withoutPadding().encodeToString(payload.toByteArray(Charsets.UTF_8)))
+            .put("signature", Base64.getUrlEncoder().withoutPadding().encodeToString(signature))
+            .put("sha256", "untrusted outer metadata")
+        val now = Instant.parse("2026-08-19T11:00:00Z").toEpochMilli()
+        assertEquals("b".repeat(64), verifySignedAppUpdateManifest(envelope.toString(), listOf(keys.public), 1_001_000, now).sha256)
+        assertTrue(runCatching { verifySignedAppUpdateManifest(envelope.toString(), listOf(other.public), 0, now) }.isFailure)
+        assertTrue(runCatching { verifySignedAppUpdateManifest(envelope.toString(), listOf(keys.public), 1_002_000, now) }.isFailure)
+        assertTrue(runCatching { verifySignedAppUpdateManifest(envelope.toString(), listOf(keys.public), 0, now + 90L * 24 * 3600 * 1000) }.isFailure)
+        assertTrue(runCatching { verifySignedAppUpdateManifest(validManifest, listOf(keys.public), 0, now) }.isFailure)
+        envelope.put("signedPayload", Base64.getUrlEncoder().withoutPadding().encodeToString(payload.replace("更新", "篡改").toByteArray(Charsets.UTF_8)))
+        assertTrue(runCatching { verifySignedAppUpdateManifest(envelope.toString(), listOf(keys.public), 0, now) }.isFailure)
+    }
+
     @Test
     fun `semantic versions keep multi digit patch values`() {
         assertTrue(AppVersion.parse("1.1.10") > AppVersion.parse("1.1.9"))

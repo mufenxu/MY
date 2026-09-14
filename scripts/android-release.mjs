@@ -53,6 +53,8 @@ export function createAndroidReleaseManifest({
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) throw new Error('Invalid GitHub repository');
   if (!/^[0-9a-f]{64}$/i.test(sha256)) throw new Error('Invalid APK SHA-256');
   if (!Number.isSafeInteger(apkSize) || apkSize <= 0) throw new Error('Invalid APK size');
+  const publishedTime = Date.parse(publishedAt);
+  if (!Number.isFinite(publishedTime)) throw new Error('Invalid release publication time');
   const tag = `android-v${version}`;
   const apkName = `my-control-${version}.apk`;
   const githubApkUrl = `https://github.com/${repository}/releases/download/${tag}/${apkName}`;
@@ -71,6 +73,8 @@ export function createAndroidReleaseManifest({
     apkSize,
     releaseUrl: `https://github.com/${repository}/releases/tag/${tag}`,
     publishedAt,
+    manifestVersion: 1,
+    expiresAt: new Date(publishedTime + 90 * 24 * 60 * 60 * 1000).toISOString(),
     notes,
   };
 }

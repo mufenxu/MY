@@ -334,6 +334,13 @@ export function createMemoryAuthStore({ bootstrap, encryptionKey, issuer = 'MY P
       account.passkeys = account.passkeys.filter((item) => item.id !== id);
       return account.passkeys.length !== before;
     },
+    async claimDeviceProof(id, expiresAt) {
+      const hash = keyedHash(`device-proof:${id}`, key, 'challenge');
+      for (const [entry, value] of challenges) if (value.expiresAt <= now()) challenges.delete(entry);
+      if (challenges.has(hash) || challenges.size >= 20_000) return false;
+      challenges.set(hash, { kind: 'device_proof', expiresAt });
+      return true;
+    },
     async saveChallenge({ kind, username, challenge, ttlMs = 5 * 60_000 }) {
       const id = crypto.randomBytes(24).toString('base64url');
       for (const [key, value] of challenges) if (value.expiresAt <= now()) challenges.delete(key);
@@ -606,6 +613,15 @@ export async function createMongoAuthStore({
         { $pull: { passkeys: { id: String(id || '') } }, $set: { updatedAt: nowDate(now()) } },
       );
       return result.modifiedCount === 1;
+    },
+    async claimDeviceProof(id, expiresAt) {
+      try {
+        await challenges.insertOne({ id: keyedHash(`device-proof:${id}`, key, 'challenge'), kind: 'device_proof', expiresAt: new Date(expiresAt) });
+        return true;
+      } catch (error) {
+        if (error.code === 11000) return false;
+        throw error;
+      }
     },
     async saveChallenge({ kind, username, challenge, ttlMs = 5 * 60_000 }) {
       const id = crypto.randomBytes(24).toString('base64url');

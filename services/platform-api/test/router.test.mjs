@@ -5,6 +5,10 @@ import path from 'node:path';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
+import { createApp } from '../../../apps/admin-console/src/app.js';
+import { loadConfig } from '../../../apps/admin-console/src/config.js';
+import { parseCookies } from '../../../apps/admin-console/src/auth.js';
+import { createTestDevice } from '../../../apps/admin-console/test/helpers/native-device.js';
 import {
   boundedProxyTimeout,
   createOfficialWebsiteApp,
@@ -17,6 +21,68 @@ import {
 
 const { privateKey: testPrivateKey } = crypto.generateKeyPairSync('ed25519');
 const TEST_PRIVATE_KEY = testPrivateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64url');
+
+test('device-bound gateway requests verify original URL and body before embedded or proxied side effects', async () => {
+  for (const proxied of [false, true]) {
+    const device = createTestDevice('https://admin.example.com');
+    const config = { ...loadConfig({ NODE_ENV: 'development' }), authDisabled: false, requireMfa: false,
+      publicOrigin: 'https://admin.example.com', sessionSecret: 'g'.repeat(32), adminUsername: 'operator', adminPasswordHash: 'unused-test-hash' };
+    const portalApp = createApp({ config });
+    const account = await portalApp.locals.authStore.findAccount('operator');
+    const issued = portalApp.locals.sessionRegistry.issue({ username: 'operator', accountId: account.id, ttlHours: 24,
+      sessionKind: 'native_app', nativeSecurity: { thumbprint: device.thumbprint, integrity: 'unverified', attestedAt: 0, versionCode: 0 } });
+    const cookie = `my_platform_session=${issued.token}`;
+    let calls = 0;
+    const receiver = (req, res) => {
+      let body = '';
+      req.setEncoding('utf8');
+      req.on('data', (chunk) => { body += chunk; });
+      req.on('end', () => {
+        calls += 1;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ url: req.url, body }));
+      });
+    };
+    const upstream = proxied ? http.createServer(receiver) : null;
+    if (upstream) await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+    const router = createPlatformRouter({ portalApp, coreApp: receiver,
+      coreTarget: upstream ? `http://127.0.0.1:${upstream.address().port}` : '',
+      internalAuthPrivateKey: TEST_PRIVATE_KEY, platformPublicOrigin: config.publicOrigin,
+      getPlatformSession: async (req) => {
+        const token = parseCookies(req.headers.cookie).my_platform_session;
+        return portalApp.locals.verifyConsoleRequest(req, await portalApp.locals.verifyConsoleSession(token), token);
+      },
+    });
+    try {
+      await withServer(router, async (port) => {
+        const url = `http://127.0.0.1:${port}/apps/core/api/echo?id=1`;
+        const raw = '{ "value": "安全请求" }';
+        const headers = { 'Content-Type': 'application/json', 'X-Platform-Request': 'console', Origin: config.publicOrigin, Cookie: cookie,
+          DPoP: device.sign('/apps/core/api/echo?id=1', { body: raw, cookie }) };
+        const accepted = await fetch(url, { method: 'POST', headers, body: raw });
+        const acceptedBody = await accepted.json();
+        assert.equal(accepted.status, 200, acceptedBody.code);
+        assert.deepEqual(acceptedBody, { url: '/api/echo?id=1', body: raw });
+        const replayed = await fetch(url, { method: 'POST', headers, body: raw });
+        assert.equal(replayed.status, 403);
+        assert.equal((await replayed.json()).code, 'DEVICE_PROOF_REPLAYED');
+        const tampered = await fetch(url, { method: 'POST', headers, body: raw.replace('安全', '篡改') });
+        assert.equal(tampered.status, 403);
+        assert.equal((await tampered.json()).code, 'DEVICE_PROOF_INVALID');
+        const changedQuery = await fetch(url.replace('id=1', 'id=2'), { method: 'POST', headers, body: raw });
+        assert.equal(changedQuery.status, 403);
+        const missing = await fetch(url, { method: 'POST', headers: { ...headers, DPoP: '' }, body: raw });
+        assert.equal(missing.status, 403);
+        assert.equal(calls, 1);
+      });
+    } finally {
+      if (upstream) {
+        upstream.closeAllConnections();
+        await new Promise((resolve) => upstream.close(resolve));
+      }
+    }
+  }
+});
 
 function echoApp(name) {
   return (req, res) => {

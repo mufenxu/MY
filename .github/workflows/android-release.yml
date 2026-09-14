@@ -7,6 +7,7 @@ on:
       - 'apps/android-app/**'
       - 'scripts/android-release.mjs'
       - 'scripts/android-release.test.mjs'
+      - 'scripts/SignAndroidManifest.java'
       - '.github/workflows/android-release.yml'
   workflow_dispatch:
     inputs:
@@ -186,6 +187,14 @@ jobs:
             --notes-file android-release-notes.md \
             --download-base-url "${DOWNLOAD_BASE_URL}" \
             --output android-release-assets/latest.json
+
+      - name: Sign update manifest with the release certificate
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/my-control-release.jks
+          RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: java scripts/SignAndroidManifest.java android-release-assets/latest.json
 
       - name: Create or update GitHub Release
         env:

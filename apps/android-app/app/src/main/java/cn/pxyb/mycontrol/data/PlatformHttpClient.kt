@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol.data
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.core.network.HttpClientProvider
 import java.io.IOException
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
@@ -12,12 +13,15 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -49,15 +53,59 @@ internal class PlatformHttpClient(
     private val sessionStore: SessionStore,
     private val snapshotStore: ResponseSnapshotStore,
 ) {
-    private val client = HttpClientProvider.client
+    private val client = HttpClientProvider.client.newBuilder()
+        .followRedirects(false).followSslRedirects(false).retryOnConnectionFailure(false).build()
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    private val baseUrl = BuildConfig.PLATFORM_BASE_URL.toHttpUrl()
+    private var pendingRegistration: DeviceRegistration? = null
+
+    suspend fun beginDeviceRegistration() {
+        DeviceProof.delete(pendingRegistration?.alias)
+        pendingRegistration = null
+        val challenge = execute("/api/auth/device/challenge", "POST", JSONObject(), authenticated = false).json
+        pendingRegistration = DeviceProof.createRegistration(challenge)
+    }
+
+    fun deviceRegistration(): DeviceRegistration = pendingRegistration
+        ?: throw ApiException("设备注册已过期，请重新登录。", 401, "DEVICE_REGISTRATION_MISSING")
+
+    fun finishDeviceRegistration(alias: String, discard: Boolean = false) {
+        if (pendingRegistration?.alias == alias) pendingRegistration = null
+        if (discard) DeviceProof.delete(alias)
+    }
 
     suspend fun isOffline(): Boolean = currentCoroutineContext()[RequestBatch]?.cachedAtMillis != null
 
     suspend fun cachedAtMillis(): Long? = currentCoroutineContext()[RequestBatch]?.cachedAtMillis
 
-    suspend fun currentSession(): SessionRequest =
-        currentCoroutineContext()[RequestBatch]?.session ?: sessionStore.captureRequestSession()
+    suspend fun currentSession(): SessionRequest {
+        val batch = currentCoroutineContext()[RequestBatch]
+        return sessionStore.withRequestSession(batch?.session) { sessionStore.captureRequestSession() }
+    }
+
+    private suspend fun freshSession(session: SessionRequest): SessionRequest = refreshMutex.withLock {
+        val current = sessionStore.withRequestSession(session) { sessionStore.captureRequestSession() }
+        val credentials = current.credentials ?: throw ApiException("请先解锁应用。", 401, "UNAUTHORIZED")
+        if (credentials.accessExpiresAtMillis > System.currentTimeMillis() + 60_000) return@withLock current
+        try {
+            val response = execute("/api/auth/native/refresh", "POST",
+                JSONObject().put("refreshToken", credentials.refreshToken), authenticated = false,
+                deviceKeyAlias = credentials.deviceKeyAlias, sessionGuard = current)
+            val updated = response.json.getJSONObject("session")
+            require(updated.optBoolean("deviceBound"))
+            val accessExpiresAt = Instant.parse(updated.getString("accessExpiresAt")).toEpochMilli()
+            require(accessExpiresAt > System.currentTimeMillis())
+            val refreshToken = updated.getString("refreshToken")
+            require(refreshToken.isNotBlank() && refreshToken != credentials.refreshToken)
+            sessionStore.rotateCredentials(current, SessionCredentials(
+                requireNotNull(response.cookie), refreshToken, accessExpiresAt, credentials.deviceKeyAlias))
+            sessionStore.captureRequestSession()
+        } catch (error: Exception) {
+            // A lost refresh response may already have consumed the token. Never retry that credential.
+            runCatching { invalidateSession(current) }
+            throw error
+        }
+    }
 
     suspend fun invalidateSession(session: SessionRequest) {
         val endedGeneration = sessionStore.clearRequestSession(session)
@@ -84,24 +132,37 @@ internal class PlatformHttpClient(
         authenticated: Boolean = true,
         timeoutSeconds: Long = 30,
         cookieOverride: String? = null,
+        deviceKeyAlias: String? = null,
+        sessionGuard: SessionRequest? = null,
     ): PlatformResponse {
+        try { RuntimeSecurity.requireSafeEnvironment() } catch (error: ApiException) {
+            sessionStore.clear()
+            throw error
+        }
         val batch = currentCoroutineContext()[RequestBatch]
         val session = if (authenticated) {
-            currentSession().takeIf { !it.cookie.isNullOrBlank() }
+            freshSession(currentSession()).takeIf { !it.cookie.isNullOrBlank() }
                 ?: throw ApiException("登录会话已失效，请重新登录。", 401, "UNAUTHORIZED")
-        } else null
+        } else sessionGuard
+        require(path.startsWith('/') && !path.startsWith("//"))
+        val url = requireNotNull(baseUrl.resolve(path))
+        require(url.isHttps && url.host == baseUrl.host && url.port == baseUrl.port && url.username.isEmpty() && url.password.isEmpty())
+        val bodyBytes = if (method == "GET" || method == "HEAD") ByteArray(0) else (body ?: JSONObject()).toString().toByteArray(Charsets.UTF_8)
+        val cookie = cookieOverride ?: if (authenticated) session?.cookie else null
+        val proofAlias = deviceKeyAlias ?: if (authenticated) session?.credentials?.deviceKeyAlias else pendingRegistration?.alias
         val request = Request.Builder()
-            .url("${BuildConfig.PLATFORM_BASE_URL}$path")
+            .url(url)
             .header("Accept", "application/json")
             .header("User-Agent", "MY-Control-Android/${BuildConfig.VERSION_NAME}")
             .header("X-Platform-Device-Id", sessionStore.readOrCreateDeviceId())
-        session?.let { request.header("Cookie", requireNotNull(it.cookie)).tag(SessionRequest::class.java, it) }
-        cookieOverride?.let { request.header("Cookie", it) }
+        session?.let { request.tag(SessionRequest::class.java, it) }
+        cookie?.let { request.header("Cookie", it) }
+        proofAlias?.let { request.header("DPoP", DeviceProof.sign(it, method, url, bodyBytes, cookie)) }
         if (method != "GET") {
             request.header("X-Platform-Request", "console")
                 .header("Origin", BuildConfig.PLATFORM_BASE_URL)
         }
-        request.method(method, if (method == "GET") null else (body ?: JSONObject()).toString().toRequestBody(jsonMediaType))
+        request.method(method, if (method == "GET" || method == "HEAD") null else bodyBytes.toRequestBody(jsonMediaType))
         val requestClient = if (timeoutSeconds == 30L) client else client.newBuilder()
             .readTimeout(timeoutSeconds, TimeUnit.SECONDS)
             .writeTimeout(timeoutSeconds, TimeUnit.SECONDS)
@@ -216,6 +277,7 @@ internal class PlatformHttpClient(
     }
 
     private companion object {
+        val refreshMutex = Mutex()
         val CACHEABLE_PATHS = setOf(
             "/api/auth/status", "/api/operations/overview", "/api/incidents?limit=100", "/api/tasks?limit=100",
             "/api/external-apps", "/apps/core/api/todos", CAMPUS_TIMETABLE_PATH,

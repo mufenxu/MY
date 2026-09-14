@@ -39,6 +39,8 @@ test('release manifest points at the immutable GitHub assets', () => {
       apkSize: 27_171_336,
       releaseUrl: 'https://github.com/mufenxu/MY/releases/tag/android-v1.2.0',
       publishedAt: '2026-08-18T11:00:00Z',
+      manifestVersion: 1,
+      expiresAt: '2026-11-16T11:00:00.000Z',
       notes: '修复首页并优化更新体验',
     },
   );

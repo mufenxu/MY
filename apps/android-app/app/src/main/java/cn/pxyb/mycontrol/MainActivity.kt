@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) window.setHideOverlayWindows(true)
         handleOpenIntent(intent)
         enableEdgeToEdge()
         setContent {
@@ -130,6 +131,11 @@ class MainActivity : ComponentActivity() {
         if (sessionStore.isLocked()) appViewModel.lockSession()
         appViewModel.setAppInForeground(true)
         notificationsEnabled.value = hasNotificationPermission()
+    }
+
+    override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (event.flags and (android.view.MotionEvent.FLAG_WINDOW_IS_OBSCURED or android.view.MotionEvent.FLAG_WINDOW_IS_PARTIALLY_OBSCURED) != 0) return true
+        return super.dispatchTouchEvent(event)
     }
 
     override fun onStop() {

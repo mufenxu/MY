@@ -126,7 +126,9 @@ const getPlatformSession = async (req) => {
   }
   const cookies = parseCookies(req.headers.cookie);
   const token = cookies[sessionCookieName(portalConfig.isProduction)] || cookies[SESSION_COOKIE_NAME];
-  return sessionVerifierCache.verify(token);
+  const session = await sessionVerifierCache.verify(token);
+  // Cache only session metadata. Every request still needs a fresh, body-bound device proof.
+  return portalApp.locals.verifyConsoleRequest(req, session, token);
 };
 const websiteApp = createOfficialWebsiteApp({ staticPath: paths.officialWebsiteStatic });
 const router = createPlatformRouter({

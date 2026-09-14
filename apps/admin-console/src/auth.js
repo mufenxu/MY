@@ -54,15 +54,16 @@ export function parseCookies(header = '') {
     }, {});
 }
 
-export function issueSession({ username, accountId, authVersion = 0, role = 'super_admin', secret, ttlHours, now = Date.now() }) {
+export function issueSession({ username, accountId, authVersion = 0, role = 'super_admin', secret, ttlHours, now = Date.now(), nonce, expiresAt, deviceKeyThumbprint }) {
   const payload = encodeJson({
     sub: username,
     accountId,
     authVersion,
     role,
     iat: Math.floor(now / 1000),
-    exp: Math.floor(now / 1000) + ttlHours * 60 * 60,
-    nonce: crypto.randomBytes(12).toString('base64url'),
+    exp: expiresAt ?? Math.floor(now / 1000) + ttlHours * 60 * 60,
+    nonce: nonce || crypto.randomBytes(12).toString('base64url'),
+    ...(deviceKeyThumbprint ? { cnf: { jkt: deviceKeyThumbprint }, jti: crypto.randomBytes(12).toString('base64url') } : {}),
   });
   return `${payload}.${sign(payload, secret)}`;
 }
@@ -79,6 +80,28 @@ export function verifySession(token, secret, now = Date.now()) {
   } catch {
     return null;
   }
+}
+
+export const sessionTokenHash = (token) => crypto.createHash('sha256').update(token).digest('hex');
+
+export function createNativeCredentials(session, secret, accessTtlSeconds, now = Date.now()) {
+  const accessExpiresAt = Math.min(session.exp, Math.floor(now / 1000) + accessTtlSeconds);
+  const token = issueSession({
+    username: session.sub, accountId: session.accountId, authVersion: session.authVersion,
+    role: session.role, secret, nonce: session.nonce, expiresAt: accessExpiresAt,
+    deviceKeyThumbprint: session.nativeKeyThumbprint, now,
+  });
+  const refreshToken = `${session.nonce}.${crypto.randomBytes(32).toString('base64url')}`;
+  return {
+    token, refreshToken, accessExpiresAt,
+    accessTokenHash: sessionTokenHash(token), refreshTokenHash: sessionTokenHash(refreshToken),
+  };
+}
+
+export function nativeAccessMatches(active, token, now = Date.now()) {
+  const digest = sessionTokenHash(token);
+  return safeEqual(active.accessTokenHash, digest) ||
+    (active.previousAccessUntil > now && safeEqual(active.previousAccessTokenHash, digest));
 }
 
 export function createSessionRegistry({
@@ -122,6 +145,8 @@ export function createSessionRegistry({
     sessionKind = 'browser',
     parentSessionNonce = '',
     replaceExisting = false,
+    nativeSecurity = null,
+    accessTtlSeconds = 900,
     now = Date.now(),
   }) {
     prune(now);
@@ -148,7 +173,7 @@ export function createSessionRegistry({
         ) activeSessions.delete(nonce);
       }
     }
-    activeSessions.set(session.nonce, {
+    const active = {
       ...session,
       ip: normalizedIp,
       userAgent: normalizedUserAgent,
@@ -159,7 +184,21 @@ export function createSessionRegistry({
       idleTimeoutMinutes: Math.max(Number(sessionIdleTimeoutMinutes) || defaultIdleTimeoutMinutes, 1),
       createdAt: new Date(now).toISOString(),
       lastSeenAt: now,
-    });
+    };
+    if (nativeSecurity) {
+      Object.assign(active, {
+        nativeKeyThumbprint: nativeSecurity.thumbprint,
+        nativeIntegrity: nativeSecurity.integrity,
+        nativeAttestedAt: nativeSecurity.attestedAt,
+        nativeVersionCode: nativeSecurity.versionCode,
+      });
+      const credentials = createNativeCredentials(active, secret, accessTtlSeconds, now);
+      active.accessTokenHash = credentials.accessTokenHash;
+      active.refreshTokenHash = credentials.refreshTokenHash;
+      activeSessions.set(session.nonce, active);
+      return { token: credentials.token, refreshToken: credentials.refreshToken, accessExpiresAt: credentials.accessExpiresAt, expiresAt: session.exp };
+    }
+    activeSessions.set(session.nonce, active);
     return token;
   }
 
@@ -167,7 +206,8 @@ export function createSessionRegistry({
     prune(now);
     const session = verifySession(token, secret, now);
     const active = session ? activeSessions.get(session.nonce) : null;
-    if (!active || active.exp !== session.exp || active.sub !== session.sub) return null;
+    if (!active || active.sub !== session.sub ||
+        (active.nativeKeyThumbprint ? !nativeAccessMatches(active, token, now) : active.exp !== session.exp)) return null;
     if (active.parentSessionNonce && !isActive({ nonce: active.parentSessionNonce, subject: active.sub, now })) return null;
     const idleTimeoutMs = sessionIdleTimeoutMs(active);
     if (active.lastSeenAt + idleTimeoutMs <= now) {
@@ -178,6 +218,11 @@ export function createSessionRegistry({
     return {
       ...session,
       role: active.role || session.role || 'super_admin',
+      sessionKind: legacySessionKind(active),
+      nativeKeyThumbprint: active.nativeKeyThumbprint || '',
+      nativeIntegrity: active.nativeIntegrity || 'unverified',
+      nativeAttestedAt: active.nativeAttestedAt || 0,
+      nativeVersionCode: active.nativeVersionCode || 0,
       idleExpiresAt: Math.min(session.exp, Math.floor((active.lastSeenAt + idleTimeoutMs) / 1000)),
       reauthenticatedUntil: active.reauthenticatedUntil > Math.floor(now / 1000)
         ? active.reauthenticatedUntil
@@ -186,15 +231,37 @@ export function createSessionRegistry({
   }
 
   function markReauthenticated(token, { now = Date.now(), ttlSeconds = 300 } = {}) {
-    const session = verifySession(token, secret, now);
+    const session = verify(token, now);
     const active = session ? activeSessions.get(session.nonce) : null;
-    if (!active || active.exp !== session.exp || active.sub !== session.sub) return null;
+    if (!active) return null;
     const nowSeconds = Math.floor(now / 1000);
     active.reauthenticatedUntil = Math.min(
       active.exp,
       nowSeconds + Math.min(Math.max(Number(ttlSeconds) || 300, 30), 300),
     );
     return active.reauthenticatedUntil;
+  }
+
+  function refreshNative(refreshToken, { thumbprint, accessTtlSeconds = 900, now = Date.now() } = {}) {
+    prune(now);
+    const nonce = String(refreshToken || '').split('.')[0];
+    const active = activeSessions.get(nonce);
+    if (!active?.nativeKeyThumbprint || active.nativeKeyThumbprint !== thumbprint) return null;
+    if (!safeEqual(active.refreshTokenHash, sessionTokenHash(refreshToken))) {
+      revokeByNonce(nonce);
+      return null;
+    }
+    const credentials = createNativeCredentials(active, secret, accessTtlSeconds, now);
+    Object.assign(active, {
+      previousAccessTokenHash: active.accessTokenHash, previousAccessUntil: now + 60_000,
+      accessTokenHash: credentials.accessTokenHash, refreshTokenHash: credentials.refreshTokenHash, lastSeenAt: now,
+    });
+    return {
+      token: credentials.token, refreshToken: credentials.refreshToken, accessExpiresAt: credentials.accessExpiresAt,
+      expiresAt: active.exp, sub: active.sub, accountId: active.accountId, authVersion: active.authVersion,
+      nonce, nativeIntegrity: active.nativeIntegrity, nativeAttestedAt: active.nativeAttestedAt,
+      nativeVersionCode: active.nativeVersionCode,
+    };
   }
 
   function revoke(token, now = Date.now()) {
@@ -260,6 +327,7 @@ export function createSessionRegistry({
     issue,
     verify,
     markReauthenticated,
+    refreshNative,
     revoke,
     revokeByNonce,
     revokeBySubject,

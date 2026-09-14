@@ -66,6 +66,7 @@ export function createMemoryQrLoginStore({
       browserUserAgent = '',
       clientKind = 'browser',
       requesterDeviceId = '',
+      requesterKeyThumbprint = '',
     } = {}) {
       const secrets = requestSecrets({ idFactory, secretFactory, codeFactory });
       const createdAt = now();
@@ -79,6 +80,7 @@ export function createMemoryQrLoginStore({
         browserUserAgent: String(browserUserAgent).slice(0, 256),
         clientKind,
         requesterDeviceId: String(requesterDeviceId).slice(0, 128),
+        requesterKeyThumbprint: String(requesterKeyThumbprint).slice(0, 128),
         scannedBy: null,
         scannedAt: null,
         approvedBy: null,
@@ -187,6 +189,7 @@ export async function createMongoQrLoginStore({
       browserUserAgent = '',
       clientKind = 'browser',
       requesterDeviceId = '',
+      requesterKeyThumbprint = '',
     } = {}) {
       const secrets = requestSecrets({
         idFactory: () => crypto.randomUUID(),
@@ -204,6 +207,7 @@ export async function createMongoQrLoginStore({
         browserUserAgent: String(browserUserAgent).slice(0, 256),
         clientKind,
         requesterDeviceId: String(requesterDeviceId).slice(0, 128),
+        requesterKeyThumbprint: String(requesterKeyThumbprint).slice(0, 128),
         scannedBy: null,
         scannedAt: null,
         approvedBy: null,

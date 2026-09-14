@@ -1,5 +1,5 @@
 import { MongoClient } from 'mongodb';
-import { issueSession, verifySession } from './auth.js';
+import { issueSession, verifySession, createNativeCredentials, nativeAccessMatches, sessionTokenHash } from './auth.js';
 
 export async function createMongoSessionRegistry({
   uri,
@@ -43,6 +43,8 @@ export async function createMongoSessionRegistry({
       sessionKind = 'browser',
       parentSessionNonce = '',
       replaceExisting = false,
+      nativeSecurity = null,
+      accessTtlSeconds = 900,
       now = Date.now(),
     }) {
       const count = await sessions.estimatedDocumentCount();
@@ -62,9 +64,12 @@ export async function createMongoSessionRegistry({
       const normalizedDeviceName = String(deviceName || '').replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, 96);
       const normalizedIp = String(ip || '').slice(0, 128);
       const normalizedUserAgent = String(userAgent || '').slice(0, 256);
+      const native = nativeSecurity ? createNativeCredentials({ ...session, nativeKeyThumbprint: nativeSecurity.thumbprint }, secret, accessTtlSeconds, now) : null;
       await sessions.insertOne({
         nonce: session.nonce,
         subject: session.sub,
+        accountId: session.accountId,
+        authVersion: session.authVersion,
         role,
         ip: normalizedIp,
         userAgent: normalizedUserAgent,
@@ -76,6 +81,11 @@ export async function createMongoSessionRegistry({
         expiresAt: new Date(session.exp * 1000),
         createdAt: new Date(now),
         lastSeenAt: new Date(now),
+        ...(native ? {
+          nativeKeyThumbprint: nativeSecurity.thumbprint, nativeIntegrity: nativeSecurity.integrity,
+          nativeAttestedAt: nativeSecurity.attestedAt, nativeVersionCode: nativeSecurity.versionCode,
+          accessTokenHash: native.accessTokenHash, refreshTokenHash: native.refreshTokenHash,
+        } : {}),
       });
       if (replaceExisting && (normalizedParentNonce || normalizedDeviceId)) {
         await sessions.deleteMany({
@@ -86,7 +96,7 @@ export async function createMongoSessionRegistry({
           ...(normalizedDeviceId ? { deviceId: normalizedDeviceId } : {}),
         });
       }
-      return token;
+      return native ? { token: native.token, refreshToken: native.refreshToken, accessExpiresAt: native.accessExpiresAt, expiresAt: session.exp } : token;
     },
 
     async verify(token, now = Date.now()) {
@@ -98,6 +108,7 @@ export async function createMongoSessionRegistry({
         expiresAt: { $gt: new Date(now) },
       });
       if (!active) return null;
+      if (active.nativeKeyThumbprint && !nativeAccessMatches(active, token, now)) return null;
       if (active.parentSessionNonce && !await this.isActive({ nonce: active.parentSessionNonce, subject: active.subject, now })) return null;
       const idleTimeoutMs = sessionIdleTimeoutMs(active);
       if (active.lastSeenAt.getTime() + idleTimeoutMs <= now) return null;
@@ -115,13 +126,18 @@ export async function createMongoSessionRegistry({
       return {
         ...session,
         role: active.role || session.role || 'super_admin',
+        sessionKind: active.sessionKind || (String(active.userAgent || '').startsWith('MY-Control-Android/') ? 'native_app' : 'browser'),
+        nativeKeyThumbprint: active.nativeKeyThumbprint || '',
+        nativeIntegrity: active.nativeIntegrity || 'unverified',
+        nativeAttestedAt: active.nativeAttestedAt || 0,
+        nativeVersionCode: active.nativeVersionCode || 0,
         idleExpiresAt: Math.min(session.exp, Math.floor((active.lastSeenAt.getTime() + idleTimeoutMs) / 1000)),
         reauthenticatedUntil,
       };
     },
 
     async markReauthenticated(token, { now = Date.now(), ttlSeconds = 300 } = {}) {
-      const session = verifySession(token, secret, now);
+      const session = await this.verify(token, now);
       if (!session) return null;
       const nowSeconds = Math.floor(now / 1000);
       const reauthenticatedUntil = Math.min(
@@ -136,6 +152,33 @@ export async function createMongoSessionRegistry({
         $set: { reauthenticatedUntil: new Date(reauthenticatedUntil * 1000) },
       });
       return result.matchedCount === 1 ? reauthenticatedUntil : null;
+    },
+
+    async refreshNative(refreshToken, { thumbprint, accessTtlSeconds = 900, now = Date.now() } = {}) {
+      const nonce = String(refreshToken || '').split('.')[0];
+      const active = await sessions.findOne({ nonce, nativeKeyThumbprint: thumbprint, expiresAt: { $gt: new Date(now) } });
+      if (!active?.nativeKeyThumbprint || active.lastSeenAt.getTime() + sessionIdleTimeoutMs(active) <= now) return null;
+      const refreshTokenHash = sessionTokenHash(refreshToken);
+      if (active.refreshTokenHash !== refreshTokenHash) {
+        await this.revokeByNonce(nonce);
+        return null;
+      }
+      const identity = { sub: active.subject, accountId: active.accountId, authVersion: active.authVersion, role: active.role, nonce, exp: Math.floor(active.expiresAt.getTime() / 1000), nativeKeyThumbprint: thumbprint };
+      const credentials = createNativeCredentials(identity, secret, accessTtlSeconds, now);
+      const updated = await sessions.updateOne({ nonce, nativeKeyThumbprint: thumbprint, refreshTokenHash }, { $set: {
+        accessTokenHash: credentials.accessTokenHash, refreshTokenHash: credentials.refreshTokenHash,
+        previousAccessTokenHash: active.accessTokenHash, previousAccessUntil: now + 60_000, lastSeenAt: new Date(now),
+      } });
+      if (updated.modifiedCount !== 1) {
+        await this.revokeByNonce(nonce);
+        return null;
+      }
+      return {
+        token: credentials.token, refreshToken: credentials.refreshToken, accessExpiresAt: credentials.accessExpiresAt,
+        expiresAt: identity.exp, sub: identity.sub, accountId: identity.accountId, authVersion: identity.authVersion,
+        nonce, nativeIntegrity: active.nativeIntegrity, nativeAttestedAt: active.nativeAttestedAt,
+        nativeVersionCode: active.nativeVersionCode,
+      };
     },
 
     async revoke(token, now = Date.now()) {
@@ -173,7 +216,7 @@ export async function createMongoSessionRegistry({
         expiresAt: { $gt: new Date() },
         ...(subject ? { subject } : {}),
       };
-      return sessions.find(query, { projection: { _id: 0 } })
+      return sessions.find(query, { projection: { _id: 0, accessTokenHash: 0, previousAccessTokenHash: 0, refreshTokenHash: 0 } })
         .sort({ createdAt: -1 })
         .limit(Math.min(Math.max(Number(limit) || 100, 1), 500))
         .toArray()

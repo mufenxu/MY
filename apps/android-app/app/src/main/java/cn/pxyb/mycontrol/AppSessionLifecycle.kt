@@ -8,6 +8,7 @@ import cn.pxyb.mycontrol.data.SessionStore
 class MyControlApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        cn.pxyb.mycontrol.data.RuntimeSecurity.initialize(this)
         AppSessionLifecycle.initialize(this)
     }
 }

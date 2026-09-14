@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { IncomingMessage } from 'node:http';
+import { Readable } from 'node:stream';
 import express from 'express';
 import httpProxy from 'http-proxy';
 import {
@@ -22,6 +24,19 @@ import {
 const PROXY_CONTEXT = Symbol('platformProxyContext');
 const PROXY_TIMEOUT_MIN_MS = 1_000;
 const PROXY_TIMEOUT_MAX_MS = 120_000;
+
+function replayDeviceBody(req) {
+  if (!req.deviceRequestBody) return req;
+  // Verification consumes the body before any side effect; embedded apps receive the same bytes.
+  const replay = new IncomingMessage(req.socket);
+  for (const field of ['method', 'url', 'headers', 'rawHeaders', 'httpVersion', 'httpVersionMajor', 'httpVersionMinor', 'trailers', 'rawTrailers']) {
+    replay[field] = req[field];
+  }
+  replay.complete = true;
+  replay.push(req.deviceRequestBody);
+  replay.push(null);
+  return replay;
+}
 
 function normalizeHost(value) {
   return String(value || '').trim().toLowerCase().replace(/:\d+$/, '');
@@ -364,12 +379,13 @@ export function createPlatformRouter({
     proxy.web(req, res, {
       target,
       proxyTimeout: timeoutMs + 250,
+      ...(req.deviceRequestBody ? { buffer: Readable.from([req.deviceRequestBody]) } : {}),
     });
   }
 
   function dispatchApp(req, res, app, target, service) {
     if (target) return proxyRequest(req, res, target, service);
-    if (typeof app === 'function') return app(req, res);
+    if (typeof app === 'function') return app(replayDeviceBody(req), res);
     return proxyRequest(req, res, '', service);
   }
 
@@ -430,7 +446,7 @@ export function createPlatformRouter({
       writeJsonError(res, 429, 'AI 助手请求过于频繁，请稍后再试。', 'AI_RATE_LIMITED');
       return;
     }
-    const body = await readJsonBody(req);
+    const body = await readJsonBody(replayDeviceBody(req));
     if (!body) {
       writeJsonError(res, 400, '请求体格式不正确。', 'INVALID_JSON');
       return;
@@ -461,6 +477,7 @@ export function createPlatformRouter({
   }
 
   async function handler(req, res) {
+    req.securityOriginalUrl = req.url;
     // 外部请求永远不能自行传入内部身份票据。
     stripExternalIdentityHeaders(req);
     const requestId = crypto.randomUUID();
@@ -579,6 +596,7 @@ export function createPlatformRouter({
   }
 
   async function handleUpgrade(req, socket, head) {
+    req.securityOriginalUrl = req.url;
     stripExternalIdentityHeaders(req);
     req.headers['x-request-id'] = crypto.randomUUID();
     const host = normalizeHost(req.headers.host);
@@ -617,7 +635,16 @@ export function createPlatformRouter({
     return socket.destroy();
   }
 
-  return { handler, handleUpgrade, close: () => proxy.close() };
+  return {
+    handler: async (req, res) => {
+      try { return await handler(req, res); } catch (error) {
+        if (error.name !== 'DeviceSecurityError') throw error;
+        return writeJsonError(res, error.status, error.message, error.code);
+      }
+    },
+    handleUpgrade,
+    close: () => proxy.close(),
+  };
 }
 
 export {
