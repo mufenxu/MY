@@ -25,6 +25,7 @@ class ReservationStateHolder(
         myReservationsLoading = false,
         deletingTaskId = null,
         cancellingReservationId = null,
+        endingReservationId = null,
         identityCode = null,
         identityCodeLoading = false,
         identityCodeError = null,
@@ -178,6 +179,28 @@ class ReservationStateHolder(
             copy(
                 cancellingReservationId = null,
                 error = error.message ?: "取消预约失败，请重试。",
+            )
+        },
+        afterSuccess = {
+            loadMyReservations(force = true)
+            onSuccess()
+        },
+    )
+
+    fun endMyReservation(reservationId: String, onSuccess: () -> Unit = {}) = launchAction(
+        isBusy = { reservationId.isBlank() || endingReservationId != null },
+        start = { copy(endingReservationId = reservationId, error = null, message = null) },
+        action = { campus.endCampusReservation(reservationId) },
+        success = {
+            copy(
+                endingReservationId = null,
+                message = "已结束该研讨间使用。",
+            )
+        },
+        failure = { error ->
+            copy(
+                endingReservationId = null,
+                error = error.message ?: "结束使用失败，请重试。",
             )
         },
         afterSuccess = {

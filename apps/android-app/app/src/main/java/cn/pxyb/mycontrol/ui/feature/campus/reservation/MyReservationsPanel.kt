@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.CampusMyReservation
 import cn.pxyb.mycontrol.ui.components.button.AppButton
+import cn.pxyb.mycontrol.ui.components.button.AppDangerButton
+import cn.pxyb.mycontrol.ui.components.button.AppInlineDangerButton
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
@@ -49,8 +51,12 @@ import java.time.format.DateTimeFormatter
 internal fun MyReservationsPanel(
     reservations: List<CampusMyReservation>,
     loading: Boolean,
+    cancellingReservationId: String?,
+    endingReservationId: String?,
     onRefresh: () -> Unit,
     onGoToSingleReservation: () -> Unit,
+    onCancelReservation: (String) -> Unit,
+    onEndReservation: (String) -> Unit,
 ) {
     val sortedReservations = remember(reservations) {
         val today = LocalDate.now()
@@ -184,6 +190,10 @@ internal fun MyReservationsPanel(
                                     Box(modifier = Modifier.weight(1f)) {
                                         ReservationCard(
                                             reservation = reservation,
+                                            cancellingReservationId = cancellingReservationId,
+                                            endingReservationId = endingReservationId,
+                                            onCancel = onCancelReservation,
+                                            onEnd = onEndReservation,
                                         )
                                     }
                                 }
@@ -198,6 +208,10 @@ internal fun MyReservationsPanel(
                         sortedReservations.forEach { reservation ->
                             ReservationCard(
                                 reservation = reservation,
+                                cancellingReservationId = cancellingReservationId,
+                                endingReservationId = endingReservationId,
+                                onCancel = onCancelReservation,
+                                onEnd = onEndReservation,
                             )
                         }
                     }
@@ -210,7 +224,19 @@ internal fun MyReservationsPanel(
 @Composable
 private fun ReservationCard(
     reservation: CampusMyReservation,
+    cancellingReservationId: String?,
+    endingReservationId: String?,
+    onCancel: (String) -> Unit,
+    onEnd: (String) -> Unit,
 ) {
+    val cancelling = cancellingReservationId == reservation.id
+    val ending = endingReservationId == reservation.id
+    val busy = cancellingReservationId != null || endingReservationId != null
+    val actionable = reservation.id.isNotBlank() &&
+        !reservation.id.startsWith("local_") &&
+        !reservation.id.startsWith("remote_") &&
+        (reservation.canCancel || reservation.canEndUse)
+
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = glassCardColor(),
@@ -319,6 +345,32 @@ private fun ReservationCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+
+            if (actionable) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (reservation.canEndUse) {
+                        AppDangerButton(
+                            text = "结束使用",
+                            onClick = { onEnd(reservation.id) },
+                            modifier = Modifier.weight(1f),
+                            enabled = !busy,
+                            loading = ending,
+                            height = 40.dp,
+                        )
+                    } else if (reservation.canCancel) {
+                        AppInlineDangerButton(
+                            text = "取消预约",
+                            onClick = { onCancel(reservation.id) },
+                            modifier = Modifier.weight(1f),
+                            enabled = !busy,
+                            loading = cancelling,
                         )
                     }
                 }

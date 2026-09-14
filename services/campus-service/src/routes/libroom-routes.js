@@ -140,11 +140,7 @@ export async function handleLibroomRoutes(req, res, url, {
   if ((cancelMatch || url.pathname === "/api/campus/libroom/reservations/cancel") && req.method === "POST") {
     const reservationId = cancelMatch ? cancelMatch[1] : (url.searchParams.get("id") || (await readBodyJson(req)).id);
     const client = await libroomClient();
-    try {
-      await client.cancelReservation(reservationId);
-    } catch (err) {
-      logger.warn("libroom_cancel_upstream_failed", { error: err?.message, id: reservationId });
-    }
+    await client.cancelReservation(reservationId);
 
     // 从本地会话记录中同步标记为已取消或移除
     const jar = await readSessionJar();
@@ -154,6 +150,19 @@ export async function handleLibroomRoutes(req, res, url, {
     }
 
     logger.info("audit_libroom_reservation_cancelled", {
+      actorUserId: currentUserId(),
+      reservationId
+    });
+    json(res, 200, { ok: true, data: { success: true } });
+    return true;
+  }
+  const endUseMatch = url.pathname.match(/^\/api\/campus\/libroom\/reservations\/([^/]+)\/end$/);
+  if (endUseMatch && req.method === "POST") {
+    const reservationId = decodeURIComponent(endUseMatch[1]);
+    const client = await libroomClient();
+    await client.endReservation(reservationId);
+
+    logger.info("audit_libroom_reservation_ended", {
       actorUserId: currentUserId(),
       reservationId
     });

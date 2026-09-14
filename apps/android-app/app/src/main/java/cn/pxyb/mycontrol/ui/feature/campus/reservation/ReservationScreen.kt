@@ -63,6 +63,8 @@ fun ReservationScreen(
     onSaveAutoTask: (CampusAutoReservationTask, () -> Unit) -> Unit,
     onToggleAutoTask: (CampusAutoReservationTask) -> Unit,
     onDeleteAutoTask: (String) -> Unit,
+    onCancelReservation: (String) -> Unit,
+    onEndReservation: (String) -> Unit,
     onClearFeedback: () -> Unit,
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(ReservationTab.Single) }
@@ -229,8 +231,12 @@ fun ReservationScreen(
                     MyReservationsPanel(
                         reservations = state.myReservations,
                         loading = state.myReservationsLoading,
+                        cancellingReservationId = state.cancellingReservationId,
+                        endingReservationId = state.endingReservationId,
                         onRefresh = onLoadMyReservations,
                         onGoToSingleReservation = { selectedTab = ReservationTab.Single },
+                        onCancelReservation = onCancelReservation,
+                        onEndReservation = onEndReservation,
                     )
                 }
             }

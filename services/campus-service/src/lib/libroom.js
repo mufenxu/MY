@@ -408,10 +408,26 @@ function activeOfficialReservation(record, statusText) {
   return false;
 }
 
+// 官方 H5 对研讨间「使用中」记录给出的操作是「结束使用」而不是「取消」；状态码取自 /v4/seminar/books 的 status。
+const LIBROOM_IN_PROGRESS_STATUS_CODES = new Set(["3", "11", "12", "33"]);
+
+function officialReservationStatusCode(record) {
+  return firstString(record, ["status", "status_code", "statusCode"]);
+}
+
+function officialReservationInUse(record) {
+  return LIBROOM_IN_PROGRESS_STATUS_CODES.has(officialReservationStatusCode(record));
+}
+
 export function normalizeLibroomMyReservationRecord(record, { activeOnly = true } = {}) {
   if (!record || typeof record !== "object" || Array.isArray(record)) return null;
   const statusText = firstString(record, ["statusText", "status_text", "status_name", "statusName", "status"]);
-  if (activeOnly && !activeOfficialReservation(record, statusText)) return null;
+  const statusCode = officialReservationStatusCode(record);
+  const canCancel = record.cancel_ok !== undefined || record.cancelOk !== undefined
+    ? isTruthyFlag(record.cancel_ok ?? record.cancelOk)
+    : activeOfficialReservation(record, statusText);
+  const canEndUse = officialReservationInUse(record);
+  if (activeOnly && !canCancel && !canEndUse) return null;
 
   const begin = officialRecordDateTime(firstString(record, ["begin_time", "beginTime", "start_time", "startTime"]));
   const end = officialRecordDateTime(firstString(record, ["end_time", "endTime", "finish_time", "finishTime"]));
@@ -427,9 +443,9 @@ export function normalizeLibroomMyReservationRecord(record, { activeOnly = true 
     endTime: end.time || show.endTime,
     title: firstString(record, ["title", "subject"], "个人预约研讨"),
     statusText: statusText || "预约成功",
-    canCancel: record.cancel_ok !== undefined || record.cancelOk !== undefined
-      ? isTruthyFlag(record.cancel_ok ?? record.cancelOk)
-      : activeOfficialReservation(record, statusText),
+    statusCode,
+    canCancel,
+    canEndUse,
     createdAt: firstString(record, ["createdAt", "created_at", "create_time"])
   };
 }
@@ -626,11 +642,19 @@ export function createLibroomClient({
     return { success: true };
   }
 
+  // 官方 H5 的「结束使用」对应 /v4/seminar/leave，与「取消预约」/v4/seminar/cancel 是两个不同动作。
+  async function endReservation(id) {
+    const orderId = String(id || "").trim();
+    if (!orderId) fail(400, "预约记录标识不正确。", "INVALID_RESERVATION_ID");
+    return request("/v4/seminar/leave", { id: orderId });
+  }
+
   return Object.freeze({
     request,
     listSpaces,
     getMyReservations,
     cancelReservation,
+    endReservation,
     getRules: () => request("/v4/index/bookingRules", {}),
     getAvailability: async ({ spaceId, date }) => {
       const raw = await request("/v4/seminar/seminar", { id: Number(spaceId), date: String(date || "") });

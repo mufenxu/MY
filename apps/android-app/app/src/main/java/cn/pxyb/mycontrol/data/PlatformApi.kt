@@ -1527,7 +1527,9 @@ internal fun JSONObject.toCampusMyReservation(): CampusMyReservation = CampusMyR
     endTime = optString("endTime", optString("end_time", optString("finish_time", ""))),
     title = optString("title", optString("subject", "个人预约研讨")),
     statusText = optString("statusText", optString("status_text", optString("status_name", optString("status", "预约成功")))),
+    statusCode = optString("statusCode", optString("status_code", optString("status", ""))),
     canCancel = optBoolean("canCancel", true),
+    canEndUse = optBoolean("canEndUse", false),
     createdAt = optString("createdAt", optString("created_at", "")),
 )
 

@@ -286,7 +286,9 @@ test("normalizes active official seminar reservation records for app display", (
     endTime: "12:00",
     title: "个人课程研读与学习",
     statusText: "预约成功",
+    statusCode: "",
     canCancel: true,
+    canEndUse: false,
     createdAt: "2026-08-27 07:00:00"
   });
   assert.equal(used, null);

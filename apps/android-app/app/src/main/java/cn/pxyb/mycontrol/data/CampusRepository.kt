@@ -411,6 +411,11 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         http.execute(path, method = "POST")
     }
 
+    suspend fun endCampusReservation(reservationId: String): Unit = withContext(Dispatchers.IO) {
+        val path = "$CAMPUS_LIBROOM_RESERVATIONS_PATH/${encodePath(reservationId)}/end"
+        http.execute(path, method = "POST")
+    }
+
     suspend fun campusAutoReservations(): List<CampusAutoReservationTask> = withContext(Dispatchers.IO) {
         val response = http.execute(CAMPUS_LIBROOM_AUTO_RESERVATIONS_PATH)
         val data = response.json.optJSONArray("data") ?: response.jsonArray

@@ -453,7 +453,9 @@ data class CampusMyReservation(
     val endTime: String = "",
     val title: String = "",
     val statusText: String = "预约成功",
+    val statusCode: String = "",
     val canCancel: Boolean = true,
+    val canEndUse: Boolean = false,
     val createdAt: String = "",
 )
 
