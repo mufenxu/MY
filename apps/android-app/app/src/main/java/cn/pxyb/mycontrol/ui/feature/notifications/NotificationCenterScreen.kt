@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.AppNotificationAction
 import cn.pxyb.mycontrol.data.activeUnreadCount
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
@@ -68,6 +69,8 @@ fun NotificationCenterScreen(
     var selectedAlertId by rememberSaveable { mutableStateOf<String?>(null) }
     var snoozeTargetId by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingArchiveId by remember { mutableStateOf<String?>(null) }
+    var archiveTarget by remember { mutableStateOf<AppAlertRecord?>(null) }
+    var bulkConfirmation by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
 
     val now = System.currentTimeMillis()
@@ -95,8 +98,7 @@ fun NotificationCenterScreen(
     }
 
     fun queueArchive(id: String) {
-        pendingArchiveId?.takeIf { it != id }?.let(onArchive)
-        pendingArchiveId = id
+        archiveTarget = state.alerts.firstOrNull { it.id == id }
     }
 
     val headerActions: @Composable RowScope.() -> Unit = {
@@ -104,7 +106,7 @@ fun NotificationCenterScreen(
             AppHeaderIconButton(
                 icon = Icons.Outlined.DoneAll,
                 contentDescription = "全部已读",
-                onClick = onMarkAllRead,
+                onClick = { bulkConfirmation = "read" },
                 iconTint = ColorTokens.Green.foreground,
                 containerColor = ColorTokens.Green.container,
             )
@@ -113,7 +115,7 @@ fun NotificationCenterScreen(
             AppHeaderIconButton(
                 icon = Icons.Outlined.DeleteOutline,
                 contentDescription = "清理已读",
-                onClick = onClearRead,
+                onClick = { bulkConfirmation = "clear" },
                 iconTint = ColorTokens.Red.foreground,
                 containerColor = ColorTokens.Red.container,
             )
@@ -262,6 +264,39 @@ fun NotificationCenterScreen(
         }
     }
 
+    bulkConfirmation?.let { action ->
+        AppConfirmDialog(
+            title = if (action == "clear") "清理全部已读通知？" else "将全部通知标为已读？",
+            detail = if (action == "clear") {
+                "将从通知中心移除全部已读通知，包括当前筛选条件外的通知。清理后无法在此恢复。"
+            } else {
+                "将全部未读通知标为已读，包括当前筛选条件外的通知，未读提醒也会消失。"
+            },
+            confirmLabel = if (action == "clear") "确认清理" else "全部已读",
+            icon = if (action == "clear") Icons.Outlined.DeleteOutline else Icons.Outlined.DoneAll,
+            danger = action == "clear",
+            onDismiss = { bulkConfirmation = null },
+            onConfirm = {
+                bulkConfirmation = null
+                if (action == "clear") onClearRead() else onMarkAllRead()
+            },
+        )
+    }
+    archiveTarget?.let { alert ->
+        AppConfirmDialog(
+            title = "归档通知？",
+            detail = "将从通知中心移除“${alert.title}”。确认后仍可在 5 秒内撤销，之后无法在此恢复。",
+            confirmLabel = "确认归档",
+            icon = Icons.Outlined.DeleteOutline,
+            danger = true,
+            onDismiss = { archiveTarget = null },
+            onConfirm = {
+                archiveTarget = null
+                pendingArchiveId?.takeIf { it != alert.id }?.let(onArchive)
+                pendingArchiveId = alert.id
+            },
+        )
+    }
     snoozeTargetId?.let { id ->
         SnoozeDialog(
             onDismiss = { snoozeTargetId = null },

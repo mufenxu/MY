@@ -32,6 +32,7 @@ import cn.pxyb.mycontrol.ui.components.button.AppDialogDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppQrCode
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 
@@ -210,6 +211,7 @@ internal fun TotpManageDialog(
     var totp by remember { mutableStateOf("") }
     var localError by remember { mutableStateOf<String?>(null) }
     var pendingAction by remember { mutableStateOf<String?>(null) }
+    var actionToConfirm by remember { mutableStateOf<String?>(null) }
     var pendingCompletion by remember { mutableStateOf<Int?>(null) }
     val busy = state.busyAction == "recovery-codes" || state.busyAction == "totp-disable"
 
@@ -255,9 +257,7 @@ internal fun TotpManageDialog(
                             !reauthenticated && password.isBlank() -> localError = "请输入当前密码。"
                             !reauthenticated && totp.length != 6 -> localError = "请输入 6 位动态验证码。"
                             else -> {
-                                pendingAction = "recovery"
-                                pendingCompletion = state.actionCompletions["recovery-codes"] ?: 0
-                                onRegenerate(password, totp)
+                                actionToConfirm = "recovery"
                             }
                         }
                     },
@@ -272,8 +272,7 @@ internal fun TotpManageDialog(
                             !reauthenticated && password.isBlank() -> localError = "请输入当前密码。"
                             !reauthenticated && totp.length != 6 -> localError = "请输入 6 位动态验证码。"
                             else -> {
-                                pendingAction = "disable"
-                                onDisable(password, totp)
+                                actionToConfirm = "disable"
                             }
                         }
                     },
@@ -284,6 +283,31 @@ internal fun TotpManageDialog(
             }
         },
     )
+    actionToConfirm?.let { action ->
+        AppConfirmDialog(
+            title = if (action == "recovery") "重新生成恢复码？" else "关闭动态验证？",
+            detail = if (action == "recovery") {
+                "所有旧恢复码将立即失效，无法恢复。请在生成后保存新的恢复码，以免无法登录。"
+            } else {
+                "关闭后将移除当前动态验证设置，旧恢复码也会失效，账号将失去这层登录保护。"
+            },
+            confirmLabel = if (action == "recovery") "确认重新生成" else "确认关闭",
+            icon = Icons.Outlined.Shield,
+            danger = true,
+            busy = busy,
+            onDismiss = { actionToConfirm = null },
+            onConfirm = {
+                actionToConfirm = null
+                pendingAction = action
+                if (action == "recovery") {
+                    pendingCompletion = state.actionCompletions["recovery-codes"] ?: 0
+                    onRegenerate(password, totp)
+                } else {
+                    onDisable(password, totp)
+                }
+            },
+        )
+    }
 }
 
 @Composable

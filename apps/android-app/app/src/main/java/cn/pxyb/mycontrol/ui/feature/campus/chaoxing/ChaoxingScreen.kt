@@ -18,8 +18,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.LinkOff
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.School
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -52,6 +54,7 @@ import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppInlineDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppDivider
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
@@ -105,6 +108,9 @@ fun ChaoxingScreen(
     val context = LocalContext.current
     var courseExpanded by remember { mutableStateOf(false) }
     var confirmDisconnect by remember { mutableStateOf(false) }
+    var confirmDisconnectProvider by remember { mutableStateOf(false) }
+    var confirmSign by remember(state.selected?.id) { mutableStateOf(false) }
+    var timeToConfirm by remember { mutableStateOf<String?>(null) }
     var showSignProvider by remember { mutableStateOf(false) }
     var showAutoSignTimePicker by remember { mutableStateOf(false) }
     var returningFromOfficial by remember { mutableStateOf(false) }
@@ -229,7 +235,7 @@ fun ChaoxingScreen(
                                 enabled = !state.busy,
                                 onClick = null,
                                 trailingContent = {
-                                    AppInlineDangerButton("断开帮你签", onDisconnectSignProvider, enabled = !state.busy)
+                                    AppInlineDangerButton("断开帮你签", { confirmDisconnectProvider = true }, enabled = !state.busy)
                                 },
                             )
                         } else {
@@ -337,14 +343,47 @@ fun ChaoxingScreen(
     if (showAutoSignTimePicker) {
         AppTimePickerModal(title = "添加签到时刻", currentTime = state.autoSign.times.lastOrNull() ?: "08:00",
             onDismiss = { showAutoSignTimePicker = false },
-            onConfirm = { time -> showAutoSignTimePicker = false; onAddAutoSignTime(time) })
+            onConfirm = { time -> showAutoSignTimePicker = false; timeToConfirm = time })
     }
 
+    timeToConfirm?.let { time ->
+        AppConfirmDialog(
+            title = "添加签到时刻？",
+            detail = "将添加每天 $time 的签到计划。" + if (state.autoSign.enabled) {
+                "定时签到已开启，新时刻保存后会自动生效，并使用保存的位置提交签到。"
+            } else {
+                "开启定时签到后，会在此时刻检查并提交签到。"
+            },
+            confirmLabel = "确认添加",
+            icon = Icons.Outlined.Schedule,
+            busy = state.busy,
+            onDismiss = { timeToConfirm = null },
+            onConfirm = { timeToConfirm = null; onAddAutoSignTime(time) },
+        )
+    }
+    if (confirmDisconnectProvider) {
+        AppConfirmDialog(
+            title = "断开帮你签服务？",
+            detail = "将移除保存的帮你签连接，依赖此服务的签到和自动任务可能无法继续，需要重新连接后才能使用。",
+            confirmLabel = "确认断开",
+            icon = Icons.Outlined.LinkOff,
+            danger = true,
+            busy = state.busy,
+            onDismiss = { confirmDisconnectProvider = false },
+            onConfirm = { confirmDisconnectProvider = false; onDisconnectSignProvider() },
+        )
+    }
     if (confirmDisconnect) {
-        AppDialog(title = "断开学习通连接", subtitle = "将移除服务器保存的学习通会话，之后需要重新连接。",
-            onDismissRequest = { confirmDisconnect = false }, footer = {
-                AppDialogDangerButton("断开连接", { confirmDisconnect = false; onDisconnect() }, modifier = Modifier.fillMaxWidth())
-            }) { Text("学习通中的课程和签到记录会保留。", style = MaterialTheme.typography.bodyMedium) }
+        AppConfirmDialog(
+            title = "断开学习通连接？",
+            detail = "将移除服务器保存的学习通会话，之后需要重新连接。学习通中的课程和签到记录会保留。",
+            confirmLabel = "确认断开",
+            icon = Icons.Outlined.LinkOff,
+            danger = true,
+            busy = state.busy,
+            onDismiss = { confirmDisconnect = false },
+            onConfirm = { confirmDisconnect = false; onDisconnect() },
+        )
     }
 
     state.selected?.let { activity ->
@@ -375,8 +414,7 @@ fun ChaoxingScreen(
                             when {
                                 activity.type != "4" -> openOfficial()
                                 !providerReady -> openSignProvider()
-                                state.captchaRequired -> showCaptcha = true
-                                else -> onSign()
+                                else -> confirmSign = true
                             }
                         },
                             modifier = Modifier.fillMaxWidth(), busy = state.operation == "sign",
@@ -419,6 +457,21 @@ fun ChaoxingScreen(
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+        }
+        if (confirmSign) {
+            AppConfirmDialog(
+                title = "提交本次签到？",
+                detail = "活动：${activity.name}\n位置：${state.location?.address.orEmpty()}\n将把账号和本次位置资料发送至帮你签服务（lovegcu.xyz），消耗服务次数并向学校提交签到。请确认活动和位置无误。",
+                confirmLabel = "确认签到",
+                icon = Icons.Outlined.CheckCircle,
+                danger = true,
+                busy = state.busy,
+                onDismiss = { confirmSign = false },
+                onConfirm = {
+                    confirmSign = false
+                    if (state.captchaRequired) showCaptcha = true else onSign()
+                },
+            )
         }
     }
 }

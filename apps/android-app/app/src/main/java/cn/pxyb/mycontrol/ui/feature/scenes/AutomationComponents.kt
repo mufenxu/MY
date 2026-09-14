@@ -40,6 +40,7 @@ import cn.pxyb.mycontrol.data.DeviceInfo
 import cn.pxyb.mycontrol.data.IotScene
 import cn.pxyb.mycontrol.data.IotSceneAction
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.dialog.DialogInfoText
 import cn.pxyb.mycontrol.ui.components.display.AppIconTile
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
@@ -61,6 +62,8 @@ internal fun AutomationRuleCard(
     onDelete: () -> Unit,
 ) {
     val matched = rule.enabled && AutomationEngine.matches(rule, devices)
+    var pendingEnabled by remember(rule.id) { mutableStateOf<Boolean?>(null) }
+    var confirmDelete by remember(rule.id) { mutableStateOf(false) }
     AppPanel {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -77,7 +80,7 @@ internal fun AutomationRuleCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                AppSwitch(checked = rule.enabled, onCheckedChange = onToggle, enabled = !busy)
+                AppSwitch(checked = rule.enabled, onCheckedChange = { pendingEnabled = it }, enabled = !busy)
             }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AppStatusBadge(
@@ -91,9 +94,37 @@ internal fun AutomationRuleCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 IconButton(onClick = onEdit, enabled = !busy) { Icon(Icons.Outlined.Edit, contentDescription = "编辑规则") }
-                IconButton(onClick = onDelete, enabled = !busy) { Icon(Icons.Outlined.DeleteOutline, contentDescription = "删除规则") }
+                IconButton(onClick = { confirmDelete = true }, enabled = !busy) { Icon(Icons.Outlined.DeleteOutline, contentDescription = "删除规则") }
             }
         }
+    }
+    pendingEnabled?.let { enabled ->
+        AppConfirmDialog(
+            title = if (enabled) "启用自动化规则？" else "停用自动化规则？",
+            detail = if (enabled) {
+                "启用“${rule.name}”后，条件满足时将自动执行 ${rule.actions.size} 个设备动作，无需再次确认。"
+            } else {
+                "停用“${rule.name}”后将不再按此规则触发设备动作，已经执行的动作不会撤销。"
+            },
+            confirmLabel = if (enabled) "确认启用" else "确认停用",
+            icon = Icons.Outlined.AutoAwesome,
+            danger = true,
+            busy = busy,
+            onDismiss = { pendingEnabled = null },
+            onConfirm = { pendingEnabled = null; onToggle(enabled) },
+        )
+    }
+    if (confirmDelete) {
+        AppConfirmDialog(
+            title = "删除自动化规则？",
+            detail = "将删除“${rule.name}”及其触发配置，删除后无法恢复，已经执行的设备动作不会撤销。",
+            confirmLabel = "确认删除",
+            icon = Icons.Outlined.DeleteOutline,
+            danger = true,
+            busy = busy,
+            onDismiss = { confirmDelete = false },
+            onConfirm = { confirmDelete = false; onDelete() },
+        )
     }
 }
 
@@ -143,6 +174,7 @@ internal fun AutomationRuleEditorDialog(
         scenes.firstOrNull { it.actions == rule?.actions }?.id ?: if (rule == null) scenes.firstOrNull()?.id else null
     }
     var name by rememberSaveable(rule?.id) { mutableStateOf(rule?.name.orEmpty()) }
+    var confirmSave by remember(rule?.id) { mutableStateOf(false) }
     var deviceId by rememberSaveable(rule?.id) { mutableStateOf(rule?.condition?.deviceId ?: devices.firstOrNull()?.id.orEmpty()) }
     var metric by rememberSaveable(rule?.id) { mutableStateOf(rule?.condition?.metric ?: "temperature") }
     var operator by rememberSaveable(rule?.id) { mutableStateOf(rule?.condition?.operator ?: "gte") }
@@ -165,16 +197,7 @@ internal fun AutomationRuleEditorDialog(
         title = if (rule == null) "新建自动化规则" else "编辑自动化规则",
         subtitle = "条件由 IoT 服务持续判断，命中后执行所选场景的动作快照",
         modifier = Modifier.heightIn(max = 760.dp),
-        onConfirm = {
-            onSave(
-                rule?.id,
-                name.trim(),
-                rule?.enabled ?: true,
-                AutomationCondition(deviceId, metric, effectiveOperator, value, effectiveRelayId),
-                selectedActions,
-                cooldownSeconds,
-            )
-        },
+        onConfirm = { confirmSave = true },
         enabled = valid,
         loading = busy,
         errorMessage = error,
@@ -245,6 +268,32 @@ internal fun AutomationRuleEditorDialog(
                 enabled = !busy,
             ) { cooldownSeconds = it.toInt() }
         }
+    }
+    if (confirmSave) {
+        AppConfirmDialog(
+            title = "保存自动化规则？",
+            detail = "规则：${name.trim()}\n" + if (rule?.enabled != false) {
+                "保存后规则将处于启用状态，条件满足时会自动执行 ${selectedActions.size} 个设备动作，无需再次确认。"
+            } else {
+                "将覆盖原有触发条件和设备动作，保存后规则仍保持停用。"
+            },
+            confirmLabel = "确认保存",
+            icon = Icons.Outlined.AutoAwesome,
+            danger = true,
+            busy = busy,
+            onDismiss = { confirmSave = false },
+            onConfirm = {
+                confirmSave = false
+                onSave(
+                    rule?.id,
+                    name.trim(),
+                    rule?.enabled ?: true,
+                    AutomationCondition(deviceId, metric, effectiveOperator, value, effectiveRelayId),
+                    selectedActions,
+                    cooldownSeconds,
+                )
+            },
+        )
     }
 }
 

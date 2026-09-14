@@ -44,6 +44,7 @@ import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
@@ -87,6 +88,7 @@ internal fun RescheduleReservationDialog(
     var title by rememberSaveable(reservation.id) { mutableStateOf(reservation.title) }
     var content by rememberSaveable(reservation.id) { mutableStateOf(RESCHEDULE_DEFAULT_CONTENT) }
     var mobile by rememberSaveable(reservation.id) { mutableStateOf("") }
+    var requestToConfirm by remember(reservation.id) { mutableStateOf<CampusReservationRequest?>(null) }
     var spaceDropdownOpen by remember { mutableStateOf(false) }
     var datePickerOpen by remember { mutableStateOf(false) }
 
@@ -140,16 +142,14 @@ internal fun RescheduleReservationDialog(
         enabled = canConfirm,
         onDismissRequest = onDismiss,
         onConfirm = {
-            onConfirm(
-                CampusReservationRequest(
-                    areaId = targetSpaceId,
-                    date = targetDate,
-                    startTime = startTime,
-                    endTime = endTime,
-                    title = title.trim(),
-                    content = content.trim(),
-                    mobile = mobile.trim(),
-                ),
+            requestToConfirm = CampusReservationRequest(
+                areaId = targetSpaceId,
+                date = targetDate,
+                startTime = startTime,
+                endTime = endTime,
+                title = title.trim(),
+                content = content.trim(),
+                mobile = mobile.trim(),
             )
         },
     ) {
@@ -410,6 +410,18 @@ internal fun RescheduleReservationDialog(
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,
             maxLines = 5,
+        )
+    }
+    requestToConfirm?.let { request ->
+        AppConfirmDialog(
+            title = "取消原预约并改期？",
+            detail = "原预约：${reservation.spaceName} ${reservation.date} ${reservation.startTime} - ${reservation.endTime}\n新预约：$targetSpaceName ${request.date} ${request.startTime} - ${request.endTime}\n改期会先取消原预约，再申请新时段。如果新预约失败，原预约可能无法恢复。",
+            confirmLabel = "确认改期",
+            icon = Icons.Outlined.Schedule,
+            danger = true,
+            busy = submitting,
+            onDismiss = { requestToConfirm = null },
+            onConfirm = { requestToConfirm = null; onConfirm(request) },
         )
     }
 }

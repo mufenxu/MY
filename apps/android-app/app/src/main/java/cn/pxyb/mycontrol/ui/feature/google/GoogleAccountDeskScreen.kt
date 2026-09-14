@@ -102,6 +102,9 @@ fun GoogleAccountDeskScreen(
     var selectionMode by rememberSaveable { mutableStateOf(false) }
     var selectedAccountIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var confirmBulkDelete by remember { mutableStateOf(false) }
+    var pendingBulkStatus by remember { mutableStateOf<Pair<Set<String>, String>?>(null) }
+    var pendingArchive by remember { mutableStateOf<Pair<Set<String>, Boolean>?>(null) }
+    var migrationAction by remember { mutableStateOf<String?>(null) }
     var selectedAccountId by rememberSaveable { mutableStateOf<String?>(null) }
     var detailAccountId by rememberSaveable { mutableStateOf<String?>(null) }
     var showAddAccount by rememberSaveable { mutableStateOf(false) }
@@ -316,10 +319,8 @@ fun GoogleAccountDeskScreen(
                                                 DropdownMenuItem(
                                                     text = { Text(openAiStatusLabel(status)) },
                                                     onClick = {
-                                                        onBulkUpdateAccounts(selectedAccountIds, status)
+                                                        pendingBulkStatus = selectedAccountIds.toSet() to status
                                                         bulkStatusMenuExpanded = false
-                                                        selectionMode = false
-                                                        selectedAccountIds = emptySet()
                                                     },
                                                 )
                                             }
@@ -327,9 +328,7 @@ fun GoogleAccountDeskScreen(
                                     }
                                     TextButton(
                                         onClick = {
-                                            onBulkArchiveAccounts(selectedAccountIds, selectedAccounts.any { !it.archived })
-                                            selectionMode = false
-                                            selectedAccountIds = emptySet()
+                                            pendingArchive = selectedAccountIds.toSet() to selectedAccounts.any { !it.archived }
                                         },
                                         enabled = selectedAccountIds.isNotEmpty() && !busy,
                                     ) {
@@ -411,8 +410,7 @@ fun GoogleAccountDeskScreen(
                                     onEdit = { editingAccount = account },
                                     onDelete = { deletingAccount = account },
                                     onToggleArchive = {
-                                        onBulkArchiveAccounts(setOf(account.id), !account.archived)
-                                        detailAccountId = null
+                                        pendingArchive = setOf(account.id) to !account.archived
                                     },
                                     onAddAlias = { addingAliasFor = account },
                                     onEditAlias = { alias -> editingAlias = account.id to alias },
@@ -434,8 +432,7 @@ fun GoogleAccountDeskScreen(
             onEdit = { editingAccount = account },
             onDelete = { deletingAccount = account },
             onToggleArchive = {
-                onBulkArchiveAccounts(setOf(account.id), !account.archived)
-                detailAccountId = null
+                pendingArchive = setOf(account.id) to !account.archived
             },
             onAddAlias = { addingAliasFor = account },
             onEditAlias = { alias -> editingAlias = account.id to alias },
@@ -501,7 +498,7 @@ fun GoogleAccountDeskScreen(
     deletingAccount?.let { account ->
         AppConfirmDialog(
             title = "删除邮箱记录？",
-            detail = "将同时删除 ${account.aliases.size} 个别名记录，不能恢复。",
+            detail = "将删除 ${account.primaryEmail} 及其 ${account.aliases.size} 个别名记录，不能恢复。",
             confirmLabel = "删除记录",
             onDismiss = { if (!busy) deletingAccount = null },
             onConfirm = {
@@ -547,6 +544,43 @@ fun GoogleAccountDeskScreen(
             busy = busy,
         )
     }
+    pendingBulkStatus?.let { (ids, status) ->
+        AppConfirmDialog(
+            title = "批量修改邮箱记录状态？",
+            detail = "将把选中的 ${ids.size} 个邮箱记录统一标记为“${openAiStatusLabel(status)}”，覆盖各记录的原有状态。",
+            confirmLabel = "确认修改",
+            icon = Icons.Outlined.CloudSync,
+            busy = busy,
+            onDismiss = { pendingBulkStatus = null },
+            onConfirm = {
+                pendingBulkStatus = null
+                onBulkUpdateAccounts(ids, status)
+                selectionMode = false
+                selectedAccountIds = emptySet()
+            },
+        )
+    }
+    pendingArchive?.let { (ids, archived) ->
+        AppConfirmDialog(
+            title = if (archived) "归档邮箱记录？" else "恢复邮箱记录？",
+            detail = if (archived) {
+                "将归档选中的 ${ids.size} 个邮箱记录及其别名，记录会从常用列表中隐藏，可在已归档记录中恢复。"
+            } else {
+                "将恢复选中的 ${ids.size} 个邮箱记录，使其重新显示在常用列表中。"
+            },
+            confirmLabel = if (archived) "确认归档" else "确认恢复",
+            icon = if (archived) Icons.Outlined.Archive else Icons.Outlined.Unarchive,
+            busy = busy,
+            onDismiss = { pendingArchive = null },
+            onConfirm = {
+                pendingArchive = null
+                onBulkArchiveAccounts(ids, archived)
+                selectionMode = false
+                selectedAccountIds = emptySet()
+                detailAccountId = null
+            },
+        )
+    }
     if (state.googleAccountMigrationPending) {
         AppDialog(
             onDismissRequest = {},
@@ -567,17 +601,36 @@ fun GoogleAccountDeskScreen(
                 ) {
                     AppDialogSecondaryButton(
                         text = "清除本机缓存",
-                        onClick = onDiscardLocalAccounts,
+                        onClick = { migrationAction = "discard" },
                         modifier = Modifier.weight(1f),
                         busy = busy,
                     )
                     AppDialogPrimaryButton(
                         text = "上传到服务器",
-                        onClick = onUploadLocalAccounts,
+                        onClick = { migrationAction = "upload" },
                         modifier = Modifier.weight(1f),
                         busy = busy,
                     )
                 }
+            },
+        )
+    }
+    migrationAction?.let { action ->
+        AppConfirmDialog(
+            title = if (action == "discard") "清除尚未上传的邮箱记录？" else "上传本机邮箱记录？",
+            detail = if (action == "discard") {
+                "本机的 ${state.googleAccounts.size} 个邮箱记录尚未上传到服务器。清除后这些记录及其别名无法恢复。"
+            } else {
+                "将把本机的 ${state.googleAccounts.size} 个邮箱记录及其别名保存为当前账号的服务器台账。"
+            },
+            confirmLabel = if (action == "discard") "确认清除" else "确认上传",
+            icon = if (action == "discard") Icons.Outlined.DeleteOutline else Icons.Outlined.CloudSync,
+            danger = action == "discard",
+            busy = busy,
+            onDismiss = { migrationAction = null },
+            onConfirm = {
+                migrationAction = null
+                if (action == "discard") onDiscardLocalAccounts() else onUploadLocalAccounts()
             },
         )
     }

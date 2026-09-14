@@ -58,6 +58,7 @@ import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
@@ -211,6 +212,7 @@ private fun AndroidReleasePlanCard(
     }
     val versionName = androidReleaseVersionName(versionCode)
     var showVersionPicker by rememberSaveable { mutableStateOf(false) }
+    var confirmBuild by remember { mutableStateOf(false) }
     var notes by rememberSaveable(draft?.id ?: "none") {
         mutableStateOf(draft?.notes.orEmpty())
     }
@@ -291,7 +293,7 @@ private fun AndroidReleasePlanCard(
                     )
                     AppButton(
                         text = "触发构建",
-                        onClick = onDispatchBuild,
+                        onClick = { confirmBuild = true },
                         icon = Icons.Outlined.RocketLaunch,
                         modifier = Modifier.weight(1f),
                         enabled = !planBusy && canSelectVersion && draft != null && !draftDirty,
@@ -331,6 +333,17 @@ private fun AndroidReleasePlanCard(
         }
     }
 
+    if (confirmBuild) {
+        AppConfirmDialog(
+            title = "触发安卓版本构建？",
+            detail = "将按已保存的 v${draft?.versionName.orEmpty()} 发布计划启动 GitHub Actions 构建，消耗构建资源，并按现有发布流程生成版本。",
+            confirmLabel = "确认构建",
+            icon = Icons.Outlined.RocketLaunch,
+            busy = planBusy,
+            onDismiss = { confirmBuild = false },
+            onConfirm = { confirmBuild = false; onDispatchBuild() },
+        )
+    }
     if (showVersionPicker && canManage && !planBusy && canSelectVersion) {
         AndroidReleaseVersionPicker(
             versionCode = versionCode,

@@ -30,7 +30,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -41,9 +44,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 
 @Composable
 internal fun LockScreen(onUnlock: () -> Unit, onUseLogin: () -> Unit, error: String?) {
+    var confirmUseLogin by remember { mutableStateOf(false) }
     val primaryColor = MaterialTheme.colorScheme.primary
     val backgroundColor = MaterialTheme.colorScheme.background
     val surfaceColor = MaterialTheme.colorScheme.surface
@@ -175,7 +180,7 @@ internal fun LockScreen(onUnlock: () -> Unit, onUseLogin: () -> Unit, error: Str
                 Spacer(Modifier.height(12.dp))
 
                 Surface(
-                    onClick = onUseLogin,
+                    onClick = { confirmUseLogin = true },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
@@ -227,5 +232,16 @@ internal fun LockScreen(onUnlock: () -> Unit, onUseLogin: () -> Unit, error: Str
                 }
             }
         }
+    }
+    if (confirmUseLogin) {
+        AppConfirmDialog(
+            title = "改用平台账号重新登录？",
+            detail = "将清除本机保存的登录会话，需要重新输入账号凭据才能继续使用。",
+            confirmLabel = "确认重新登录",
+            icon = Icons.Outlined.Lock,
+            danger = true,
+            onDismiss = { confirmUseLogin = false },
+            onConfirm = { confirmUseLogin = false; onUseLogin() },
+        )
     }
 }

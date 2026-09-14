@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.CampusCourse
 import cn.pxyb.mycontrol.data.TodoTask
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppIconTile
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
@@ -87,6 +88,7 @@ fun TodayScreen(
     var editingTodoId by rememberSaveable { mutableStateOf<String?>(null) }
     val editingTodo = state.todoSnapshot.tasks.firstOrNull { it.id == editingTodoId }
     var addingTodo by rememberSaveable { mutableStateOf(false) }
+    var confirmCalendarSync by remember { mutableStateOf(false) }
     var campusSection by rememberSaveable(initialSection) {
         mutableStateOf(when (initialSection) {
             WorkspaceDestination.Timetable -> CampusWorkspaceSection.Timetable
@@ -234,7 +236,7 @@ fun TodayScreen(
             AppHeaderIconButton(
                 icon = Icons.Outlined.CalendarMonth,
                 contentDescription = "同步到 Android 日历",
-                onClick = onSyncCalendar,
+                onClick = { confirmCalendarSync = true },
                 enabled = !state.calendarSyncing,
                 loading = state.calendarSyncing,
             )
@@ -531,6 +533,18 @@ fun TodayScreen(
         }
     }
 
+    if (confirmCalendarSync) {
+        AppConfirmDialog(
+            title = "同步到系统日历？",
+            detail = "将用当前课表、待办和到期提醒重新生成 MY 日历中的日程，在系统日历中对这些日程的手动修改会被覆盖。",
+            confirmLabel = "确认同步",
+            icon = Icons.Outlined.CalendarMonth,
+            danger = true,
+            busy = state.calendarSyncing,
+            onDismiss = { confirmCalendarSync = false },
+            onConfirm = { confirmCalendarSync = false; onSyncCalendar() },
+        )
+    }
     if (addingTodo || editingTodo != null) {
         TodoEditorDialog(
             task = editingTodo,

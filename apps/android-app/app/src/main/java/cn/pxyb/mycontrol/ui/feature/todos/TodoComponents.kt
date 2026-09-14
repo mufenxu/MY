@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -29,6 +30,7 @@ import cn.pxyb.mycontrol.data.CampusCourse
 import cn.pxyb.mycontrol.data.TodoCourseRef
 import cn.pxyb.mycontrol.data.TodoTask
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppListCard
 import cn.pxyb.mycontrol.ui.components.filter.AppChoiceRow
 import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
@@ -40,6 +42,7 @@ import java.util.UUID
 
 @Composable
 internal fun TodoCard(task: TodoTask, onToggle: (String) -> Unit, onEdit: () -> Unit, onDelete: (String) -> Unit) {
+    var confirmDelete by remember(task.id) { mutableStateOf(false) }
     AppListCard(
         title = task.title,
         subtitle = todoMeta(task),
@@ -55,10 +58,21 @@ internal fun TodoCard(task: TodoTask, onToggle: (String) -> Unit, onEdit: () -> 
         trailing = {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, "编辑") }
-            IconButton(onClick = { onDelete(task.id) }) { Icon(Icons.Outlined.DeleteOutline, "删除") }
+            IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Outlined.DeleteOutline, "删除") }
             }
         }
     )
+    if (confirmDelete) {
+        AppConfirmDialog(
+            title = "删除待办？",
+            detail = "将删除“${task.title}”及其提醒设置，删除后无法恢复。",
+            confirmLabel = "确认删除",
+            icon = Icons.Outlined.DeleteOutline,
+            danger = true,
+            onDismiss = { confirmDelete = false },
+            onConfirm = { confirmDelete = false; onDelete(task.id) },
+        )
+    }
 }
 
 @Composable

@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.data.PlatformPasskey
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.input.AppSwitch
@@ -105,6 +106,7 @@ fun AccountManagementScreen(
     var showPasskeyDialog by remember { mutableStateOf(false) }
     var showPasskeyRegisterDialog by remember { mutableStateOf(false) }
     var passkeyToDelete by remember { mutableStateOf<PlatformPasskey?>(null) }
+    var confirmDisableAppLock by remember { mutableStateOf(false) }
     val isTablet = useTwoPaneLayout()
 
     val listState = rememberLazyListState()
@@ -269,7 +271,9 @@ fun AccountManagementScreen(
                                     }
                                     AppSwitch(
                                         checked = state.appLockEnabled,
-                                        onCheckedChange = onSetAppLockEnabled,
+                                        onCheckedChange = { enabled ->
+                                            if (enabled) onSetAppLockEnabled(true) else confirmDisableAppLock = true
+                                        },
                                     )
                                 }
                             }
@@ -478,7 +482,9 @@ fun AccountManagementScreen(
                             }
                             AppSwitch(
                                 checked = state.appLockEnabled,
-                                onCheckedChange = onSetAppLockEnabled,
+                                onCheckedChange = { enabled ->
+                                    if (enabled) onSetAppLockEnabled(true) else confirmDisableAppLock = true
+                                },
                             )
                         }
                     }
@@ -489,6 +495,17 @@ fun AccountManagementScreen(
     }
 
     // 弹窗：修改登录密码
+    if (confirmDisableAppLock) {
+        AppConfirmDialog(
+            title = "关闭打开应用时的身份验证？",
+            detail = "关闭后，重新打开已登录的应用将不再要求指纹或设备密码，拿到已解锁手机的人可能访问你的账号数据。",
+            confirmLabel = "确认关闭",
+            icon = Icons.Outlined.Shield,
+            danger = true,
+            onDismiss = { confirmDisableAppLock = false },
+            onConfirm = { confirmDisableAppLock = false; onSetAppLockEnabled(false) },
+        )
+    }
     if (showChangePasswordDialog) {
         ChangePasswordDialog(
             state = state,

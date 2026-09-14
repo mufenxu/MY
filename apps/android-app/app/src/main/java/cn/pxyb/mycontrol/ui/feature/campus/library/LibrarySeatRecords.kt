@@ -476,7 +476,7 @@ private fun CurrentSeatUsageCard(
                     "RESERVE" -> {
                         AppButton(
                             text = "签到",
-                            onClick = onCheckIn,
+                            onClick = { pendingSeatAction = "check-in" },
                             modifier = Modifier.weight(1f),
                             enabled = !busy,
                             loading = usageAction == LibrarySeatUsageAction.CheckIn,
@@ -494,7 +494,7 @@ private fun CurrentSeatUsageCard(
                     "CHECK_IN" -> {
                         AppSecondaryButton(
                             text = "暂离",
-                            onClick = onLeaveSeat,
+                            onClick = { pendingSeatAction = "leave" },
                             modifier = Modifier.weight(1f),
                             enabled = !busy,
                             loading = usageAction == LibrarySeatUsageAction.Leave,
@@ -539,6 +539,24 @@ private fun CurrentSeatUsageCard(
                 .joinToString(" "),
         ).filter(String::isNotBlank).joinToString(" · ")
         when (pendingSeatAction) {
+            "check-in" -> AppConfirmDialog(
+                title = "确认座位签到？",
+                detail = "$seatText\n将向学校提交签到并开始本次座位使用，请确认你已到达预约座位。",
+                confirmLabel = "确认签到",
+                icon = Icons.Outlined.EventBusy,
+                busy = busy,
+                onDismiss = { pendingSeatAction = null },
+                onConfirm = { pendingSeatAction = null; onCheckIn() },
+            )
+            "leave" -> AppConfirmDialog(
+                title = "暂离座位？",
+                detail = "$seatText\n暂离后需要在学校规定的时间内返回，超时可能释放座位或记为违约。",
+                confirmLabel = "确认暂离",
+                icon = Icons.Outlined.EventBusy,
+                busy = busy,
+                onDismiss = { pendingSeatAction = null },
+                onConfirm = { pendingSeatAction = null; onLeaveSeat() },
+            )
             "cancel" -> AppConfirmDialog(
                 title = "取消预约",
                 detail = "$seatText\n取消后座位立即释放，需要重新预约。",

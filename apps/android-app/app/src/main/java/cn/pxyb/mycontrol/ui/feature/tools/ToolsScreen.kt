@@ -838,6 +838,7 @@ private fun ModernRelayCard(
     val isOn = status == "ON"
     val available = device?.online == true && mqttConnected
     val switchEnabled = enabled && canOperate && available && isKnown && !busy
+    var pendingEnabled by remember(target.deviceId, target.relayId) { mutableStateOf<Boolean?>(null) }
 
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -860,7 +861,7 @@ private fun ModernRelayCard(
             .fillMaxWidth()
             .pressFeedback(interactionSource)
             .clickable(enabled = switchEnabled) {
-                onControlRelay(target.deviceId, target.relayId, !isOn)
+                pendingEnabled = !isOn
             },
         shape = RoundedCornerShape(24.dp),
         color = animatedBg,
@@ -907,7 +908,7 @@ private fun ModernRelayCard(
                 AppSwitch(
                     checked = isOn,
                     onCheckedChange = if (switchEnabled) {
-                        { enabled -> onControlRelay(target.deviceId, target.relayId, enabled) }
+                        { enabled -> pendingEnabled = enabled }
                     } else null,
                     enabled = switchEnabled,
                     tint = target.activeAccent,
@@ -964,6 +965,21 @@ private fun ModernRelayCard(
                 }
             }
         }
+    }
+    pendingEnabled?.let { requestedEnabled ->
+        AppConfirmDialog(
+            title = if (requestedEnabled) "开启${target.name}？" else "关闭${target.name}？",
+            detail = "设备：${device?.name ?: target.deviceId} · ${target.relayId}\n确认后会立即发送${if (requestedEnabled) "开启" else "关闭"}指令，实际设备状态会改变，请确认现场安全。",
+            confirmLabel = if (requestedEnabled) "确认开启" else "确认关闭",
+            icon = target.icon,
+            danger = true,
+            busy = busy,
+            onDismiss = { pendingEnabled = null },
+            onConfirm = {
+                pendingEnabled = null
+                if (switchEnabled) onControlRelay(target.deviceId, target.relayId, requestedEnabled)
+            },
+        )
     }
 }
 

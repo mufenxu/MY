@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.feature.auth.AppEntryUiState
@@ -35,6 +36,7 @@ internal fun ChangePasswordDialog(
     var totp by remember { mutableStateOf("") }
     var localError by remember { mutableStateOf<String?>(null) }
     var submittedAt by remember { mutableStateOf<Int?>(null) }
+    var showConfirmation by remember { mutableStateOf(false) }
     val busy = state.busyAction == "password"
 
     LaunchedEffect(state.actionCompletions["password"]) {
@@ -55,8 +57,7 @@ internal fun ChangePasswordDialog(
                             newPassword == oldPassword -> localError = "新密码不能与当前密码相同。"
                             !reauthenticated && totpEnabled && totp.length != 6 -> localError = "请输入 6 位动态验证码。"
                             else -> {
-                                submittedAt = state.actionCompletions["password"] ?: 0
-                                onSubmit(oldPassword, newPassword, totp)
+                                showConfirmation = true
                             }
                         }
                     },
@@ -102,6 +103,22 @@ internal fun ChangePasswordDialog(
             }
         },
     )
+    if (showConfirmation) {
+        AppConfirmDialog(
+            title = "确认修改登录密码？",
+            detail = "修改后旧密码立即失效，所有设备（包括本机）将退出登录，需要使用新密码重新登录。",
+            confirmLabel = "确认修改",
+            icon = Icons.Outlined.Lock,
+            danger = true,
+            busy = busy,
+            onDismiss = { showConfirmation = false },
+            onConfirm = {
+                showConfirmation = false
+                submittedAt = state.actionCompletions["password"] ?: 0
+                onSubmit(oldPassword, newPassword, totp)
+            },
+        )
+    }
 }
 
 
@@ -112,6 +129,7 @@ internal fun AccountRecoveryDialog(state: AppEntryUiState, onDismiss: () -> Unit
     var newPassword by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
     var submitted by remember { mutableStateOf(false) }
+    var showConfirmation by remember { mutableStateOf(false) }
     LaunchedEffect(state.loginBusy, state.error, state.message) {
         if (submitted && !state.loginBusy && state.error == null && state.message != null) onDismiss()
     }
@@ -120,7 +138,7 @@ internal fun AccountRecoveryDialog(state: AppEntryUiState, onDismiss: () -> Unit
         subtitle = "输入管理员签发的恢复凭据。恢复后将退出所有设备，并清除原有 Passkey 和动态验证设置。",
         onDismissRequest = { if (!state.loginBusy) onDismiss() },
         confirmText = "恢复账号",
-        onConfirm = { submitted = true; onRecover(recoveryToken, newPassword) },
+        onConfirm = { showConfirmation = true },
         loading = state.loginBusy,
         enabled = !state.loginBusy && recoveryToken.isNotBlank() && newPassword.length in 15..256 && newPassword == confirmation,
         content = {
@@ -135,4 +153,16 @@ internal fun AccountRecoveryDialog(state: AppEntryUiState, onDismiss: () -> Unit
             }
         },
     )
+    if (showConfirmation) {
+        AppConfirmDialog(
+            title = "恢复并重置账号安全设置？",
+            detail = "将设置新密码、退出所有设备，并清除原有 Passkey 和动态验证设置。这些安全设置无法撤销恢复，需要重新绑定。",
+            confirmLabel = "确认恢复账号",
+            icon = Icons.Outlined.Lock,
+            danger = true,
+            busy = state.loginBusy,
+            onDismiss = { showConfirmation = false },
+            onConfirm = { showConfirmation = false; submitted = true; onRecover(recoveryToken, newPassword) },
+        )
+    }
 }

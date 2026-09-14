@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
@@ -33,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.ExternalApplication
 import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
 import cn.pxyb.mycontrol.data.HomeQuickAction
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
@@ -78,6 +80,7 @@ fun OverviewScreen(
     requestExternalApplicationLaunch: suspend (String) -> ExternalApplicationLaunch,
 ) {
     var customizingQuickActions by remember { mutableStateOf(false) }
+    var confirmBackup by remember { mutableStateOf(false) }
     var openingExternalApplicationId by remember { mutableStateOf<String?>(null) }
     var externalApplicationOpenError by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
@@ -173,7 +176,7 @@ fun OverviewScreen(
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                             row.forEach { action ->
                                 val spec = homeQuickActionSpec(
-                                    action, onSelectTab, onRunDiagnostics, onTriggerBackup,
+                                    action, onSelectTab, onRunDiagnostics, { confirmBackup = true },
                                     onOpenGoogleAccountDesk, onOpenOperations, onOpenWorkspace,
                                     onOpenReservation, onOpenFreeClassrooms, onOpenSeatReservation,
                                     onOpenWaterValve, onOpenDailyNews, onOpenSearch, onOpenQrLogin,
@@ -253,6 +256,16 @@ fun OverviewScreen(
                 }
             }
         }
+    }
+    if (confirmBackup) {
+        AppConfirmDialog(
+            title = "立即执行平台备份？",
+            detail = "将启动后台备份任务，消耗服务器资源并生成新的备份，不会覆盖或删除现有数据。",
+            confirmLabel = "确认备份",
+            icon = Icons.Outlined.Backup,
+            onDismiss = { confirmBackup = false },
+            onConfirm = { confirmBackup = false; onTriggerBackup() },
+        )
     }
     if (customizingQuickActions) {
         QuickActionsDialog(

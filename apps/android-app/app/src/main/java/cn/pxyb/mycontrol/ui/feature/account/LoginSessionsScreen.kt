@@ -65,6 +65,8 @@ fun LoginSessionsScreen(
     val security = state.security
     var revokeTarget by remember { mutableStateOf<SecuritySession?>(null) }
     var loginUrl by remember { mutableStateOf<String?>(null) }
+    var confirmRevokeOthers by remember { mutableStateOf(false) }
+    var confirmMagicLink by remember { mutableStateOf(false) }
     val rawVisibleSessions = security?.sessions?.filterNot { it.sessionKind == "embedded_web" }
     val identifiedNativeFallbackKeys = rawVisibleSessions
         ?.filter { it.sessionKind == "native_app" && !it.deviceId.isNullOrBlank() }
@@ -103,12 +105,7 @@ fun LoginSessionsScreen(
                     subtitle = "生成单次使用、5 分钟内有效的登录链接",
                     icon = Icons.Outlined.Laptop,
                     enabled = state.busyAction != "desktop-magic-link",
-                    onClick = {
-                        onCreateDesktopMagicLink { url, error ->
-                            if (url != null) loginUrl = url
-                            else if (error != null) Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
-                        }
-                    },
+                    onClick = { confirmMagicLink = true },
                 )
             }
         }
@@ -124,9 +121,39 @@ fun LoginSessionsScreen(
         }
         if (otherSessions > 0) {
             item(key = "revoke-other-sessions") {
-                AppSecondaryButton("退出我的其他设备", onRevokeOtherSessions, enabled = state.busyAction != "session", modifier = Modifier.fillMaxWidth())
+                AppSecondaryButton("退出我的其他设备", { confirmRevokeOthers = true }, enabled = state.busyAction != "session", modifier = Modifier.fillMaxWidth())
             }
         }
+    }
+    if (confirmRevokeOthers) {
+        AppConfirmDialog(
+            title = "退出所有其他设备？",
+            detail = "其他设备和浏览器的登录会话将被撤销，它们需要重新登录后才能继续访问账号。",
+            confirmLabel = "确认退出",
+            icon = Icons.Outlined.Devices,
+            danger = true,
+            busy = state.busyAction == "session",
+            onDismiss = { confirmRevokeOthers = false },
+            onConfirm = { confirmRevokeOthers = false; onRevokeOtherSessions() },
+        )
+    }
+    if (confirmMagicLink) {
+        AppConfirmDialog(
+            title = "生成免密登录链接？",
+            detail = "持有此链接的人可在 5 分钟内免密登录你的账号。链接仅能使用一次，请只在自己的设备上使用。",
+            confirmLabel = "确认生成",
+            icon = Icons.Outlined.Laptop,
+            danger = true,
+            busy = state.busyAction == "desktop-magic-link",
+            onDismiss = { confirmMagicLink = false },
+            onConfirm = {
+                confirmMagicLink = false
+                onCreateDesktopMagicLink { url, error ->
+                    if (url != null) loginUrl = url
+                    else if (error != null) Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                }
+            },
+        )
     }
     revokeTarget?.let { session ->
         AppConfirmDialog(

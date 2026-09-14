@@ -38,6 +38,7 @@ import cn.pxyb.mycontrol.data.IotSceneAction
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.dialog.DialogInfoText
 import cn.pxyb.mycontrol.ui.components.display.AppIconTile
 import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
@@ -58,6 +59,7 @@ internal fun SceneCard(
     onSetQuickScene: () -> Unit,
     quickScene: Boolean,
 ) {
+    var pendingAction by remember(scene.id) { mutableStateOf<String?>(null) }
     AppPanel {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -67,12 +69,12 @@ internal fun SceneCard(
                     Text("${scene.actionCount} 个设备动作", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onClick = onEdit, enabled = enabled && !busy) { Icon(Icons.Outlined.Edit, "编辑") }
-                IconButton(onClick = { onDelete(scene.id) }, enabled = enabled && !busy) { Icon(Icons.Outlined.DeleteOutline, "删除") }
+                IconButton(onClick = { pendingAction = "delete" }, enabled = enabled && !busy) { Icon(Icons.Outlined.DeleteOutline, "删除") }
             }
             AppButton(
                 text = "执行场景",
                 icon = Icons.Outlined.PlayArrow,
-                onClick = { onRun(scene.id) },
+                onClick = { pendingAction = "run" },
                 enabled = enabled && !busy,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -80,7 +82,7 @@ internal fun SceneCard(
                 AppSecondaryButton(
                     text = "写入 NFC",
                     icon = Icons.Outlined.Nfc,
-                    onClick = onWriteNfc,
+                    onClick = { pendingAction = "nfc" },
                     enabled = enabled && !busy,
                     modifier = Modifier.weight(1f),
                 )
@@ -94,6 +96,41 @@ internal fun SceneCard(
             }
         }
     }
+    pendingAction?.let { action ->
+        AppConfirmDialog(
+            title = when (action) {
+                "delete" -> "删除智能场景？"
+                "nfc" -> "将场景写入 NFC？"
+                else -> "执行智能场景？"
+            },
+            detail = when (action) {
+                "delete" -> "将删除“${scene.name}”的场景配置，删除后需要重新创建。已经执行的设备动作不会撤销。"
+                "nfc" -> "将“${scene.name}”写入接下来贴近的 NFC 标签，标签上的原有内容会被覆盖。请确认该标签可以改写。"
+                else -> "将执行“${scene.name}”中的 ${scene.actionCount} 个设备动作，实际设备状态会改变。请确认现场可以安全执行。"
+            },
+            confirmLabel = when (action) {
+                "delete" -> "确认删除"
+                "nfc" -> "确认写入"
+                else -> "确认执行"
+            },
+            icon = when (action) {
+                "delete" -> Icons.Outlined.DeleteOutline
+                "nfc" -> Icons.Outlined.Nfc
+                else -> Icons.Outlined.PlayArrow
+            },
+            danger = true,
+            busy = busy,
+            onDismiss = { pendingAction = null },
+            onConfirm = {
+                pendingAction = null
+                when (action) {
+                    "delete" -> onDelete(scene.id)
+                    "nfc" -> onWriteNfc()
+                    else -> onRun(scene.id)
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -106,6 +143,7 @@ internal fun SceneEditorDialog(
     onSave: (String?, String, List<IotSceneAction>) -> Unit,
 ) {
     var name by rememberSaveable(scene?.id) { mutableStateOf(scene?.name.orEmpty()) }
+    var confirmSave by remember(scene?.id) { mutableStateOf(false) }
     val actionsSaver = remember {
         listSaver<List<IotSceneAction>, String>(
             save = { actions -> actions.flatMap { listOf(it.deviceId, it.relayId, it.status) } },
@@ -120,7 +158,9 @@ internal fun SceneEditorDialog(
         title = if (scene == null) "新建智能场景" else "编辑智能场景",
         subtitle = "只显示后端已确认的真实设备与继电器",
         modifier = Modifier.heightIn(max = 760.dp),
-        onConfirm = { onSave(scene?.id, name.trim(), actions) },
+        onConfirm = {
+            if (scene == null) onSave(null, name.trim(), actions) else confirmSave = true
+        },
         enabled = name.isNotBlank() && actions.isNotEmpty(),
         loading = busy,
         errorMessage = error,
@@ -159,5 +199,17 @@ internal fun SceneEditorDialog(
                 }
             }
         }
+    }
+    if (confirmSave) {
+        AppConfirmDialog(
+            title = "保存场景修改？",
+            detail = "将覆盖“${scene?.name}”的配置，下次执行时会使用修改后的 ${actions.size} 个设备动作。",
+            confirmLabel = "确认保存",
+            icon = Icons.Outlined.Tune,
+            danger = true,
+            busy = busy,
+            onDismiss = { confirmSave = false },
+            onConfirm = { confirmSave = false; onSave(scene?.id, name.trim(), actions) },
+        )
     }
 }

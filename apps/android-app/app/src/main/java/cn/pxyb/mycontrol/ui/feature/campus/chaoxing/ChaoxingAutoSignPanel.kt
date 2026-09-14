@@ -34,6 +34,7 @@ import cn.pxyb.mycontrol.data.ChaoxingAutoSign
 import cn.pxyb.mycontrol.data.ChaoxingAutoSignResult
 import cn.pxyb.mycontrol.data.ChaoxingCourse
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppDivider
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
@@ -61,6 +62,9 @@ internal fun ChaoxingAutoSignPanel(
     val autoSign = state.autoSign
     val busy = state.busy
     var courseExpanded by remember { mutableStateOf(false) }
+    var confirmation by remember { mutableStateOf<String?>(null) }
+    var timeToRemove by remember { mutableStateOf("") }
+    var courseToConfirm by remember { mutableStateOf<ChaoxingCourse?>(null) }
 
     AppPanel {
         Column(Modifier.fillMaxWidth()) {
@@ -69,7 +73,7 @@ internal fun ChaoxingAutoSignPanel(
                 subtitle = autoSignSubtitle(autoSign),
                 icon = Icons.Outlined.Schedule,
                 checked = autoSign.enabled,
-                onCheckedChange = onToggleAutoSign,
+                onCheckedChange = { confirmation = if (it) "enable" else "disable" },
                 enabled = !busy,
             )
             AppDivider()
@@ -84,7 +88,10 @@ internal fun ChaoxingAutoSignPanel(
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     } else {
                         autoSign.times.forEach { time ->
-                            AutoSignTimeRow(time, enabled = !busy) { onRemoveAutoSignTime(time) }
+                            AutoSignTimeRow(time, enabled = !busy) {
+                                timeToRemove = time
+                                confirmation = "remove-time"
+                            }
                         }
                     }
                     AppSecondaryButton("添加签到时刻", onRequestAddTime, icon = Icons.Outlined.Add,
@@ -101,7 +108,10 @@ internal fun ChaoxingAutoSignPanel(
                         onValueChange = { key ->
                             courseExpanded = false
                             val picked = state.courses.firstOrNull { it.key == key }
-                            if (picked != null || key == null) onSelectAutoSignCourse(picked)
+                            if ((picked != null || key == null) && key != autoSign.course?.key) {
+                                courseToConfirm = picked
+                                confirmation = "course"
+                            }
                         },
                         expanded = courseExpanded, onExpandedChange = { courseExpanded = it },
                         enabled = !busy, modifier = Modifier.fillMaxWidth())
@@ -134,7 +144,7 @@ internal fun ChaoxingAutoSignPanel(
                     }
                     AppSecondaryButton(
                         text = if (autoSign.location == null) "使用当前位置保存" else "更新签到位置",
-                        onClick = onRequestLocation,
+                        onClick = { confirmation = "location" },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !busy,
                         loading = state.operation == "auto-sign-location",
@@ -148,7 +158,7 @@ internal fun ChaoxingAutoSignPanel(
                         Text("尚未关联失败提醒收件人，签到失败时可能收不到企业微信消息，请先在提醒设置中填写企业微信成员账号。",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                     }
-                    AppSecondaryButton("立即执行一次", onRunAutoSign, icon = Icons.Outlined.PlayArrow,
+                    AppSecondaryButton("立即执行一次", { confirmation = "run" }, icon = Icons.Outlined.PlayArrow,
                         modifier = Modifier.fillMaxWidth(), enabled = !busy && autoSign.enabled,
                         loading = state.operation == "auto-sign-run")
                     Text("在设定的时刻检查所选课程里最新的未签到活动，用保存的位置调用帮你签服务；失败会通过企业微信与通知中心提醒。",
@@ -156,6 +166,51 @@ internal fun ChaoxingAutoSignPanel(
                 }
             }
         }
+    }
+    confirmation?.let { action ->
+        AppConfirmDialog(
+            title = when (action) {
+                "enable" -> "开启定时签到？"
+                "disable" -> "关闭定时签到？"
+                "remove-time" -> "删除签到时刻？"
+                "course" -> "更改自动签到课程？"
+                "location" -> "保存自动签到位置？"
+                else -> "立即执行自动签到？"
+            },
+            detail = when (action) {
+                "enable" -> "每天 ${autoSign.times.joinToString("、")} 将检查${autoSign.course?.name ?: "全部课程"}，使用保存的位置自动提交签到，无需再次确认。账号和位置资料会发送至帮你签服务，并消耗该服务的可用次数。"
+                "disable" -> "将停止后续定时签到。已经开始的任务和已提交的签到记录不会撤销。"
+                "remove-time" -> "将删除每天 $timeToRemove 的签到计划，该时刻不再自动检查签到活动。"
+                "course" -> "将把自动签到范围改为“${courseToConfirm?.name ?: "全部课程"}”，后续任务会按新范围查找并提交签到。"
+                "location" -> "将用当前设备定位覆盖保存的签到位置，后续自动签到会使用这个位置提交。"
+                else -> "将检查${autoSign.course?.name ?: "全部课程"}的待签到活动，使用保存的位置向帮你签服务提交真实签到，可能消耗服务次数。"
+            },
+            confirmLabel = when (action) {
+                "enable" -> "确认开启"
+                "disable" -> "确认关闭"
+                "remove-time" -> "确认删除"
+                "course" -> "确认更改"
+                "location" -> "确认保存"
+                else -> "确认执行"
+            },
+            icon = Icons.Outlined.Schedule,
+            danger = true,
+            busy = busy,
+            onDismiss = { confirmation = null; courseToConfirm = null },
+            onConfirm = {
+                val course = courseToConfirm
+                confirmation = null
+                courseToConfirm = null
+                when (action) {
+                    "enable" -> onToggleAutoSign(true)
+                    "disable" -> onToggleAutoSign(false)
+                    "remove-time" -> onRemoveAutoSignTime(timeToRemove)
+                    "course" -> onSelectAutoSignCourse(course)
+                    "location" -> onRequestLocation()
+                    else -> onRunAutoSign()
+                }
+            },
+        )
     }
 }
 

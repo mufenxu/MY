@@ -47,6 +47,7 @@ import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.input.AppSwitch
 import cn.pxyb.mycontrol.ui.components.picker.AppDatePickerModal
@@ -94,6 +95,7 @@ internal fun AutoReservationEditDialog(
     }
 
     var validationError by remember { mutableStateOf<String?>(null) }
+    var taskToConfirm by remember { mutableStateOf<CampusAutoReservationTask?>(null) }
 
     val dateWeekday = remember(reservationDate) {
         try {
@@ -219,7 +221,7 @@ internal fun AutoReservationEditDialog(
                             mobile = mobile.trim(),
                             open = open,
                         )
-                        onSave(newTask)
+                        taskToConfirm = newTask
                     },
                     modifier = Modifier.weight(1f),
                     busy = saving,
@@ -531,5 +533,27 @@ internal fun AutoReservationEditDialog(
                 AppFeedbackBanner(message = err, error = true)
             }
         }
+    }
+    taskToConfirm?.let { target ->
+        AppConfirmDialog(
+            title = if (target.enabled) "保存并启用自动预约？" else "保存自动预约任务？",
+            detail = buildString {
+                append("任务：${target.name}\n")
+                append("运行时间：${target.executeDate} ${target.executeTime}\n")
+                append("预约日期：${target.reservationDate}\n")
+                target.candidates.forEach { candidate ->
+                    val spaceName = spaces.firstOrNull { it.id == candidate.areaId }?.name ?: "${candidate.areaId}"
+                    append("$spaceName ${candidate.startTime} - ${candidate.endTime}\n")
+                }
+                append(if (target.enabled) "到运行时间会自动向学校提交预约，无需再次确认。" else "保存后任务保持停用。")
+                if (task != null && task.id.isNotBlank()) append("本次保存会覆盖原任务配置。")
+            },
+            confirmLabel = if (target.enabled) "确认保存并启用" else "确认保存",
+            icon = Icons.Outlined.AutoAwesome,
+            danger = true,
+            busy = saving,
+            onDismiss = { taskToConfirm = null },
+            onConfirm = { taskToConfirm = null; onSave(target) },
+        )
     }
 }

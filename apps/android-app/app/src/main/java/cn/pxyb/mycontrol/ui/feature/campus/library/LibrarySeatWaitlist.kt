@@ -447,6 +447,7 @@ private fun WaitlistTaskCard(
     val success = task.status == "success"
     var confirmResume by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var confirmStop by remember { mutableStateOf(false) }
     Surface(
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
@@ -511,7 +512,7 @@ private fun WaitlistTaskCard(
                 if (listening) {
                     AppSecondaryButton(
                         text = "停止监听",
-                        onClick = onStop,
+                        onClick = { confirmStop = true },
                         enabled = !busy,
                         height = 36.dp,
                     )
@@ -532,6 +533,17 @@ private fun WaitlistTaskCard(
                 )
             }
         }
+    }
+    if (confirmStop) {
+        AppConfirmDialog(
+            title = "停止候补监听？",
+            detail = "将停止 ${task.date} ${formatMinutesToTime(task.startMinute)} - ${formatMinutesToTime(task.endMinute)}、${waitlistSeatScopeText(task)} 的候补监听，停止期间不会自动提交预约。",
+            confirmLabel = "确认停止",
+            icon = Icons.Outlined.NotificationsActive,
+            busy = busy,
+            onDismiss = { confirmStop = false },
+            onConfirm = { confirmStop = false; onStop() },
+        )
     }
     if (confirmResume) {
         AppConfirmDialog(

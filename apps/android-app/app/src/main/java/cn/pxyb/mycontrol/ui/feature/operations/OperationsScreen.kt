@@ -118,6 +118,8 @@ fun OperationsScreen(
     }
     var confirmBackup by remember { mutableStateOf(false) }
     var noteTarget by remember { mutableStateOf<IncidentInfo?>(null) }
+    var muteTarget by remember { mutableStateOf<IncidentInfo?>(null) }
+    var resolveTarget by remember { mutableStateOf<IncidentInfo?>(null) }
     var noteText by remember { mutableStateOf("") }
     val canOperate = state.user?.role in setOf("operator", "super_admin")
     val activeIncidents = state.incidents.count { it.status != "resolved" }
@@ -402,11 +404,11 @@ fun OperationsScreen(
                                                     Icon(Icons.Outlined.EditNote, null, modifier = Modifier.size(17.dp))
                                                     Text("记录")
                                                 }
-                                                TextButton(onClick = { onIncidentMute(incident.id) }, enabled = canOperate) {
+                                                TextButton(onClick = { muteTarget = incident }, enabled = canOperate) {
                                                     Icon(Icons.Outlined.VolumeOff, null, modifier = Modifier.size(17.dp))
                                                     Text("静音 1 小时")
                                                 }
-                                                TextButton(onClick = { onIncidentResolve(incident.id, "已由移动端标记解决") }, enabled = canOperate) {
+                                                TextButton(onClick = { resolveTarget = incident }, enabled = canOperate) {
                                                     Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(17.dp))
                                                     Text("解决")
                                                 }
@@ -570,11 +572,11 @@ fun OperationsScreen(
                                         Icon(Icons.Outlined.EditNote, null, modifier = Modifier.size(17.dp))
                                         Text("记录")
                                     }
-                                    TextButton(onClick = { onIncidentMute(incident.id) }, enabled = canOperate) {
+                                    TextButton(onClick = { muteTarget = incident }, enabled = canOperate) {
                                         Icon(Icons.Outlined.VolumeOff, null, modifier = Modifier.size(17.dp))
                                         Text("静音 1 小时")
                                     }
-                                    TextButton(onClick = { onIncidentResolve(incident.id, "已由手机端标记解决") }, enabled = canOperate) {
+                                    TextButton(onClick = { resolveTarget = incident }, enabled = canOperate) {
                                         Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(17.dp))
                                         Text("解决")
                                     }
@@ -711,6 +713,26 @@ fun OperationsScreen(
                 onTriggerBackup()
             },
             icon = Icons.Outlined.Backup,
+        )
+    }
+    muteTarget?.let { incident ->
+        AppConfirmDialog(
+            title = "将事件静音 1 小时？",
+            detail = "事件：${incident.title}\n静音期间将暂停此事件的提醒，异常仍需要处理。",
+            confirmLabel = "确认静音",
+            icon = Icons.Outlined.VolumeOff,
+            onDismiss = { muteTarget = null },
+            onConfirm = { muteTarget = null; onIncidentMute(incident.id) },
+        )
+    }
+    resolveTarget?.let { incident ->
+        AppConfirmDialog(
+            title = "将事件标记为已解决？",
+            detail = "事件：${incident.title}\n将改变此事件的处理状态及未解决事件统计，请确认故障已经排除。",
+            confirmLabel = "确认已解决",
+            icon = Icons.Outlined.CheckCircle,
+            onDismiss = { resolveTarget = null },
+            onConfirm = { resolveTarget = null; onIncidentResolve(incident.id, "已由移动端标记解决") },
         )
     }
     noteTarget?.let { incident ->

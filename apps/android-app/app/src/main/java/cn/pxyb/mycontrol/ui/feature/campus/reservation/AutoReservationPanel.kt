@@ -38,6 +38,7 @@ import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.ui.components.button.AppDialogDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
 import java.time.LocalDate
@@ -58,6 +59,24 @@ internal fun AutoReservationPanel(
     var isEditing by remember { mutableStateOf(false) }
     var editingTask by remember { mutableStateOf<CampusAutoReservationTask?>(null) }
     var taskToDelete by remember { mutableStateOf<CampusAutoReservationTask?>(null) }
+    var taskToToggle by remember { mutableStateOf<CampusAutoReservationTask?>(null) }
+
+    taskToToggle?.let { target ->
+        AppConfirmDialog(
+            title = if (target.enabled) "停用自动预约任务？" else "启用自动预约任务？",
+            detail = if (target.enabled) {
+                "将停用“${target.name}”，不再按计划提交预约。已经成功的预约不会被取消。"
+            } else {
+                "将启用“${target.name}”，在 ${target.executeDate} ${target.executeTime} 自动申请 ${target.reservationDate} 的预约，无需再次确认。"
+            },
+            confirmLabel = if (target.enabled) "确认停用" else "确认启用",
+            icon = Icons.Outlined.AutoAwesome,
+            danger = true,
+            busy = savingTask,
+            onDismiss = { taskToToggle = null },
+            onConfirm = { taskToToggle = null; onToggleTask(target) },
+        )
+    }
 
     // 删除确认弹窗升级为 AppDialog
     if (taskToDelete != null) {
@@ -214,7 +233,7 @@ internal fun AutoReservationPanel(
                                                 task = task,
                                                 spaces = spaces,
                                                 isDeleting = deletingTaskId == task.id,
-                                                onToggle = { onToggleTask(task) },
+                                                onToggle = { taskToToggle = task },
                                                 onEdit = {
                                                     editingTask = task
                                                     isEditing = true
@@ -242,7 +261,7 @@ internal fun AutoReservationPanel(
                                     task = task,
                                     spaces = spaces,
                                     isDeleting = deletingTaskId == task.id,
-                                    onToggle = { onToggleTask(task) },
+                                    onToggle = { taskToToggle = task },
                                     onEdit = {
                                         editingTask = task
                                         isEditing = true

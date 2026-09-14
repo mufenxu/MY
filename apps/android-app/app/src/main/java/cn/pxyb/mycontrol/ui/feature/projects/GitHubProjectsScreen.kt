@@ -59,6 +59,7 @@ import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
+import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppMetricCell
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
@@ -745,6 +746,7 @@ private fun CreateReleaseDialog(
     var draft by rememberSaveable { mutableStateOf(false) }
     var prerelease by rememberSaveable { mutableStateOf(false) }
     var localError by remember { mutableStateOf<String?>(null) }
+    var confirmCreate by remember { mutableStateOf(false) }
 
     AppDialogForm(
         onDismissRequest = { if (!busy) onDismiss() },
@@ -757,7 +759,7 @@ private fun CreateReleaseDialog(
                             localError = "请填写标签（tag），如 v1.0.0。"
                             return@AppDialogForm
                         }
-                        onCreate(tag.trim(), name.trim(), body.trim(), draft, prerelease)
+                        confirmCreate = true
                     },
         loading = busy,
         enabled = !busy,
@@ -804,6 +806,25 @@ private fun CreateReleaseDialog(
             )
 
         }
+    }
+    if (confirmCreate) {
+        AppConfirmDialog(
+            title = if (draft) "创建 Release 草稿？" else "发布 Release？",
+            detail = "仓库：${repo.fullName}\n标签：${tag.trim()}\n" + if (draft) {
+                "将在 GitHub 上创建发布草稿。"
+            } else {
+                "发布内容将对有权访问该仓库的人可见，可能触发订阅通知和自动化流程。"
+            },
+            confirmLabel = if (draft) "确认创建草稿" else "确认发布",
+            icon = Icons.Outlined.RocketLaunch,
+            danger = !draft,
+            busy = busy,
+            onDismiss = { confirmCreate = false },
+            onConfirm = {
+                confirmCreate = false
+                onCreate(tag.trim(), name.trim(), body.trim(), draft, prerelease)
+            },
+        )
     }
 }
 
