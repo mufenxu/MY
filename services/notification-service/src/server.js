@@ -44,6 +44,7 @@ async function start() {
     if (shutdownPromise) return shutdownPromise;
     shuttingDown = true;
     clearInterval(orchestrationTimer);
+    app.locals.cmccClient?.close();
     console.log(`收到 ${signal}，正在关闭通知服务。`);
     shutdownPromise = (async () => {
       const serverClosed = new Promise((resolve) => {

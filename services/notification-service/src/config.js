@@ -63,6 +63,21 @@ if (process.env.NODE_ENV === 'production' && !notificationMongoUri) {
   throw new Error('缺少必要环境变量：NOTIFICATION_MONGODB_URI');
 }
 
+const CMCC_DEFAULT_WS_URL = 'wss://5gvas01.cmicmaap.com/gtw-ai/openclaw/ws/msg';
+
+// 中国移动新消息通道只会投递给固定手机号，未配置时整个通道停用。
+function parseCmccConfig() {
+  const apiKey = String(process.env.CMCC_API_KEY || '').trim();
+  const recipient = String(process.env.CMCC_RECIPIENT || '').trim();
+  const wsUrl = String(process.env.CMCC_WS_URL || CMCC_DEFAULT_WS_URL).trim();
+  if (!apiKey && !recipient) return { enabled: false, apiKey: '', recipient: '', wsUrl };
+  if (!apiKey || !recipient) throw new Error('CMCC_API_KEY 与 CMCC_RECIPIENT 必须同时配置');
+  if (!/^(?:ak|app)_/.test(apiKey)) throw new Error('CMCC_API_KEY 必须以 ak_ 或 app_ 开头');
+  if (!/^1\d{10}$/.test(recipient)) throw new Error('CMCC_RECIPIENT 必须是 11 位手机号');
+  if (!wsUrl.startsWith('wss://')) throw new Error('CMCC_WS_URL 必须使用 wss://');
+  return { enabled: true, apiKey, recipient, wsUrl };
+}
+
 const config = {
   port: parseInt(process.env.PORT || "3000", 10),
   apiKey: ensureStrongSecret("NOTIFY_API_KEY"),
@@ -81,6 +96,7 @@ const config = {
     agentId: parseInteger(ensureEnv("WECOM_AGENT_ID"), "WECOM_AGENT_ID"),
     secret: ensureEnv("WECOM_SECRET"),
   },
+  cmcc: parseCmccConfig(),
   tokenCacheMargin: parseInteger(
     process.env.TOKEN_CACHE_MARGIN || "120",
     "TOKEN_CACHE_MARGIN"

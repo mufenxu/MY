@@ -36,7 +36,7 @@ const appNotificationSchema = z.object({
   audience: z.object({
     users: z.array(z.string().trim().min(1).max(128)).min(1).max(500),
   }),
-  channels: z.array(z.enum(['app', 'wecom'])).min(1).max(2).default(['app']),
+  channels: z.array(z.enum(['app', 'wecom', 'cmcc'])).min(1).max(3).default(['app']),
   priority: z.enum(['low', 'normal', 'high', 'critical']).default('normal'),
   category: z.string().trim().regex(/^[a-z][a-z0-9._-]{1,63}$/),
   content: appContentSchema,
@@ -110,11 +110,26 @@ function toWeComMessage(input) {
   };
 }
 
+// 新消息通道只收纯文本，Markdown 标记会原样显示在手机上，这里做一次轻量剥离。
+function toCmccText(content, maxLength = 2048) {
+  return contentToText(content, maxLength * 2)
+    .replace(/```[\s\S]*?```/g, (block) => block.slice(3, -3).trim())
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^\s*>\s?/gm, '')
+    .slice(0, maxLength)
+    .trim();
+}
+
 module.exports = {
   appContentSchema,
   appDeviceSchema,
   appNotificationSchema,
   appPreferenceSchema,
   contentToText,
+  toCmccText,
   toWeComMessage,
 };

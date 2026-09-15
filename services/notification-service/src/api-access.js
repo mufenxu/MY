@@ -115,7 +115,7 @@ function buildOpenApiDocument({ serverUrl = 'https://pxyb.cn/api/notify' } = {})
               required: ['users'],
               properties: { users: { type: 'array', minItems: 1, maxItems: 500, items: { type: 'string' } } },
             },
-            channels: { type: 'array', items: { enum: ['app', 'wecom'] } },
+            channels: { type: 'array', items: { enum: ['app', 'wecom', 'cmcc'] } },
             category: { type: 'string' },
             priority: { enum: ['low', 'normal', 'high', 'critical'] },
             content: { type: 'object' },

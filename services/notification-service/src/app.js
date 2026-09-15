@@ -7,6 +7,7 @@ const { verifyPlatformSsoRequest, verifyServiceRequest } = require('@my-platform
 const { z } = require('zod');
 
 const WeComClient = require('./wecom-client');
+const { CmccClient } = require('./cmcc-client');
 const { notificationSchema, buildWeComPayload } = require('./notification-schema');
 const { createNotificationOrchestrator } = require('./notification-orchestrator');
 const { createMemoryNotificationStore } = require('./notification-store');
@@ -15,6 +16,7 @@ const {
   appDeviceSchema,
   appNotificationSchema,
   appPreferenceSchema,
+  toCmccText,
   toWeComMessage,
 } = require('./app-notification-schema');
 const {
@@ -95,7 +97,13 @@ const appTestNotificationSchema = z.object({
   priority: z.enum(['low', 'normal', 'high', 'critical']).default('high'),
 });
 
-function createApp({ config, wecomClient = null, notificationStore = null, appPushDispatcher = null } = {}) {
+function createApp({
+  config,
+  wecomClient = null,
+  notificationStore = null,
+  appPushDispatcher = null,
+  cmccClient = null,
+} = {}) {
   if (!config) throw new Error('Notification service config is required.');
   const app = express();
   const client = wecomClient || new WeComClient({
@@ -108,6 +116,9 @@ function createApp({ config, wecomClient = null, notificationStore = null, appPu
     retentionDays: config.historyRetentionDays,
   });
   const pushDispatcher = appPushDispatcher || createAppPushDispatcher();
+  const cmcc = cmccClient || (config.cmcc?.enabled
+    ? new CmccClient({ apiKey: config.cmcc.apiKey, wsUrl: config.cmcc.wsUrl })
+    : null);
   const guardAgainstReplay = createReplayGuard();
   const apiRateWindows = new Map();
 
@@ -265,6 +276,47 @@ function createApp({ config, wecomClient = null, notificationStore = null, appPu
     }
   }
 
+  function requireCmccChannel() {
+    if (!cmcc) {
+      throw httpError(503, 'CMCC_CHANNEL_UNAVAILABLE', '中国移动新消息通道未配置，请先设置 CMCC_API_KEY 与 CMCC_RECIPIENT。');
+    }
+    return cmcc;
+  }
+
+  async function deliverCmcc(content, { caller, actor = '', requestId, apiClient = null } = {}) {
+    const channel = requireCmccChannel();
+    const to = config.cmcc.recipient;
+    const text = toCmccText(content);
+    const startedAt = Date.now();
+    const delivery = await safelyCreateDelivery({
+      caller,
+      actor: String(actor || '').slice(0, 128),
+      requestId,
+      apiClientId: apiClient?.clientId || null,
+      apiClientName: apiClient?.clientName || '',
+      apiKeyId: apiClient?.keyId || null,
+      msgType: 'text',
+      targetType: 'phone',
+      targetValue: to,
+      retryable: false,
+      payload: { channel: 'cmcc', to, content: text },
+    });
+    try {
+      const messageId = await channel.send({ to, content: text });
+      const completed = await safelyCompleteDelivery(delivery?.id, {
+        status: 'success',
+        durationMs: Date.now() - startedAt,
+      }, requestId);
+      return { result: { messageId }, delivery: completed || delivery };
+    } catch (error) {
+      await safelyCompleteDelivery(delivery?.id, {
+        ...deliveryFailure(error),
+        durationMs: Date.now() - startedAt,
+      }, requestId);
+      throw error;
+    }
+  }
+
   async function deliver(body, { caller, actor = '', requestId, parentDeliveryId = null, apiClient = null } = {}) {
     const parsed = notificationSchema.parse(body);
     const target = targetMetadata(parsed);
@@ -386,10 +438,22 @@ function createApp({ config, wecomClient = null, notificationStore = null, appPu
       wecomDeliveryId = delivered.delivery?.id || null;
       wecomStatus = 'sent';
     }
+    let cmccDeliveryId = null;
+    let cmccStatus = parsed.channels.includes('cmcc') ? 'deduplicated' : 'not-requested';
+    if (parsed.channels.includes('cmcc') && !created.deduplicated) {
+      const delivered = await deliverCmcc(parsed.content, { caller, requestId, apiClient });
+      cmccDeliveryId = delivered.delivery?.id || null;
+      // 网关没有投递回执，只记录已提交。
+      cmccStatus = 'accepted';
+    }
     return {
       notificationId: created.notification.id,
       deduplicated: created.deduplicated,
-      channels: { app: created.deduplicated ? 'deduplicated' : 'accepted', wecom: wecomStatus },
+      channels: {
+        app: created.deduplicated ? 'deduplicated' : 'accepted',
+        wecom: wecomStatus,
+        cmcc: cmccStatus,
+      },
       push: {
         attempted: push.attempted,
         sent: push.sent,
@@ -398,6 +462,7 @@ function createApp({ config, wecomClient = null, notificationStore = null, appPu
         suppressed: push.suppressed,
       },
       wecomDeliveryId,
+      cmccDeliveryId,
     };
   }
 
@@ -488,9 +553,10 @@ function createApp({ config, wecomClient = null, notificationStore = null, appPu
         await recordManagedApiRequest(req, { endpoint: '/v1/notifications', httpStatus: 403, errorCode: 'BROADCAST_SCOPE_REQUIRED', body: req.body });
         return res.status(403).json({ errcode: 403, errmsg: '多用户通知需要广播权限', code: 'BROADCAST_SCOPE_REQUIRED', requestId: req.id });
       }
-      if (req.apiClient?.managed && parsed.channels.includes('wecom') && !hasScope(req.apiClient, 'notifications:send')) {
+      const requiresExternalSendScope = parsed.channels.includes('wecom') || parsed.channels.includes('cmcc');
+      if (req.apiClient?.managed && requiresExternalSendScope && !hasScope(req.apiClient, 'notifications:send')) {
         await recordManagedApiRequest(req, { endpoint: '/v1/notifications', httpStatus: 403, errorCode: 'API_SCOPE_REQUIRED', body: req.body });
-        return res.status(403).json({ errcode: 403, errmsg: '当前 API Key 缺少企业微信发送权限', code: 'API_SCOPE_REQUIRED', requestId: req.id });
+        return res.status(403).json({ errcode: 403, errmsg: '当前 API Key 缺少外部通道发送权限', code: 'API_SCOPE_REQUIRED', requestId: req.id });
       }
       if (parsed.scheduledAt && parsed.scheduledAt > new Date()) {
         if (req.apiClient?.managed && !hasScope(req.apiClient, 'notifications:enqueue')) {
@@ -511,9 +577,11 @@ function createApp({ config, wecomClient = null, notificationStore = null, appPu
           channels: {
             app: 'scheduled',
             wecom: parsed.channels.includes('wecom') ? 'scheduled' : 'not-requested',
+            cmcc: parsed.channels.includes('cmcc') ? 'scheduled' : 'not-requested',
           },
           push: { attempted: 0, sent: 0, deferred: 0, failed: 0, suppressed: 0 },
           wecomDeliveryId: null,
+          cmccDeliveryId: null,
           requestId: req.id,
         });
       }
@@ -1088,6 +1156,7 @@ function createApp({ config, wecomClient = null, notificationStore = null, appPu
 
   app.locals.notificationStore = store;
   app.locals.notificationOrchestrator = orchestrator;
+  app.locals.cmccClient = cmcc;
   return app;
 }
 
