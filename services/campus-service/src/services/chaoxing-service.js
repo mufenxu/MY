@@ -28,6 +28,11 @@ function id(value) {
   return text;
 }
 function enabled(value) { return value === true || String(value) === "1" || value === "true"; }
+// 上游失败原因只用于诊断：压成一行并截断，避免把整段堆栈带进日志和通知。
+function upstreamReason(message, limit = 60) {
+  const text = String(message ?? "").replace(/\s+/g, " ").trim();
+  return text ? "（" + text.slice(0, limit) + "）" : "";
+}
 function apiUrl(path, query = {}) {
   const url = new URL(path, MOBILE);
   for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
@@ -131,11 +136,12 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
       if (!enabled(payload.success)) {
         if (path === "/http/chaoxing") throw loginFailed();
         const message = String(payload.message || "");
-        if (/登录|cookie|session/i.test(message)) throw providerLoginRequired();
+        // 帮你签把自家会话失效也报成业务失败（例如「缓存异常，请重新登」），不能只认 登录/cookie/session。
+        if (/登录|cookie|session|缓存异常|重新登|重新连接/i.test(message)) throw providerLoginRequired();
         if (/(?:次数|积分|时长|余额).*(?:不足|不够|用完|耗尽)/.test(message)) {
           throw fail(409, "帮你签可用次数不足，请在小程序中补充后重试。", "CHAOXING_PROVIDER_QUOTA_EXHAUSTED");
         }
-        throw fail(502, "帮你签服务未能处理请求，请稍后重试。", "CHAOXING_PROVIDER_REJECTED");
+        throw fail(502, "帮你签服务未能处理请求" + upstreamReason(message) + "，请稍后重试。", "CHAOXING_PROVIDER_REJECTED");
       }
       return payload.data;
     } catch (error) {
@@ -352,6 +358,51 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
       message: pending ? "官方签到记录尚未更新，请先刷新结果。" : "学习通未确认签到，请刷新官方记录。", activity };
   }
 
+  // 帮你签把会话失效也报成业务失败，这类错误用保存的凭据重登一次就能恢复。
+  function providerSessionError(error) {
+    return error?.code === "CHAOXING_PROVIDER_REJECTED" || error?.code === "CHAOXING_PROVIDER_LOGIN_REQUIRED";
+  }
+
+  // 用连接时保存的密码重建帮你签侧会话；没有凭据或凭据被拒时，转成"请重新连接"的可操作错误。
+  async function ensureProviderLogin(jar, provider) {
+    const password = typeof provider?.password === "string" ? provider.password : "";
+    if (!password) throw providerLoginRequired();
+    let profile;
+    try {
+      const data = await providerRequest("/http/chaoxing", { method: "POST", body: { phone: provider.phone, password } });
+      profile = data?.result;
+      if (!profile || !/^\d{1,20}$/.test(String(profile.uid ?? ""))) throw providerProtocolChanged("LOGIN_RESULT");
+      if (String(profile.uid) !== jar.meta.profile.uid) {
+        throw fail(409, "帮你签保存的账号与当前学习通账号不一致，请重新连接帮你签服务。", "CHAOXING_PROVIDER_ACCOUNT_MISMATCH");
+      }
+    } catch (error) {
+      if (!["CHAOXING_PROVIDER_LOGIN_FAILED", "CHAOXING_PROVIDER_ACCOUNT_MISMATCH"].includes(error?.code)) throw error;
+      if (logger) logger.warn("chaoxing_sign_provider_relogin_failed", { code: error.code });
+      throw fail(409, "帮你签服务登录已失效，自动重新登录未成功，请重新连接帮你签服务。", "CHAOXING_PROVIDER_LOGIN_REQUIRED");
+    }
+    const account = typeof profile.phone === "number" ? String(profile.phone) : profile.phone;
+    if (typeof account === "string" && account.trim()) provider.phone = account.trim();
+    if (profile.dxfid != null && ["string", "number"].includes(typeof profile.dxfid)) provider.fid = profile.dxfid;
+    if (typeof profile.realname === "string" && profile.realname) provider.name = profile.realname;
+    provider.uid = String(profile.uid);
+    delete provider.expired;
+    if (logger) logger.info("chaoxing_sign_provider_relogin", { uid: provider.uid });
+  }
+
+  // 签到前和失败后各留一次自动重登机会，避免帮你签侧会话过期直接变成一次失败。
+  async function signWithProvider(jar, summary, options) {
+    const provider = jar.meta.signProvider;
+    if (!provider) throw fail(409, "请先连接帮你签服务后再签到。", "CHAOXING_SIGN_PROVIDER_REQUIRED");
+    if (provider.expired || provider.uid !== jar.meta.profile.uid) await ensureProviderLogin(jar, provider);
+    try {
+      return await submitProviderSign(jar, summary, options);
+    } catch (error) {
+      if (!providerSessionError(error)) throw error;
+      await ensureProviderLogin(jar, provider);
+      return await submitProviderSign(jar, summary, options);
+    }
+  }
+
   async function runAutoSign(jar, row) {
     const empty = { courseName: "", activityName: "", activityId: "" };
     const scopedName = String(row?.course?.name || "").trim().slice(0, 120);
@@ -404,7 +455,7 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
       return failed(`最新活动「${summary.name}」需要${need}，请在帮你签小程序或学习通客户端手动完成。`, target);
     }
     try {
-      const outcome = await submitProviderSign(jar, summary, { location });
+      const outcome = await signWithProvider(jar, summary, { location });
       return { ...target, status: outcome.confirmed ? "success" : "failed", message: outcome.message || "自动签到未能完成。" };
     } catch (error) {
       if (error.code === "CHAOXING_LOGIN_REQUIRED") jar.meta.expired = true;
@@ -482,8 +533,8 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
       if (typeof account !== "string" || !account.trim() || account.length > 128) throw providerProtocolChanged(`PHONE_${profile.phone == null ? "MISSING" : typeof profile.phone}`.toUpperCase());
       // The mini program passes dxfid through as an optional value; it is not the account identity.
       if (profile.dxfid != null && !["string", "number"].includes(typeof profile.dxfid)) throw providerProtocolChanged("FID_TYPE");
-      // The provider keeps its own login session; MY only retains the identity needed for signing.
-      jar.meta.signProvider = { phone: account.trim(), uid: String(profile.uid), fid: profile.dxfid, name: String(profile.realname || jar.meta.profile.name) };
+      // 密码随 jar 一起加密落库，只用于帮你签会话失效时的自动重登；断开帮你签即删除。
+      jar.meta.signProvider = { phone: account.trim(), uid: String(profile.uid), fid: profile.dxfid, name: String(profile.realname || jar.meta.profile.name), password };
       return profileSummary(jar);
     }),
     disconnectSignProvider: userId => withSession(userId, async jar => {
@@ -515,7 +566,7 @@ export function createChaoxingService({ repository, sensitiveJson, readUpstreamT
       if (typeof validate !== "string" || validate.length > 8192) throw fail(400, "验证码结果无效，请重新验证。", "CHAOXING_INVALID_CAPTCHA");
       if (summary.requiresCaptcha && !validate) return { confirmed: false, requiresCaptcha: true, message: "请在 MY 内完成学习通安全验证后继续签到。", activity: summary };
       if (summary.type !== "4") return { confirmed: false, requiresOfficial: true, message: "该签到类型请在帮你签小程序或学习通客户端完成。", activity: summary };
-      return submitProviderSign(jar, summary, { location: normalizeChaoxingLocation(body.location), validate });
+      return signWithProvider(jar, summary, { location: normalizeChaoxingLocation(body.location), validate });
     }),
     async autoSignSettings(userId) {
       const [row, session] = await Promise.all([repository.getChaoxingAutoSign(userId), repository.getChaoxingSession(userId)]);

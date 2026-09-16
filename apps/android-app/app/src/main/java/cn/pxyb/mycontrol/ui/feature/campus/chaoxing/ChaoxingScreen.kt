@@ -364,7 +364,7 @@ fun ChaoxingScreen(
     if (confirmDisconnectProvider) {
         AppConfirmDialog(
             title = "断开帮你签服务？",
-            detail = "将移除保存的帮你签连接，依赖此服务的签到和自动任务可能无法继续，需要重新连接后才能使用。",
+            detail = "将移除保存的帮你签连接和加密保存的学习通密码，依赖此服务的签到和自动任务可能无法继续，需要重新连接后才能使用。",
             confirmLabel = "确认断开",
             icon = Icons.Outlined.LinkOff,
             danger = true,
@@ -501,7 +501,7 @@ private fun SignProviderConnectionDialog(state: ChaoxingUiState, onConnect: (Str
             }
         }) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("账号和密码将发送至帮你签服务（lovegcu.xyz）用于连接。MY 不保存密码。", style = MaterialTheme.typography.bodyMedium)
+            Text("账号和密码将发送至帮你签服务（lovegcu.xyz）用于连接。密码会加密保存在服务器，仅在该服务会话失效时自动重新登录，断开帮你签后即删除。", style = MaterialTheme.typography.bodyMedium)
             Text("启用后，位置签到会向该服务发送本次位置和账号资料，并消耗其可用次数。", style = MaterialTheme.typography.bodySmall)
             AppTextField(phone, { phone = it }, label = "学习通账号", enabled = !state.busy, modifier = Modifier.fillMaxWidth())
             AppTextField(password, { password = it }, label = "学习通密码", isPassword = true, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
