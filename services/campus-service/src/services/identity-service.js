@@ -1,6 +1,7 @@
 import bwipjs from "bwip-js";
 import { cookieHeaderFor } from "../lib/session-jar.js";
 import { HttpError } from "../lib/http.js";
+import { discardUpstreamResponse } from "../lib/upstream-response.js";
 import { normalizeHtmlText } from "../lib/academic-parsers.js";
 import QRCode from "qrcode";
 
@@ -257,13 +258,15 @@ export function createIdentityService({
   }
 
   async function activatePortalSession(jar, credentials = {}) {
-    await loginCasService({
+    // loginCasService 返回的响应持有上游并发槽，必须在调用方消费掉。
+    const casLogin = await loginCasService({
       jar,
       username: credentials.username,
       password: credentials.password,
       rememberMe: credentials.rememberMe ?? true,
       serviceUrl: MY_USERCENTER_HOME_URL
     });
+    await discardUpstreamResponse(casLogin.response).catch(() => {});
     await requestPortalHtml(jar, MY_USERCENTER_HOME_URL);
     await requestPortalHtml(jar, MY_INFO_PAGE_URL, { referer: MY_USERCENTER_HOME_URL }).catch(() => null);
     if (!cookieHeaderFor(jar, MY_USERCENTER_HOME_URL)) {

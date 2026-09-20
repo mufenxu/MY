@@ -350,13 +350,14 @@ export function createReservationService({
       const verifyUrl = extractWebvpnVerifyUrl(html, finalUrl);
       if (verifyUrl) {
         // 网关先返回 locationUrl=verify 壳页：跟随 verify 建立站点会话后重试。
-        await followRedirectsWithJar(verifyUrl, jar, {
+        const verified = await followRedirectsWithJar(verifyUrl, jar, {
           method: "GET",
           headers: {
             accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             referer: finalUrl
           }
         });
+        await discardUpstreamResponse(verified.response).catch(() => {});
         continue;
       }
 

@@ -201,6 +201,7 @@ export function createSchoolWebvpnService({
         }
         return fetchLibroomWithWebvpn(jar, targetUrl, { method, headers, body, attempt: attempt + 1 });
       }
+      await discardUpstreamResponse(response);
       return { response, text: null, finalUrl: targetUrl };
     }
 

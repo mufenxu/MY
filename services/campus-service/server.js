@@ -1778,6 +1778,14 @@ async function fetchWithJar(url, {
     updateJarFromResponse(jar, response, safeUrl);
     return trackUpstreamResponse(response, () => {
       activeUpstreamRequests -= 1;
+    }, {
+      onWatchdog: () => {
+        logger.warn("upstream_response_release_watchdog", {
+          endpoint: new URL(safeUrl).pathname,
+          status: response.status,
+          activeUpstreamRequests
+        });
+      }
     });
   } catch (error) {
     activeUpstreamRequests -= 1;
@@ -1942,7 +1950,9 @@ async function getCasTicketRedirect({ jar, username, password, rememberMe = true
 
 async function loginWithCasFull({ username, password, rememberMe = true, saveCredentials = false }) {
   const jar = emptyJar();
-  await loginCasService({ jar, username, password, rememberMe, serviceUrl: SERVICE_URL });
+  // loginCasService 返回的响应持有上游并发槽，必须在调用方消费掉。
+  const casLogin = await loginCasService({ jar, username, password, rememberMe, serviceUrl: SERVICE_URL });
+  await discardUpstreamResponse(casLogin.response).catch(() => {});
 
   jar.meta.schoolAccount = normalizeSchoolLoginAccount(username);
   jar.meta.autoRelogin = saveCredentials
@@ -2250,13 +2260,14 @@ async function schoolRequest(path, {
 }
 
 async function activateEnergySession(jar, credentials = {}) {
-  await loginCasService({
+  const casLogin = await loginCasService({
     jar,
     username: credentials.username,
     password: credentials.password,
     rememberMe: credentials.rememberMe ?? true,
     serviceUrl: SERVICE_URL
   });
+  await discardUpstreamResponse(casLogin.response).catch(() => {});
   jar.meta.nrgCapturedAt = new Date().toISOString();
   jar.meta.cas ||= {};
   jar.meta.cas.lastError = null;

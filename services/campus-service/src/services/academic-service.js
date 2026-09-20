@@ -16,6 +16,7 @@ import {
 import * as cheerio from "cheerio";
 import { cookieHeaderFor, mergeSessionJars } from "../lib/session-jar.js";
 import { HttpError } from "../lib/http.js";
+import { discardUpstreamResponse } from "../lib/upstream-response.js";
 import {
   normalizeFreeClassroomPayload,
   normalizeHtmlText,
@@ -92,7 +93,9 @@ export function createAcademicService({
   }
 
   async function loginAcademicCasSession(jar, { username, password, rememberMe = true } = {}) {
-    await loginCasService({ jar, username, password, rememberMe, serviceUrl: JWXS_LOGIN_URL });
+    // loginCasService 返回的响应持有上游并发槽，必须在调用方消费掉。
+    const casLogin = await loginCasService({ jar, username, password, rememberMe, serviceUrl: JWXS_LOGIN_URL });
+    await discardUpstreamResponse(casLogin.response).catch(() => {});
     await requestAcademicHtmlWithSimpleRedirects(jar, `${JWXS_ORIGIN}/sigin`, { referer: JWXS_LOGIN_URL }).catch(() => null);
     jar.meta.cas ||= {};
     jar.meta.cas.lastError = null;
