@@ -210,8 +210,8 @@ class PlatformWebActivity : ComponentActivity() {
                 allowInsecure = intent.getBooleanExtra(EXTRA_AUTO_LOGIN_ALLOW_INSECURE, false),
             )
         }
-        if (autoLogin != null && !isAutoLoginPage(initialUrl, autoLogin.loginUrl, autoLogin.allowInsecure)) {
-            Toast.makeText(this, "自动登录地址未通过安全验证，请为外部应用配置 HTTPS。", Toast.LENGTH_LONG).show()
+        if (autoLogin != null && !isAutoLoginOrigin(initialUrl, autoLogin.loginUrl, autoLogin.allowInsecure)) {
+            Toast.makeText(this, "自动登录地址未通过安全验证：启动地址需与登录页同一站点，或为该站点配置 HTTPS。", Toast.LENGTH_LONG).show()
             finish()
             return
         }
@@ -703,19 +703,35 @@ private fun shouldRestoreInitialHash(initialUrl: String, currentUrl: String?, al
     return currentUrl == initialUrl.substring(0, initialHashIndex)
 }
 
-internal fun isAutoLoginPage(currentUrl: String?, loginUrl: String, allowInsecure: Boolean = false): Boolean {
+// 登录页只在 HTTPS，或站点已开启明文豁免时允许；其余情况不注入凭据。
+private fun allowedAutoLoginTarget(loginUrl: String, allowInsecure: Boolean): java.net.URI? = runCatching {
+    val target = java.net.URI(loginUrl)
+    val scheme = target.scheme?.lowercase()
+    if (scheme == "https" || (allowInsecure && scheme == "http")) target else null
+}.getOrNull()
+
+private fun defaultPortOf(uri: java.net.URI): Int = if (uri.scheme.equals("https", ignoreCase = true)) 443 else 80
+
+// 预检只要求启动地址与登录页同站点同协议：站点通常先落到首页再跳登录页。
+internal fun isAutoLoginOrigin(currentUrl: String?, loginUrl: String, allowInsecure: Boolean = false): Boolean {
     if (currentUrl.isNullOrBlank()) return false
+    val target = allowedAutoLoginTarget(loginUrl, allowInsecure) ?: return false
     return runCatching {
         val current = java.net.URI(currentUrl)
-        val target = java.net.URI(loginUrl)
-        val scheme = target.scheme?.lowercase()
-        val schemeAllowed = scheme == "https" || (allowInsecure && scheme == "http")
-        val defaultPort = if (scheme == "https") 443 else 80
-        schemeAllowed && current.scheme?.lowercase() == scheme &&
+        val defaultPort = defaultPortOf(target)
+        current.scheme?.lowercase() == target.scheme?.lowercase() &&
             !current.host.isNullOrBlank() && current.host.equals(target.host, ignoreCase = true) &&
-            current.rawUserInfo == null && target.rawUserInfo == null &&
-            (current.port.takeIf { it != -1 } ?: defaultPort) == (target.port.takeIf { it != -1 } ?: defaultPort) &&
-            current.rawPath == target.rawPath
+            current.rawUserInfo == null &&
+            (current.port.takeIf { it != -1 } ?: defaultPort) == (target.port.takeIf { it != -1 } ?: defaultPort)
+    }.getOrDefault(false)
+}
+
+// 凭据只注入到登录页本身：主机、端口、协议以及路径都必须完全一致。
+internal fun isAutoLoginPage(currentUrl: String?, loginUrl: String, allowInsecure: Boolean = false): Boolean {
+    if (!isAutoLoginOrigin(currentUrl, loginUrl, allowInsecure)) return false
+    return runCatching {
+        val target = java.net.URI(loginUrl)
+        target.rawUserInfo == null && java.net.URI(currentUrl).rawPath == target.rawPath
     }.getOrDefault(false)
 }
 

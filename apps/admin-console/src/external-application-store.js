@@ -379,6 +379,7 @@ export async function createMongoExternalApplicationStore({
         loginUrl: record.autoLogin.loginUrl,
         username: record.autoLogin.username,
         homeUrl: record.autoLogin.homeUrl,
+        allowInsecure: record.autoLogin.allowInsecure === true,
         password: decryptSecret(record.autoLogin.password),
       };
       return result;
