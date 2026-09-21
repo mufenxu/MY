@@ -59,7 +59,10 @@ export function registerExternalAppRoutes(app, {
 
   app.put('/api/external-apps/:id', requireConsoleRequest, requireRole('super_admin'), async (req, res, next) => {
     try {
-      const input = normalizeExternalApplicationInput(req.body, { isProduction: config.isProduction });
+      const input = normalizeExternalApplicationInput(req.body, {
+        isProduction: config.isProduction,
+        keepAutoLoginPassword: true,
+      });
       const application = await externalApplications.updateApplication(req.params.id, {
         ...input,
         actor: req.consoleUser.username,
@@ -124,7 +127,8 @@ export function registerExternalAppRoutes(app, {
         loginUrl = application.launchUrl;
       } else if (application.autoLogin) {
         const credentialUrl = new URL(application.autoLogin.loginUrl);
-        if (credentialUrl.protocol !== 'https:' || credentialUrl.username || credentialUrl.password) {
+        const plainTextAllowed = application.autoLogin.allowInsecure === true;
+        if ((credentialUrl.protocol !== 'https:' && !plainTextAllowed) || credentialUrl.username || credentialUrl.password) {
           return res.status(409).json({ error: '该外部应用未配置安全的 HTTPS 登录地址，已阻止发送账号密码。', code: 'INSECURE_AUTO_LOGIN' });
         }
         const secrets = await externalApplications.revealApplicationSecrets(application.id);

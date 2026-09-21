@@ -140,6 +140,7 @@ data class ExternalApplicationAutoLogin(
     val username: String,
     val password: String,
     val homeUrl: String?,
+    val allowInsecure: Boolean = false,
 )
 
 @Immutable

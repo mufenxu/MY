@@ -35,6 +35,7 @@ const EMPTY_FORM = Object.freeze({
   autoLoginUsername: '',
   autoLoginPassword: '',
   autoLoginHomeUrl: '',
+  autoLoginAllowInsecure: false,
 });
 
 const ROLE_OPTIONS = [
@@ -77,6 +78,7 @@ function formFromApplication(application) {
     autoLoginUsername: application.autoLogin?.username || '',
     autoLoginPassword: '',
     autoLoginHomeUrl: application.autoLogin?.homeUrl || '',
+    autoLoginAllowInsecure: application.autoLogin?.allowInsecure === true,
   };
 }
 
@@ -104,6 +106,7 @@ function ApplicationEditor({ application, busy, onClose, onSave }) {
         username: form.autoLoginUsername.trim(),
         password: form.autoLoginPassword,
         homeUrl: form.autoLoginHomeUrl.trim() || null,
+        allowInsecure: form.autoLoginAllowInsecure === true,
       } : null,
     });
   }
@@ -145,6 +148,7 @@ function ApplicationEditor({ application, busy, onClose, onSave }) {
                       <label><span>账号</span><input required maxLength={100} autoComplete="off" value={form.autoLoginUsername} onChange={(event) => update('autoLoginUsername', event.target.value)} /></label>
                       <label><span>密码</span><input required={!application?.autoLogin?.hasPassword} type="password" autoComplete="new-password" placeholder={application?.autoLogin?.hasPassword ? '已保存，留空则不修改' : (application ? '未保存，请填写' : '请输入该站点登录密码')} value={form.autoLoginPassword} onChange={(event) => update('autoLoginPassword', event.target.value)} /></label>
                       <label className="wide"><span>登录后首页（可选）</span><input type="url" placeholder="http://example.com/index/index.php" value={form.autoLoginHomeUrl} onChange={(event) => update('autoLoginHomeUrl', event.target.value)} /></label>
+                      <label className="wide external-app-toggle"><span><strong>允许 HTTP 明文登录</strong><small>仅当该站点无法启用 HTTPS 时开启，否则明文传输账号密码</small></span><input type="checkbox" checked={form.autoLoginAllowInsecure} onChange={(event) => update('autoLoginAllowInsecure', event.target.checked)} /></label>
                     </>
                   )}
                 </>
@@ -302,7 +306,7 @@ export default function ExternalApplicationsView({ session }) {
                 <dl>
                   <div><dt>接入方式</dt><dd>{application.kind === 'direct' ? '直接打开网址' : '统一身份认证'}</dd></div>
                   <div><dt>访问范围</dt><dd>{roleLabel(application.requiredRole)}</dd></div>
-                  {application.autoLogin && <div><dt>登录方式</dt><dd>自动登录</dd></div>}
+                  {application.autoLogin && <div><dt>登录方式</dt><dd>{application.autoLogin.allowInsecure ? '自动登录（HTTP 明文）' : '自动登录'}</dd></div>}
                   <div><dt>响应时间</dt><dd>{application.health?.latencyMs == null ? '--' : `${application.health.latencyMs} ms`}</dd></div>
                   <div><dt>打开方式</dt><dd>{application.openMode === 'browser' ? '系统浏览器' : 'App 内网页'}</dd></div>
                   {superAdmin && application.kind !== 'direct' && <div><dt>Client ID</dt><dd title={application.clientId}>{application.clientId}</dd></div>}

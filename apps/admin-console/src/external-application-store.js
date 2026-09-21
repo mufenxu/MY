@@ -73,6 +73,7 @@ function autoLoginRecord(input, encryptSecret, existingPassword = '') {
     loginUrl: String(input.loginUrl || '').trim(),
     username: String(input.username || '').trim(),
     homeUrl: String(input.homeUrl || '').trim() || null,
+    allowInsecure: input.allowInsecure === true,
     password: password ? encryptSecret(password) : existingPassword,
   };
 }
@@ -112,6 +113,7 @@ function publicApplication(record) {
       loginUrl: result.autoLogin.loginUrl,
       username: result.autoLogin.username,
       homeUrl: result.autoLogin.homeUrl,
+      allowInsecure: result.autoLogin.allowInsecure === true,
       hasPassword: Boolean(result.autoLogin.password),
     };
   }
@@ -229,6 +231,7 @@ export function createMemoryExternalApplicationStore({
         loginUrl: record.autoLogin.loginUrl,
         username: record.autoLogin.username,
         homeUrl: record.autoLogin.homeUrl,
+        allowInsecure: record.autoLogin.allowInsecure === true,
         password: decryptSecret(record.autoLogin.password),
       };
       return result;

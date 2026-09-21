@@ -25,14 +25,16 @@ function secureHttpUrl(value, label, { isProduction = true, optional = false, al
   return url.toString();
 }
 
-function normalizeAutoLogin(input, { isProduction = true } = {}) {
+function normalizeAutoLogin(input, { isProduction = true, keepPassword = false } = {}) {
   if (input === null || input === undefined) return null;
   if (typeof input !== 'object' || Array.isArray(input)) throw new TypeError('自动登录配置无效。');
   const loginUrl = secureHttpUrl(input.loginUrl, '自动登录页地址', { isProduction, allowInsecure: true });
   const username = String(input.username || '').trim();
   if (!username || username.length > 100) throw new TypeError('自动登录账号必须为 1 到 100 个字符。');
   const password = String(input.password || '');
-  if (!password || password.length > 200) throw new TypeError('自动登录密码必须为 1 到 200 个字符。');
+  if (password.length > 200) throw new TypeError('自动登录密码必须为 1 到 200 个字符。');
+  // 编辑时允许留空沿用已保存密码，新密码是否存在由存储层校验。
+  if (!password && !keepPassword) throw new TypeError('自动登录密码必须为 1 到 200 个字符。');
   let homeUrl = null;
   if (String(input.homeUrl || '').trim()) {
     homeUrl = secureHttpUrl(input.homeUrl, '自动登录后地址', { isProduction, allowInsecure: true });
@@ -40,10 +42,10 @@ function normalizeAutoLogin(input, { isProduction = true } = {}) {
       throw new TypeError('自动登录后地址必须与登录页同源。');
     }
   }
-  return { loginUrl, username, password, homeUrl };
+  return { loginUrl, username, password, homeUrl, allowInsecure: input.allowInsecure === true };
 }
 
-export function normalizeExternalApplicationInput(input, { isProduction = true } = {}) {
+export function normalizeExternalApplicationInput(input, { isProduction = true, keepAutoLoginPassword = false } = {}) {
   if (!input || typeof input !== 'object') throw new TypeError('外部应用参数无效。');
   const name = String(input.name || '').trim();
   if (!name || name.length > 100) throw new TypeError('应用名称必须为 1 到 100 个字符。');
@@ -51,7 +53,7 @@ export function normalizeExternalApplicationInput(input, { isProduction = true }
   if (!ACCESS_KINDS.has(kind)) throw new TypeError('接入方式无效。');
   const direct = kind === 'direct';
   if (direct && input.autoLogin) throw new TypeError('直接打开类型不支持第三方自动登录。');
-  const autoLogin = direct ? null : normalizeAutoLogin(input.autoLogin, { isProduction });
+  const autoLogin = direct ? null : normalizeAutoLogin(input.autoLogin, { isProduction, keepPassword: keepAutoLoginPassword });
   const redirectUris = direct ? [] : [...new Set((Array.isArray(input.redirectUris) ? input.redirectUris : [])
     .map((value) => String(value || '').trim())
     .filter(Boolean))];
@@ -102,6 +104,7 @@ export function sanitizeExternalApplication(application, { role = 'viewer', incl
       loginUrl: sanitized.autoLogin.loginUrl,
       username: sanitized.autoLogin.username,
       homeUrl: sanitized.autoLogin.homeUrl,
+      allowInsecure: sanitized.autoLogin.allowInsecure === true,
       hasPassword: Boolean(sanitized.autoLogin.password),
     };
   }

@@ -207,9 +207,10 @@ class PlatformWebActivity : ComponentActivity() {
                 username = intent.getStringExtra(EXTRA_AUTO_LOGIN_USERNAME).orEmpty(),
                 password = intent.getStringExtra(EXTRA_AUTO_LOGIN_PASSWORD).orEmpty(),
                 homeUrl = intent.getStringExtra(EXTRA_AUTO_LOGIN_HOME_URL)?.takeIf { it.isNotBlank() },
+                allowInsecure = intent.getBooleanExtra(EXTRA_AUTO_LOGIN_ALLOW_INSECURE, false),
             )
         }
-        if (autoLogin != null && !isAutoLoginPage(initialUrl, autoLogin.loginUrl)) {
+        if (autoLogin != null && !isAutoLoginPage(initialUrl, autoLogin.loginUrl, autoLogin.allowInsecure)) {
             Toast.makeText(this, "自动登录地址未通过安全验证，请为外部应用配置 HTTPS。", Toast.LENGTH_LONG).show()
             finish()
             return
@@ -457,6 +458,7 @@ class PlatformWebActivity : ComponentActivity() {
         private const val EXTRA_AUTO_LOGIN_USERNAME = "extra_auto_login_username"
         private const val EXTRA_AUTO_LOGIN_PASSWORD = "extra_auto_login_password"
         private const val EXTRA_AUTO_LOGIN_HOME_URL = "extra_auto_login_home_url"
+        private const val EXTRA_AUTO_LOGIN_ALLOW_INSECURE = "extra_auto_login_allow_insecure"
         private const val WEBVIEW_UPLOAD_CACHE_DIR = "webview-uploads"
 
         fun createChaoxingLoginIntent(context: Context): Intent =
@@ -478,6 +480,7 @@ class PlatformWebActivity : ComponentActivity() {
                     putExtra(EXTRA_AUTO_LOGIN_LOGIN_URL, it.loginUrl)
                     putExtra(EXTRA_AUTO_LOGIN_USERNAME, it.username)
                     putExtra(EXTRA_AUTO_LOGIN_PASSWORD, it.password)
+                    putExtra(EXTRA_AUTO_LOGIN_ALLOW_INSECURE, it.allowInsecure)
                     it.homeUrl?.let { homeUrl -> putExtra(EXTRA_AUTO_LOGIN_HOME_URL, homeUrl) }
                 }
                 if (initialCookies.isNotEmpty()) {
@@ -611,7 +614,7 @@ private fun PlatformWebScreen(
                                     view?.loadUrl(initialUrl)
                                     return
                                 }
-                                if (autoLogin != null && isAutoLoginPage(url, autoLogin.loginUrl)) {
+                                if (autoLogin != null && isAutoLoginPage(url, autoLogin.loginUrl, autoLogin.allowInsecure)) {
                                     view?.evaluateJavascript(
                                         buildAutoLoginScript(autoLogin),
                                         null,
@@ -700,15 +703,18 @@ private fun shouldRestoreInitialHash(initialUrl: String, currentUrl: String?, al
     return currentUrl == initialUrl.substring(0, initialHashIndex)
 }
 
-internal fun isAutoLoginPage(currentUrl: String?, loginUrl: String): Boolean {
+internal fun isAutoLoginPage(currentUrl: String?, loginUrl: String, allowInsecure: Boolean = false): Boolean {
     if (currentUrl.isNullOrBlank()) return false
     return runCatching {
         val current = java.net.URI(currentUrl)
         val target = java.net.URI(loginUrl)
-        current.scheme.equals("https", ignoreCase = true) && target.scheme.equals("https", ignoreCase = true) &&
+        val scheme = target.scheme?.lowercase()
+        val schemeAllowed = scheme == "https" || (allowInsecure && scheme == "http")
+        val defaultPort = if (scheme == "https") 443 else 80
+        schemeAllowed && current.scheme?.lowercase() == scheme &&
             !current.host.isNullOrBlank() && current.host.equals(target.host, ignoreCase = true) &&
             current.rawUserInfo == null && target.rawUserInfo == null &&
-            (current.port.takeIf { it != -1 } ?: 443) == (target.port.takeIf { it != -1 } ?: 443) &&
+            (current.port.takeIf { it != -1 } ?: defaultPort) == (target.port.takeIf { it != -1 } ?: defaultPort) &&
             current.rawPath == target.rawPath
     }.getOrDefault(false)
 }

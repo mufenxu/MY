@@ -536,6 +536,7 @@ internal fun parseExternalApplicationLaunch(json: JSONObject) = ExternalApplicat
             username = autoLogin.optString("username"),
             password = autoLogin.optString("password"),
             homeUrl = autoLogin.nullableString("homeUrl"),
+            allowInsecure = autoLogin.optBoolean("allowInsecure", false),
         )
     },
 )
