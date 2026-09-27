@@ -6,6 +6,26 @@ const HEARTBEAT_TIMEOUT_MS = 10000;
 const RECONNECT_BASE_DELAY_MS = 3000;
 const RECONNECT_MAX_DELAY_MS = 60000;
 const OPEN_STATE = 1;
+const DEFAULT_UPLOAD_URL = 'https://5gvas01.cmicmaap.com/gtw-ai/openclaw/api';
+const MEDIA_TYPES = ['IMAGE', 'TEXT', 'AUDIO', 'VIDEO', 'FILE'];
+const UPLOAD_TIMEOUT_MS = 60000;
+
+function normalizeText(value, maxLength = 2048) {
+  return String(value ?? '').trim().slice(0, maxLength);
+}
+
+function normalizeMediaType(value) {
+  const type = String(value || '').toUpperCase();
+  return MEDIA_TYPES.includes(type) ? type : '';
+}
+
+// 网关的 timestamp 可能是毫秒或秒级 Unix 时间，统一转换为 ISO 字符串。
+function normalizeTimestamp(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return new Date().toISOString();
+  const date = new Date(numeric > 1e11 ? numeric : numeric * 1000);
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+}
 
 function createCmccError(message, code) {
   const error = new Error(message);
@@ -21,17 +41,32 @@ function createCmccError(message, code) {
  * 帧写出成功只代表「已提交到网关」，不能视为「已送达手机」。
  */
 class CmccClient {
-  constructor({ apiKey, wsUrl = DEFAULT_WS_URL, logger = console, webSocketImpl = globalThis.WebSocket } = {}) {
+  constructor({
+    apiKey,
+    wsUrl = DEFAULT_WS_URL,
+    uploadUrl = DEFAULT_UPLOAD_URL,
+    defaultTo = '',
+    logger = console,
+    webSocketImpl = globalThis.WebSocket,
+    fetchImpl = globalThis.fetch,
+  } = {}) {
     this.apiKey = String(apiKey || '').trim();
     this.wsUrl = String(wsUrl || DEFAULT_WS_URL).trim();
+    this.uploadUrl = String(uploadUrl || DEFAULT_UPLOAD_URL).trim().replace(/\/+$/, '');
+    this.defaultTo = String(defaultTo || '').trim();
     this.logger = logger;
     this.webSocketImpl = webSocketImpl;
+    this.fetchImpl = fetchImpl;
     this.socket = null;
     this.connected = false;
     this.closed = false;
     this.lastError = null;
     this.lastConnectedAt = null;
-    this.stats = { sent: 0, failed: 0, reconnects: 0 };
+    this.lastInboundAt = null;
+    // 网关的富媒体帧没有 to 字段，只能回复最近一次上行会话，因此记录会话发送方。
+    this.sessionSender = '';
+    this.inboundHandlers = new Set();
+    this.stats = { sent: 0, failed: 0, reconnects: 0, mediaSent: 0, received: 0 };
     this.connectPromise = null;
     this.authWaiter = null;
     this.authTimer = null;
@@ -49,13 +84,32 @@ class CmccClient {
     return {
       configured: Boolean(this.apiKey),
       wsUrl: this.wsUrl,
+      uploadUrl: this.uploadUrl,
       connected: this.connected,
       ready: this.isReady(),
+      sessionSender: this.sessionSender,
       reconnectAttempts: this.reconnectAttempts,
       lastConnectedAt: this.lastConnectedAt,
+      lastInboundAt: this.lastInboundAt,
       lastError: this.lastError ? { ...this.lastError } : null,
       stats: { ...this.stats },
     };
+  }
+
+  /** 注册上行消息监听，返回取消注册函数。 */
+  onInbound(handler) {
+    if (typeof handler !== 'function') return () => {};
+    this.inboundHandlers.add(handler);
+    return () => this.inboundHandlers.delete(handler);
+  }
+
+  getSessionSender() {
+    return this.sessionSender;
+  }
+
+  /** 文本帧支持显示 to；未指定时优先回复最近一次上行会话，再回退到固定接收号码。 */
+  resolveTarget(to) {
+    return String(to || this.sessionSender || this.defaultTo || '').trim();
   }
 
   recordError(error) {
@@ -85,13 +139,15 @@ class CmccClient {
   async send({ to, content }) {
     try {
       if (this.closed) throw createCmccError('中国移动新消息通道已关闭。', 'CMCC_CLIENT_CLOSED');
+      const target = this.resolveTarget(to);
+      if (!target) throw createCmccError('缺少新消息接收号码，且当前没有可回复的上行会话。', 'CMCC_TARGET_REQUIRED');
       await this.connect();
       const socket = this.socket;
       if (!socket || socket.readyState !== OPEN_STATE) {
         throw createCmccError('中国移动新消息网关未连接。', 'CMCC_NOT_CONNECTED');
       }
       const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-      socket.send(JSON.stringify({ type: 'send', apiKey: this.apiKey, to, content, messageId }));
+      socket.send(JSON.stringify({ type: 'send', apiKey: this.apiKey, to: target, content, messageId }));
       this.stats.sent += 1;
       return messageId;
     } catch (error) {
@@ -99,6 +155,79 @@ class CmccClient {
       this.recordError(error);
       throw error;
     }
+  }
+
+  /**
+   * 发送富媒体消息。网关的富媒体帧没有 to 字段，只会投递给最近一次上行会话，
+   * 这里保持与官方插件一致的帧结构，不做额外改写。
+   */
+  async sendRichMedia({
+    mediaType,
+    content = '',
+    mediaUrl,
+    thumbnailUrl = '',
+    mediaFileName = '',
+    mediaSize = 0,
+    mediaMimeType = '',
+  } = {}) {
+    try {
+      if (this.closed) throw createCmccError('中国移动新消息通道已关闭。', 'CMCC_CLIENT_CLOSED');
+      const type = normalizeMediaType(mediaType);
+      if (!type) throw createCmccError('富媒体类型无效，仅支持 IMAGE、TEXT、AUDIO、VIDEO、FILE。', 'CMCC_MEDIA_TYPE_INVALID');
+      if (!String(mediaUrl || '').trim()) throw createCmccError('富媒体消息缺少可访问的 mediaUrl。', 'CMCC_MEDIA_URL_REQUIRED');
+      await this.connect();
+      const socket = this.socket;
+      if (!socket || socket.readyState !== OPEN_STATE) {
+        throw createCmccError('中国移动新消息网关未连接。', 'CMCC_NOT_CONNECTED');
+      }
+      const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+      const payload = { type: 'send', apiKey: this.apiKey, mediaType: type, content, mediaUrl, messageId };
+      if (thumbnailUrl) payload.thumbnailUrl = thumbnailUrl;
+      if (mediaFileName) payload.mediaFileName = mediaFileName;
+      if (Number(mediaSize) > 0) payload.mediaSize = Number(mediaSize);
+      if (mediaMimeType) payload.mediaMimeType = mediaMimeType;
+      socket.send(JSON.stringify(payload));
+      this.stats.sent += 1;
+      this.stats.mediaSent += 1;
+      return messageId;
+    } catch (error) {
+      this.stats.failed += 1;
+      this.recordError(error);
+      throw error;
+    }
+  }
+
+  /** 上传富媒体文件到网关，返回可用于发送的 mediaUrl。 */
+  async uploadMedia({ data, fileName = `cmcc_${Date.now()}`, mimeType = 'application/octet-stream' } = {}) {
+    if (!this.apiKey) throw createCmccError('未配置 CMCC_API_KEY，无法上传富媒体文件。', 'CMCC_UPLOAD_UNAVAILABLE');
+    if (typeof this.fetchImpl !== 'function' || typeof FormData !== 'function' || typeof Blob !== 'function') {
+      throw createCmccError('当前 Node 运行时不支持上传富媒体文件。', 'CMCC_UPLOAD_UNAVAILABLE');
+    }
+    const bytes = Buffer.isBuffer(data) ? data : Buffer.from(data || []);
+    if (!bytes.length) throw createCmccError('待上传的富媒体文件为空。', 'CMCC_UPLOAD_EMPTY');
+    const form = new FormData();
+    form.append('file', new Blob([bytes], { type: mimeType }), fileName);
+    form.append('apiKey', this.apiKey);
+    let response;
+    try {
+      response = await this.fetchImpl(`${this.uploadUrl}/upload`, {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
+      });
+    } catch (error) {
+      const failure = createCmccError(`上传富媒体文件失败：${error.message}`, 'CMCC_UPLOAD_FAILED');
+      this.recordError(failure);
+      throw failure;
+    }
+    const payload = await response.json().catch(() => null);
+    const mediaUrl = typeof payload?.data === 'string' ? payload.data.trim() : '';
+    if (!response.ok || Number(payload?.code) !== 10200 || !mediaUrl) {
+      const failure = createCmccError(`上传富媒体文件失败：${payload?.message || `HTTP ${response.status}`}`, 'CMCC_UPLOAD_FAILED');
+      this.recordError(failure);
+      throw failure;
+    }
+    return mediaUrl;
   }
 
   close() {
@@ -186,6 +315,14 @@ class CmccClient {
         clearTimeout(this.pongTimer);
         this.pongTimer = null;
         return;
+      case 'connected':
+        this.logger.info?.('[cmcc] 网关已确认连接。');
+        return;
+      case 'message':
+      case 'text_message':
+      case 'media_message':
+        this.handleInbound(message);
+        return;
       case 'error':
         this.recordError(createCmccError(`网关返回错误：${message.message || '未知错误'}`, 'CMCC_GATEWAY_ERROR'));
         this.logger.error(`[cmcc] 网关返回错误：${message.message || '未知错误'}`);
@@ -193,6 +330,35 @@ class CmccClient {
       default:
         return;
     }
+  }
+
+  handleInbound(frame) {
+    const inbound = {
+      id: normalizeText(frame.messageId || frame.id, 128) || `in_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`,
+      from: normalizeText(frame.from || frame.phone, 32),
+      content: normalizeText(frame.content, 4096),
+      mediaType: normalizeMediaType(frame.mediaType),
+      mediaUrl: normalizeText(frame.mediaUrl, 2048),
+      thumbnailUrl: normalizeText(frame.thumbnailUrl, 2048),
+      mediaFileName: normalizeText(frame.mediaFileName, 256),
+      mediaMimeType: normalizeText(frame.mediaMimeType, 128),
+      mediaSize: Number.isFinite(Number(frame.mediaSize)) ? Number(frame.mediaSize) : null,
+      receivedAt: normalizeTimestamp(frame.timestamp),
+    };
+    if (inbound.from) this.sessionSender = inbound.from;
+    this.lastInboundAt = inbound.receivedAt;
+    this.stats.received += 1;
+    for (const handler of this.inboundHandlers) {
+      try {
+        const result = handler(inbound);
+        if (result && typeof result.catch === 'function') {
+          result.catch((error) => this.logger.error(`[cmcc] 上行消息处理失败：${error.message}`));
+        }
+      } catch (error) {
+        this.logger.error(`[cmcc] 上行消息处理失败：${error.message}`);
+      }
+    }
+    return inbound;
   }
 
   startHeartbeat() {

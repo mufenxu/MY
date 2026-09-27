@@ -822,6 +822,21 @@ body {
   color: var(--text-muted);
 }
 
+.notify-cmcc-message {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  padding: 10px 0;
+}
+
+.notify-cmcc-message p {
+  margin: 6px 0 0;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .notify-inline-check {
   display: flex !important;
   align-items: center;

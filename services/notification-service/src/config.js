@@ -64,18 +64,37 @@ if (process.env.NODE_ENV === 'production' && !notificationMongoUri) {
 }
 
 const CMCC_DEFAULT_WS_URL = 'wss://5gvas01.cmicmaap.com/gtw-ai/openclaw/ws/msg';
+const CMCC_DEFAULT_UPLOAD_URL = 'https://5gvas01.cmicmaap.com/gtw-ai/openclaw/api';
+
+function parseBoolean(value, fallback) {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  if (!normalized) return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+}
 
 // 中国移动新消息通道只会投递给固定手机号，未配置时整个通道停用。
 function parseCmccConfig() {
   const apiKey = String(process.env.CMCC_API_KEY || '').trim();
   const recipient = String(process.env.CMCC_RECIPIENT || '').trim();
   const wsUrl = String(process.env.CMCC_WS_URL || CMCC_DEFAULT_WS_URL).trim();
-  if (!apiKey && !recipient) return { enabled: false, apiKey: '', recipient: '', wsUrl };
+  const uploadUrl = String(process.env.CMCC_UPLOAD_URL || CMCC_DEFAULT_UPLOAD_URL).trim();
+  if (!apiKey && !recipient) {
+    return { enabled: false, apiKey: '', recipient: '', wsUrl, uploadUrl, receiveEnabled: false, replyEnabled: false };
+  }
   if (!apiKey || !recipient) throw new Error('CMCC_API_KEY 与 CMCC_RECIPIENT 必须同时配置');
   if (!/^(?:ak|app)_/.test(apiKey)) throw new Error('CMCC_API_KEY 必须以 ak_ 或 app_ 开头');
   if (!/^1\d{10}$/.test(recipient)) throw new Error('CMCC_RECIPIENT 必须是 11 位手机号');
   if (!wsUrl.startsWith('wss://')) throw new Error('CMCC_WS_URL 必须使用 wss://');
-  return { enabled: true, apiKey, recipient, wsUrl };
+  if (!/^https?:\/\//.test(uploadUrl)) throw new Error('CMCC_UPLOAD_URL 必须是完整的 http(s) 地址');
+  return {
+    enabled: true,
+    apiKey,
+    recipient,
+    wsUrl,
+    uploadUrl,
+    receiveEnabled: parseBoolean(process.env.CMCC_RECEIVE_ENABLED, true),
+    replyEnabled: parseBoolean(process.env.CMCC_REPLY_ENABLED, true),
+  };
 }
 
 const config = {
@@ -104,4 +123,3 @@ const config = {
 };
 
 module.exports = config;
-

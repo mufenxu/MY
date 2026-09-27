@@ -39,6 +39,8 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
   const appMessages = [];
   const appRecipients = [];
   const appDevices = [];
+  const cmccMessages = [];
+  const cmccCommands = [];
 
   function prune() {
     const cutoff = now().getTime() - retentionDays * 86400000;
@@ -63,6 +65,9 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
     }
     for (let index = appDevices.length - 1; index >= 0; index -= 1) {
       if (appDevices[index].expiresAt && new Date(appDevices[index].expiresAt) <= timestamp) appDevices.splice(index, 1);
+    }
+    for (let index = cmccMessages.length - 1; index >= 0; index -= 1) {
+      if (cmccMessages[index].expiresAt && new Date(cmccMessages[index].expiresAt) <= timestamp) cmccMessages.splice(index, 1);
     }
   }
 
@@ -318,6 +323,79 @@ function createMemoryNotificationStore({ encryptionKey, retentionDays = 30, now 
       const index = templates.findIndex((item) => item.key === key);
       if (index < 0) return false;
       templates.splice(index, 1);
+      return true;
+    },
+    async createInboundCmccMessage(input) {
+      prune();
+      const existing = cmccMessages.find((row) => row.id === input.id);
+      if (existing) return { message: serializeDocument(existing), duplicate: true };
+      const receivedAt = input.receivedAt ? new Date(input.receivedAt) : now();
+      const row = {
+        ...input,
+        from: String(input.from || ''),
+        content: String(input.content || ''),
+        mediaType: input.mediaType || '',
+        mediaUrl: input.mediaUrl || '',
+        thumbnailUrl: input.thumbnailUrl || '',
+        mediaFileName: input.mediaFileName || '',
+        mediaMimeType: input.mediaMimeType || '',
+        mediaSize: Number.isFinite(Number(input.mediaSize)) ? Number(input.mediaSize) : null,
+        replyStatus: 'skipped',
+        replyMessageId: '',
+        replyContent: '',
+        replyError: '',
+        receivedAt,
+        expiresAt: new Date(receivedAt.getTime() + retentionDays * 86400000),
+      };
+      cmccMessages.unshift(row);
+      return { message: serializeDocument(row), duplicate: false };
+    },
+    async listCmccMessages(filters = {}) {
+      prune();
+      const page = normalizePositiveInteger(filters.page, 1, 100000);
+      const pageSize = normalizePositiveInteger(filters.pageSize, 20, 100);
+      const filtered = cmccMessages.filter((row) => {
+        if (filters.mediaType && row.mediaType !== filters.mediaType) return false;
+        if (filters.replyStatus && row.replyStatus !== filters.replyStatus) return false;
+        if (filters.from && row.from !== filters.from) return false;
+        return true;
+      });
+      const offset = (page - 1) * pageSize;
+      return { items: filtered.slice(offset, offset + pageSize).map(serializeDocument), page, pageSize, total: filtered.length };
+    },
+    async completeCmccMessageReply(id, update) {
+      const row = cmccMessages.find((item) => item.id === id);
+      if (!row) return null;
+      Object.assign(row, update);
+      return serializeDocument(row);
+    },
+    async getCmccMessageSummary() {
+      prune();
+      const cutoff = now().getTime() - 86400000;
+      return {
+        total: cmccMessages.length,
+        last24h: cmccMessages.filter((row) => new Date(row.receivedAt).getTime() >= cutoff).length,
+        replied: cmccMessages.filter((row) => row.replyStatus === 'sent').length,
+        lastReceivedAt: cmccMessages[0]?.receivedAt || null,
+      };
+    },
+    async listCmccCommands() {
+      return cmccCommands.map(serializeDocument);
+    },
+    async getCmccCommand(key) {
+      return serializeDocument(cmccCommands.find((item) => item.key === key) || null);
+    },
+    async saveCmccCommand(input) {
+      const timestamp = now();
+      const existing = cmccCommands.find((item) => item.key === input.key);
+      if (existing) Object.assign(existing, input, { updatedAt: timestamp });
+      else cmccCommands.push({ id: crypto.randomUUID(), ...input, createdAt: timestamp, updatedAt: timestamp });
+      return serializeDocument(cmccCommands.find((item) => item.key === input.key));
+    },
+    async deleteCmccCommand(key) {
+      const index = cmccCommands.findIndex((item) => item.key === key);
+      if (index < 0) return false;
+      cmccCommands.splice(index, 1);
       return true;
     },
     async createNotificationJob(input) {
@@ -598,6 +676,8 @@ async function createMongoNotificationStore({
   const appMessages = db.collection('notification_app_messages');
   const appRecipients = db.collection('notification_app_recipients');
   const appDevices = db.collection('notification_app_devices');
+  const cmccMessages = db.collection('notification_cmcc_messages');
+  const cmccCommands = db.collection('notification_cmcc_commands');
   await Promise.all([
     deliveries.createIndex({ id: 1 }, { unique: true }),
     deliveries.createIndex({ startedAt: -1 }),
@@ -632,6 +712,12 @@ async function createMongoNotificationStore({
     appDevices.createIndex({ recipientId: 1, installationId: 1 }, { unique: true }),
     appDevices.createIndex({ tokenHash: 1 }, { unique: true, sparse: true }),
     appDevices.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    cmccMessages.createIndex({ id: 1 }, { unique: true }),
+    cmccMessages.createIndex({ receivedAt: -1 }),
+    cmccMessages.createIndex({ mediaType: 1, receivedAt: -1 }),
+    cmccMessages.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+    cmccCommands.createIndex({ key: 1 }, { unique: true }),
+    cmccCommands.createIndex({ updatedAt: -1 }),
   ]);
 
   const migrationTimestamp = new Date();
@@ -1065,6 +1151,85 @@ async function createMongoNotificationStore({
     },
     async deleteTemplate(key) {
       return (await templates.deleteOne({ key })).deletedCount === 1;
+    },
+    async createInboundCmccMessage(input) {
+      const receivedAt = input.receivedAt ? new Date(input.receivedAt) : new Date();
+      const result = await cmccMessages.updateOne(
+        { id: input.id },
+        {
+          $setOnInsert: {
+            ...input,
+            from: String(input.from || ''),
+            content: String(input.content || ''),
+            mediaType: input.mediaType || '',
+            mediaUrl: input.mediaUrl || '',
+            thumbnailUrl: input.thumbnailUrl || '',
+            mediaFileName: input.mediaFileName || '',
+            mediaMimeType: input.mediaMimeType || '',
+            mediaSize: Number.isFinite(Number(input.mediaSize)) ? Number(input.mediaSize) : null,
+            replyStatus: 'skipped',
+            replyMessageId: '',
+            replyContent: '',
+            replyError: '',
+            receivedAt,
+            expiresAt: new Date(receivedAt.getTime() + retentionDays * 86400000),
+          },
+        },
+        { upsert: true },
+      );
+      const message = serializeDocument(await cmccMessages.findOne({ id: input.id }, { projection: { _id: 0, expiresAt: 0 } }));
+      return { message, duplicate: result.upsertedCount === 0 };
+    },
+    async listCmccMessages(filters = {}) {
+      const page = normalizePositiveInteger(filters.page, 1, 100000);
+      const pageSize = normalizePositiveInteger(filters.pageSize, 20, 100);
+      const query = {
+        ...(filters.mediaType ? { mediaType: filters.mediaType } : {}),
+        ...(filters.replyStatus ? { replyStatus: filters.replyStatus } : {}),
+        ...(filters.from ? { from: filters.from } : {}),
+      };
+      const [items, total] = await Promise.all([
+        cmccMessages.find(query, { projection: { _id: 0, expiresAt: 0 } })
+          .sort({ receivedAt: -1 })
+          .skip((page - 1) * pageSize)
+          .limit(pageSize)
+          .toArray(),
+        cmccMessages.countDocuments(query),
+      ]);
+      return { items: items.map(serializeDocument), page, pageSize, total };
+    },
+    async completeCmccMessageReply(id, update) {
+      return serializeDocument(await cmccMessages.findOneAndUpdate(
+        { id },
+        { $set: update },
+        { returnDocument: 'after', projection: { _id: 0 } },
+      ));
+    },
+    async getCmccMessageSummary() {
+      const [total, last24h, replied, latest] = await Promise.all([
+        cmccMessages.countDocuments({}),
+        cmccMessages.countDocuments({ receivedAt: { $gte: new Date(Date.now() - 86400000) } }),
+        cmccMessages.countDocuments({ replyStatus: 'sent' }),
+        cmccMessages.find({}, { projection: { _id: 0, receivedAt: 1 } }).sort({ receivedAt: -1 }).limit(1).toArray(),
+      ]);
+      return { total, last24h, replied, lastReceivedAt: latest[0]?.receivedAt || null };
+    },
+    async listCmccCommands() {
+      return (await cmccCommands.find({}, { projection: { _id: 0 } }).sort({ updatedAt: -1 }).toArray()).map(serializeDocument);
+    },
+    async getCmccCommand(key) {
+      return serializeDocument(await cmccCommands.findOne({ key }, { projection: { _id: 0 } }));
+    },
+    async saveCmccCommand(input) {
+      const timestamp = new Date();
+      return serializeDocument(await cmccCommands.findOneAndUpdate(
+        { key: input.key },
+        { $set: { ...input, updatedAt: timestamp }, $setOnInsert: { id: crypto.randomUUID(), createdAt: timestamp } },
+        { upsert: true, returnDocument: 'after', projection: { _id: 0 } },
+      ));
+    },
+    async deleteCmccCommand(key) {
+      return (await cmccCommands.deleteOne({ key })).deletedCount === 1;
     },
     async createNotificationJob(input) {
       const timestamp = new Date();

@@ -139,6 +139,54 @@ export function registerNotificationRoutes(app, {
     return res.json(result);
   });
 
+  router.get('/api/notifications/cmcc/messages', requireRole('operator'), async (req, res) => {
+    return res.json(await notificationManagement.listCmccMessages({
+      mediaType: req.query.mediaType,
+      replyStatus: req.query.replyStatus,
+      page: req.query.page,
+      pageSize: req.query.pageSize,
+    }));
+  });
+
+  router.post('/api/notifications/cmcc/media', notificationSendLimiter, requireConsoleRequest, requireRole('operator'), async (req, res) => {
+    const result = await notificationManagement.sendCmccMedia(req.body || {}, req.consoleUser.username);
+    await recordAudit(req, {
+      action: 'notification.cmcc_media_send',
+      targetType: 'notification_recipient',
+      targetId: String(result.targetMasked || '').slice(0, 32),
+      details: {
+        mediaType: String(req.body?.mediaType || '').slice(0, 16),
+        messageId: String(result.messageId || '').slice(0, 64),
+      },
+    });
+    return res.status(201).json(result);
+  });
+
+  router.get('/api/notifications/cmcc/commands', requireRole('operator'), async (_req, res) => {
+    return res.json(await notificationManagement.listCmccCommands());
+  });
+
+  router.put('/api/notifications/cmcc/commands/:key', requireConsoleRequest, requireRole('super_admin'), async (req, res) => {
+    const result = await notificationManagement.saveCmccCommand(req.params.key, req.body || {}, req.consoleUser.username);
+    await recordAudit(req, {
+      action: 'notification.cmcc_command_saved',
+      targetType: 'notification_cmcc_command',
+      targetId: String(req.params.key || '').slice(0, 64),
+      details: { matchType: String(req.body?.matchType || 'prefix').slice(0, 16), enabled: req.body?.enabled !== false },
+    });
+    return res.json(result);
+  });
+
+  router.delete('/api/notifications/cmcc/commands/:key', requireConsoleRequest, requireRole('super_admin'), async (req, res) => {
+    await notificationManagement.deleteCmccCommand(req.params.key);
+    await recordAudit(req, {
+      action: 'notification.cmcc_command_deleted',
+      targetType: 'notification_cmcc_command',
+      targetId: String(req.params.key || '').slice(0, 64),
+    });
+    return res.status(204).end();
+  });
+
   router.post('/api/notifications/deliveries/:id/retry', notificationSendLimiter, requireConsoleRequest, requireRole('operator'), async (req, res) => {
     const result = await notificationManagement.retryDelivery(req.params.id, req.consoleUser.username);
     await recordAudit(req, {

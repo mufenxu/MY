@@ -841,12 +841,18 @@ export function createApp({
       }
     },
   );
-  app.use(express.json({ limit: '128kb', verify: (req, res, body) => {
+  const consoleJsonParser = (limit) => express.json({ limit, verify: (req, res, body) => {
     if (req.headers.dpop && req.headers['content-encoding'] && req.headers['content-encoding'] !== 'identity') {
       throw new DeviceSecurityError('DEVICE_BODY_ENCODING', '设备请求不支持压缩正文。', 415);
     }
     req.bodyDigest = proofDigest(body);
-  } }));
+  } });
+  // 新消息富媒体上传需要携带 base64 文件，单独放宽该路由上限，其余接口保持 128kb。
+  const defaultConsoleJsonParser = consoleJsonParser('128kb');
+  const consoleUploadJsonParser = consoleJsonParser('16mb');
+  app.use((req, res, next) => (
+    req.path === '/api/notifications/cmcc/media' ? consoleUploadJsonParser : defaultConsoleJsonParser
+  )(req, res, next));
   app.use('/api', (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     next();

@@ -72,6 +72,85 @@ function validateCmccTestInput(input = {}) {
   return { content };
 }
 
+const CMCC_MEDIA_TYPES = ['IMAGE', 'TEXT', 'AUDIO', 'VIDEO', 'FILE'];
+const CMCC_COMMAND_MATCH_TYPES = ['prefix', 'exact', 'contains', 'regex'];
+
+function validateCmccMediaInput(input = {}) {
+  const mediaType = String(input.mediaType || '').trim().toUpperCase();
+  if (!CMCC_MEDIA_TYPES.includes(mediaType)) {
+    throw new NotificationManagementError('富媒体类型无效。', { status: 400, code: 'INVALID_CMCC_MEDIA_TYPE' });
+  }
+  const content = String(input.content || '').trim();
+  if (content.length > 1024) {
+    throw new NotificationManagementError('富媒体说明不能超过 1024 个字符。', { status: 400, code: 'INVALID_CMCC_MEDIA_CONTENT' });
+  }
+  const mediaUrl = String(input.mediaUrl || '').trim();
+  const fileBase64 = String(input.fileBase64 || '').trim();
+  if (Boolean(mediaUrl) === Boolean(fileBase64)) {
+    throw new NotificationManagementError('请二选一填写 HTTPS 媒体地址或上传本地文件。', { status: 400, code: 'INVALID_CMCC_MEDIA_SOURCE' });
+  }
+  if (mediaUrl && !mediaUrl.startsWith('https://')) {
+    throw new NotificationManagementError('媒体地址必须使用 HTTPS。', { status: 400, code: 'INVALID_CMCC_MEDIA_URL' });
+  }
+  if (fileBase64 && fileBase64.length > 9_000_000) {
+    throw new NotificationManagementError('上传文件过大，请控制在 6MB 以内。', { status: 400, code: 'CMCC_MEDIA_TOO_LARGE' });
+  }
+  const payload = { mediaType, content };
+  if (mediaUrl) payload.mediaUrl = mediaUrl;
+  if (fileBase64) {
+    payload.fileBase64 = fileBase64;
+    payload.fileName = String(input.fileName || 'cmcc-media.bin').trim().slice(0, 180) || 'cmcc-media.bin';
+    if (input.mimeType) payload.mimeType = String(input.mimeType).trim().slice(0, 120);
+  }
+  if (input.thumbnailUrl) {
+    const thumbnailUrl = String(input.thumbnailUrl).trim();
+    if (!thumbnailUrl.startsWith('https://')) {
+      throw new NotificationManagementError('缩略图地址必须使用 HTTPS。', { status: 400, code: 'INVALID_CMCC_THUMBNAIL_URL' });
+    }
+    payload.thumbnailUrl = thumbnailUrl.slice(0, 2048);
+  }
+  return payload;
+}
+
+function validateCmccCommandKey(value) {
+  const key = String(value || '').trim();
+  if (!/^[a-z0-9][a-z0-9._-]{1,63}$/i.test(key)) {
+    throw new NotificationManagementError('指令规则标识格式无效。', { status: 400, code: 'INVALID_CMCC_COMMAND_KEY' });
+  }
+  return key;
+}
+
+function validateCmccCommandInput(input = {}) {
+  const name = String(input.name || '').trim();
+  const description = String(input.description || '').trim();
+  const matchType = String(input.matchType || 'prefix').trim();
+  const pattern = String(input.pattern || '').trim();
+  const reply = String(input.reply || '').trim();
+  if (!name || name.length > 80) {
+    throw new NotificationManagementError('指令名称必须为 1 至 80 个字符。', { status: 400, code: 'INVALID_CMCC_COMMAND_NAME' });
+  }
+  if (description.length > 160) {
+    throw new NotificationManagementError('指令说明不能超过 160 个字符。', { status: 400, code: 'INVALID_CMCC_COMMAND_DESCRIPTION' });
+  }
+  if (!CMCC_COMMAND_MATCH_TYPES.includes(matchType)) {
+    throw new NotificationManagementError('指令匹配方式无效。', { status: 400, code: 'INVALID_CMCC_COMMAND_MATCH_TYPE' });
+  }
+  if (!pattern || pattern.length > 160) {
+    throw new NotificationManagementError('触发内容必须为 1 至 160 个字符。', { status: 400, code: 'INVALID_CMCC_COMMAND_PATTERN' });
+  }
+  if (matchType === 'regex') {
+    try {
+      new RegExp(pattern);
+    } catch {
+      throw new NotificationManagementError('正则表达式无法解析。', { status: 400, code: 'INVALID_CMCC_COMMAND_REGEX' });
+    }
+  }
+  if (!reply || reply.length > 2048) {
+    throw new NotificationManagementError('自动回复内容必须为 1 至 2048 个字符。', { status: 400, code: 'INVALID_CMCC_COMMAND_REPLY' });
+  }
+  return { name, description, matchType, pattern, reply, enabled: input.enabled !== false };
+}
+
 export function createNotificationManagementClient({
   serviceUrl,
   apiKey,
@@ -80,7 +159,7 @@ export function createNotificationManagementClient({
 } = {}) {
   const configured = Boolean(serviceUrl && apiKey);
 
-  async function request(pathname, { method = 'GET', body = null } = {}) {
+  async function request(pathname, { method = 'GET', body = null, requestTimeoutMs = timeoutMs } = {}) {
     if (!configured) {
       throw new NotificationManagementError('通知服务管理连接尚未配置。', { status: 503, code: 'NOTIFICATION_NOT_CONFIGURED' });
     }
@@ -88,7 +167,7 @@ export function createNotificationManagementClient({
     const signedPath = `${url.pathname}${url.search}`;
     const serialized = body === null ? '' : JSON.stringify(body);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
     try {
       const response = await fetchImpl(url, {
         method,
@@ -135,7 +214,7 @@ export function createNotificationManagementClient({
     async listDeliveries(filters = {}) {
       if (!configured) return { items: [], page: 1, pageSize: 20, total: 0 };
       const query = new URLSearchParams();
-      for (const key of ['status', 'caller', 'msgType']) {
+      for (const key of ['status', 'caller', 'msgType', 'targetType']) {
         if (filters[key]) query.set(key, String(filters[key]));
       }
       query.set('page', String(boundedInteger(filters.page, 1, 1, 100000)));
@@ -211,6 +290,37 @@ export function createNotificationManagementClient({
     async probeCmccChannel(actor) {
       return request('/management/cmcc/probe', { method: 'POST', body: { actor: String(actor || '').slice(0, 128) } });
     },
+    async listCmccMessages(filters = {}) {
+      if (!configured) return { items: [], page: 1, pageSize: 20, total: 0 };
+      const query = new URLSearchParams();
+      if (filters.mediaType) query.set('mediaType', String(filters.mediaType).toUpperCase());
+      if (filters.replyStatus) query.set('replyStatus', String(filters.replyStatus));
+      query.set('page', String(boundedInteger(filters.page, 1, 1, 100000)));
+      query.set('pageSize', String(boundedInteger(filters.pageSize, 20, 1, 100)));
+      return request(`/management/cmcc/messages?${query}`);
+    },
+    async sendCmccMedia(input, actor) {
+      return request('/management/cmcc/media', {
+        method: 'POST',
+        body: { ...validateCmccMediaInput(input), actor: actorName(actor) },
+        requestTimeoutMs: 90_000,
+      });
+    },
+    async listCmccCommands() {
+      if (!configured) return { items: [] };
+      return request('/management/cmcc/commands');
+    },
+    async saveCmccCommand(key, input, actor) {
+      const commandKey = validateCmccCommandKey(key);
+      return request(`/management/cmcc/commands/${encodeURIComponent(commandKey)}`, {
+        method: 'PUT',
+        body: { ...validateCmccCommandInput(input), actor: actorName(actor) },
+      });
+    },
+    async deleteCmccCommand(key) {
+      const commandKey = validateCmccCommandKey(key);
+      return request(`/management/cmcc/commands/${encodeURIComponent(commandKey)}`, { method: 'DELETE' });
+    },
     async retryDelivery(id, actor) {
       const deliveryId = String(id || '').trim();
       if (!/^[A-Za-z0-9_-]{8,128}$/.test(deliveryId)) {
@@ -264,4 +374,10 @@ export function createNotificationManagementClient({
   };
 }
 
-export { validateAppTestInput, validateCmccTestInput, validateTestInput };
+export {
+  validateAppTestInput,
+  validateCmccCommandInput,
+  validateCmccMediaInput,
+  validateCmccTestInput,
+  validateTestInput,
+};

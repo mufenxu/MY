@@ -8,6 +8,7 @@ const { z } = require('zod');
 
 const WeComClient = require('./wecom-client');
 const { CmccClient } = require('./cmcc-client');
+const { resolveCmccAutoReply } = require('./cmcc-commands');
 const { notificationSchema, buildWeComPayload } = require('./notification-schema');
 const { createNotificationOrchestrator } = require('./notification-orchestrator');
 const { createMemoryNotificationStore } = require('./notification-store');
@@ -102,6 +103,41 @@ const cmccTestNotificationSchema = z.object({
   content: z.string().trim().min(1).max(2048),
 });
 
+const CMCC_MEDIA_TYPES = ['IMAGE', 'TEXT', 'AUDIO', 'VIDEO', 'FILE'];
+const CMCC_MAX_UPLOAD_BYTES = 6 * 1024 * 1024;
+
+const httpsMediaUrl = z.string().trim().url().max(2048).refine((value) => value.startsWith('https://'), '富媒体地址必须使用 HTTPS');
+
+const cmccMediaSchema = z.object({
+  actor: z.string().trim().min(1).max(128),
+  mediaType: z.enum(CMCC_MEDIA_TYPES),
+  content: z.string().trim().max(1024).default(''),
+  mediaUrl: httpsMediaUrl.optional(),
+  fileBase64: z.string().trim().min(1).max(9_000_000).optional(),
+  fileName: z.string().trim().max(180).optional(),
+  mimeType: z.string().trim().max(120).optional(),
+  thumbnailUrl: httpsMediaUrl.optional(),
+}).refine((value) => Boolean(value.mediaUrl) !== Boolean(value.fileBase64), {
+  message: '请二选一提供 mediaUrl 或上传文件',
+});
+
+const cmccCommandSchema = z.object({
+  actor: z.string().trim().min(1).max(128),
+  name: z.string().trim().min(1).max(80),
+  description: z.string().trim().max(160).default(''),
+  matchType: z.enum(['prefix', 'exact', 'contains', 'regex']).default('prefix'),
+  pattern: z.string().trim().min(1).max(160),
+  reply: z.string().trim().min(1).max(2048),
+  enabled: z.boolean().default(true),
+}).superRefine((value, ctx) => {
+  if (value.matchType !== 'regex') return;
+  try {
+    new RegExp(value.pattern);
+  } catch {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['pattern'], message: '正则表达式无法解析' });
+  }
+});
+
 function createApp({
   config,
   wecomClient = null,
@@ -122,7 +158,12 @@ function createApp({
   });
   const pushDispatcher = appPushDispatcher || createAppPushDispatcher();
   const cmcc = cmccClient || (config.cmcc?.enabled
-    ? new CmccClient({ apiKey: config.cmcc.apiKey, wsUrl: config.cmcc.wsUrl })
+    ? new CmccClient({
+      apiKey: config.cmcc.apiKey,
+      wsUrl: config.cmcc.wsUrl,
+      uploadUrl: config.cmcc.uploadUrl,
+      defaultTo: config.cmcc.recipient,
+    })
     : null);
   const guardAgainstReplay = createReplayGuard();
   const apiRateWindows = new Map();
@@ -327,12 +368,131 @@ function createApp({
     return /^\d{11}$/.test(digits) ? `${digits.slice(0, 3)}****${digits.slice(7)}` : digits;
   }
 
-  function cmccOverview() {
+  // 网关的富媒体帧没有 to 字段，只能投递给最近一次上行会话，这里统一解析实际目标。
+  function cmccTargetPhone() {
+    const sessionSender = cmcc && typeof cmcc.getSessionSender === 'function' ? cmcc.getSessionSender() : '';
+    return String(sessionSender || config.cmcc?.recipient || '').trim();
+  }
+
+  async function deliverCmccMedia(input, { caller, actor = '', requestId, apiClient = null } = {}) {
+    const channel = requireCmccChannel();
+    const to = cmccTargetPhone();
+    const startedAt = Date.now();
+    const delivery = await safelyCreateDelivery({
+      caller,
+      actor: String(actor || '').slice(0, 128),
+      requestId,
+      apiClientId: apiClient?.clientId || null,
+      apiClientName: apiClient?.clientName || '',
+      apiKeyId: apiClient?.keyId || null,
+      msgType: input.mediaType.toLowerCase(),
+      targetType: 'phone',
+      targetValue: to,
+      retryable: false,
+      payload: {
+        channel: 'cmcc',
+        mediaType: input.mediaType,
+        to,
+        content: input.content,
+        mediaUrl: input.mediaUrl,
+        mediaFileName: input.mediaFileName || '',
+      },
+    });
+    try {
+      const messageId = await channel.sendRichMedia(input);
+      const completed = await safelyCompleteDelivery(delivery?.id, {
+        status: 'success',
+        durationMs: Date.now() - startedAt,
+      }, requestId);
+      return { result: { messageId }, delivery: completed || delivery };
+    } catch (error) {
+      await safelyCompleteDelivery(delivery?.id, {
+        ...deliveryFailure(error),
+        durationMs: Date.now() - startedAt,
+      }, requestId);
+      throw error;
+    }
+  }
+
+  async function recordCmccAutoReply({ to, content, ruleKey, error, durationMs }) {
+    const delivery = await safelyCreateDelivery({
+      caller: 'cmcc-inbound',
+      actor: String(ruleKey || 'auto-reply').slice(0, 128),
+      requestId: 'cmcc-inbound',
+      msgType: 'text',
+      targetType: 'phone',
+      targetValue: to,
+      retryable: false,
+      payload: { channel: 'cmcc', to, content, autoReply: true, ruleKey: ruleKey || '' },
+    });
+    if (!delivery?.id) return null;
+    return safelyCompleteDelivery(delivery.id, error
+      ? { ...deliveryFailure(error), durationMs }
+      : { status: 'success', durationMs }, 'cmcc-inbound');
+  }
+
+  async function handleCmccInbound(inbound) {
+    let created = null;
+    try {
+      created = await store.createInboundCmccMessage(inbound);
+    } catch (error) {
+      console.error('[cmcc] 上行消息写入失败', error);
+    }
+    if (created?.duplicate) return;
+    if (!config.cmcc?.replyEnabled) return;
+    let rules = [];
+    try {
+      rules = await store.listCmccCommands();
+    } catch (error) {
+      console.error('[cmcc] 读取指令规则失败', error);
+    }
+    const autoReply = resolveCmccAutoReply(rules, inbound);
+    if (!autoReply) return;
+    const startedAt = Date.now();
+    let replyMessageId = '';
+    try {
+      replyMessageId = await cmcc.send({ to: inbound.from, content: autoReply.content });
+    } catch (error) {
+      console.error('[cmcc] 自动回复失败', error);
+      await store.completeCmccMessageReply(inbound.id, {
+        replyStatus: 'failed',
+        replyError: String(error.message || error).slice(0, 300),
+        ruleKey: autoReply.ruleId || '',
+      }).catch(() => {});
+      await recordCmccAutoReply({ to: inbound.from, content: autoReply.content, ruleKey: autoReply.ruleId, error, durationMs: Date.now() - startedAt });
+      return;
+    }
+    // 回复已经发出，后续记录失败不再视为回复失败。
+    await store.completeCmccMessageReply(inbound.id, {
+      replyStatus: 'sent',
+      replyContent: autoReply.content.slice(0, 512),
+      replyMessageId,
+      ruleKey: autoReply.ruleId || '',
+    }).catch(() => {});
+    await recordCmccAutoReply({ to: inbound.from, content: autoReply.content, ruleKey: autoReply.ruleId, durationMs: Date.now() - startedAt });
+  }
+
+  if (cmcc && typeof cmcc.onInbound === 'function') {
+    cmcc.onInbound(handleCmccInbound);
+    if (config.cmcc?.receiveEnabled && typeof cmcc.connect === 'function') {
+      // 常驻连接才能接收上行消息；失败由客户端按退避策略自动重连。
+      setTimeout(() => {
+        cmcc.connect().catch((error) => console.error(`[cmcc] 上行通道连接失败：${error.message}`));
+      }, 0).unref?.();
+    }
+  }
+
+  function cmccOverview(summary = null) {
     const status = cmcc && typeof cmcc.getStatus === 'function' ? cmcc.getStatus() : null;
     return {
       configured: Boolean(cmcc),
+      receiveEnabled: Boolean(config.cmcc?.receiveEnabled),
+      replyEnabled: Boolean(config.cmcc?.replyEnabled),
       recipientMasked: cmcc ? maskPhoneNumber(config.cmcc.recipient) : '',
+      sessionSenderMasked: status?.sessionSender ? maskPhoneNumber(status.sessionSender) : '',
       wsUrl: cmcc ? config.cmcc.wsUrl : '',
+      uploadUrl: cmcc ? config.cmcc.uploadUrl : '',
+      inbound: summary,
       status,
     };
   }
@@ -507,10 +667,16 @@ function createApp({
   app.use(morgan(process.env.NODE_ENV === 'production'
     ? ':request-id :remote-addr - :remote-user [:date[clf]] ":method :url HTTP/:http-version" :status :res[content-length] ":referrer" ":user-agent"'
     : ':request-id :method :url :status :response-time ms - :res[content-length]'));
-  app.use(express.json({
-    limit: '64kb',
+  // 富媒体上传需要携带 base64 文件，单独放宽该路由的请求体上限，其余接口保持 64kb。
+  const jsonParser = (limit) => express.json({
+    limit,
     verify(req, _res, buffer) { req.rawBody = Buffer.from(buffer); },
-  }));
+  });
+  const defaultJsonParser = jsonParser('64kb');
+  const uploadJsonParser = jsonParser('16mb');
+  app.use((req, res, next) => (
+    req.path === '/management/cmcc/media' ? uploadJsonParser : defaultJsonParser
+  )(req, res, next));
 
   app.get('/healthz', (_req, res) => res.json({ status: 'ok' }));
   app.get('/readyz', async (_req, res) => {
@@ -807,9 +973,10 @@ function createApp({
 
   app.get('/management/overview', checkManagementAccess, async (_req, res, _next) => {
     try {
-      const [history, queue] = await Promise.all([
+      const [history, queue, cmccSummary] = await Promise.all([
         store.getOverview(),
         orchestrator.getQueueOverview(),
+        store.getCmccMessageSummary().catch(() => null),
       ]);
       return res.json({
         configured: true,
@@ -820,7 +987,7 @@ function createApp({
           agentId: config.wecom.agentId,
           secretConfigured: Boolean(config.wecom.secret),
         },
-        cmcc: cmccOverview(),
+        cmcc: cmccOverview(cmccSummary),
         history,
         queue,
       });
@@ -847,7 +1014,7 @@ function createApp({
       const msgType = String(req.query.msgType || '');
       const targetType = String(req.query.targetType || '').trim();
       if (status && !['pending', 'success', 'failed'].includes(status)) throw httpError(400, 'INVALID_STATUS', '发送状态筛选值无效。');
-      if (msgType && !['text', 'markdown', 'textcard', 'news'].includes(msgType)) throw httpError(400, 'INVALID_MESSAGE_TYPE', '消息类型筛选值无效。');
+      if (msgType && !['text', 'markdown', 'textcard', 'news', 'image', 'audio', 'video', 'file'].includes(msgType)) throw httpError(400, 'INVALID_MESSAGE_TYPE', '消息类型筛选值无效。');
       if (targetType && !/^[a-z][a-z0-9_-]{0,31}$/.test(targetType)) throw httpError(400, 'INVALID_TARGET_TYPE', '发送目标类型筛选值无效。');
       return res.json(await store.listDeliveries({
         status,
@@ -1099,6 +1266,102 @@ function createApp({
         status: channel.getStatus(),
         delivery,
       });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/management/cmcc/messages', checkManagementAccess, async (req, res, next) => {
+    try {
+      const mediaType = String(req.query.mediaType || '').trim().toUpperCase();
+      if (mediaType && !CMCC_MEDIA_TYPES.includes(mediaType)) throw httpError(400, 'INVALID_MEDIA_TYPE', '上行消息类型筛选值无效。');
+      const replyStatus = String(req.query.replyStatus || '').trim();
+      if (replyStatus && !['skipped', 'sent', 'failed'].includes(replyStatus)) throw httpError(400, 'INVALID_REPLY_STATUS', '自动回复状态筛选值无效。');
+      return res.json(await store.listCmccMessages({
+        mediaType,
+        replyStatus,
+        from: String(req.query.from || '').trim().slice(0, 32),
+        page: req.query.page,
+        pageSize: req.query.pageSize,
+      }));
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/management/cmcc/media', managementSendLimiter, checkManagementAccess, async (req, res, next) => {
+    try {
+      const input = cmccMediaSchema.parse(req.body);
+      const channel = requireCmccChannel();
+      let mediaUrl = input.mediaUrl || '';
+      let mediaFileName = String(input.fileName || '').trim();
+      const mediaMimeType = String(input.mimeType || '').trim();
+      let mediaSize = 0;
+      if (input.fileBase64) {
+        const buffer = Buffer.from(input.fileBase64, 'base64');
+        if (!buffer.length) throw httpError(400, 'CMCC_UPLOAD_EMPTY', '上传的富媒体文件内容为空。');
+        if (buffer.length > CMCC_MAX_UPLOAD_BYTES) {
+          throw httpError(413, 'CMCC_UPLOAD_TOO_LARGE', `上传的富媒体文件不能超过 ${Math.floor(CMCC_MAX_UPLOAD_BYTES / 1024 / 1024)}MB。`);
+        }
+        if (!mediaFileName) mediaFileName = `cmcc-${Date.now()}`;
+        mediaUrl = await channel.uploadMedia({
+          data: buffer,
+          fileName: mediaFileName,
+          mimeType: mediaMimeType || 'application/octet-stream',
+        });
+        mediaSize = buffer.length;
+      }
+      const { result, delivery } = await deliverCmccMedia({
+        mediaType: input.mediaType,
+        content: input.content,
+        mediaUrl,
+        thumbnailUrl: input.thumbnailUrl || '',
+        mediaFileName,
+        mediaSize,
+        mediaMimeType,
+      }, { caller: req.serviceCaller, actor: input.actor, requestId: req.id });
+      return res.status(201).json({
+        delivered: true,
+        messageId: result.messageId,
+        mediaUrl,
+        targetMasked: maskPhoneNumber(cmccTargetPhone()),
+        status: channel.getStatus(),
+        delivery,
+      });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.get('/management/cmcc/commands', checkManagementAccess, async (_req, res, next) => {
+    try {
+      return res.json({ items: await store.listCmccCommands() });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.put('/management/cmcc/commands/:key', checkManagementAccess, async (req, res, next) => {
+    try {
+      const key = String(req.params.key || '').trim();
+      if (!/^[a-z0-9][a-z0-9._-]{1,63}$/i.test(key)) throw httpError(400, 'INVALID_COMMAND_KEY', '指令规则标识格式无效。');
+      const input = cmccCommandSchema.parse(req.body);
+      return res.json({ command: await store.saveCmccCommand({ ...input, key }) });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.delete('/management/cmcc/commands/:key', checkManagementAccess, async (req, res, next) => {
+    try {
+      const removed = await store.deleteCmccCommand(String(req.params.key || '').trim());
+      if (!removed) throw httpError(404, 'COMMAND_NOT_FOUND', '指令规则不存在。');
+      return res.status(204).end();
     } catch (error) {
       next(error);
       return undefined;
