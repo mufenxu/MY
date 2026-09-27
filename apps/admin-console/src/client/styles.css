@@ -262,7 +262,7 @@ body {
 
 .notify-channel-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -301,6 +301,50 @@ body {
 .notify-channel-card:nth-child(3) > span {
   color: var(--purple);
   background: var(--purple-soft);
+}
+
+.notify-channel-card:nth-child(4) > span {
+  color: var(--orange);
+  background: var(--orange-soft);
+}
+
+.notify-cmcc-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.notify-cmcc-stats span {
+  padding: 4px 10px;
+  color: var(--muted);
+  font-size: 11px;
+  background: var(--panel-muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.notify-cmcc-notes {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  background: var(--panel-muted);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.notify-cmcc-notes > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.notify-cmcc-notes ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 16px;
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1.7;
 }
 
 .notify-channel-card > div {

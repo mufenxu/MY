@@ -19,6 +19,7 @@ import {
   UserRound,
   X,
   XCircle,
+  Zap,
 } from 'lucide-react';
 import { requestJson } from './api.js';
 import NotificationApiAccess from './NotificationApiAccess.jsx';
@@ -43,6 +44,14 @@ const TYPE_OPTIONS = [
   { value: 'markdown', label: 'Markdown（仅企业微信）' },
   { value: 'textcard', label: '文本卡片' },
   { value: 'news', label: '图文' },
+];
+const TARGET_OPTIONS = [
+  { value: '', label: '全部目标' },
+  { value: 'user', label: '企业微信用户' },
+  { value: 'party', label: '部门' },
+  { value: 'tag', label: '标签' },
+  { value: 'all', label: '全员' },
+  { value: 'phone', label: '手机号（新消息）' },
 ];
 const TEST_CHANNEL_OPTIONS = [
   { value: 'wecom', label: '企业微信' },
@@ -90,9 +99,16 @@ function priorityLabel(value) {
   return { low: '低优先级', normal: '普通', high: '重要', critical: '紧急' }[value] || value || '--';
 }
 
+function maskPhoneValue(value) {
+  const digits = String(value || '');
+  return /^\d{11}$/.test(digits) ? `${digits.slice(0, 3)}****${digits.slice(7)}` : digits;
+}
+
 function targetLabel(delivery) {
-  const prefix = { user: '用户', party: '部门', tag: '标签', all: '全员' }[delivery.targetType] || '目标';
-  return delivery.targetType === 'all' ? prefix : `${prefix} ${delivery.targetValue || '--'}`;
+  const prefix = { user: '用户', party: '部门', tag: '标签', all: '全员', phone: '手机号' }[delivery.targetType] || '目标';
+  if (delivery.targetType === 'all') return prefix;
+  const value = delivery.targetType === 'phone' ? maskPhoneValue(delivery.targetValue) : delivery.targetValue;
+  return `${prefix} ${value || '--'}`;
 }
 
 function DeliveryState({ value }) {
@@ -132,7 +148,7 @@ export default function NotificationServiceView({ session }) {
   const [tab, setTab] = useState('overview');
   const [overview, setOverview] = useState(null);
   const [deliveries, setDeliveries] = useState({ items: [], page: 1, pageSize: 20, total: 0 });
-  const [filters, setFilters] = useState({ status: '', caller: '', msgType: '' });
+  const [filters, setFilters] = useState({ status: '', caller: '', msgType: '', targetType: '' });
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -146,6 +162,7 @@ export default function NotificationServiceView({ session }) {
     appTitle: 'Android App 通知测试',
     appPriority: 'high',
     content: '',
+    cmccContent: '',
   });
   const [appFilter, setAppFilter] = useState('');
   const [appOverviewUser, setAppOverviewUser] = useState('');
@@ -192,6 +209,9 @@ export default function NotificationServiceView({ session }) {
 
   const totalPages = Math.max(1, Math.ceil(deliveries.total / deliveries.pageSize));
   const history = overview?.history || {};
+  const cmcc = overview?.cmcc || {};
+  const cmccStatus = cmcc.status || {};
+  const cmccStats = cmccStatus.stats || {};
   const recent = deliveries.items.slice(0, 5);
   const isAppTest = form.channel === 'app';
   const contentLimit = isAppTest ? 500 : form.msgType === 'markdown' ? 4096 : 2048;
@@ -239,7 +259,17 @@ export default function NotificationServiceView({ session }) {
     setMessage('');
     let nextAppUser = null;
     try {
-      if (action.type === 'test') {
+      if (action.type === 'cmcc-probe') {
+        await requestJson('/api/notifications/cmcc/probe', { method: 'POST' });
+        setMessage('新消息网关握手成功，通道可用于发送');
+      } else if (action.type === 'cmcc-test') {
+        await requestJson('/api/notifications/cmcc/test', {
+          method: 'POST',
+          body: JSON.stringify({ content: form.cmccContent.trim() }),
+        });
+        setMessage('新消息测试已提交到网关');
+        setForm((current) => ({ ...current, cmccContent: '' }));
+      } else if (action.type === 'test') {
         if (actionIsAppTest) {
           const userId = form.appUserId.trim();
           nextAppUser = userId;
@@ -284,6 +314,7 @@ export default function NotificationServiceView({ session }) {
     } catch (requestError) {
       setPendingAction(null);
       setError(requestError.message);
+      if (['cmcc-probe', 'cmcc-test'].includes(action.type)) await load({ quiet: true });
     } finally {
       setSubmitting(false);
     }
@@ -360,17 +391,22 @@ export default function NotificationServiceView({ session }) {
   const confirmTitle = pendingAction?.type === 'retry' ? '重试失败通知'
     : pendingAction?.type === 'cancel-job' ? '取消计划任务'
       : pendingAction?.type === 'delete-template' ? '删除通知模板'
-        : '发送测试通知';
+        : pendingAction?.type === 'cmcc-probe' ? '连接新消息网关'
+          : pendingAction?.type === 'cmcc-test' ? '发送新消息测试' : '发送测试通知';
   const confirmDescription = pendingAction?.type === 'retry' ? '将使用原始加密载荷重新发送。'
     : pendingAction?.type === 'cancel-job' ? '取消后该任务不会再自动发送。'
       : pendingAction?.type === 'delete-template' ? '删除后不能再用此模板创建任务。'
-        : form.channel === 'app' ? '确认向指定 Android App 平台用户写入测试通知。' : '确认向指定企业微信用户发送此消息。';
+        : pendingAction?.type === 'cmcc-probe' ? '将与中国移动新消息网关建立 WebSocket 连接并完成认证，不会向手机发送消息。'
+          : pendingAction?.type === 'cmcc-test' ? '确认向固定接收号码发送一条纯文本新消息。'
+            : form.channel === 'app' ? '确认向指定 Android App 平台用户写入测试通知。' : '确认向指定企业微信用户发送此消息。';
   const confirmDetail = pendingAction?.type === 'retry' ? targetLabel(pendingAction.delivery)
     : pendingAction?.type === 'cancel-job' ? pendingAction.job?.id
       : pendingAction?.type === 'delete-template' ? pendingAction.template?.name
-        : form.channel === 'app'
-          ? `${form.appUserId.trim()} · ${priorityLabel(form.appPriority)}`
-          : `${form.touser.trim()} · ${typeLabel(form.msgType)}`;
+        : pendingAction?.type === 'cmcc-probe' ? (cmcc.wsUrl || '--')
+          : pendingAction?.type === 'cmcc-test' ? `${cmcc.recipientMasked || '--'} · ${form.cmccContent.trim().slice(0, 60)}`
+            : form.channel === 'app'
+              ? `${form.appUserId.trim()} · ${priorityLabel(form.appPriority)}`
+              : `${form.touser.trim()} · ${typeLabel(form.msgType)}`;
 
   return (
     <section className="page-view notify-page" aria-label="统一通知服务控制中心">
@@ -383,6 +419,7 @@ export default function NotificationServiceView({ session }) {
             { id: 'overview', label: '概览' },
             { id: 'records', label: '发送' },
             { id: 'app', label: 'App 通知' },
+            { id: 'cmcc', label: '新消息' },
             { id: 'jobs', label: '编排' },
             { id: 'preferences', label: '接收偏好' },
             { id: 'api', label: 'API 接入' },
@@ -413,6 +450,7 @@ export default function NotificationServiceView({ session }) {
                 <ConfigurationState ready={overview?.configured} label="通知服务" detail={overview?.configured ? '管理连接已建立' : '尚未配置管理连接'} />
                 <ConfigurationState ready={overview?.storageHealthy} label="发送台账" detail={overview?.storageHealthy ? `保留 ${overview.retentionDays} 天` : '存储连接异常'} />
                 <ConfigurationState ready={overview?.wecom?.corpIdConfigured && overview?.wecom?.secretConfigured} label="企业微信应用" detail={overview?.wecom?.agentId ? `AgentId ${overview.wecom.agentId}` : '应用凭据未配置'} />
+                <ConfigurationState ready={Boolean(cmcc.configured && cmccStatus.ready)} label="中国移动新消息" detail={cmcc.configured ? `${cmcc.recipientMasked || '--'} · ${cmccStatus.ready ? '连接就绪' : '未连接'}` : '凭据未配置'} />
                 <ConfigurationState ready={true} label="Android App 收件箱" detail={`${appOverview.total || 0} 条通知 · ${appOverview.unread || 0} 条未读`} />
                 <ConfigurationState ready={appDevices.total > 0} label="App 设备注册" detail={`${appDevices.total || 0} 台设备 · ${appDevices.pushReady || 0} 台可推送 · ${appDevices.pollOnly || 0} 台轮询`} />
                 <ConfigurationState ready={true} label="敏感数据" detail="服务端托管" />
@@ -443,6 +481,10 @@ export default function NotificationServiceView({ session }) {
               <span><UserRound size={18} /></span>
               <div><strong>接收偏好</strong><small>平台用户免打扰与接收开关统一维护</small></div>
             </button>
+            <button className="notify-channel-card" type="button" onClick={() => setTab('cmcc')}>
+              <span><Zap size={18} /></span>
+              <div><strong>中国移动新消息</strong><small>{cmcc.configured ? `${cmcc.recipientMasked || '--'} · ${cmccStatus.ready ? '连接就绪' : '未连接'}` : '通道未配置'} · 控制与测试</small></div>
+            </button>
           </div>
         </>
       )}
@@ -455,6 +497,7 @@ export default function NotificationServiceView({ session }) {
               <SelectControl ariaLabel="按发送状态筛选" value={filters.status} onChange={(value) => updateFilter('status', value)} options={STATUS_OPTIONS} />
               <SelectControl ariaLabel="按调用方筛选" value={filters.caller} onChange={(value) => updateFilter('caller', value)} options={CALLER_OPTIONS} />
               <SelectControl ariaLabel="按消息类型筛选" value={filters.msgType} onChange={(value) => updateFilter('msgType', value)} options={TYPE_OPTIONS} />
+              <SelectControl ariaLabel="按发送目标筛选" value={filters.targetType} onChange={(value) => updateFilter('targetType', value)} options={TARGET_OPTIONS} />
             </div>
           </header>
           <div className="notify-table">
@@ -521,6 +564,41 @@ export default function NotificationServiceView({ session }) {
         </div>
       )}
 
+      {tab === 'cmcc' && (
+        <div className="notify-test-layout">
+          <section className="ops-panel notify-test-form">
+            <header><div><span>中国移动新消息</span><h3>通道状态</h3></div><Zap size={20} /></header>
+            <div className="notify-config-list">
+              <ConfigurationState ready={Boolean(cmcc.configured)} label="通道凭据" detail={cmcc.configured ? `接收号码 ${cmcc.recipientMasked}` : '未配置 CMCC_API_KEY 与 CMCC_RECIPIENT'} />
+              <ConfigurationState ready={Boolean(cmcc.wsUrl)} label="网关地址" detail={cmcc.wsUrl || '未配置'} />
+              <ConfigurationState ready={Boolean(cmccStatus.ready)} label="WebSocket 连接" detail={cmccStatus.ready ? '已认证，可发送' : cmccStatus.connected ? '已连接，等待认证' : '未连接'} />
+              <ConfigurationState ready={!cmccStatus.lastError} label="最近错误" detail={cmccStatus.lastError ? `${cmccStatus.lastError.code} · ${formatDateTime(cmccStatus.lastError.at)}` : '暂无'} />
+            </div>
+            <div className="notify-cmcc-stats">
+              <span>已提交 {cmccStats.sent || 0}</span>
+              <span>失败 {cmccStats.failed || 0}</span>
+              <span>重连 {cmccStats.reconnects || 0}</span>
+            </div>
+            <button className="secondary-action" type="button" disabled={!canOperate || !cmcc.configured || submitting} onClick={() => setPendingAction({ type: 'cmcc-probe' })}><ShieldCheck size={17} />连接自检</button>
+            <button className="secondary-action" type="button" disabled={!canOperate} onClick={() => { updateFilter('targetType', 'phone'); setTab('records'); }}><FileText size={17} />查看发送记录</button>
+          </section>
+          <section className="ops-panel notify-test-form">
+            <header><div><span>下行测试</span><h3>发送新消息</h3></div><Send size={20} /></header>
+            <label><span>接收号码</span><input value={cmcc.recipientMasked || '未配置'} readOnly /></label>
+            <label><span>消息内容</span><textarea rows={8} maxLength={2048} value={form.cmccContent} placeholder="输入测试内容，将转为纯文本发送" onChange={(event) => setForm({ ...form, cmccContent: event.target.value })} /><small>{form.cmccContent.length} / 2048 字符</small></label>
+            <button className="primary-button notify-send-button" type="button" disabled={!canOperate || !cmcc.configured || !form.cmccContent.trim() || submitting} onClick={() => setPendingAction({ type: 'cmcc-test' })}><Send size={17} />发送测试</button>
+            <div className="notify-cmcc-notes">
+              <span>当前通道能力</span>
+              <ul>
+                <li>仅支持纯文本下行，超过 2048 字按网关上限截断</li>
+                <li>网关不回投递回执，成功仅代表已提交到网关</li>
+                <li>固定投递给 CMCC_RECIPIENT，控制台不提供改号能力</li>
+                <li>尚未接收上行消息，短信控制指令与交互卡片未接入</li>
+              </ul>
+            </div>
+          </section>
+        </div>
+      )}
       {tab === 'test' && (
         <div className="notify-test-layout">
           <section className="ops-panel notify-test-form">
@@ -602,7 +680,7 @@ export default function NotificationServiceView({ session }) {
         title={confirmTitle}
         description={confirmDescription}
         detail={confirmDetail}
-        confirmLabel={pendingAction?.type === 'retry' ? '确认重试' : pendingAction?.type === 'cancel-job' ? '确认取消' : pendingAction?.type === 'delete-template' ? '确认删除' : '确认发送'}
+        confirmLabel={pendingAction?.type === 'retry' ? '确认重试' : pendingAction?.type === 'cancel-job' ? '确认取消' : pendingAction?.type === 'delete-template' ? '确认删除' : pendingAction?.type === 'cmcc-probe' ? '开始自检' : '确认发送'}
         tone="primary"
         busy={submitting}
         onCancel={() => !submitting && setPendingAction(null)}

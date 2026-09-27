@@ -97,6 +97,11 @@ const appTestNotificationSchema = z.object({
   priority: z.enum(['low', 'normal', 'high', 'critical']).default('high'),
 });
 
+const cmccTestNotificationSchema = z.object({
+  actor: z.string().trim().min(1).max(128),
+  content: z.string().trim().min(1).max(2048),
+});
+
 function createApp({
   config,
   wecomClient = null,
@@ -315,6 +320,21 @@ function createApp({
       }, requestId);
       throw error;
     }
+  }
+
+  function maskPhoneNumber(value) {
+    const digits = String(value || '');
+    return /^\d{11}$/.test(digits) ? `${digits.slice(0, 3)}****${digits.slice(7)}` : digits;
+  }
+
+  function cmccOverview() {
+    const status = cmcc && typeof cmcc.getStatus === 'function' ? cmcc.getStatus() : null;
+    return {
+      configured: Boolean(cmcc),
+      recipientMasked: cmcc ? maskPhoneNumber(config.cmcc.recipient) : '',
+      wsUrl: cmcc ? config.cmcc.wsUrl : '',
+      status,
+    };
   }
 
   async function deliver(body, { caller, actor = '', requestId, parentDeliveryId = null, apiClient = null } = {}) {
@@ -800,6 +820,7 @@ function createApp({
           agentId: config.wecom.agentId,
           secretConfigured: Boolean(config.wecom.secret),
         },
+        cmcc: cmccOverview(),
         history,
         queue,
       });
@@ -814,6 +835,7 @@ function createApp({
           agentId: config.wecom.agentId,
           secretConfigured: Boolean(config.wecom.secret),
         },
+        cmcc: cmccOverview(),
         history: null,
       });
     }
@@ -823,11 +845,14 @@ function createApp({
     try {
       const status = String(req.query.status || '');
       const msgType = String(req.query.msgType || '');
+      const targetType = String(req.query.targetType || '').trim();
       if (status && !['pending', 'success', 'failed'].includes(status)) throw httpError(400, 'INVALID_STATUS', '发送状态筛选值无效。');
       if (msgType && !['text', 'markdown', 'textcard', 'news'].includes(msgType)) throw httpError(400, 'INVALID_MESSAGE_TYPE', '消息类型筛选值无效。');
+      if (targetType && !/^[a-z][a-z0-9_-]{0,31}$/.test(targetType)) throw httpError(400, 'INVALID_TARGET_TYPE', '发送目标类型筛选值无效。');
       return res.json(await store.listDeliveries({
         status,
         msgType,
+        targetType,
         caller: String(req.query.caller || '').slice(0, 64),
         page: req.query.page,
         pageSize: req.query.pageSize,
@@ -1038,6 +1063,42 @@ function createApp({
       };
       const { delivery } = await deliver(body, { caller: req.serviceCaller, actor: input.actor, requestId: req.id });
       return res.status(201).json({ delivered: true, delivery });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/management/cmcc/probe', managementSendLimiter, checkManagementAccess, async (_req, res, next) => {
+    try {
+      const channel = requireCmccChannel();
+      await channel.connect();
+      return res.json({
+        ok: true,
+        recipientMasked: maskPhoneNumber(config.cmcc.recipient),
+        status: channel.getStatus(),
+      });
+    } catch (error) {
+      next(error);
+      return undefined;
+    }
+  });
+
+  app.post('/management/cmcc/test', managementSendLimiter, checkManagementAccess, async (req, res, next) => {
+    try {
+      const input = cmccTestNotificationSchema.parse(req.body);
+      const channel = requireCmccChannel();
+      const { result, delivery } = await deliverCmcc(
+        { title: '中国移动新消息测试', summary: input.content },
+        { caller: req.serviceCaller, actor: input.actor, requestId: req.id },
+      );
+      return res.status(201).json({
+        delivered: true,
+        messageId: result.messageId,
+        recipientMasked: maskPhoneNumber(config.cmcc.recipient),
+        status: channel.getStatus(),
+        delivery,
+      });
     } catch (error) {
       next(error);
       return undefined;

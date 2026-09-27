@@ -64,6 +64,14 @@ function validateAppTestInput(input = {}) {
   return { userId, title, summary, priority };
 }
 
+function validateCmccTestInput(input = {}) {
+  const content = String(input.content || '').trim();
+  if (!content || content.length > 2048) {
+    throw new NotificationManagementError('新消息测试内容必须为 1 至 2048 个字符。', { status: 400, code: 'INVALID_CMCC_TEST_CONTENT' });
+  }
+  return { content };
+}
+
 export function createNotificationManagementClient({
   serviceUrl,
   apiKey,
@@ -197,6 +205,12 @@ export function createNotificationManagementClient({
     async sendAppTest(input, actor) {
       return request('/management/app/test', { method: 'POST', body: { ...validateAppTestInput(input), actor: String(actor || '').slice(0, 128) } });
     },
+    async sendCmccTest(input, actor) {
+      return request('/management/cmcc/test', { method: 'POST', body: { ...validateCmccTestInput(input), actor: String(actor || '').slice(0, 128) } });
+    },
+    async probeCmccChannel(actor) {
+      return request('/management/cmcc/probe', { method: 'POST', body: { actor: String(actor || '').slice(0, 128) } });
+    },
     async retryDelivery(id, actor) {
       const deliveryId = String(id || '').trim();
       if (!/^[A-Za-z0-9_-]{8,128}$/.test(deliveryId)) {
@@ -250,4 +264,4 @@ export function createNotificationManagementClient({
   };
 }
 
-export { validateAppTestInput, validateTestInput };
+export { validateAppTestInput, validateCmccTestInput, validateTestInput };

@@ -242,7 +242,8 @@ function summarize(rows, since) {
 function matchesFilters(row, filters) {
   return (!filters.status || row.status === filters.status)
     && (!filters.caller || row.caller === filters.caller)
-    && (!filters.msgType || row.msgType === filters.msgType);
+    && (!filters.msgType || row.msgType === filters.msgType)
+    && (!filters.targetType || row.targetType === filters.targetType);
 }
 
 function paged(items, filters = {}, maximum = 100) {

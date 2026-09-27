@@ -1023,6 +1023,7 @@ async function createMongoNotificationStore({
         ...(filters.status ? { status: filters.status } : {}),
         ...(filters.caller ? { caller: filters.caller } : {}),
         ...(filters.msgType ? { msgType: filters.msgType } : {}),
+        ...(filters.targetType ? { targetType: filters.targetType } : {}),
       };
       const [items, total] = await Promise.all([
         deliveries.find(query, { projection: { _id: 0, encryptedPayload: 0, expiresAt: 0 } })

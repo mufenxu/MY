@@ -29,6 +29,9 @@ class CmccClient {
     this.socket = null;
     this.connected = false;
     this.closed = false;
+    this.lastError = null;
+    this.lastConnectedAt = null;
+    this.stats = { sent: 0, failed: 0, reconnects: 0 };
     this.connectPromise = null;
     this.authWaiter = null;
     this.authTimer = null;
@@ -40,6 +43,28 @@ class CmccClient {
 
   isReady() {
     return this.connected && this.socket?.readyState === OPEN_STATE;
+  }
+
+  getStatus() {
+    return {
+      configured: Boolean(this.apiKey),
+      wsUrl: this.wsUrl,
+      connected: this.connected,
+      ready: this.isReady(),
+      reconnectAttempts: this.reconnectAttempts,
+      lastConnectedAt: this.lastConnectedAt,
+      lastError: this.lastError ? { ...this.lastError } : null,
+      stats: { ...this.stats },
+    };
+  }
+
+  recordError(error) {
+    if (!error) return;
+    this.lastError = {
+      code: error.code || 'CMCC_UNKNOWN_ERROR',
+      message: String(error.message || ''),
+      at: new Date().toISOString(),
+    };
   }
 
   async connect() {
@@ -58,15 +83,22 @@ class CmccClient {
   }
 
   async send({ to, content }) {
-    if (this.closed) throw createCmccError('中国移动新消息通道已关闭。', 'CMCC_CLIENT_CLOSED');
-    await this.connect();
-    const socket = this.socket;
-    if (!socket || socket.readyState !== OPEN_STATE) {
-      throw createCmccError('中国移动新消息网关未连接。', 'CMCC_NOT_CONNECTED');
+    try {
+      if (this.closed) throw createCmccError('中国移动新消息通道已关闭。', 'CMCC_CLIENT_CLOSED');
+      await this.connect();
+      const socket = this.socket;
+      if (!socket || socket.readyState !== OPEN_STATE) {
+        throw createCmccError('中国移动新消息网关未连接。', 'CMCC_NOT_CONNECTED');
+      }
+      const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
+      socket.send(JSON.stringify({ type: 'send', apiKey: this.apiKey, to, content, messageId }));
+      this.stats.sent += 1;
+      return messageId;
+    } catch (error) {
+      this.stats.failed += 1;
+      this.recordError(error);
+      throw error;
     }
-    const messageId = `msg_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
-    socket.send(JSON.stringify({ type: 'send', apiKey: this.apiKey, to, content, messageId }));
-    return messageId;
   }
 
   close() {
@@ -95,7 +127,9 @@ class CmccClient {
     }
     this.socket = socket;
     this.authTimer = setTimeout(() => {
-      this.settleAuth(createCmccError('中国移动新消息网关认证超时。', 'CMCC_AUTH_TIMEOUT'));
+      const timeoutError = createCmccError('中国移动新消息网关认证超时。', 'CMCC_AUTH_TIMEOUT');
+      this.recordError(timeoutError);
+      this.settleAuth(timeoutError);
       this.destroySocket();
     }, AUTH_TIMEOUT_MS);
     this.authTimer.unref?.();
@@ -105,12 +139,16 @@ class CmccClient {
     });
     socket.addEventListener('message', (event) => this.handleFrame(event?.data));
     socket.addEventListener('error', () => {
-      this.settleAuth(createCmccError('中国移动新消息网关连接异常。', 'CMCC_CONNECT_FAILED'));
+      const failure = createCmccError('中国移动新消息网关连接异常。', 'CMCC_CONNECT_FAILED');
+      this.recordError(failure);
+      this.settleAuth(failure);
     });
     socket.addEventListener('close', () => {
       this.connected = false;
       this.stopHeartbeat();
-      this.settleAuth(createCmccError('中国移动新消息网关连接已关闭。', 'CMCC_CONNECT_CLOSED'));
+      const closed = createCmccError('中国移动新消息网关连接已关闭。', 'CMCC_CONNECT_CLOSED');
+      this.recordError(closed);
+      this.settleAuth(closed);
       if (!this.closed) this.scheduleReconnect();
     });
   }
@@ -127,6 +165,8 @@ class CmccClient {
       case 'auth_ok':
         this.connected = true;
         this.reconnectAttempts = 0;
+        this.lastConnectedAt = new Date().toISOString();
+        this.lastError = null;
         clearTimeout(this.authTimer);
         this.authTimer = null;
         this.startHeartbeat();
@@ -135,7 +175,11 @@ class CmccClient {
       case 'auth_failed':
         clearTimeout(this.authTimer);
         this.authTimer = null;
-        this.settleAuth(createCmccError(`中国移动新消息网关认证失败：${message.message || '未知原因'}`, 'CMCC_AUTH_FAILED'));
+        {
+          const failure = createCmccError(`中国移动新消息网关认证失败：${message.message || '未知原因'}`, 'CMCC_AUTH_FAILED');
+          this.recordError(failure);
+          this.settleAuth(failure);
+        }
         this.destroySocket();
         return;
       case 'pong':
@@ -143,6 +187,7 @@ class CmccClient {
         this.pongTimer = null;
         return;
       case 'error':
+        this.recordError(createCmccError(`网关返回错误：${message.message || '未知错误'}`, 'CMCC_GATEWAY_ERROR'));
         this.logger.error(`[cmcc] 网关返回错误：${message.message || '未知错误'}`);
         return;
       default:
@@ -191,6 +236,7 @@ class CmccClient {
   scheduleReconnect() {
     if (this.closed || this.reconnectTimer) return;
     this.reconnectAttempts += 1;
+    this.stats.reconnects += 1;
     const delay = Math.min(RECONNECT_BASE_DELAY_MS * (2 ** (this.reconnectAttempts - 1)), RECONNECT_MAX_DELAY_MS);
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
@@ -202,6 +248,7 @@ class CmccClient {
   }
 
   failAndRetry(error) {
+    this.recordError(error);
     this.settleAuth(error);
     if (!this.closed) this.scheduleReconnect();
   }

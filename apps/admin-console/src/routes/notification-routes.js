@@ -117,6 +117,28 @@ export function registerNotificationRoutes(app, {
     return res.status(201).json(result);
   });
 
+  router.post('/api/notifications/cmcc/test', notificationSendLimiter, requireConsoleRequest, requireRole('operator'), async (req, res) => {
+    const result = await notificationManagement.sendCmccTest(req.body || {}, req.consoleUser.username);
+    await recordAudit(req, {
+      action: 'notification.cmcc_test_send',
+      targetType: 'notification_recipient',
+      targetId: String(result.recipientMasked || '').slice(0, 32),
+      details: { messageId: String(result.messageId || '').slice(0, 64) },
+    });
+    return res.status(201).json(result);
+  });
+
+  router.post('/api/notifications/cmcc/probe', notificationSendLimiter, requireConsoleRequest, requireRole('operator'), async (req, res) => {
+    const result = await notificationManagement.probeCmccChannel(req.consoleUser.username);
+    await recordAudit(req, {
+      action: 'notification.cmcc_probe',
+      targetType: 'notification_channel',
+      targetId: 'cmcc',
+      details: { ready: Boolean(result.status?.ready) },
+    });
+    return res.json(result);
+  });
+
   router.post('/api/notifications/deliveries/:id/retry', notificationSendLimiter, requireConsoleRequest, requireRole('operator'), async (req, res) => {
     const result = await notificationManagement.retryDelivery(req.params.id, req.consoleUser.username);
     await recordAudit(req, {
