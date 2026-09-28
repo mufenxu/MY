@@ -89,9 +89,20 @@ class OperationalSyncWorker(
                     }
                     if (resources != null) alertNotifier.evaluateResourceExpiries(resources)
                     if (timetable != null) CourseWidgetProvider.publish(applicationContext, timetable)
+                    if (syncedTodo != null) PersonalReminderScheduler.schedule(applicationContext, accountUsername, syncedTodo, timetable)
                 }
                 if (!fullSyncDue) return@withRequestMetadata syncResult()
 
+                val energySettings = cn.pxyb.mycontrol.ui.feature.campus.energy.EnergyStore(applicationContext, accountUsername)
+                if (energySettings.read().optBoolean("enabled")) {
+                    val month = java.time.YearMonth.now().toString()
+                    val energy = optionalSync { api.campus.energyReport(month) }
+                    if (energy != null) sessionStore.withRequestSession(session) {
+                        energySettings.record(energy, month)
+                        energySettings.notifyLowBalance(applicationContext, accountUsername,
+                            energy.optJSONObject("wallet")?.optJSONObject("account")?.optString("remainingSum")?.let { cn.pxyb.mycontrol.ui.feature.campus.energy.energyNumber(it) })
+                    }
+                }
                 val overview = optionalSync { api.overview() }
                 val iot = optionalSync { api.iot.dashboard(includeAutomations = false) }
                 val backup = optionalSync { api.backupQuality() }

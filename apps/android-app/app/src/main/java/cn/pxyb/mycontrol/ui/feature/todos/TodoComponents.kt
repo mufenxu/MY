@@ -117,6 +117,7 @@ internal fun TodoEditorDialog(
         modifier = Modifier.heightIn(max = 720.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            task?.id?.let { TodoSourcePreview(it) }
             AppTextField(value = title, onValueChange = { title = it }, label = "待办内容")
             val dueOptions = listOfNotNull(task?.dueAt?.let { "keep" to formatLocalDateTime(it) }) +
                 listOf("none" to "无", "today" to "今天", "tomorrow" to "明天", "week" to "7 天后")

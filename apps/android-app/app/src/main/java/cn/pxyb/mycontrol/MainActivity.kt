@@ -271,6 +271,11 @@ class MainActivity : ComponentActivity() {
             writePendingScene(intent)
             return
         }
+        if (intent.action == Intent.ACTION_SEND && intent.type?.startsWith("image/") == true) {
+            val uri = androidx.core.content.IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, android.net.Uri::class.java)
+            if (uri?.scheme == "content") appViewModel.acceptSharedImage(uri)
+            return
+        }
         if (intent.action == Intent.ACTION_SEND && intent.type == "text/plain") {
             appViewModel.openSharedTodo(
                 subject = intent.getStringExtra(Intent.EXTRA_SUBJECT),

@@ -216,6 +216,15 @@ internal fun AuthenticatedShell(
         }
     }
 
+    val sharedImage by viewModel.sharedImage.collectAsStateWithLifecycle()
+    LaunchedEffect(sharedImage) {
+        sharedImage?.let { uri ->
+            navigateToSubScreen(AppRoute.Screenshot)
+            viewModel.screenshot.recognize(uri)
+            viewModel.consumeSharedImage()
+        }
+    }
+
     val navigateToTab: (MainTab) -> Unit = remember(navController, navigateToSubScreen) {
         { tab ->
             val targetRoute = tab.route()
@@ -296,6 +305,7 @@ internal fun AuthenticatedShell(
             AppRoute.Assistant -> viewModel.syncNavigationDestination(MainTab.Overview, assistantOpen = true)
             AppRoute.Today -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
             AppRoute.FreeClassrooms -> viewModel.syncNavigationDestination(MainTab.Overview)
+            AppRoute.Agenda, AppRoute.Study, AppRoute.Energy, AppRoute.Grades, AppRoute.Screenshot -> viewModel.syncNavigationDestination(MainTab.Overview, autoRefresh = false)
             AppRoute.Reservation -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.LibrarySeatReservation -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.DailyNews -> viewModel.syncNavigationDestination(MainTab.Overview, autoRefresh = false)
@@ -847,9 +857,40 @@ internal fun AuthenticatedShell(
                             },
                             onOpenChaoxing = { navigateToSubScreen(AppRoute.Chaoxing) },
                             onConsumeSharedDraft = viewModel::consumeSharedTodoDraft,
+                            onOpenFeature = navigateToSubScreen,
                             initialSection = destination,
                         )
                     }
+                }
+                composable(AppRoute.Agenda) {
+                    val agendaState by viewModel.agenda.state.collectAsStateWithLifecycle()
+                    val today by viewModel.todayState.collectAsStateWithLifecycle()
+                    cn.pxyb.mycontrol.ui.feature.agenda.AgendaScreen(agendaState, today.timetable, today.todoSnapshot.tasks, contentPadding,
+                        navigateBackFromSubScreen, { viewModel.refreshCurrentWorkspace(); viewModel.agenda.refresh() }, { kind ->
+                            navigateToSubScreen(when (kind) { "课程" -> AppRoute.Timetable; "研讨间" -> AppRoute.Reservation; "座位" -> AppRoute.LibrarySeatReservation; else -> AppRoute.Todos })
+                        })
+                }
+                composable(AppRoute.Study) {
+                    val study by viewModel.study.state.collectAsStateWithLifecycle()
+                    val today by viewModel.todayState.collectAsStateWithLifecycle()
+                    cn.pxyb.mycontrol.ui.feature.study.StudyScreen(study, today.timetable?.courses.orEmpty(), today.todoSnapshot.tasks,
+                        contentPadding, navigateBackFromSubScreen, viewModel.study::load, viewModel.study::start, viewModel.study::finish)
+                }
+                composable(AppRoute.Energy) {
+                    val energy by viewModel.energy.state.collectAsStateWithLifecycle()
+                    cn.pxyb.mycontrol.ui.feature.campus.energy.EnergyScreen(energy, contentPadding, navigateBackFromSubScreen, viewModel.energy::load, viewModel.energy::saveSettings)
+                }
+                composable(AppRoute.Grades) {
+                    val grades by viewModel.grades.state.collectAsStateWithLifecycle()
+                    val today by viewModel.todayState.collectAsStateWithLifecycle()
+                    cn.pxyb.mycontrol.ui.feature.campus.grades.GradesScreen(grades, today.campusOverview?.gpa, contentPadding,
+                        navigateBackFromSubScreen, viewModel.grades::load, viewModel.grades::save, viewModel.grades::remove, viewModel.grades::savePlan)
+                }
+                composable(AppRoute.Screenshot) {
+                    val screenshot by viewModel.screenshot.state.collectAsStateWithLifecycle()
+                    cn.pxyb.mycontrol.ui.feature.todos.ScreenshotTodoScreen(screenshot, contentPadding, navigateBackFromSubScreen, viewModel.screenshot::recognize,
+                        { task, location -> viewModel.screenshot.saveSource(task, location, viewModel.todos::saveImported) },
+                        { navigateToSubScreen(AppRoute.Todos) })
                 }
                 composable(AppRoute.DailyNews) {
                     val dailyNewsState by viewModel.dailyNewsState.collectAsStateWithLifecycle()
@@ -920,6 +961,10 @@ internal fun AuthenticatedShell(
                     )
                 }
                 composable(AppRoute.Reservation) {
+                    val today by viewModel.todayState.collectAsStateWithLifecycle()
+                    val agenda by viewModel.agenda.state.collectAsStateWithLifecycle()
+                    LaunchedEffect(Unit) { viewModel.agenda.refresh() }
+                    val guard = cn.pxyb.mycontrol.ui.feature.agenda.rememberReservationConflictGuard(today.timetable, agenda)
                     val reservationState by viewModel.reservations.state.collectAsStateWithLifecycle()
                     val context = LocalContext.current
                     ReservationScreen(
@@ -942,18 +987,32 @@ internal fun AuthenticatedShell(
                         onRefreshIdentityCode = viewModel.reservations::refreshIdentityCode,
                         onQueryRulesAndAvailability = viewModel.reservations::queryReservationRulesAndAvailability,
                         onQuerySpacesByTime = viewModel.reservations::queryAvailableSpacesByTime,
-                        onSubmitReservation = viewModel.reservations::submitReservation,
+                        onSubmitReservation = { request, done ->
+                            guard(request.date, cn.pxyb.mycontrol.ui.feature.agenda.agendaMinute(request.startTime) ?: 0,
+                                cn.pxyb.mycontrol.ui.feature.agenda.agendaMinute(request.endTime) ?: 0, null) {
+                                viewModel.reservations.submitReservation(request) { viewModel.agenda.refresh(); done() }
+                            }
+                        },
                         onLoadAutoTasks = viewModel.reservations::loadAutoReservationTasks,
                         onSaveAutoTask = viewModel.reservations::saveAutoReservationTask,
                         onToggleAutoTask = viewModel.reservations::toggleAutoReservationTask,
                         onDeleteAutoTask = viewModel.reservations::deleteAutoReservationTask,
                         onCancelReservation = viewModel.reservations::cancelMyReservation,
                         onEndReservation = viewModel.reservations::endMyReservation,
-                        onRescheduleReservation = viewModel.reservations::rescheduleMyReservation,
+                        onRescheduleReservation = { id, request, done ->
+                            guard(request.date, cn.pxyb.mycontrol.ui.feature.agenda.agendaMinute(request.startTime) ?: 0,
+                                cn.pxyb.mycontrol.ui.feature.agenda.agendaMinute(request.endTime) ?: 0, "room:$id") {
+                                viewModel.reservations.rescheduleMyReservation(id, request) { viewModel.agenda.refresh(); done() }
+                            }
+                        },
                         onClearFeedback = viewModel.reservations::clearReservationFeedback,
                     )
                 }
                 composable(AppRoute.LibrarySeatReservation) {
+                    val today by viewModel.todayState.collectAsStateWithLifecycle()
+                    val agenda by viewModel.agenda.state.collectAsStateWithLifecycle()
+                    LaunchedEffect(Unit) { viewModel.agenda.refresh() }
+                    val guard = cn.pxyb.mycontrol.ui.feature.agenda.rememberReservationConflictGuard(today.timetable, agenda)
                     val librarySeatState by viewModel.librarySeats.state.collectAsStateWithLifecycle()
                     val context = LocalContext.current
                     val initialTab = if (state.pendingLibrarySeatMyReservations) {
@@ -992,7 +1051,11 @@ internal fun AuthenticatedShell(
                         onLoadTimeline = { seatId, date ->
                             viewModel.librarySeats.loadLibrarySeatTimeline(seatId, date)
                         },
-                        onSubmitReservation = viewModel.librarySeats::submitLibrarySeatReservation,
+                        onSubmitReservation = { request, done ->
+                            guard(request.date, request.startMinute, request.endMinute, null) {
+                                viewModel.librarySeats.submitLibrarySeatReservation(request) { viewModel.agenda.refresh(); done() }
+                            }
+                        },
                         onLoadReservations = viewModel.librarySeats::loadLibrarySeatReservations,
                         onLoadReservationHistory = viewModel.librarySeats::loadLibrarySeatReservationHistory,
                         onLoadCurrentUse = { viewModel.librarySeats.loadLibrarySeatCurrentUse() },

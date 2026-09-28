@@ -172,6 +172,7 @@ class AlertNotifier(context: Context) {
     }
 
     fun clear() {
+        PersonalReminderScheduler.cancel(appContext, accountUsername)
         ResourceExpiryReminderScheduler.cancel(appContext, accountUsername)
         DailyBriefScheduler.cancel(appContext, accountUsername)
         SnoozedAlertScheduler.cancel(appContext, accountUsername)
@@ -265,6 +266,14 @@ class AlertNotifier(context: Context) {
         }
     }
 
+    fun notifyScheduledPersonal(alert: AppAlertRecord) {
+        val existing = personalStore.readAlerts()
+        if (existing.any { it.id == alert.id }) return
+        if (existing.any { it.origin == "remote" && isSamePersonalReminder(alert, it) }) return
+        personalStore.appendAlerts(listOf(alert))
+        notifyRecord(alert)
+    }
+
     fun evaluateRemote(alerts: List<AppAlertRecord>) {
         if (accountScope == null) return
         ensureChannel()
@@ -273,6 +282,10 @@ class AlertNotifier(context: Context) {
         val unread = alerts.filter { it.origin == "remote" && !it.read && it.id !in seen }
         var posted = 0
         for (alert in unread) {
+            if (alerts.any { it.origin == "local" && isSamePersonalReminder(it, alert) }) {
+                markRemoteSeen(alert.id)
+                continue
+            }
             if (notifyRecord(alert) && ++posted >= 3) break
         }
     }
@@ -509,7 +522,7 @@ class AlertNotifier(context: Context) {
         const val INCIDENT_BASE = 41000
         const val TASK_BASE = 42000
         const val PERSONAL_BASE = 43000
-        const val COURSE_NOTICE_WINDOW_MS = 30 * 60_000L
+        const val COURSE_NOTICE_WINDOW_MS = 15 * 60_000L
     }
 }
 
@@ -517,6 +530,16 @@ internal data class PublicNotificationContent(
     val title: String,
     val body: String,
 )
+
+internal fun isSamePersonalReminder(local: AppAlertRecord, remote: AppAlertRecord): Boolean {
+    val sameCategory = when (local.type) {
+        "todo" -> remote.type.startsWith("todo.")
+        "course" -> remote.type == "campus.course.reminder"
+        else -> false
+    }
+    return sameCategory && local.sourceId.isNotBlank() && local.sourceId == remote.sourceId &&
+        kotlin.math.abs(local.createdAt - remote.createdAt) <= 60 * 60_000L
+}
 
 internal fun publicNotificationContent(): PublicNotificationContent = PublicNotificationContent(
         title = "MY 有新的提醒",

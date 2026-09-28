@@ -63,6 +63,7 @@ data class CampusCourse(
     val endSection: Int,
     val timeRange: String,
     val location: String,
+    val sectionNo: String = "",
 )
 
 @Immutable

@@ -83,6 +83,7 @@ fun TodayScreen(
     onOpenWaterValve: () -> Unit,
     onOpenChaoxing: () -> Unit,
     onConsumeSharedDraft: () -> Unit,
+    onOpenFeature: (String) -> Unit = {},
     initialSection: WorkspaceDestination = WorkspaceDestination.Today,
 ) {
     var editingTodoId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -208,6 +209,18 @@ fun TodayScreen(
         }
     }
 
+    @Composable
+    fun featureLinks() {
+        val routes = cn.pxyb.mycontrol.ui.navigation.AppRoute
+        val entries = if (campusSection == CampusWorkspaceSection.Campus) listOf("电费账单与提醒" to routes.Energy, "成绩与学分" to routes.Grades)
+            else listOf("统一日程" to routes.Agenda, "截图转待办" to routes.Screenshot, "学习计时" to routes.Study)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            entries.forEach { (label, route) ->
+                cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton(text = label, onClick = { onOpenFeature(route) })
+            }
+        }
+    }
+
     AppSubPage(
         title = when (campusSection) {
             CampusWorkspaceSection.Today -> "今日安排"
@@ -248,6 +261,7 @@ fun TodayScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     workspaceTabs()
+                    featureLinks()
                     state.sectionError?.let { message ->
                         AppFeedbackBanner(message, error = true, onRetry = onRefresh)
                     }
@@ -280,6 +294,7 @@ fun TodayScreen(
         item(key = "workspace-sections", contentType = "filter") {
             workspaceTabs()
         }
+        item(key = "workspace-features") { featureLinks() }
 
         when (campusSection) {
             CampusWorkspaceSection.Today -> {

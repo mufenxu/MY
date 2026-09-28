@@ -100,6 +100,7 @@ const appTestNotificationSchema = z.object({
 
 const cmccTestNotificationSchema = z.object({
   actor: z.string().trim().min(1).max(128),
+  title: z.string().trim().max(60).default('中国移动新消息测试'),
   content: z.string().trim().min(1).max(2048),
 });
 
@@ -1256,7 +1257,7 @@ function createApp({
       const input = cmccTestNotificationSchema.parse(req.body);
       const channel = requireCmccChannel();
       const { result, delivery } = await deliverCmcc(
-        { title: '中国移动新消息测试', summary: input.content },
+        { title: input.title, summary: input.content },
         { caller: req.serviceCaller, actor: input.actor, requestId: req.id },
       );
       return res.status(201).json({

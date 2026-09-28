@@ -49,11 +49,16 @@ class TodoController(
         }
     }
 
+    fun saveImported(task: TodoTask, onSaved: () -> Unit) {
+        if (task.title.isBlank()) return
+        mutateLocal(afterLocalSave = onSaved) { repository.enqueue(TodoMutation("upsert", task)) }
+    }
+
     fun toggle(id: String) = mutateLocal { repository.updateTask(id) { it.copy(completed = !it.completed) } }
 
-    fun delete(id: String) = mutateLocal { repository.enqueue(TodoMutation("delete", id = id)) }
+    fun delete(id: String, afterLocalSave: () -> Unit = {}) = mutateLocal(afterLocalSave) { repository.enqueue(TodoMutation("delete", id = id)) }
 
-    private fun mutateLocal(block: suspend () -> Unit) {
+    private fun mutateLocal(afterLocalSave: () -> Unit = {}, block: suspend () -> Unit) {
         val current = appState.value
         if (current.user == null || current.locked || current.busyAction == "logout") return
         scope.launch {
@@ -61,6 +66,7 @@ class TodoController(
             try {
                 mutationMutex.withLock { block() }
                 saved = true
+                afterLocalSave()
                 appState.update { it.copy(message = "待办已保存，正在同步。", error = null) }
                 repository.syncPending()
                 appState.update { it.copy(message = "待办已同步。") }

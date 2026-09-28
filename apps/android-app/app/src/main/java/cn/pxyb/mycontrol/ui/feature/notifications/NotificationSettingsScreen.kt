@@ -75,11 +75,12 @@ fun NotificationSettingsScreen(
         onBack = onBack,
         pinHeader = true,
     ) {
+        item(key = "background-delivery") { BackgroundDeliverySettings() }
         item(key = "permission") {
             AppPanel {
                 AppActionRow(
                     title = "系统通知权限",
-                    subtitle = if (notificationsEnabled) "已开启，可接收设备推送" else "尚未开启，点击允许通知",
+                    subtitle = if (notificationsEnabled) "已开启，可显示系统通知" else "尚未开启，点击允许通知",
                     icon = Icons.Outlined.NotificationsActive,
                     onClick = if (notificationsEnabled) null else onRequestNotifications,
                     trailingContent = null,

@@ -204,6 +204,15 @@ class AppViewModel(
     private val assistantChatMutable = MutableStateFlow(AssistantChatUiState())
     val assistantChatState: StateFlow<AssistantChatUiState> = assistantChatMutable.asStateFlow()
     val todayState = deriveState(AppUiState::toTodayUiState)
+    val agenda = cn.pxyb.mycontrol.ui.feature.agenda.AgendaStateHolder(viewModelScope, api.campus, ::forceReauthentication)
+    val study = cn.pxyb.mycontrol.ui.feature.study.StudyStateHolder(viewModelScope, application, { mutableState.value.user?.username }, ::forceReauthentication)
+    val energy = cn.pxyb.mycontrol.ui.feature.campus.energy.EnergyStateHolder(viewModelScope, application, api.campus, { mutableState.value.user?.username }, ::forceReauthentication)
+    val grades = cn.pxyb.mycontrol.ui.feature.campus.grades.GradesStateHolder(viewModelScope, application, { mutableState.value.user?.username }, ::forceReauthentication)
+    val screenshot = cn.pxyb.mycontrol.ui.feature.todos.ScreenshotStateHolder(viewModelScope, application, { mutableState.value.user?.username }, ::forceReauthentication)
+    val sharedImage = MutableStateFlow<android.net.Uri?>(null)
+    fun acceptSharedImage(uri: android.net.Uri) { sharedImage.value = uri }
+    fun consumeSharedImage() { sharedImage.value = null }
+
     private val waterValves = WaterValveStateHolder(
         viewModelScope,
         api,
@@ -274,6 +283,23 @@ class AppViewModel(
                 .distinctUntilChanged()
                 .debounce(250)
                 .collectLatest(::refreshAssistantSnapshot)
+        }
+    }
+
+    init {
+        viewModelScope.launch {
+            mutableState.map { current ->
+                current.user?.username?.takeIf { !current.locked }?.let { Triple(it, current.todoSnapshot, current.campusTimetable) }
+            }.distinctUntilChanged().debounce(500).collectLatest { inputs ->
+                if (inputs != null) withContext(Dispatchers.IO) {
+                    try {
+                        cn.pxyb.mycontrol.PersonalReminderScheduler.schedule(getApplication(), inputs.first, inputs.second, inputs.third)
+                    } catch (error: Exception) {
+                        if (error is kotlinx.coroutines.CancellationException) throw error
+                        mutableState.update { it.copy(error = "本地提醒暂未排入计划，请重新打开工作台后重试。") }
+                    }
+                }
+            }
         }
     }
 
@@ -751,6 +777,11 @@ class AppViewModel(
             appUpdates.reset()
             androidReleases.reset()
             reservations.reset()
+            agenda.reset()
+            study.reset()
+            energy.reset()
+            grades.reset()
+            screenshot.reset()
             librarySeats.reset()
             waterValves.reset()
             chaoxing.reset()
@@ -789,6 +820,11 @@ class AppViewModel(
     }
 
     private fun cancelAccountRequests() {
+        agenda.cancelPending()
+        study.cancelPending()
+        energy.cancelPending()
+        grades.cancelPending()
+        screenshot.cancelPending()
         accountRequestScope.coroutineContext.cancelChildren()
         qrLoginJob = null
         waterValves.cancelPending()
@@ -1956,16 +1992,25 @@ class AppViewModel(
 
     fun toggleTodo(id: String) = todos.toggle(id)
 
-    fun deleteTodo(id: String) = todos.delete(id)
+    fun deleteTodo(id: String) {
+        val username = mutableState.value.user?.username ?: return
+        todos.delete(id) {
+            cn.pxyb.mycontrol.ui.feature.todos.TodoSourceStore(getApplication(), username).remove(id)
+        }
+    }
 
     fun syncAndroidCalendar() = actions.run("calendar-sync", failureMessage = "日历同步失败，请稍后重试。") {
         val current = mutableState.value
+        val rooms = api.campus.campusMyReservations()
+        val seats = api.campus.librarySeatReservations()
         val result = withContext(Dispatchers.IO) {
             androidCalendarSync.sync(
                 accountUsername = current.user?.username ?: sessionStore.readActiveUsername(),
                 timetable = current.campusTimetable,
                 todos = current.todoSnapshot,
                 resources = current.resourceExpiries,
+                rooms = rooms,
+                seats = seats,
             )
         }
         mutableState.update { it.copy(message = result.message()) }

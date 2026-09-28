@@ -225,6 +225,7 @@ export default function NotificationServiceView({ session }) {
     appPriority: 'high',
     content: '',
     cmccContent: '',
+    cmccTitle: '中国移动新消息测试',
   });
   const [appFilter, setAppFilter] = useState('');
   const [appOverviewUser, setAppOverviewUser] = useState('');
@@ -342,7 +343,7 @@ export default function NotificationServiceView({ session }) {
       } else if (action.type === 'cmcc-test') {
         await requestJson('/api/notifications/cmcc/test', {
           method: 'POST',
-          body: JSON.stringify({ content: form.cmccContent.trim() }),
+          body: JSON.stringify({ title: form.cmccTitle.trim(), content: form.cmccContent.trim() }),
         });
         setMessage('新消息测试已提交到网关');
         setForm((current) => ({ ...current, cmccContent: '' }));
@@ -561,7 +562,7 @@ export default function NotificationServiceView({ session }) {
       : pendingAction?.type === 'delete-template' ? pendingAction.template?.name
         : pendingAction?.type === 'delete-cmcc-command' ? `${pendingAction.command?.name || ''} · ${pendingAction.command?.pattern || ''}`
           : pendingAction?.type === 'cmcc-probe' ? (cmcc.wsUrl || '--')
-            : pendingAction?.type === 'cmcc-test' ? `${cmcc.recipientMasked || '--'} · ${form.cmccContent.trim().slice(0, 60)}`
+            : pendingAction?.type === 'cmcc-test' ? `${cmcc.recipientMasked || '--'} · ${[form.cmccTitle.trim(), form.cmccContent.trim()].filter(Boolean).join(' / ').slice(0, 60)}`
               : form.channel === 'app'
                 ? `${form.appUserId.trim()} · ${priorityLabel(form.appPriority)}`
                 : `${form.touser.trim()} · ${typeLabel(form.msgType)}`;
@@ -749,6 +750,7 @@ export default function NotificationServiceView({ session }) {
           <section className="ops-panel notify-test-form">
             <header><div><span>下行测试</span><h3>发送新消息</h3></div><Send size={20} /></header>
             <label><span>接收号码</span><input value={cmcc.recipientMasked || '未配置'} readOnly /></label>
+            <label><span>消息标题</span><input value={form.cmccTitle} maxLength={60} placeholder="留空则只发送正文" onChange={(event) => setForm({ ...form, cmccTitle: event.target.value })} /><small>{form.cmccTitle.trim() ? '标题与正文各自成行下发' : '已留空：只发送正文'}</small></label>
             <label><span>消息内容</span><textarea rows={8} maxLength={2048} value={form.cmccContent} placeholder="输入测试内容，将转为纯文本发送" onChange={(event) => setForm({ ...form, cmccContent: event.target.value })} /><small>{form.cmccContent.length} / 2048 字符</small></label>
             <button className="primary-button notify-send-button" type="button" disabled={!canOperate || !cmcc.configured || !form.cmccContent.trim() || submitting} onClick={() => setPendingAction({ type: 'cmcc-test' })}><Send size={17} />发送测试</button>
             <div className="notify-cmcc-notes">

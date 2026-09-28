@@ -21,12 +21,13 @@ data class CalendarSyncResult(
     val todoCount: Int,
     val resourceCount: Int,
     val skippedCourseCount: Int,
+    val reservationCount: Int = 0,
 ) {
-    val totalCount: Int get() = courseCount + todoCount + resourceCount
+    val totalCount: Int get() = courseCount + todoCount + resourceCount + reservationCount
 
     fun message(): String = buildString {
         append("已同步 $totalCount 项到 Android 日历")
-        append("（课程 $courseCount、待办 $todoCount、到期提醒 $resourceCount）")
+        append("（课程 $courseCount、待办 $todoCount、预约 $reservationCount、到期提醒 $resourceCount）")
         if (skippedCourseCount > 0) append("；$skippedCourseCount 节课程因时间或周次不完整未同步")
     }
 }
@@ -89,6 +90,8 @@ class AndroidCalendarSync(context: Context) {
         timetable: CampusTimetable?,
         todos: TodoSnapshot,
         resources: List<ResourceExpiry>,
+        rooms: List<CampusMyReservation> = emptyList(),
+        seats: List<LibrarySeatReservationRecord> = emptyList(),
     ): CalendarSyncResult {
         requireCalendarPermission()
         check(timetable != null) { "课表尚未同步，请先刷新今日工作台后再同步。" }
@@ -102,14 +105,23 @@ class AndroidCalendarSync(context: Context) {
         val courseDrafts = buildCourseDrafts(loadedTimetable, academicAnchor)
         val todoDrafts = buildTodoDrafts(todos)
         val resourceDrafts = buildResourceDrafts(resources)
+        val reservationDrafts = (rooms.map { it.date } + seats.map { it.date }).distinct().mapNotNull {
+            runCatching { LocalDate.parse(it.take(10)) }.getOrNull()
+        }.flatMap { date ->
+            cn.pxyb.mycontrol.ui.feature.agenda.buildAgenda(date, null, emptyList(), rooms, seats).map {
+                CalendarEventDraft(title = it.title, location = it.location, description = it.kind,
+                    startAtMillis = it.start, endAtMillis = it.end, timeZone = ZoneId.systemDefault().id, reminderMinutes = 15)
+            }
+        }
         val calendarId = findCalendarId(accountScope) ?: createCalendar(accountScope)
-        replaceCalendarEvents(calendarId, courseDrafts.events + todoDrafts + resourceDrafts)
+        replaceCalendarEvents(calendarId, courseDrafts.events + todoDrafts + resourceDrafts + reservationDrafts)
 
         return CalendarSyncResult(
             courseCount = courseDrafts.events.size,
             todoCount = todoDrafts.size,
             resourceCount = resourceDrafts.size,
             skippedCourseCount = courseDrafts.skipped,
+            reservationCount = reservationDrafts.size,
         )
     }
 

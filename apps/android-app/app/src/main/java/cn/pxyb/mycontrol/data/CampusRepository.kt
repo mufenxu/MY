@@ -12,6 +12,11 @@ import org.json.JSONObject
 import java.time.YearMonth
 
 class CampusRepository internal constructor(private val http: PlatformHttpClient) {
+    suspend fun energyReport(month: String): JSONObject = withContext(Dispatchers.IO) {
+        http.withRequestMetadata(allowCache = false) {
+            campusData("$CAMPUS_ENERGY_SUMMARY_PATH?time=${YearMonth.parse(month)}")
+        }.value
+    }
     val chaoxing = ChaoxingRepository(http)
     private val librarySeatSeatCache = LinkedHashMap<String, Pair<Long, List<LibrarySeatStatus>>>()
 
@@ -61,6 +66,7 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
                     endSection = item.optInt("endSection"),
                     timeRange = item.optString("timeRange"),
                     location = location?.optString("display") ?: item.optString("location"),
+                    sectionNo = item.optString("sectionNo"),
                 )
             },
         )

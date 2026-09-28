@@ -65,11 +65,15 @@ function validateAppTestInput(input = {}) {
 }
 
 function validateCmccTestInput(input = {}) {
+  const title = String(input.title ?? '中国移动新消息测试').trim();
   const content = String(input.content || '').trim();
+  if (title.length > 60) {
+    throw new NotificationManagementError('新消息标题不能超过 60 个字符。', { status: 400, code: 'INVALID_CMCC_TEST_TITLE' });
+  }
   if (!content || content.length > 2048) {
     throw new NotificationManagementError('新消息测试内容必须为 1 至 2048 个字符。', { status: 400, code: 'INVALID_CMCC_TEST_CONTENT' });
   }
-  return { content };
+  return { title, content };
 }
 
 const CMCC_MEDIA_TYPES = ['IMAGE', 'TEXT', 'AUDIO', 'VIDEO', 'FILE'];
