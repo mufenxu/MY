@@ -19,6 +19,7 @@ enum class HomeQuickAction {
     GoogleAccounts,
     Operations,
     Account,
+    MediaDownload,
 }
 
 internal val DEFAULT_HIDDEN_HOME_QUICK_ACTIONS: Set<HomeQuickAction> = setOf(

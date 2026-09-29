@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Chair
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Hub
@@ -96,6 +97,7 @@ private fun homeQuickActionVisual(action: HomeQuickAction): QuickActionVisual = 
     HomeQuickAction.GoogleAccounts -> QuickActionVisual(Icons.Outlined.Email, ColorTokens.Indigo.foreground)
     HomeQuickAction.Operations -> QuickActionVisual(Icons.Outlined.Settings, MaterialTheme.colorScheme.onSurfaceVariant)
     HomeQuickAction.Account -> QuickActionVisual(Icons.Outlined.Security, ColorTokens.Green.foreground)
+    HomeQuickAction.MediaDownload -> QuickActionVisual(Icons.Outlined.Download, ColorTokens.Indigo.foreground)
 }
 
 @Composable
@@ -115,6 +117,7 @@ internal fun homeQuickActionSpec(
     onOpenSearch: () -> Unit,
     onOpenQrLogin: () -> Unit,
     onOpenAccountManagement: () -> Unit,
+    onOpenMediaDownload: () -> Unit,
 ): HomeQuickActionSpec = when (action) {
     HomeQuickAction.Today -> HomeQuickActionSpec(
         icon = Icons.Outlined.CalendarMonth,
@@ -222,6 +225,14 @@ internal fun homeQuickActionSpec(
         accent = ColorTokens.Green.foreground,
         accentPale = ColorTokens.Green.container,
         onClick = onOpenAccountManagement,
+    )
+
+    HomeQuickAction.MediaDownload -> HomeQuickActionSpec(
+        icon = Icons.Outlined.Download,
+        label = "视频下载",
+        accent = ColorTokens.Indigo.foreground,
+        accentPale = ColorTokens.Indigo.container,
+        onClick = onOpenMediaDownload,
     )
 }
 
@@ -403,6 +414,7 @@ private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action
     HomeQuickAction.GoogleAccounts -> "Google 邮箱台账"
     HomeQuickAction.Operations -> "系统状态"
     HomeQuickAction.Account -> "账号与安全"
+    HomeQuickAction.MediaDownload -> "视频下载"
 }
 
 @Composable

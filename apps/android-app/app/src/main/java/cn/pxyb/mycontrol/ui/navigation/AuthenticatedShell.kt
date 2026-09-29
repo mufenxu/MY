@@ -116,6 +116,7 @@ import cn.pxyb.mycontrol.ui.feature.news.DailyNewsScreen
 import cn.pxyb.mycontrol.ui.feature.notifications.NotificationCenterScreen
 import cn.pxyb.mycontrol.ui.feature.notifications.NotificationSettingsScreen
 import cn.pxyb.mycontrol.ui.feature.operations.OperationsScreen
+import cn.pxyb.mycontrol.ui.feature.media.MediaDownloadScreen
 import cn.pxyb.mycontrol.ui.feature.overview.OverviewScreen
 import cn.pxyb.mycontrol.ui.feature.profile.AppSettingsDialog
 import cn.pxyb.mycontrol.ui.feature.profile.ProfileScreen
@@ -309,6 +310,7 @@ internal fun AuthenticatedShell(
             AppRoute.Reservation -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.LibrarySeatReservation -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.DailyNews -> viewModel.syncNavigationDestination(MainTab.Overview, autoRefresh = false)
+            AppRoute.MediaDownload -> viewModel.syncNavigationDestination(MainTab.Overview, autoRefresh = false)
             AppRoute.Scenes -> viewModel.syncNavigationDestination(MainTab.Tools, workspaceDestination = WorkspaceDestination.Scenes)
             AppRoute.Timetable -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Timetable)
             AppRoute.Campus -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Campus)
@@ -520,6 +522,7 @@ internal fun AuthenticatedShell(
                             navigateToSubScreen(AppRoute.CampusWaterValve)
                         },
                         onOpenAccountManagement = viewModel::openAccountManagement,
+                        onOpenMediaDownload = { navigateToSubScreen(AppRoute.MediaDownload) },
                         onUpdateQuickActions = viewModel::updateHomeQuickActions,
                         requestExternalApplicationLaunch = viewModel::createExternalApplicationLaunch,
                     )
@@ -899,6 +902,13 @@ internal fun AuthenticatedShell(
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
                         onRefresh = viewModel::refreshDailyNews,
+                    )
+                }
+                composable(AppRoute.MediaDownload) {
+                    MediaDownloadScreen(
+                        contentPadding = contentPadding,
+                        onBack = navigateBackFromSubScreen,
+                        onParse = viewModel::parseMediaDownload,
                     )
                 }
                 composable(AppRoute.FreeClassrooms) {

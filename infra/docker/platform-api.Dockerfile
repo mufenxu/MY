@@ -54,8 +54,10 @@ RUN npm ci --omit=dev --no-audit --no-fund
 FROM ${NODE_IMAGE} AS runtime
 ARG BUILD_REVISION=unknown
 ARG BUILD_TIMESTAMP=
+# yt-dlp 只用于解析直链（-J），不下载不合并，所以不需要 ffmpeg。版本号固定以便构建可复现。
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && apt-get install -y --no-install-recommends libgssapi-krb5-2 python3 python3-pip \
+    && python3 -m pip install --no-cache-dir --break-system-packages yt-dlp==2026.08.19 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production \

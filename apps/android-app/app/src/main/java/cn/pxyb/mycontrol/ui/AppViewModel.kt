@@ -35,6 +35,7 @@ import cn.pxyb.mycontrol.data.HomePreferences
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.IotSceneAction
+import cn.pxyb.mycontrol.data.MediaDownloadTarget
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.data.PlatformWebSession
@@ -1566,6 +1567,8 @@ class AppViewModel(
         if (launch.loginUrl.isBlank()) throw IllegalStateException("服务端未返回外部应用登录地址。")
         return launch
     }
+
+    suspend fun parseMediaDownload(shareText: String): MediaDownloadTarget = api.parseMediaDownload(shareText)
 
     fun approveQrLogin(
         requestCredential: suspend (String) -> String,

@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
+import java.net.URLEncoder
 import java.util.Locale
 
 class PlatformApi(
@@ -34,6 +35,11 @@ class PlatformApi(
 
     suspend fun externalApplications(): List<ExternalApplication> = withContext(Dispatchers.IO) {
         parseExternalApplications(execute(EXTERNAL_APPLICATIONS_PATH).json)
+    }
+
+    suspend fun parseMediaDownload(shareText: String): MediaDownloadTarget = withContext(Dispatchers.IO) {
+        val query = URLEncoder.encode(shareText, "UTF-8")
+        parseMediaDownloadTarget(execute("$MEDIA_DOWNLOAD_PARSE_PATH?url=$query").json)
     }
 
     suspend fun launchExternalApplication(id: String): ExternalApplicationLaunch = withContext(Dispatchers.IO) {
@@ -496,6 +502,7 @@ class PlatformApi(
     private companion object {
         const val AUTH_STATUS_PATH = "/api/auth/status"
         const val EXTERNAL_APPLICATIONS_PATH = "/api/external-apps"
+        const val MEDIA_DOWNLOAD_PARSE_PATH = "/api/download/parse"
         const val TODOS_PATH = "/apps/core/api/todos"
         const val ACR_IMAGES_PATH = "/api/acr/images"
         const val DAILY_NEWS_PATH = "/apps/core/api/news/daily"

@@ -42,6 +42,7 @@ internal object AppRoute {
     const val Notifications = "notifications"
     const val DailyNews = "daily-news"
     const val Scenes = "scenes"
+    const val MediaDownload = "media-download"
 }
 
 internal fun contentMaxWidthForRoute(route: String): Dp = when (route) {
@@ -53,6 +54,7 @@ internal fun contentMaxWidthForRoute(route: String): Dp = when (route) {
     AppRoute.Reservation, AppRoute.LibrarySeatReservation, AppRoute.Notifications, AppRoute.Chaoxing,
     AppRoute.GoogleAccounts, AppRoute.GitHubProjects, AppRoute.Projects,
     AppRoute.RegistryImages, AppRoute.AndroidReleases, AppRoute.Search, AppRoute.Scenes -> AppWorkspaceContentMaxWidth
+    AppRoute.MediaDownload -> AppWorkspaceContentMaxWidth
     else -> AppTabletContentMaxWidth
 }
 
@@ -92,6 +94,7 @@ internal fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Today, AppRoute.Timetable, AppRoute.Campus, AppRoute.Todos,
     AppRoute.FreeClassrooms, AppRoute.Reservation, AppRoute.LibrarySeatReservation,
     AppRoute.CampusWaterValve, AppRoute.DailyNews, AppRoute.Notifications, AppRoute.Chaoxing -> MainTab.Overview
+    AppRoute.MediaDownload -> MainTab.Overview
     AppRoute.Operations, AppRoute.Projects, AppRoute.GitHubProjects,
     AppRoute.AndroidReleases, AppRoute.RegistryImages -> MainTab.Operations
     AppRoute.Tools, AppRoute.Scenes -> MainTab.Tools
@@ -112,6 +115,7 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.Today, AppRoute.Timetable, AppRoute.Campus, AppRoute.Todos,
     AppRoute.FreeClassrooms, AppRoute.Reservation, AppRoute.LibrarySeatReservation,
     AppRoute.CampusWaterValve, AppRoute.DailyNews, AppRoute.Chaoxing -> MainTab.Overview
+    AppRoute.MediaDownload -> MainTab.Overview
     else -> null
 }
 

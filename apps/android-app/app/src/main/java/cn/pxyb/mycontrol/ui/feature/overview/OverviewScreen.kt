@@ -76,6 +76,7 @@ fun OverviewScreen(
     onOpenSeatReservation: () -> Unit = {},
     onOpenWaterValve: () -> Unit = {},
     onOpenAccountManagement: () -> Unit = {},
+    onOpenMediaDownload: () -> Unit = {},
     onUpdateQuickActions: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
     requestExternalApplicationLaunch: suspend (String) -> ExternalApplicationLaunch,
 ) {
@@ -181,6 +182,7 @@ fun OverviewScreen(
                                     onOpenReservation, onOpenFreeClassrooms, onOpenSeatReservation,
                                     onOpenWaterValve, onOpenDailyNews, onOpenSearch, onOpenQrLogin,
                                     onOpenAccountManagement,
+                                    onOpenMediaDownload,
                                 )
                                 QuickAction(spec.icon, spec.label, spec.accent, spec.accentPale, Modifier.weight(1f), spec.onClick)
                             }

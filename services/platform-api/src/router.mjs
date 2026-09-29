@@ -20,10 +20,15 @@ import {
   runAssistantChat,
   writeJsonError,
 } from './ai-assistant.mjs';
+import {
+  readDownloadConfig,
+  resolveDownloadTarget,
+} from './download-parse.mjs';
 
 const PROXY_CONTEXT = Symbol('platformProxyContext');
 const PROXY_TIMEOUT_MIN_MS = 1_000;
 const PROXY_TIMEOUT_MAX_MS = 120_000;
+const DOWNLOAD_RATE_LIMIT_PER_MINUTE = 20;
 
 function replayDeviceBody(req) {
   if (!req.deviceRequestBody) return req;
@@ -282,6 +287,8 @@ export function createPlatformRouter({
   const assistantConfig = readAiAssistantConfig();
   const examAiTimeout = Math.max(upstreamTimeout, assistantConfig.timeoutMs + 10_000);
   const assistantLimiter = createAssistantRateLimiter({ limit: assistantConfig.rateLimitPerMinute });
+  const downloadConfig = readDownloadConfig();
+  const downloadLimiter = createAssistantRateLimiter({ limit: DOWNLOAD_RATE_LIMIT_PER_MINUTE });
   const proxy = httpProxy.createProxyServer({
     xfwd: true,
     ws: true,
@@ -476,6 +483,35 @@ export function createPlatformRouter({
     }
   }
 
+  async function handleDownloadParse(req, res, requestUrl) {
+    if (req.method !== 'GET') {
+      writeJsonError(res, 405, '仅支持 GET 请求。', 'METHOD_NOT_ALLOWED');
+      return;
+    }
+    const session = await getPlatformSession(req);
+    if (!session) {
+      writeJsonError(res, 401, '登录会话已失效，请重新登录。', 'PLATFORM_SESSION_REQUIRED');
+      return;
+    }
+    const subject = String(session.sub || session.username || session.nonce || 'anonymous');
+    if (!downloadLimiter.allow(subject)) {
+      writeJsonError(res, 429, '解析请求过于频繁，请稍后再试。', 'DOWNLOAD_RATE_LIMITED');
+      return;
+    }
+    try {
+      const result = await resolveDownloadTarget({
+        url: requestUrl.searchParams.get('url'),
+        config: downloadConfig,
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      const status = Number.isInteger(error?.status) ? error.status : 502;
+      const code = typeof error?.code === 'string' ? error.code : 'PARSE_FAILED';
+      writeJsonError(res, status, error?.message || '解析失败，请稍后再试。', code);
+    }
+  }
+
   async function handler(req, res) {
     req.securityOriginalUrl = req.url;
     // 外部请求永远不能自行传入内部身份票据。
@@ -552,6 +588,9 @@ export function createPlatformRouter({
     }
     if (requestUrl.pathname === '/api/assistant/chat') {
       return handleAssistantChat(req, res);
+    }
+    if (requestUrl.pathname === '/api/download/parse') {
+      return handleDownloadParse(req, res, requestUrl);
     }
 
     if (requestUrl.pathname === '/core' || requestUrl.pathname.startsWith('/core/')) {
