@@ -152,6 +152,10 @@ const router = createPlatformRouter({
     portalApp.locals.recordProxyMetric(metric);
     console.info(JSON.stringify({ event: 'platform_proxy_request', ...metric }));
   },
+  recordDownloadMetric: (metric) => {
+    portalApp.locals.recordDownloadMetric?.(metric);
+    console.info(JSON.stringify({ event: 'platform_download_parse', ...metric }));
+  },
 });
 
 const host = process.env.PLATFORM_API_HOST || '0.0.0.0';

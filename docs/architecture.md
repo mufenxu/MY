@@ -101,5 +101,12 @@ Alibaba Cloud Container Registry is the primary production image source. GitHub 
 | Personal exam libraries and shared-paper copies | Exam `console` identity | Read-only share restrictions stay in the console adapter |
 | Business events and domain announcements | Owning business service | Source records such as exams, tasks, incidents and published announcements remain with their domain owner |
 | Cross-channel notifications and recipient inbox state | `notification-service` | New user-directed notifications use the canonical API; the service owns App inbox/read/archive state, channel delivery, preferences and audit |
+| Video share-link parsing and watermark-free direct links | `platform-api` `/api/download/parse` | The gateway only resolves metadata and direct media URLs; the Android client downloads from the platform CDN itself, and the server must not relay media bytes |
 
 New features must extend the canonical owner or call its internal API. A compatibility route may redirect or proxy temporarily, but it must not contain a second implementation of the feature.
+
+## Media download
+
+`GET /api/download/parse?url=` requires a platform session and is rate limited per account. It resolves the share link into per-quality direct URLs plus the request headers the CDN requires, and the Android client hands those to `DownloadManager` so the transfer never consumes platform bandwidth. Results are cached for five minutes and dropped once the underlying CDN link is about to expire.
+
+Douyin is resolved by calling the public `aweme/detail` web API with a registered `ttwid` credential, because yt-dlp cannot pass Douyin signature checks. Every other platform is resolved by running the pinned `yt-dlp -J` and keeping only progressive HTTP formats; DASH/HLS-only sources are rejected instead of being merged. The optional `PLATFORM_YTDLP_PATH` and `PLATFORM_DOWNLOAD_TIMEOUT_MS` variables tune that path.

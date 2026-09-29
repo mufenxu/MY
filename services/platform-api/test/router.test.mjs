@@ -576,3 +576,50 @@ test('proxy metrics classify upstream 5xx responses as errors', async () => {
   assert.equal(metrics[0].statusClass, '5xx');
   assert.equal(metrics[0].errorKind, 'upstream');
 });
+test('download parsing requires a session and reports bounded metrics', async () => {
+  const metrics = [];
+  const router = createPlatformRouter({
+    portalApp: echoApp('portal'),
+    recordDownloadMetric: (metric) => metrics.push(metric),
+  });
+
+  await withServer(router, async (port) => {
+    const unauthorized = await request(port, '/api/download/parse?url=https%3A%2F%2Fv.douyin.com%2Fabc%2F');
+    assert.equal(unauthorized.status, 401);
+    assert.equal(unauthorized.body.code, 'PLATFORM_SESSION_REQUIRED');
+
+    const wrongMethod = await request(port, '/api/download/parse', 'admin.example.com', {}, 'POST');
+    assert.equal(wrongMethod.status, 405);
+    assert.equal(wrongMethod.body.code, 'METHOD_NOT_ALLOWED');
+  });
+
+  assert.deepEqual(
+    metrics.map((metric) => ({ outcome: metric.outcome, errorKind: metric.errorKind, statusClass: metric.statusClass })),
+    [
+      { outcome: 'error', errorKind: 'auth', statusClass: '4xx' },
+      { outcome: 'error', errorKind: 'method', statusClass: '4xx' },
+    ],
+  );
+  assert.equal(metrics.every((metric) => Number.isFinite(metric.durationMs)), true);
+});
+
+test('download parsing rejects internal targets after authentication', async () => {
+  const metrics = [];
+  const router = createPlatformRouter({
+    portalApp: echoApp('portal'),
+    getPlatformSession: () => ({ sub: 'tester' }),
+    recordDownloadMetric: (metric) => metrics.push(metric),
+  });
+
+  await withServer(router, async (port) => {
+    const response = await request(port, '/api/download/parse?url=http%3A%2F%2F169.254.169.254%2Flatest%2Fmeta-data%2F');
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, 'BLOCKED_TARGET');
+  });
+
+  assert.equal(metrics.length, 1);
+  assert.deepEqual(
+    { outcome: metrics[0].outcome, errorKind: metrics[0].errorKind, statusClass: metrics[0].statusClass },
+    { outcome: 'error', errorKind: 'BLOCKED_TARGET', statusClass: '4xx' },
+  );
+});

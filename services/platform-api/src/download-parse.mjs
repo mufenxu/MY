@@ -6,6 +6,9 @@ const DOUYIN_REFERER = 'https://www.douyin.com/';
 const TTWID_REGISTER_URL = 'https://ttwid.bytedance.com/ttwid/union/register/';
 const DOUYIN_DETAIL_URL = 'https://www.douyin.com/aweme/v1/web/aweme/detail/';
 const TTWID_TTL_MS = 6 * 60 * 60 * 1000;
+const PARSE_CACHE_TTL_MS = 5 * 60 * 1000;
+const PARSE_CACHE_MAX_ENTRIES = 64;
+const PARSE_CACHE_EXPIRY_MARGIN_SECONDS = 60;
 const DEFAULT_TIMEOUT_MS = 20_000;
 const MAX_URL_CHARS = 2_048;
 const MAX_QUALITIES = 8;
@@ -18,7 +21,24 @@ const TOKEN_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456
 // 只转发播放直链必需的头：Accept-Encoding 会把响应变成 gzip 流，交给下载器会损坏文件。
 const FORWARDED_HEADER_NAMES = new Set(['referer', 'user-agent', 'origin']);
 
+// 通用分支会把地址交给 yt-dlp 在服务器上发起请求，因此先挡掉回环、内网与链路本地地址，避免被当成内网探测代理。
+const BLOCKED_HOST_PATTERNS = [
+  /^localhost$/i,
+  /\.(?:localhost|local|internal|home\.arpa)$/i,
+  /^127\./,
+  /^0\./,
+  /^10\./,
+  /^169\.254\./,
+  /^192\.168\./,
+  /^172\.(?:1[6-9]|2\d|3[01])\./,
+  /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./,
+  /^\[?::1\]?$/,
+  /^\[?f[cd][0-9a-f]{2}:/i,
+  /^\[?fe80:/i,
+];
+
 const ttwidCache = { value: '', expiresAt: 0 };
+const parseCache = new Map();
 
 export function readDownloadConfig(env = process.env) {
   const timeout = Number.parseInt(String(env.PLATFORM_DOWNLOAD_TIMEOUT_MS ?? ''), 10);
@@ -53,7 +73,7 @@ function pickDirectHeaders(source) {
   return headers;
 }
 
-function formatSize(size) {
+export function formatSize(size) {
   const bytes = Number(size) || 0;
   if (bytes <= 0) return '';
   if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
@@ -62,7 +82,7 @@ function formatSize(size) {
 }
 
 // 竖版视频的 height 是长边，用短边才符合用户对 720P/1080P 的习惯。
-function resolutionLabel(width, height) {
+export function resolutionLabel(width, height) {
   const shortSide = Math.min(Number(width) || 0, Number(height) || 0);
   return shortSide > 0 ? `${shortSide}P` : '原始画质';
 }
@@ -72,7 +92,10 @@ export function extractShareUrl(input) {
   if (!text) return '';
   const matched = text.match(SHARE_URL_PATTERN);
   const candidate = matched ? matched[0] : text;
-  const cleaned = candidate.replace(/[,，。；;、]+$/, '');
+  // 分享文案里的链接常常直接黏着中文，遇到非 ASCII 字符即截断，避免把中文编码进 URL。
+  const cleaned = candidate
+    .replace(/[^\x20-\x7E][\s\S]*$/, '')
+    .replace(/[,，。；;、]+$/, '');
   if (cleaned.length > MAX_URL_CHARS) return '';
   try {
     const parsed = new URL(cleaned);
@@ -89,6 +112,44 @@ export function isDouyinUrl(value) {
   } catch {
     return false;
   }
+}
+
+export function isBlockedShareTarget(value) {
+  let hostname = '';
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return true;
+    hostname = parsed.hostname.toLowerCase();
+  } catch {
+    return true;
+  }
+  return BLOCKED_HOST_PATTERNS.some((pattern) => pattern.test(hostname));
+}
+
+function readParseCache(key) {
+  const entry = parseCache.get(key);
+  if (!entry) return null;
+  // 直链本身也会过期，剩余有效期太短的缓存结果直接丢弃，避免把死链交给客户端。
+  const linkExpired = Number(entry.value?.expireAt || 0) > 0
+    && Number(entry.value.expireAt) - PARSE_CACHE_EXPIRY_MARGIN_SECONDS <= Math.floor(Date.now() / 1000);
+  if (entry.expiresAt <= Date.now() || linkExpired) {
+    parseCache.delete(key);
+    return null;
+  }
+  return entry.value;
+}
+
+function writeParseCache(key, value) {
+  if (parseCache.size >= PARSE_CACHE_MAX_ENTRIES) {
+    const oldest = parseCache.keys().next().value;
+    if (oldest !== undefined) parseCache.delete(oldest);
+  }
+  parseCache.set(key, { value, expiresAt: Date.now() + PARSE_CACHE_TTL_MS });
+}
+
+function invalidateTtwid() {
+  ttwidCache.value = '';
+  ttwidCache.expiresAt = 0;
 }
 
 async function readTtwid(fetchImpl, signal) {
@@ -187,6 +248,18 @@ async function fetchAwemeDetail(awemeId, fetchImpl, signal) {
     throw resolveError(502, '抖音没有返回作品信息，可能是私密作品或需要登录。', 'DOUYIN_DETAIL_EMPTY');
   }
   return detail;
+}
+
+// 缓存的 ttwid 可能已经失效，表现为接口返回空；此时清掉缓存重来一次。
+async function fetchAwemeDetailWithRetry(awemeId, fetchImpl, signal) {
+  const usedCachedCredential = Boolean(ttwidCache.value) && ttwidCache.expiresAt > Date.now();
+  try {
+    return await fetchAwemeDetail(awemeId, fetchImpl, signal);
+  } catch (error) {
+    if (!usedCachedCredential || error?.code !== 'DOUYIN_DETAIL_EMPTY') throw error;
+    invalidateTtwid();
+    return fetchAwemeDetail(awemeId, fetchImpl, signal);
+  }
 }
 
 function buildDouyinQualities(video) {
@@ -363,27 +436,39 @@ function buildGenericResult(info) {
   };
 }
 
+async function resolveUncachedTarget(shareUrl, config, fetchImpl) {
+  if (isDouyinUrl(shareUrl)) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), config.timeoutMs);
+    timer.unref?.();
+    try {
+      const awemeId = await resolveAwemeId(shareUrl, fetchImpl, controller.signal);
+      const detail = await fetchAwemeDetailWithRetry(awemeId, fetchImpl, controller.signal);
+      return buildDouyinResult(detail);
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        throw resolveError(504, '解析超时，请稍后再试。', 'PARSE_TIMEOUT');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return buildGenericResult(await runYtDlp(shareUrl, config));
+}
+
 export async function resolveDownloadTarget({ url, config = readDownloadConfig(), fetchImpl = globalThis.fetch } = {}) {
   const shareUrl = extractShareUrl(url);
   if (!shareUrl) {
     throw resolveError(400, '没有识别到有效的视频链接。', 'INVALID_URL');
   }
-  if (!isDouyinUrl(shareUrl)) {
-    return buildGenericResult(await runYtDlp(shareUrl, config));
+  if (isBlockedShareTarget(shareUrl)) {
+    throw resolveError(400, '不支持解析内网或本地地址。', 'BLOCKED_TARGET');
   }
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), config.timeoutMs);
-  timer.unref?.();
-  try {
-    const awemeId = await resolveAwemeId(shareUrl, fetchImpl, controller.signal);
-    const detail = await fetchAwemeDetail(awemeId, fetchImpl, controller.signal);
-    return buildDouyinResult(detail);
-  } catch (error) {
-    if (error?.name === 'AbortError') {
-      throw resolveError(504, '解析超时，请稍后再试。', 'PARSE_TIMEOUT');
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
+  // 同一个链接短时间内重复解析直接复用结果，避免反复触达平台接口。
+  const cached = readParseCache(shareUrl);
+  if (cached) return cached;
+  const target = await resolveUncachedTarget(shareUrl, config, fetchImpl);
+  writeParseCache(shareUrl, target);
+  return target;
 }

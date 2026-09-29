@@ -905,10 +905,15 @@ internal fun AuthenticatedShell(
                     )
                 }
                 composable(AppRoute.MediaDownload) {
+                    val mediaDownloadState by viewModel.mediaDownloadState.collectAsStateWithLifecycle()
                     MediaDownloadScreen(
+                        state = mediaDownloadState,
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
-                        onParse = viewModel::parseMediaDownload,
+                        onShareTextChange = viewModel.mediaDownload::updateShareText,
+                        onParse = viewModel.mediaDownload::parse,
+                        onDownloadQueued = viewModel.mediaDownload::reportDownloadQueued,
+                        onDownloadFailed = viewModel.mediaDownload::reportDownloadFailure,
                     )
                 }
                 composable(AppRoute.FreeClassrooms) {

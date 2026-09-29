@@ -275,6 +275,7 @@ export function createPlatformRouter({
   platformPublicOrigin = '',
   proxyTimeoutMs = 15_000,
   recordProxyMetric = () => {},
+  recordDownloadMetric = () => {},
 }) {
   const hostSets = {
     core: parseHosts(coreHosts),
@@ -484,17 +485,36 @@ export function createPlatformRouter({
   }
 
   async function handleDownloadParse(req, res, requestUrl) {
+    const startedAt = performance.now();
+    const finishMetric = ({ outcome, errorKind = 'none', statusClass: klass = 'unknown', target = null }) => {
+      try {
+        recordDownloadMetric({
+          platform: String(target?.platform || ''),
+          kind: String(target?.kind || ''),
+          qualityCount: Array.isArray(target?.qualities) ? target.qualities.length : 0,
+          outcome,
+          errorKind,
+          statusClass: klass,
+          durationMs: Math.max(Math.round(performance.now() - startedAt), 0),
+        });
+      } catch (metricError) {
+        console.error('Platform download metric callback failed:', metricError.message);
+      }
+    };
     if (req.method !== 'GET') {
+      finishMetric({ outcome: 'error', errorKind: 'method', statusClass: '4xx' });
       writeJsonError(res, 405, '仅支持 GET 请求。', 'METHOD_NOT_ALLOWED');
       return;
     }
     const session = await getPlatformSession(req);
     if (!session) {
+      finishMetric({ outcome: 'error', errorKind: 'auth', statusClass: '4xx' });
       writeJsonError(res, 401, '登录会话已失效，请重新登录。', 'PLATFORM_SESSION_REQUIRED');
       return;
     }
     const subject = String(session.sub || session.username || session.nonce || 'anonymous');
     if (!downloadLimiter.allow(subject)) {
+      finishMetric({ outcome: 'error', errorKind: 'rate-limit', statusClass: '4xx' });
       writeJsonError(res, 429, '解析请求过于频繁，请稍后再试。', 'DOWNLOAD_RATE_LIMITED');
       return;
     }
@@ -503,11 +523,13 @@ export function createPlatformRouter({
         url: requestUrl.searchParams.get('url'),
         config: downloadConfig,
       });
+      finishMetric({ outcome: 'success', statusClass: '2xx', target: result });
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify(result));
     } catch (error) {
       const status = Number.isInteger(error?.status) ? error.status : 502;
       const code = typeof error?.code === 'string' ? error.code : 'PARSE_FAILED';
+      finishMetric({ outcome: 'error', errorKind: code, statusClass: statusClass(status) });
       writeJsonError(res, status, error?.message || '解析失败，请稍后再试。', code);
     }
   }

@@ -33,10 +33,14 @@ data class MediaDownloadTarget(
     val isImageGallery: Boolean get() = kind == "images" && images.isNotEmpty()
 }
 
+// 服务端已过滤过一次，这里再挡一层：只有播放直链必需的请求头才允许进入系统下载器。
+private val ALLOWED_DOWNLOAD_HEADERS = setOf("referer", "user-agent", "origin")
+
 private fun parseDownloadHeaders(json: JSONObject?): Map<String, String> {
     if (json == null) return emptyMap()
     val headers = linkedMapOf<String, String>()
     for (name in json.keys()) {
+        if (name.lowercase() !in ALLOWED_DOWNLOAD_HEADERS) continue
         val value = json.optString(name, "")
         if (value.isNotBlank()) headers[name] = value
     }

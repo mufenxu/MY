@@ -35,7 +35,6 @@ import cn.pxyb.mycontrol.data.HomePreferences
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.IotSceneAction
-import cn.pxyb.mycontrol.data.MediaDownloadTarget
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.data.PlatformWebSession
@@ -66,6 +65,7 @@ import cn.pxyb.mycontrol.ui.feature.campus.toFreeClassroomUiState
 import cn.pxyb.mycontrol.ui.feature.campus.water.WaterValveStateHolder
 import cn.pxyb.mycontrol.ui.feature.google.GoogleAccountsController
 import cn.pxyb.mycontrol.ui.feature.google.toGoogleAccountDeskUiState
+import cn.pxyb.mycontrol.ui.feature.media.MediaDownloadStateHolder
 import cn.pxyb.mycontrol.ui.feature.news.toDailyNewsUiState
 import cn.pxyb.mycontrol.ui.feature.notifications.NotificationController
 import cn.pxyb.mycontrol.ui.feature.notifications.toNotificationCenterUiState
@@ -230,6 +230,8 @@ class AppViewModel(
         accountName = sessionStore::readActiveUsername,
         onSessionExpired = ::forceReauthentication,
     )
+    val mediaDownload = MediaDownloadStateHolder(viewModelScope, api, ::forceReauthentication)
+    val mediaDownloadState = mediaDownload.state
     val notificationCenterState = deriveState(AppUiState::toNotificationCenterUiState)
     private val scenes = ScenesController(viewModelScope, api.iot, actions, mutableState, { refreshIot(force = true) }, ::publishWidget)
     val scenesState = scenes.state
@@ -786,6 +788,7 @@ class AppViewModel(
             librarySeats.reset()
             waterValves.reset()
             chaoxing.reset()
+            mediaDownload.reset()
             featureAccountUsername = username
         }
         notifications.reset()
@@ -830,6 +833,7 @@ class AppViewModel(
         qrLoginJob = null
         waterValves.cancelPending()
         chaoxing.cancelPending()
+        mediaDownload.cancelPending()
         operationalEffectsJob?.cancel()
         operationalEffectsJob = null
         assistantChatMutable.update { it.copy(sending = false) }
@@ -1567,8 +1571,6 @@ class AppViewModel(
         if (launch.loginUrl.isBlank()) throw IllegalStateException("服务端未返回外部应用登录地址。")
         return launch
     }
-
-    suspend fun parseMediaDownload(shareText: String): MediaDownloadTarget = api.parseMediaDownload(shareText)
 
     fun approveQrLogin(
         requestCredential: suspend (String) -> String,
