@@ -35,6 +35,7 @@ import cn.pxyb.mycontrol.data.HomePreferences
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.IotSceneAction
+import cn.pxyb.mycontrol.data.MediaDownloadPreferences
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.data.PlatformWebSession
@@ -230,7 +231,13 @@ class AppViewModel(
         accountName = sessionStore::readActiveUsername,
         onSessionExpired = ::forceReauthentication,
     )
-    val mediaDownload = MediaDownloadStateHolder(viewModelScope, api, ::forceReauthentication)
+    val mediaDownload = MediaDownloadStateHolder(
+        viewModelScope,
+        MediaDownloadPreferences(application),
+        api,
+        account = { mutableState.value.user?.username ?: sessionStore.readActiveUsername() },
+        onSessionExpired = ::forceReauthentication,
+    )
     val mediaDownloadState = mediaDownload.state
     val notificationCenterState = deriveState(AppUiState::toNotificationCenterUiState)
     private val scenes = ScenesController(viewModelScope, api.iot, actions, mutableState, { refreshIot(force = true) }, ::publishWidget)

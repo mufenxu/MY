@@ -906,6 +906,7 @@ internal fun AuthenticatedShell(
                 }
                 composable(AppRoute.MediaDownload) {
                     val mediaDownloadState by viewModel.mediaDownloadState.collectAsStateWithLifecycle()
+                    LaunchedEffect(Unit) { viewModel.mediaDownload.refreshHistory() }
                     MediaDownloadScreen(
                         state = mediaDownloadState,
                         contentPadding = contentPadding,
@@ -914,6 +915,13 @@ internal fun AuthenticatedShell(
                         onParse = viewModel.mediaDownload::parse,
                         onDownloadQueued = viewModel.mediaDownload::reportDownloadQueued,
                         onDownloadFailed = viewModel.mediaDownload::reportDownloadFailure,
+                        onPasteClipboard = viewModel.mediaDownload::pasteClipboard,
+                        onClipboardScanned = viewModel.mediaDownload::offerClipboardLink,
+                        onAutoPasteChange = viewModel.mediaDownload::setAutoPaste,
+                        onAcceptClipboardLink = viewModel.mediaDownload::acceptClipboardLink,
+                        onDismissClipboardLink = viewModel.mediaDownload::dismissClipboardLink,
+                        onClearHistory = viewModel.mediaDownload::clearHistory,
+                        onLinkCopied = viewModel.mediaDownload::reportLinkCopied,
                     )
                 }
                 composable(AppRoute.FreeClassrooms) {

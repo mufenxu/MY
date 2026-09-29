@@ -109,4 +109,8 @@ New features must extend the canonical owner or call its internal API. A compati
 
 `GET /api/download/parse?url=` requires a platform session and is rate limited per account. It resolves the share link into per-quality direct URLs plus the request headers the CDN requires, and the Android client hands those to `DownloadManager` so the transfer never consumes platform bandwidth. Results are cached for five minutes and dropped once the underlying CDN link is about to expire.
 
+Each quality and image also carries its real container extension and MIME type, taken from yt-dlp's `ext` or from the image URL suffix, so the saved file name and the MIME handed to `DownloadManager` cannot disagree with the actual bytes.
+
+Besides video qualities, a Douyin result exposes the cover image and the original soundtrack as single optional assets (`coverAsset`, `music`) with their own extension, MIME type and headers. The soundtrack URL has no suffix and its bytes are an `ftypM4A` container, so it falls back to `m4a` instead of `mp3`. The Android screen can queue the cover or the soundtrack on its own, copy any direct link to the clipboard, keeps the last 12 parsed links per account, and offers to paste a share link detected on the clipboard when that setting is enabled.
+
 Douyin is resolved by calling the public `aweme/detail` web API with a registered `ttwid` credential, because yt-dlp cannot pass Douyin signature checks. Every other platform is resolved by running the pinned `yt-dlp -J` and keeping only progressive HTTP formats; DASH/HLS-only sources are rejected instead of being merged. The optional `PLATFORM_YTDLP_PATH` and `PLATFORM_DOWNLOAD_TIMEOUT_MS` variables tune that path.

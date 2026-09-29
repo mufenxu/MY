@@ -15,11 +15,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,19 +34,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import cn.pxyb.mycontrol.data.MediaDownloadAsset
+import cn.pxyb.mycontrol.data.MediaDownloadHistoryEntry
 import cn.pxyb.mycontrol.data.MediaDownloadTarget
 import cn.pxyb.mycontrol.ui.components.button.AppButton
+import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppDivider
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
+import cn.pxyb.mycontrol.ui.components.display.AppSwitchRow
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
+import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import coil.compose.SubcomposeAsyncImage
@@ -67,9 +81,29 @@ fun MediaDownloadScreen(
     onParse: () -> Unit,
     onDownloadQueued: (Int) -> Unit,
     onDownloadFailed: (String) -> Unit,
+    onPasteClipboard: (String) -> Unit,
+    onClipboardScanned: (String) -> Unit,
+    onAutoPasteChange: (Boolean) -> Unit,
+    onAcceptClipboardLink: () -> Unit,
+    onDismissClipboardLink: () -> Unit,
+    onClearHistory: () -> Unit,
+    onLinkCopied: (String) -> Unit,
 ) {
     val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
     var pendingDownload by remember { mutableStateOf<PendingMediaDownload?>(null) }
+
+    // 剪贴板只在页面前台可见时可读，读不到就静默跳过，不打断用户。
+    fun readClipboard(): String = runCatching { clipboard.getText()?.text }.getOrNull().orEmpty()
+
+    LaunchedEffect(Unit) {
+        onClipboardScanned(readClipboard())
+    }
+
+    fun copyLink(label: String, url: String) {
+        clipboard.setText(AnnotatedString(url))
+        onLinkCopied(label)
+    }
 
     fun startDownload(pending: PendingMediaDownload) {
         runCatching { pending.requests.forEach { request -> enqueueMediaDownload(context, request) } }
@@ -94,6 +128,28 @@ fun MediaDownloadScreen(
         }
     }
 
+    fun downloadMaterial(
+        result: MediaDownloadTarget,
+        asset: MediaDownloadAsset,
+        suffix: String,
+        trafficLabel: String,
+    ) {
+        beginDownload(
+            result = result,
+            requests = listOf(
+                MediaDownloadRequest(
+                    url = asset.url,
+                    headers = asset.headers,
+                    fileName = mediaFileName(result.title, suffix, ".${asset.ext}"),
+                    title = result.title,
+                    mimeType = asset.mimeType,
+                    notify = true,
+                ),
+            ),
+            trafficLabel = trafficLabel,
+        )
+    }
+
     AppSubPage(
         title = "视频下载",
         subtitle = "粘贴分享链接，选清晰度后保存无水印原片",
@@ -115,15 +171,37 @@ fun MediaDownloadScreen(
                         singleLine = false,
                         maxLines = 3,
                     )
-                    AppButton(
-                        text = "解析",
-                        onClick = onParse,
-                        icon = Icons.Outlined.Download,
-                        enabled = !state.parsing,
-                        loading = state.parsing,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AppSecondaryButton(
+                            text = "粘贴",
+                            onClick = { onPasteClipboard(readClipboard()) },
+                            icon = Icons.Outlined.ContentPaste,
+                            enabled = !state.parsing,
+                            modifier = Modifier.weight(1f),
+                        )
+                        AppButton(
+                            text = "解析",
+                            onClick = onParse,
+                            icon = Icons.Outlined.Download,
+                            enabled = !state.parsing,
+                            loading = state.parsing,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
+            }
+        }
+
+        item {
+            AppPanel {
+                AppSwitchRow(
+                    title = "自动读取剪贴板",
+                    subtitle = "进入页面时提示粘贴刚复制的分享链接",
+                    icon = Icons.Outlined.ContentPaste,
+                    checked = state.autoPaste,
+                    onCheckedChange = onAutoPasteChange,
+                    modifier = Modifier.padding(vertical = 4.dp),
+                )
             }
         }
 
@@ -199,16 +277,23 @@ fun MediaDownloadScreen(
                                                         fileName = mediaFileName(
                                                             title = result.title,
                                                             suffix = quality.label.substringBefore(' '),
-                                                            extension = ".mp4",
+                                                            extension = ".${quality.ext}",
                                                         ),
                                                         title = result.title,
-                                                        mimeType = "video/mp4",
+                                                        mimeType = quality.mimeType,
                                                         notify = true,
                                                     ),
                                                 ),
                                                 trafficLabel = quality.sizeLabel.takeIf { it.isNotBlank() }
                                                     ?.let { "约 $it" }
                                                     ?: "这次下载的流量",
+                                            )
+                                        },
+                                        trailingContent = {
+                                            AppHeaderIconButton(
+                                                icon = Icons.Outlined.ContentCopy,
+                                                contentDescription = "复制${quality.label}清晰度的下载直链",
+                                                onClick = { copyLink(quality.label, quality.url) },
                                             )
                                         },
                                     )
@@ -243,10 +328,10 @@ fun MediaDownloadScreen(
                                                     fileName = mediaFileName(
                                                         title = result.title,
                                                         suffix = (index + 1).toString(),
-                                                        extension = ".jpg",
+                                                        extension = ".${image.ext}",
                                                     ),
                                                     title = result.title,
-                                                    mimeType = "image/jpeg",
+                                                    mimeType = image.mimeType,
                                                     // 图文作品动辄几十张，只让最后一张弹完成通知，避免刷屏。
                                                     notify = index == result.images.lastIndex,
                                                 )
@@ -262,7 +347,94 @@ fun MediaDownloadScreen(
                     }
                 }
             }
+
+            val coverAsset = result.coverAsset
+            val musicAsset = result.music
+            if (coverAsset != null || musicAsset != null) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AppSectionHeader(title = "其他素材", subtitle = "封面与原声可以单独保存")
+                        AppPanel {
+                            Column {
+                                if (coverAsset != null) {
+                                    AppActionRow(
+                                        title = "下载封面",
+                                        subtitle = "${coverAsset.ext.uppercase()} 图片",
+                                        icon = Icons.Outlined.Image,
+                                        onClick = { downloadMaterial(result, coverAsset, "封面", "这张封面") },
+                                        trailingContent = {
+                                            AppHeaderIconButton(
+                                                icon = Icons.Outlined.ContentCopy,
+                                                contentDescription = "复制封面直链",
+                                                onClick = { copyLink("封面", coverAsset.url) },
+                                            )
+                                        },
+                                    )
+                                }
+                                if (coverAsset != null && musicAsset != null) AppDivider()
+                                if (musicAsset != null) {
+                                    AppActionRow(
+                                        title = "下载原声",
+                                        subtitle = "${musicAsset.ext.uppercase()} 音频",
+                                        icon = Icons.Outlined.MusicNote,
+                                        onClick = { downloadMaterial(result, musicAsset, "原声", "这段原声") },
+                                        trailingContent = {
+                                            AppHeaderIconButton(
+                                                icon = Icons.Outlined.ContentCopy,
+                                                contentDescription = "复制原声直链",
+                                                onClick = { copyLink("原声", musicAsset.url) },
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
+
+        if (state.history.isNotEmpty()) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AppSectionHeader(
+                        title = "最近解析",
+                        subtitle = "点击即可回填链接",
+                        trailing = {
+                            AppHeaderIconButton(
+                                icon = Icons.Outlined.DeleteSweep,
+                                contentDescription = "清空解析历史",
+                                onClick = onClearHistory,
+                            )
+                        },
+                    )
+                    AppPanel {
+                        Column {
+                            state.history.forEachIndexed { index, entry ->
+                                if (index > 0) AppDivider()
+                                AppActionRow(
+                                    title = entry.title.ifBlank { "未命名作品" },
+                                    subtitle = mediaHistorySubtitle(entry),
+                                    icon = Icons.Outlined.History,
+                                    onClick = { onShareTextChange(entry.shareText) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    state.clipboardSuggestion?.let { suggestion ->
+        AppConfirmDialog(
+            title = "检测到剪贴板链接",
+            detail = suggestion.take(80),
+            confirmLabel = "粘贴",
+            onDismiss = onDismissClipboardLink,
+            onConfirm = onAcceptClipboardLink,
+            icon = Icons.Outlined.ContentPaste,
+        )
     }
 
     pendingDownload?.let { pending ->
@@ -344,3 +516,19 @@ internal fun mediaExpireHint(expireAtSeconds: Long): String {
 
 internal fun mediaLinkExpired(expireAtSeconds: Long, nowMillis: Long = System.currentTimeMillis()): Boolean =
     expireAtSeconds in 1 until nowMillis / 1000
+
+internal fun mediaHistorySubtitle(entry: MediaDownloadHistoryEntry, nowMillis: Long = System.currentTimeMillis()): String =
+    listOf(mediaPlatformLabel(entry.platform), mediaHistoryTime(entry.parsedAtMillis, nowMillis))
+        .filter { it.isNotBlank() }
+        .joinToString(" · ")
+
+internal fun mediaHistoryTime(parsedAtMillis: Long, nowMillis: Long = System.currentTimeMillis()): String {
+    if (parsedAtMillis <= 0) return ""
+    val elapsedMinutes = (nowMillis - parsedAtMillis) / 60_000
+    return when {
+        elapsedMinutes < 1 -> "刚刚"
+        elapsedMinutes < 60 -> "$elapsedMinutes 分钟前"
+        elapsedMinutes < 24 * 60 -> "${elapsedMinutes / 60} 小时前"
+        else -> "${elapsedMinutes / (24 * 60)} 天前"
+    }
+}

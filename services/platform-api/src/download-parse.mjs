@@ -21,6 +21,38 @@ const TOKEN_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456
 // 只转发播放直链必需的头：Accept-Encoding 会把响应变成 gzip 流，交给下载器会损坏文件。
 const FORWARDED_HEADER_NAMES = new Set(['referer', 'user-agent', 'origin']);
 
+// 扩展名决定落地文件名，MIME 决定系统下载器如何归类，两边必须保持一致。
+const MIME_BY_EXTENSION = new Map([
+  ['mp4', 'video/mp4'],
+  ['m4v', 'video/mp4'],
+  ['mov', 'video/quicktime'],
+  ['webm', 'video/webm'],
+  ['mkv', 'video/x-matroska'],
+  ['flv', 'video/x-flv'],
+  ['ts', 'video/mp2t'],
+  ['m2ts', 'video/mp2t'],
+  ['3gp', 'video/3gpp'],
+  ['avi', 'video/x-msvideo'],
+  ['ogv', 'video/ogg'],
+  ['wmv', 'video/x-ms-wmv'],
+  ['mpg', 'video/mpeg'],
+  ['mpeg', 'video/mpeg'],
+  ['jpg', 'image/jpeg'],
+  ['jpeg', 'image/jpeg'],
+  ['png', 'image/png'],
+  ['webp', 'image/webp'],
+  ['gif', 'image/gif'],
+  ['heic', 'image/heic'],
+  ['bmp', 'image/bmp'],
+  ['mp3', 'audio/mpeg'],
+  ['m4a', 'audio/mp4'],
+  ['aac', 'audio/aac'],
+  ['wav', 'audio/wav'],
+  ['ogg', 'audio/ogg'],
+  ['opus', 'audio/ogg'],
+  ['flac', 'audio/flac'],
+]);
+
 // 通用分支会把地址交给 yt-dlp 在服务器上发起请求，因此先挡掉回环、内网与链路本地地址，避免被当成内网探测代理。
 const BLOCKED_HOST_PATTERNS = [
   /^localhost$/i,
@@ -71,6 +103,36 @@ function pickDirectHeaders(source) {
     headers[name] = String(value);
   }
   return headers;
+}
+
+export function normalizeDownloadExtension(value) {
+  const extension = String(value || '').trim().toLowerCase().replace(/^\./, '');
+  return /^[a-z0-9]{1,5}$/.test(extension) ? extension : '';
+}
+
+export function mediaMimeType(extension, kind = 'video') {
+  const resolved = MIME_BY_EXTENSION.get(normalizeDownloadExtension(extension));
+  if (resolved) return resolved;
+  if (kind === 'images') return 'image/jpeg';
+  return kind === 'audio' ? 'audio/mpeg' : 'video/mp4';
+}
+
+// 抖音直链没有扩展名，只能从 URL 路径里推断（图文的 webp/jpeg 就走这条路）。
+export function extensionFromUrl(url) {
+  try {
+    const pathname = new URL(url).pathname;
+    return normalizeDownloadExtension(pathname.slice(pathname.lastIndexOf('.') + 1));
+  } catch {
+    return '';
+  }
+}
+
+// 封面和原声走同一套结构：URL + 真实扩展名 + MIME + 必需请求头。
+export function buildMediaAsset(url, fallbackExtension, headers, kind) {
+  const address = String(url || '').trim();
+  if (!address) return null;
+  const ext = extensionFromUrl(address) || fallbackExtension;
+  return { url: address, ext, mimeType: mediaMimeType(ext, kind), headers };
 }
 
 export function formatSize(size) {
@@ -262,6 +324,12 @@ async function fetchAwemeDetailWithRetry(awemeId, fetchImpl, signal) {
   }
 }
 
+// 抖音原声地址没有扩展名，实测响应是 ftypM4A + audio/mp4，因此兜底用 m4a 而不是 mp3。
+function buildMusicAsset(detail, headers) {
+  const url = (detail?.music?.play_url?.url_list || [])[0] || '';
+  return buildMediaAsset(url, 'm4a', headers, 'audio');
+}
+
 function buildDouyinQualities(video) {
   const qualities = [];
   const seen = new Set();
@@ -280,6 +348,9 @@ function buildDouyinQualities(video) {
       size,
       sizeLabel: formatSize(size),
       bitrate: rate,
+      // 抖音 play_addr 始终是 MP4 容器（实测 content-type: video/mp4）。
+      ext: 'mp4',
+      mimeType: mediaMimeType('mp4', 'video'),
       url,
       headers,
     });
@@ -305,10 +376,16 @@ function buildDouyinResult(detail) {
       title,
       author,
       cover: cover || (images[0]?.url_list || [])[0] || '',
+      coverAsset: buildMediaAsset(cover || (images[0]?.url_list || [])[0] || '', 'jpg', headers, 'images'),
+      music: buildMusicAsset(detail, headers),
       durationMs: 0,
       expireAt: 0,
       images: images
-        .map((item) => ({ url: (item?.url_list || [])[0] || '', headers }))
+        .map((item) => {
+          const url = (item?.url_list || [])[0] || '';
+          const ext = extensionFromUrl(url) || 'jpg';
+          return { url, ext, mimeType: mediaMimeType(ext, 'images'), headers };
+        })
         .filter((item) => item.url),
       qualities: [],
     };
@@ -323,6 +400,8 @@ function buildDouyinResult(detail) {
     title,
     author,
     cover,
+    coverAsset: buildMediaAsset(cover, 'jpg', headers, 'images'),
+    music: buildMusicAsset(detail, headers),
     durationMs: Number(video?.duration) || 0,
     expireAt: Number(video?.cdn_url_expired) || 0,
     images: [],
@@ -408,6 +487,8 @@ function buildGenericResult(info) {
     const height = Number(format?.height) || 0;
     const size = Number(format?.filesize || format?.filesize_approx) || 0;
     const formatHeaders = pickDirectHeaders(format.http_headers);
+    // yt-dlp 的 ext 是真实容器格式（webm/flv/ts 等），不能再统一当成 mp4。
+    const ext = normalizeDownloadExtension(format?.ext) || extensionFromUrl(url) || 'mp4';
     qualities.push({
       label: resolutionLabel(format?.width, height),
       width: Number(format?.width) || 0,
@@ -415,6 +496,8 @@ function buildGenericResult(info) {
       size,
       sizeLabel: formatSize(size),
       bitrate: Math.round((Number(format?.tbr) || 0) * 1000),
+      ext,
+      mimeType: mediaMimeType(ext, 'video'),
       url,
       headers: Object.keys(formatHeaders).length > 0 ? formatHeaders : fallbackHeaders,
     });
@@ -429,6 +512,8 @@ function buildGenericResult(info) {
     title: String(info?.title || '').trim() || '视频',
     author: String(info?.uploader || info?.channel || '').trim(),
     cover: String(info?.thumbnail || ''),
+    coverAsset: buildMediaAsset(info?.thumbnail, 'jpg', fallbackHeaders, 'images'),
+    music: null,
     durationMs: Math.round((Number(info?.duration) || 0) * 1000),
     expireAt: 0,
     images: [],
