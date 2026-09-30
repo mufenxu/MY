@@ -34,5 +34,8 @@
     "better-sqlite3": "^12.11.1",
     "eslint": "^9.39.5",
     "globals": "^16.5.0"
+  },
+  "overrides": {
+    "undici": "^7.29.1"
   }
 }
