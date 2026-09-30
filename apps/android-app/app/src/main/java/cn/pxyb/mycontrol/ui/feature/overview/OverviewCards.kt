@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.FactCheck
@@ -80,8 +81,18 @@ internal fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (Workspac
                 onClick = { onOpenWorkspace(WorkspaceDestination.Todos) },
             )
             Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AppSecondaryButton("本学期课表", { onOpenWorkspace(WorkspaceDestination.Timetable) }, modifier = Modifier.weight(1f))
-                AppSecondaryButton("校园服务", { onOpenWorkspace(WorkspaceDestination.Campus) }, modifier = Modifier.weight(1f))
+                AppSecondaryButton(
+                    text = "本学期课表",
+                    onClick = { onOpenWorkspace(WorkspaceDestination.Timetable) },
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Outlined.CalendarMonth,
+                )
+                AppSecondaryButton(
+                    text = "校园服务",
+                    onClick = { onOpenWorkspace(WorkspaceDestination.Campus) },
+                    modifier = Modifier.weight(1f),
+                    icon = Icons.Outlined.Apps,
+                )
             }
         }
     }

@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
@@ -164,9 +165,10 @@ fun AppButton(
 }
 
 /**
- * 全 App 现代次要行动按钮 (Pure Frosted Pill)
+ * 全 App 现代次要行动按钮 (Aurora Gradient Outline Pill)
  *
- * 采用微凸磨砂底色 + 微弱深浅发丝切边 + 50% 胶囊全圆角，通透微立体，绝不发灰泛白。
+ * 方案 E：玻璃底 + 蓝→青→紫品牌渐变发丝描边 + 50% 胶囊全圆角，精致有科技感且不喧哗。
+ * 禁用/加载态自动退回中性描边，避免彩色描边误导为可点击。
  */
 @Composable
 fun AppSecondaryButton(
@@ -184,16 +186,27 @@ fun AppSecondaryButton(
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
 
-    val gradientBrush = Brush.verticalGradient(
-        listOf(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.surfaceContainerLow),
-    )
-
-    val borderBrush = Brush.verticalGradient(
+    val gradientBrush = Brush.linearGradient(
         listOf(
-            if (dark) Color.White.copy(alpha = 0.18f) else Color.Black.copy(alpha = 0.10f),
-            if (dark) Color.White.copy(alpha = 0.06f) else Color.Black.copy(alpha = 0.05f),
+            MaterialTheme.colorScheme.surface,
+            ColorTokens.Blue.foreground.copy(alpha = if (dark) 0.10f else 0.06f)
+                .compositeOver(MaterialTheme.colorScheme.surface),
         ),
     )
+
+    val borderBrush = if (enabled && !loading) {
+        Brush.linearGradient(
+            listOf(
+                ColorTokens.Blue.foreground.copy(alpha = if (dark) 0.70f else 0.60f),
+                ColorTokens.Teal.foreground.copy(alpha = if (dark) 0.42f else 0.28f),
+                ColorTokens.Purple.foreground.copy(alpha = if (dark) 0.60f else 0.45f),
+            ),
+        )
+    } else {
+        Brush.linearGradient(
+            listOf(MaterialTheme.colorScheme.outlineVariant, MaterialTheme.colorScheme.outlineVariant),
+        )
+    }
 
     Button(
         onClick = {
@@ -211,7 +224,7 @@ fun AppSecondaryButton(
             )
             .clip(shape)
             .background(gradientBrush)
-            .border(1.dp, borderBrush, shape)
+            .border(1.2.dp, borderBrush, shape)
             .pressFeedback(interactionSource),
         interactionSource = interactionSource,
         enabled = enabled && !loading,
