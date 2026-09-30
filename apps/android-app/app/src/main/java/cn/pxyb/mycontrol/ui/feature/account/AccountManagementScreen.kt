@@ -1,6 +1,5 @@
 package cn.pxyb.mycontrol.ui.feature.account
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -14,8 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -51,16 +48,11 @@ import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.input.AppSwitch
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
-import cn.pxyb.mycontrol.ui.components.layout.AppSecondaryHeader
-import cn.pxyb.mycontrol.ui.components.layout.LocalAppNavigationHandlesBack
-import cn.pxyb.mycontrol.ui.components.layout.PullToRefresh
-import cn.pxyb.mycontrol.ui.components.layout.appPageContentPadding
-import cn.pxyb.mycontrol.ui.components.layout.auroraBackdrop
+import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
 import cn.pxyb.mycontrol.ui.isRefreshing
 import cn.pxyb.mycontrol.ui.sectionError
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
-import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import kotlinx.coroutines.delay
 
 @Composable
@@ -83,9 +75,6 @@ fun AccountManagementScreen(
     onReauthenticatePasskey: () -> Unit,
     onSetAppLockEnabled: (Boolean) -> Unit,
 ) {
-    // 支持按键与滑动手势返回上一级
-    BackHandler(enabled = !LocalAppNavigationHandlesBack.current, onBack = onDismiss)
-
     val user = state.user ?: return
     val security = state.security
     val totpEnabled = security?.totpEnabled == true || user.totpEnabled
@@ -109,30 +98,16 @@ fun AccountManagementScreen(
     var confirmDisableAppLock by remember { mutableStateOf(false) }
     val isTablet = useTwoPaneLayout()
 
-    val listState = rememberLazyListState()
-    val dark = isAppInDarkTheme()
-    PullToRefresh(
-        isRefreshing = state.refreshing,
+    AppSubPage(
+        title = "账号与安全",
+        subtitle = "密码、安全与登录凭证设置",
+        onBack = onDismiss,
+        contentPadding = contentPadding,
+        refreshing = state.refreshing,
         onRefresh = onRefresh,
-        atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .auroraBackdrop(dark),
-            contentPadding = appPageContentPadding(contentPadding),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-        item {
-            AppSecondaryHeader(
-                title = "账号与安全",
-                subtitle = "密码、安全与登录凭证设置",
-                onBack = onDismiss,
-            )
-        }
         state.sectionError?.let { message ->
-            item(key = "section-error") { AppFeedbackBanner("安全数据暂不可用：$message", error = true) }
+            item(key = "section-error") { AppFeedbackBanner("安全数据暂不可用：$message", error = true, onRetry = onRefresh) }
         }
         item(key = "login-sessions") {
             AppPanel {
@@ -165,7 +140,7 @@ fun AccountManagementScreen(
                     // 左列
                     Column(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         AppPanel {
                             Column(
@@ -234,7 +209,7 @@ fun AccountManagementScreen(
                                         .fillMaxWidth()
                                         .padding(horizontal = 16.dp, vertical = 14.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
                                     Surface(
                                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
@@ -283,7 +258,7 @@ fun AccountManagementScreen(
                     // 右列：安全认证与密钥
                     Column(
                         modifier = Modifier.weight(1.2f),
-                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         AppPanel {
                             Column {
@@ -445,7 +420,7 @@ fun AccountManagementScreen(
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 14.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             Surface(
                                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
@@ -491,7 +466,6 @@ fun AccountManagementScreen(
                 }
             }
         }
-    }
     }
 
     // 弹窗：修改登录密码

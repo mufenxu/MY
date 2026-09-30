@@ -32,6 +32,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -51,12 +52,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import kotlinx.coroutines.launch
 
 /**
  * 现代化 App 启动 Splash 开屏动画 (Ultra-Modern Dynamic Splash System)
  * 具备自适应智能就绪响应、动态极光流光底衬、全息悬浮晶体徽章、星轨粒子与沉浸式揭幕退场。
- * 极致性能架构：基于 Animatable 与纯 GPU RenderNode 矩阵变换，0 次重组（Zero Recomposition）与 0 内存开销。
+ * 使用绘制层和图形变换呈现动效，实际帧耗时由设备性能基准验证。
  */
 @Composable
 fun ModernAnimatedSplashScreen(
@@ -128,7 +131,7 @@ fun ModernAnimatedSplashScreen(
             introProgress.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(
-                    durationMillis = 420,
+                    durationMillis = MotionTokens.DurationMedium,
                     easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f),
                 ),
             )
@@ -138,38 +141,31 @@ fun ModernAnimatedSplashScreen(
             beamProgress.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(
-                    durationMillis = 500,
+                    durationMillis = MotionTokens.DurationLong,
                     easing = CubicBezierEasing(0.2f, 0.0f, 0.2f, 1.0f),
                 ),
             )
         }
         // 3. 全息晶体流光扫描 (在徽章展露后丝滑掠过)
         launch {
-            kotlinx.coroutines.delay(120)
+            delay(MotionTokens.DurationShort.toLong())
             gleamProgress.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(
-                    durationMillis = 550,
+                    durationMillis = MotionTokens.DurationLong,
                     easing = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f),
                 ),
             )
         }
     }
 
-    // 智能就绪自适应控制：保证 ~450ms 最短黄金展示期后，只要数据就绪即刻无缝触发退场
+    // 短暂入场后等待状态就绪，避免轮询和额外的品牌展示等待。
     val currentIsDataReady by rememberUpdatedState(isDataReady)
     val currentOnSplashFinished by rememberUpdatedState(onSplashFinished)
     LaunchedEffect(Unit) {
-        val startTime = System.currentTimeMillis()
-        val minDisplayMs = 450L
-        while (true) {
-            val elapsed = System.currentTimeMillis() - startTime
-            if (elapsed >= minDisplayMs && currentIsDataReady) {
-                currentOnSplashFinished()
-                break
-            }
-            kotlinx.coroutines.delay(16)
-        }
+        delay(MotionTokens.DurationShort.toLong())
+        snapshotFlow { currentIsDataReady }.first { it }
+        currentOnSplashFinished()
     }
 
     // 退场阶段驱动：轻盈上浮微散 + 景深揭幕
@@ -179,7 +175,7 @@ fun ModernAnimatedSplashScreen(
             exitProgress.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(
-                    durationMillis = 360,
+                    durationMillis = MotionTokens.DurationLong,
                     easing = CubicBezierEasing(0.32f, 0f, 0.15f, 1f),
                 ),
             )

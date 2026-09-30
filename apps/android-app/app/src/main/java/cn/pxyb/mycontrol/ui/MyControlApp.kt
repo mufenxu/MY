@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -16,7 +17,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cn.pxyb.mycontrol.BuildConfig
@@ -30,8 +35,9 @@ import cn.pxyb.mycontrol.ui.navigation.AuthenticatedShell
 import cn.pxyb.mycontrol.ui.startup.FullScreenLoading
 import cn.pxyb.mycontrol.ui.startup.ModernAnimatedSplashScreen
 import cn.pxyb.mycontrol.ui.startup.StartupAppUpdateDialog
-import kotlinx.coroutines.delay
+import cn.pxyb.mycontrol.ui.theme.MotionTokens
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun MyControlApp(
     viewModel: AppViewModel,
@@ -49,7 +55,7 @@ fun MyControlApp(
     showInitialSetup: Boolean,
     onInitialSetupComplete: () -> Unit,
 ) {
-    var splashVisible by remember { mutableStateOf(true) }
+    var splashVisible by rememberSaveable { mutableStateOf(true) }
     var splashExiting by remember { mutableStateOf(false) }
     var prewarmContent by remember { mutableStateOf(false) }
     var startupUpdateChecked by rememberSaveable { mutableStateOf(false) }
@@ -58,22 +64,23 @@ fun MyControlApp(
     val state by viewModel.entryState.collectAsStateWithLifecycle()
     val profileState by viewModel.profileState.collectAsStateWithLifecycle()
 
-    // 底层主界面在开屏初期（180ms）静默启动并行预热，确保退场揭幕时 100% 满帧 0 掉帧
+    // 首帧后挂载主内容，让数据加载与开屏入场重叠。
     LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(180)
+        androidx.compose.runtime.withFrameNanos { }
         prewarmContent = true
     }
+    ReportDrawnWhen { !state.booting && !splashVisible }
 
     // 主内容在开屏退场时的沉浸式景深聚焦渐入 (0.95f -> 1.0f, 0.75f -> 1.0f)
     val mainContentAlpha by animateFloatAsState(
         targetValue = if (splashExiting || !splashVisible) 1f else 0.75f,
-        animationSpec = tween(durationMillis = 360, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
+        animationSpec = tween(durationMillis = MotionTokens.DurationLong, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
         label = "mainContentAlpha",
     )
 
     val mainContentScale by animateFloatAsState(
         targetValue = if (splashExiting || !splashVisible) 1f else 0.95f,
-        animationSpec = tween(durationMillis = 360, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
+        animationSpec = tween(durationMillis = MotionTokens.DurationLong, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
         label = "mainContentScale",
     )
 
@@ -107,9 +114,10 @@ fun MyControlApp(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .semantics { testTagsAsResourceId = true }
                 .background(MaterialTheme.colorScheme.background)
         ) {
-        // 底层：主应用内容层（静默预热挂载，退场时伴随极致丝滑的景深微弹浮现）
+        // 主内容在开屏期间挂载，退场时恢复正常比例与透明度。
         if (prewarmContent || !splashVisible) {
             Box(
                 modifier = Modifier
@@ -162,9 +170,10 @@ fun MyControlApp(
             }
         }
 
-        // 顶层：自适应智能感知就绪、纯 GPU 渲染的次世代极光流光开屏动效系统
+        // 数据就绪后移除开屏层。
         if (splashVisible) {
             ModernAnimatedSplashScreen(
+                modifier = Modifier.testTag("startup-splash"),
                 isDataReady = !state.booting,
                 isExiting = splashExiting,
                 onSplashFinished = { splashExiting = true },

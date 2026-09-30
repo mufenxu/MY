@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Backup
@@ -97,6 +98,7 @@ fun OverviewScreen(
     val quickActionRows = remember(state.homeQuickActionOrder, state.hiddenHomeQuickActions, quickActionColumns) {
         state.homeQuickActionOrder.filterNot(state.hiddenHomeQuickActions::contains).chunked(quickActionColumns)
     }
+    val applicationRows = remember(state.externalApplications) { state.externalApplications.chunked(2) }
     val listState = rememberLazyListState()
     val dark = isAppInDarkTheme()
     fun openExternalApplication(application: ExternalApplication) {
@@ -250,9 +252,16 @@ fun OverviewScreen(
                 if (state.externalApplications.isEmpty()) {
                     item(key = "applications-loading") { ExternalApplicationsLoadingPlaceholder() }
                 } else {
-                    item(key = "applications") {
-                        OverviewTwoColumnGrid(state.externalApplications) { application ->
-                            ExternalApplicationRow(application, openingExternalApplicationId == application.id, ::openExternalApplication)
+                    items(applicationRows, key = { "applications-${it.first().id}" }, contentType = { "application-row" }) { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            row.forEach { application ->
+                                androidx.compose.runtime.key(application.id) {
+                                    Column(Modifier.weight(1f)) {
+                                        ExternalApplicationRow(application, openingExternalApplicationId == application.id, ::openExternalApplication)
+                                    }
+                                }
+                            }
+                            if (row.size == 1) Spacer(Modifier.weight(1f))
                         }
                     }
                 }

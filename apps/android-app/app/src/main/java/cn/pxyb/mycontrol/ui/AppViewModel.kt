@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.os.SystemClock
 import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
@@ -51,7 +50,6 @@ import cn.pxyb.mycontrol.data.activeUnreadCount
 import cn.pxyb.mycontrol.data.isSnoozedAt
 import cn.pxyb.mycontrol.data.mergeHydratedAlerts
 import cn.pxyb.mycontrol.data.newTodoTask
-import cn.pxyb.mycontrol.data.shouldInvalidatePlatformSession
 import cn.pxyb.mycontrol.ui.feature.account.AccountSecurityController
 import cn.pxyb.mycontrol.ui.feature.account.toAccountManagementUiState
 import cn.pxyb.mycontrol.ui.feature.assistant.AssistantChatMessageUi
@@ -92,6 +90,7 @@ import cn.pxyb.mycontrol.ui.navigation.SAVED_WORKSPACE_DESTINATION
 import cn.pxyb.mycontrol.ui.navigation.WorkspaceDestination
 import cn.pxyb.mycontrol.ui.navigation.restoredMainTab
 import cn.pxyb.mycontrol.ui.navigation.restoredWorkspaceDestination
+import cn.pxyb.mycontrol.ui.state.SectionRefreshController
 import cn.pxyb.mycontrol.ui.state.ActionStateHolder
 import cn.pxyb.mycontrol.ui.state.handleFeatureRequestFailure
 import cn.pxyb.mycontrol.update.AppUpdateManager
@@ -101,12 +100,10 @@ import java.io.File
 import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -253,8 +250,7 @@ class AppViewModel(
     private var qrLoginJob: Job? = null
 
     private var appInForeground = false
-    private val refreshJobs = mutableMapOf<DataSection, Job>()
-    private val lastRefreshElapsedMs = mutableMapOf<DataSection, Long>()
+    private val sectionRefresh = SectionRefreshController(viewModelScope, api, mutableState, ::forceReauthentication)
     private var alertsSeeded = false
     private var initialIncidentsLoaded = false
     private var initialTasksLoaded = false
@@ -1918,87 +1914,11 @@ class AppViewModel(
         force: Boolean = false,
         publishError: Boolean = force,
         block: suspend () -> Unit,
-    ) {
-        if (mutableState.value.user == null || refreshJobs[section]?.isActive == true) return
-        val now = SystemClock.elapsedRealtime()
-        val lastRefresh = lastRefreshElapsedMs[section]
-        if (!force && lastRefresh != null && now - lastRefresh < REFRESH_CACHE_WINDOW_MS) return
-        updateSectionLoadState(section) { it.copy(refreshing = true, error = null) }
-        val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
-            val refreshJob = currentCoroutineContext()[Job]
-            api.withRequestMetadata {
-                try {
-                    block()
-                    lastRefreshElapsedMs[section] = SystemClock.elapsedRealtime()
-                    val fromCache = api.isOffline()
-                    val cachedAt = api.cachedAtMillis()
-                    updateSectionLoadState(section) {
-                        it.copy(error = null, updatedAtMillis = System.currentTimeMillis(), fromCache = fromCache, cachedAtMillis = cachedAt)
-                    }
-                } catch (error: Throwable) {
-                    if (error is CancellationException) throw error
-                    val cachedAt = api.cachedAtMillis()
-                    updateSectionLoadState(section) {
-                        it.copy(
-                            error = error.message ?: "请稍后重试。",
-                            fromCache = it.fromCache || cachedAt != null,
-                            cachedAtMillis = cachedAt ?: it.cachedAtMillis,
-                        )
-                    }
-                    if (error is ApiException && shouldInvalidatePlatformSession(error.status, error.code)) {
-                        forceReauthentication(error.message ?: "登录会话已失效，请重新登录。")
-                    } else if (publishError) {
-                        mutableState.update { it.copy(error = "部分数据暂不可用：${error.message ?: "请稍后重试。"}") }
-                    }
-                } finally {
-                    if (refreshJobs[section] === refreshJob) {
-                        refreshJobs.remove(section)
-                        updateSectionLoadState(section) { it.copy(refreshing = false) }
-                        updateRefreshingState()
-                    }
-                }
-            }
-        }
-        refreshJobs[section] = job
-        job.start()
-        updateRefreshingState()
-    }
+    ) = sectionRefresh.launchRefresh(section, force, publishError, block)
 
-    private fun cancelRefreshes() {
-        refreshJobs.values.toList().forEach { it.cancel() }
-        refreshJobs.clear()
-        mutableState.update { current ->
-            current.copy(
-                refreshing = false,
-                sectionLoadStates = current.sectionLoadStates.mapValues { (_, state) -> state.copy(refreshing = false) },
-            )
-        }
-    }
+    private fun cancelRefreshes() = sectionRefresh.cancelRefreshes()
 
-    private fun clearRefreshCache() {
-        lastRefreshElapsedMs.clear()
-    }
-
-    private fun updateRefreshingState() {
-        val refreshing = refreshJobs.values.any { it.isActive }
-        mutableState.update { current ->
-            if (current.refreshing == refreshing) current else current.copy(refreshing = refreshing)
-        }
-    }
-
-    private fun updateSectionLoadState(
-        section: DataSection,
-        transform: (SectionLoadState) -> SectionLoadState,
-    ) {
-        mutableState.update { current ->
-            val sections = current.sectionLoadStates + (section to transform(current.sectionLoadStates[section] ?: SectionLoadState()))
-            current.copy(
-                sectionLoadStates = sections,
-                offlineMode = sections.values.any { it.fromCache },
-                cachedAtMillis = sections.values.filter { it.fromCache }.mapNotNull { it.cachedAtMillis }.minOrNull(),
-            )
-        }
-    }
+    private fun clearRefreshCache() = sectionRefresh.clearRefreshCache()
 
     fun saveTodo(task: TodoTask) = todos.save(task)
 
@@ -2485,9 +2405,6 @@ class AppViewModel(
 
     fun clearRegistryImageFeedback() = registryImages.clearFeedback()
 
-    private companion object {
-        const val REFRESH_CACHE_WINDOW_MS = 30_000L
-    }
 }
 
 internal fun formatBytes(bytes: Long): String = when {

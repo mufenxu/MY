@@ -163,7 +163,7 @@ dependencies {
     implementation(project(":core:network"))
     implementation(project(":core:security"))
     implementation(libs.mlkit.barcode.scanning)
-    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+    implementation(libs.mlkit.text.recognition.chinese)
     implementation(libs.androidx.profileinstaller)
 
     debugImplementation(libs.androidx.compose.ui.tooling)

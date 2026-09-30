@@ -60,19 +60,15 @@ import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.components.display.AppIconTile
-import cn.pxyb.mycontrol.ui.components.layout.AppPageBottomSpacing
 import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
-import cn.pxyb.mycontrol.ui.components.layout.AppPageTopSpacing
-import cn.pxyb.mycontrol.ui.components.layout.AppSecondaryHeader
+import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.components.layout.AppAdaptivePanes
 import cn.pxyb.mycontrol.ui.components.layout.AppReadingContentMaxWidth
 import cn.pxyb.mycontrol.ui.components.layout.PullToRefresh
-import cn.pxyb.mycontrol.ui.components.layout.auroraBackdrop
 import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.isRefreshing
 import cn.pxyb.mycontrol.ui.theme.AppCardShape
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
-import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 /** 平板 / 大屏：左侧列表 + 右侧详情的经典双栏布局。 */
 @Composable
@@ -93,79 +89,64 @@ internal fun NotificationTwoPaneLayout(
     onSnooze: (String) -> Unit,
     listContent: LazyListScope.() -> Unit,
 ) {
-    val dark = isAppInDarkTheme()
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .auroraBackdrop(dark)
-            .padding(
-                top = contentPadding.calculateTopPadding(),
-                bottom = contentPadding.calculateBottomPadding(),
-            ),
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = AppPageHorizontalPadding)
-                .padding(top = AppPageTopSpacing, bottom = 8.dp),
-        ) {
-            AppSecondaryHeader(
-                title = title,
-                subtitle = subtitle,
-                onBack = onBack,
-                actions = actions,
-            )
-        }
-        AppAdaptivePanes(
-            showDetail = true,
-            twoPane = true,
-            listPane = {
-                PullToRefresh(
-                    isRefreshing = refreshing,
-                    onRefresh = onRefresh,
-                    atTop = {
-                        listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
-                    },
-                ) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(
-                            start = AppPageHorizontalPadding,
-                            end = AppPageHorizontalPadding,
-                            top = 4.dp,
-                            bottom = AppPageBottomSpacing,
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        content = listContent,
-                    )
-                }
-            },
-            detailPane = {
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp),
-                    contentAlignment = Alignment.TopCenter,
-                ) {
-                    val detailModifier = Modifier.widthIn(max = AppReadingContentMaxWidth).fillMaxSize()
-                    if (selectedAlert != null) {
-                        key(selectedAlert.id) {
-                            NotificationDetailPane(
-                                alert = selectedAlert,
-                                onAction = { onAction(selectedAlert, it) },
-                                onMarkRead = onMarkRead,
-                                onMarkUnread = onMarkUnread,
-                                onArchive = onArchive,
-                                onSnooze = onSnooze,
-                                modifier = detailModifier,
-                            )
-                        }
-                    } else {
-                        NotificationDetailPlaceholder(modifier = detailModifier)
+    AppSubPage(
+        title = title,
+        subtitle = subtitle,
+        onBack = onBack,
+        contentPadding = contentPadding,
+        pinHeader = true,
+        actions = actions,
+        body = {
+            AppAdaptivePanes(
+                showDetail = true,
+                twoPane = true,
+                listPane = {
+                    PullToRefresh(
+                        isRefreshing = refreshing,
+                        onRefresh = onRefresh,
+                        atTop = {
+                            listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+                        },
+                    ) {
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(
+                                start = AppPageHorizontalPadding,
+                                end = AppPageHorizontalPadding,
+                                top = 4.dp,
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            content = listContent,
+                        )
                     }
-                }
-            },
-        )
-    }
+                },
+                detailPane = {
+                    Box(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.TopCenter,
+                    ) {
+                        val detailModifier = Modifier.widthIn(max = AppReadingContentMaxWidth).fillMaxSize()
+                        if (selectedAlert != null) {
+                            key(selectedAlert.id) {
+                                NotificationDetailPane(
+                                    alert = selectedAlert,
+                                    onAction = { onAction(selectedAlert, it) },
+                                    onMarkRead = onMarkRead,
+                                    onMarkUnread = onMarkUnread,
+                                    onArchive = onArchive,
+                                    onSnooze = onSnooze,
+                                    modifier = detailModifier,
+                                )
+                            }
+                        } else {
+                            NotificationDetailPlaceholder(modifier = detailModifier)
+                        }
+                    }
+                },
+            )
+        },
+    )
 }
 
 @Composable

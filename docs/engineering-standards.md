@@ -268,7 +268,7 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 6. **`services/iot-service` 的 `check` 不含 `test`**，由根 `check:iot` 在外部补跑。
 7. **小程序**：`smart-campus-miniapp` 的 `tsconfig.json` 排除了不存在的 `scratch` 目录；其 `preloadRule` 校验因 `app.json` 无 `preloadRule` 而暂为空转；`ROUTES` 缺 `SCAN` 与热泵设置项，导致 9 处硬编码路径。
 8. **前端**：`exam-admin` lint 实质无效（3 条规则、无 `eslint-plugin-vue`）；`official-website` 无 lint/test/check/`.gitignore`；`admin-console` 约 31 条 react-hooks 警告长期存在；无共享设计令牌包；`core-admin` 与 `exam-admin` 开发端口同为 5173；`exam-admin/src/assets/css/admin.css` 内重复打开 `:root` 三次导致同名令牌三重定义；`core-admin/README.md` 标题与依赖版本已过期。详见 §8。
-9. **Android**：`ui/feature` 中约 150 处 `spacedBy(8|10|14.dp)` 与"12.dp 标准"不符；`TextButton` 仍散落于 6 个文件（无对应胶囊化组件）；存在若干零引用组件（`AppAvatar`、`AppFilterBar`、`AppMetricDashboard`、`AppGroupedCard`、`ImmersiveHeader`、`ModernHeaderIconButton`）；`app/build.gradle.kts` 有一处硬编码 ML Kit 坐标绕过版本目录；`AccountManagementScreen.kt` 与 `NotificationDetail.kt` 手搓页面骨架，违反"二级页面必须用 `AppSubPage`"。
+9. **Android**：`ui/feature` 中约 150 处 `spacedBy(8|10|14.dp)` 与"12.dp 标准"不符；`TextButton` 仍散落于 6 个文件（无对应胶囊化组件）；存在若干零引用组件（`AppAvatar`、`AppFilterBar`、`AppMetricDashboard`、`AppGroupedCard`、`ImmersiveHeader`、`ModernHeaderIconButton`）。
 10. **前端 Vite 大版本四分**：5 / 7 / 7 / 8。与第 1 条同理，升级需独立评估。
 11. **小程序 README 过期**：曾描述不存在的 `backend/`、`admin-web/`、`admin-server/` 等目录（已在本轮修正）。若再发现文档描述不存在的东西，按"文档服从代码"处理：改文档，不改代码。
 12. **CLI 惯用法不统一**（风格问题，无行为风险）：入口守卫在 `pathToFileURL(...).href === import.meta.url` 与 `path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)` 之间分裂；参数解析有手写三种风格；失败有 `process.exit(1)` 与 `process.exitCode = 1` 两种。新脚本按 §12 任选其一即可，不必回改存量。

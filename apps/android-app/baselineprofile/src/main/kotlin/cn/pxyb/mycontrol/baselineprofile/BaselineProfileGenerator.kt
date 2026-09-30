@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.benchmark.macro.BaselineProfileMode
 import androidx.benchmark.macro.CompilationMode
+import androidx.benchmark.macro.FrameTimingMetric
 import androidx.benchmark.macro.MacrobenchmarkScope
 import androidx.benchmark.macro.StartupMode
 import androidx.benchmark.macro.StartupTimingMetric
@@ -84,6 +85,62 @@ class StartupBenchmark {
     )
 }
 
+@RunWith(AndroidJUnit4::class)
+class InteractionBenchmark {
+    @get:Rule
+    val macrobenchmarkRule = MacrobenchmarkRule()
+
+    @Before
+    fun prepare() = prepareOfflineAccount()
+
+    @Test
+    fun homeScroll() = macrobenchmarkRule.measureRepeated(
+        packageName = PACKAGE,
+        metrics = listOf(FrameTimingMetric()),
+        compilationMode = CompilationMode.Partial(baselineProfileMode = BaselineProfileMode.Require),
+        iterations = 5,
+        setupBlock = {
+            openHome()
+            val list = device.wait(Until.findObject(By.scrollable(true)), 5_000) ?: error("未找到首页列表")
+            list.setGestureMargin(device.displayWidth / 5)
+            check(list.scrollUntil(Direction.DOWN, Until.hasObject(By.text("示例应用 1")))) { "首页应用数据未加载" }
+        },
+        measureBlock = { scrollList() },
+    )
+
+    @Test
+    fun notificationScroll() = macrobenchmarkRule.measureRepeated(
+        packageName = PACKAGE,
+        metrics = listOf(FrameTimingMetric()),
+        compilationMode = CompilationMode.Partial(baselineProfileMode = BaselineProfileMode.Require),
+        iterations = 5,
+        setupBlock = {
+            openHome()
+            startActivityAndWait(Intent(Intent.ACTION_VIEW, Uri.parse("mycontrol://open?tab=notifications"))
+                .setComponent(ComponentName(PACKAGE, MAIN_ACTIVITY)))
+            check(device.wait(Until.hasObject(By.textContains("示例通知")), 10_000)) { "通知列表未加载" }
+        },
+        measureBlock = { scrollList() },
+    )
+
+    @Test
+    fun tabSwitching() = macrobenchmarkRule.measureRepeated(
+        packageName = PACKAGE,
+        metrics = listOf(FrameTimingMetric()),
+        compilationMode = CompilationMode.Partial(baselineProfileMode = BaselineProfileMode.Require),
+        iterations = 5,
+        setupBlock = { openHome() },
+        measureBlock = {
+            device.findObject(By.text("设备")).click()
+            check(device.wait(Until.hasObject(By.text("本地验证器")), 10_000)) { "设备页未就绪" }
+            device.waitForIdle()
+            device.findObject(By.text("我的")).click()
+            check(device.wait(Until.hasObject(By.text("账号与安全")), 10_000)) { "我的页面未就绪" }
+            device.waitForIdle()
+        },
+    )
+}
+
 private fun prepareOfflineAccount() {
     val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     device.executeShellCommand("am start -W -n $PACKAGE/cn.pxyb.mycontrol.benchmark.BenchmarkFixtureActivity")
@@ -95,6 +152,7 @@ private fun MacrobenchmarkScope.openHome() {
     startActivityAndWait(Intent().setComponent(ComponentName(PACKAGE, MAIN_ACTIVITY))
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
     check(device.wait(Until.hasObject(By.text("设备")), 20_000)) { "工作台未就绪" }
+    check(device.wait(Until.gone(By.res("startup-splash")), 20_000)) { "开屏尚未退场" }
 }
 
 private fun MacrobenchmarkScope.scrollList() {

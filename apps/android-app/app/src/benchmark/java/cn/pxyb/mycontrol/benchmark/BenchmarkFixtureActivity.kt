@@ -11,6 +11,9 @@ import cn.pxyb.mycontrol.data.Authenticator
 import cn.pxyb.mycontrol.data.AuthenticatorEntry
 import cn.pxyb.mycontrol.data.AuthenticatorStore
 import cn.pxyb.mycontrol.data.CAMPUS_TIMETABLE_PATH
+import cn.pxyb.mycontrol.data.DeviceProof
+import cn.pxyb.mycontrol.data.LoginResult
+import cn.pxyb.mycontrol.data.PlatformUser
 import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.data.ResponseSnapshotStore
 import cn.pxyb.mycontrol.data.SessionStore
@@ -40,7 +43,23 @@ class BenchmarkFixtureActivity : ComponentActivity() {
         val username = "benchmark-fixture"
         SessionStore(this).apply {
             setLockEnabled(false)
-            writeCookie("benchmark_fixture=offline", now + 86_400_000L, 1440, username)
+            val deviceKey = DeviceProof.createRegistration(JSONObject()
+                .put("challengeId", "offline-benchmark")
+                .put("challenge", java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(ByteArray(32))))
+            try {
+                writeLogin(LoginResult(
+                    user = PlatformUser(username, "admin", false, 0),
+                    sessionCookie = "benchmark_fixture=offline",
+                    sessionExpiresAtMillis = now + 86_400_000L,
+                    sessionIdleMinutes = 1440,
+                    refreshToken = "offline-benchmark-fixture",
+                    accessExpiresAtMillis = now + 86_400_000L,
+                    deviceKeyAlias = deviceKey.alias,
+                ))
+            } catch (error: Exception) {
+                DeviceProof.delete(deviceKey.alias)
+                throw error
+            }
         }
         AppPreferences(this).apply {
             completeInitialSetup()
@@ -61,7 +80,12 @@ class BenchmarkFixtureActivity : ComponentActivity() {
         }).put("incidents", JSONArray()).put("audit", JSONArray()))
         snapshot("/api/incidents?limit=100", JSONObject().put("incidents", JSONArray()))
         snapshot("/api/tasks?limit=100", JSONObject().put("tasks", JSONArray()))
-        snapshot("/api/external-apps", JSONObject().put("applications", JSONArray()))
+        snapshot("/api/external-apps", JSONObject().put("applications", JSONArray().apply {
+            repeat(40) { index ->
+                put(JSONObject().put("id", "fixture-app-$index").put("name", "示例应用 ${index + 1}")
+                    .put("description", "用于首页滚动性能采集").put("canAccess", false))
+            }
+        }))
         snapshot("/apps/core/api/resources/expiry-summary", JSONObject().put("resources", JSONArray()))
         val tasks = List(40) { index ->
             TodoTask(id = "fixture-todo-$index", title = "示例待办 ${index + 1}", dueAt = now + (index + 1) * 3_600_000L)
