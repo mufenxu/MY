@@ -5,10 +5,12 @@
 ## 项目结构
 
 ```text
-backend/        Node.js + Express + MongoDB 后端与管理后台
-miniprogram/    微信小程序前端
+miniprogram/    微信小程序前端（原生 + TypeScript）
+scripts/        结构与合规检查脚本（node --test 单测）
 typings/        小程序类型定义
 ```
+
+后端**不在此目录**，位于 `../../services/exam-api/`。
 
 ## 这次已经补上的上线能力
 

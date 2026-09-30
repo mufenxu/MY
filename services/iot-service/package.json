@@ -2,6 +2,7 @@
   "name": "@my-platform/iot-service",
   "version": "1.0.0",
   "description": "MQTT dashboard with secure web console, realtime updates, and scoped API keys",
+  "private": true,
   "main": "src/index.js",
   "scripts": {
     "check": "npm run lint && node scripts/check-js.js",

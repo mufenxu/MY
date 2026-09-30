@@ -1,8 +1,9 @@
 {
   "name": "@my-platform/core-api",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "综合业务 API：小程序与后台的业务接口、数据模型与定时任务",
+  "private": true,
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "test": "node --test test/*.test.js",

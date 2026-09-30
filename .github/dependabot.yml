@@ -8,8 +8,13 @@ updates:
       actions:
         patterns: ["*"]
 
+  # Base images are digest-pinned in the Dockerfiles rather than in a root-level
+  # compose file, so this entry must point at each directory that holds one.
+  # A root "/" directory has nothing to scan and would silently do nothing.
   - package-ecosystem: docker
-    directory: /
+    directories:
+      - /infra/docker
+      - /infra/blackbox
     schedule:
       interval: weekly
     groups:
@@ -22,6 +27,7 @@ updates:
       - /apps/core-admin
       - /apps/exam-admin
       - /apps/exam-miniapp
+      - /apps/official-website
       - /apps/smart-campus-miniapp/miniprogram
       - /services/platform-api
       - /services/core-api

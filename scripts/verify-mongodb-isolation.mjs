@@ -88,4 +88,4 @@ for (let index = 0; index < definitions.length; index += 1) {
   });
 }
 
-console.log('MongoDB replica set, five application accounts and the dedicated backup account verified.');
+console.log('MongoDB replica set, six application accounts and the dedicated backup account verified.');

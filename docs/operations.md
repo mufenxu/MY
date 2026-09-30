@@ -27,7 +27,7 @@ npm run compose:rollback-split
 ## First deployment after the MongoDB consolidation
 
 1. Back up the current MongoDB volume, campus `app.db`, IoT `mqttapi.db`, IoT `config.json`, and core uploads.
-2. Update `.env` from `.env.example`. Generate a new replica-set key and five different URL-safe application database passwords.
+2. Update `.env` from `.env.example`. Generate a new replica-set key and six different URL-safe application database passwords (`MONGO_PLATFORM_*`, `MONGO_CORE_*`, `MONGO_EXAM_*`, `MONGO_CAMPUS_*`, `MONGO_IOT_*`, `MONGO_NOTIFICATION_*`), plus the dedicated `MONGO_BACKUP_*` account.
 3. Pull or build the latest images, then initialize MongoDB:
 
 ```bash
@@ -94,7 +94,7 @@ docker compose --env-file .env -f infra/docker/compose.yml start platform-api no
 npm run backup
 ```
 
-这个命令会短暂停止业务容器，创建 MongoDB 副本集时间点归档，复制核心上传文件，然后只重启原本正在运行的服务。它会写入带校验和的备份目录，并删除超过 `BACKUP_RETENTION_DAYS`（默认 30 天）的本地备份。请把备份目录同步到加密的异地存储；同一台服务器上的本地备份不等于灾备。
+这个命令会短暂停止业务容器，创建 MongoDB 副本集时间点归档，复制核心上传文件，然后只重启原本正在运行的服务。它会写入带校验和的备份目录，并按 `BACKUP_RETENTION_DAYS` 清理本地备份。该变量的实际默认值是 **14 天，且被硬编码上限 14 天**（见 `scripts/backup-mongodb.mjs` 与 `scripts/backup-mongodb-container.mjs`），设更大的值不会生效；它也不在 `.env.example` 中。请把备份目录同步到加密的异地存储；同一台服务器上的本地备份不等于灾备。
 
 命令行恢复入口仍可用于服务器维护场景：
 
@@ -110,7 +110,13 @@ Recommended policy:
 - weekly backups retained for 4 weeks;
 - monthly backups retained for 6 months;
 - a restore drill at least once per month;
-- target RPO 24 hours and target RTO 4 hours.
+- the deployed alerting targets are RPO 26 hours and RTO 30 minutes
+  (`PLATFORM_BACKUP_RPO_HOURS` and `PLATFORM_RESTORE_RTO_MINUTES` in `compose.yml` / `.env.example`).
+
+Note: the automated local retention implemented today is a single flat window capped at 14 days
+(`BACKUP_RETENTION_DAYS`). The daily/weekly/monthly tiering above is the target policy and is not
+yet enforced by the backup scripts; until it is, the off-host copy is what provides the longer
+retention. Keep this list and the deployed variables in sync when either changes.
 
 ## Health and metrics
 

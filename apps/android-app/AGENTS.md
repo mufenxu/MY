@@ -14,13 +14,16 @@
 ## 2. 视觉与材质约束
 
 - **毛玻璃拟态 (Glassmorphism)**：
-  - 核心质感见 `ui/components/layout/Glassmorphism.kt`：半透明磨砂表面 (`glassCardColor()`) + 顶部高光渐变 + 发丝描边 (`1.dp outlineVariant`，alpha ≈ 0.45) + **0 阴影投影**（严禁添加深色阴影，防止出现灰色脏晕边）。
+  - 核心质感见 `ui/components/layout/Glassmorphism.kt`：半透明磨砂表面 (`glassCardColor()`) + 顶部高光渐变 + 发丝描边 + **0 阴影投影**（严禁添加深色阴影，防止出现灰色脏晕边）。
+  - 真实描边取值（以代码为准，勿凭记忆写死）：`Glassmorphism.kt` 用 `1.dp` + `palette.border`（白色 `alpha = 0.16f` 深色 / `0.5f` 浅色）；`AppPanel.kt` 用 `BorderStroke(0.5.dp, colorScheme.outlineVariant)`，**不带 alpha 叠加**。新增面板直接复用 `AppPanel`，不要另写 border。
   - 极光背景 (`auroraBackdrop`) 已采用 `drawWithCache` 缓存径向渐变着色器；严禁在滑动项内部私自构建高频重绘的渐变画笔。
 - **底部浮动胶囊导航**：
   保持现有浮动胶囊底栏的形状、尺寸、颜色和弹性选中动画；系统手势区避让由外层处理。
 - **布局间距标准**：
-  - 列表项垂直间距严格统一为 `12.dp`，不得出现 `8.dp`/`10.dp`/`14.dp` 等杂乱变体；
+  - 列表项垂直间距统一为 `12.dp`，新增列表一律使用 `12.dp`，不得引入 `10.dp`/`14.dp` 等新变体；
+  - 组件内部紧凑排布与图标-文字间隙可用 `4.dp`/`8.dp`；`AppPanel` 等面板内部已自带内边距时不要重复叠加；
   - 页面水平边距统一引用 `AppPageHorizontalPadding` (16.dp)，底部边距统一引用 `AppPageBottomSpacing` (16.dp)。
+  - 已知存量偏差：`ui/feature` 中仍有约 150 处 `spacedBy(8|10|14.dp)`（历史遗留）。新增或改动页面必须按上述标准书写，**不要**借改动之机全仓批量替换间距。
 
 ## 3. 触控热区与无障碍 (A11y & Touch Target)
 
@@ -71,8 +74,10 @@
      - 采用珊瑚红立体微凸渐变（`#EF4444` $\rightarrow$ `#DC2626`）+ 红色微光晕投影，用于“删除”、“撤销”、“清空”、“重置”等不可逆高危操作，警示明确、质感高级。
   4. **弹窗按钮配套**：
      - 弹窗内的操作按钮统一使用 `AppDialogPrimaryButton`、`AppDialogSecondaryButton`、`AppDialogDangerButton`，底层已全量委托映射至上述三级胶囊按钮。
+     - 注意这三个符号位于同包的 **`ui/components/button/AppDialogButtons.kt`**（不是 `AppButtons.kt`）；`AppButtons.kt` 只放三级胶囊主体与行内危险微胶囊。
   5. **行内轻量危险微胶囊 (`AppInlineDangerButton`)**：
-     - 专用于列表项、卡片行内右侧的次要危险操作（如“撤销会话”、“移除设备”、“解绑”），高度自适应约 `26~28.dp`，采用柔和微透危险红（`#FEE2E2` / `#7F1D1D`）+ 浅红发丝微切边 + 全圆角胶囊，警示明确且体量克制，严禁在列表项行内塞入全尺寸大红实心按钮以防遮挡同行信息。
+     - 专用于列表项、卡片行内右侧的次要危险操作（如“撤销会话”、“移除设备”、“解绑”），高度自适应约 `26~28.dp`，采用柔和微透危险红 + 浅红发丝微切边 + 全圆角胶囊，警示明确且体量克制，严禁在列表项行内塞入全尺寸大红实心按钮以防遮挡同行信息。
+     - 真实取色以 `ColorTokens.Red` 为准：`container = #FEF2F2`、`foreground = #B91C1C`、`border = #FECACA`（`AppButtons.kt`）。严禁硬编码形如 `#FEE2E2` 的近似色。
 
 - **按钮设计红线**：
   - **严禁**使用直角、小圆角（如 8dp/10dp/12dp）或方形按钮，必须保持 `RoundedCornerShape(50)` 胶囊圆角；
@@ -85,7 +90,7 @@
   - 页面初次加载或长列表异步拉取时，严禁使用突兀的居中大菊花。应采用 `GlassShimmerList` 预占位，数据到达后自然渲染；
   - 微光动画必须使用 `Modifier.glassShimmer(dark)`，渐变光斑自适应深浅色，禁止生硬刺眼的白光。
 - **就地一键重试 (Inline Retry)**：
-  - 异步请求失败时，`FeedbackBanner(message, error = true, onRetry = { ... })` 必须尽可能传入重试操作，允许用户就地重新发起请求，严禁迫使用户只能退出重进或整页下拉。
+  - 异步请求失败时，`AppFeedbackBanner(message, error = true, onRetry = { ... })`（位于 `ui/components/feedback/AppFeedbackBanner.kt`，注意符号名带 `App` 前缀）必须尽可能传入重试操作，允许用户就地重新发起请求，严禁迫使用户只能退出重进或整页下拉。
 
 ## 8. 隐私安全与系统集成 (Security & System)
 
@@ -100,11 +105,12 @@
 - **严禁直角与彩色边框**：不新增直角面板、彩色粗边框或高饱和度投影。
 - **严禁私造与裸写按钮**：严禁在任何业务页面直接使用 Material 3 原生 `Button`、`FilledTonalButton`、`OutlinedButton`；严禁使用直角或方形按键，所有按钮必须统一引用 `AppButton`、`AppSecondaryButton` 或 `AppDangerButton`。
 - **严禁按钮表面泛白**：严禁在按钮上方覆盖半透明白色反光雾层，确保科技蓝纯净通透。
+- **纯文字操作的现状说明**：内部 `TextButton` 仍存在于 6 个业务文件（约 17 处），当前**尚未**封装对应的胶囊化纯文字组件。这属于已知技术债：新增纯文字操作请优先复用 `AppSecondaryButton` 或 `AppInlineDangerButton`；确需行内纯文字入口时，暂沿用现有 `TextButton` 写法，**不要**自行新造第四套按钮样式，也不要直接补丁式扩展 `AppButtons.kt`。
 - **严禁页面内部重复调用 `statusBarsPadding()`**。
 - **严禁混用状态跳转与路由栈**：二级路由必须登记在 `parentTabForSubScreen`。
 - **用户可见文案保持规范中文**（保留产品名、标准代码或国际协议字段原样）。
 
-## 11. 标准公共组件库体系 (Component Library)
+## 10. 标准公共组件库体系 (Component Library)
 
 工程已全面完成公共组件模块化抽取，所有通用 UI 必须优先复用位于 `cn.pxyb.mycontrol.ui.components` 及 `cn.pxyb.mycontrol.util` 中的标准化组件，严禁在业务界面私自复制粘贴或手写重复实现：
 
@@ -131,5 +137,12 @@
 | | `AppErrorState` | 标准错误面板，集成就地一键重试机制 |
 | **`ui.components.filter`** | `AppFilterChip` / `AppFilterBar` | 胶囊形微凸毛玻璃多维筛选栏，支持横向平滑滚动 |
 | | `AppSegmentedControl` / `AppChoiceRow` | 分段单选与带标题的选项行，统一选中语义和交互 |
+| **`ui.components.dialog`** | `AppDialog` / `AppDialogSize` | 标准毛玻璃弹窗容器与尺寸档位，统一遮罩、圆角与进出场 |
+| | `AppConfirmDialog` | 标准二次确认弹窗，危险操作必须走此组件而非自绘 |
+| | `AppDialogForm` | 弹窗内表单容器，统一字段间距与校验提示位 |
+| **`ui.components.interaction`** | `pressFeedback` | 统一按压弹性微缩放修饰符，自带触觉反馈；禁止各页面自行实现缩放动画 |
 | **`util`** | `QrUtils` | 集中统一的 Data URL Base64 二维码安全解析工具，杜绝各 Screen 私有重复实现 |
 | | `DateTimeUtils` | 集中统一的平台时间、分钟值和相对时间格式化；仅需日末端点的业务显式传入 `allowEndOfDay = true` 解析 `24:00` |
+| | `BoundedInput` / `DeviceAuthentication` | 输入长度与格式边界校验、设备生物特征/凭据认证包装 |
+
+> 本表记录**公共约定面**，不是全量清单。其余已抽取但仍未登记的公共组件包括：`AppSwitch`、`AppNotificationButton`、`AppLoadingState` / `AppShimmer` / `AppSkeleton*` / `AppToast`、`AppIconTile` / `AppListCard` / `AppMetricCell` / `AppSectionHeader` / `AppStatusBadge` / `AppStatusStyle` / `QuickActionGlassTile`、`AppGroupedCard`、`UiLayout.kt` 自适应网格助手，以及顶层 `ui.legal`、`ui.scanner`、`ui.state`（`ActionStateHolder` / `FeatureStateHolder`）。新增代码复用这些组件前，先确认签名再引用；不要把未登记的组件当成不存在而另写一份。

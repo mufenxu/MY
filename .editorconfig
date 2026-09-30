@@ -10,5 +10,16 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 2
 
+# Declared 4-space source exceptions. Both directories hold tens of thousands of
+# 4-space lines and no meaningful 2-space lines, and services/exam-api enforces
+# 4 spaces through its own ESLint "indent" rule. Keep these in sync with
+# services/exam-api/.editorconfig; add an entry only for code that already is
+# 4-space, and never reformat an existing service just to match the default.
+[services/core-api/**.js]
+indent_size = 4
+
+[services/exam-api/**.js]
+indent_size = 4
+
 [*.md]
 trim_trailing_whitespace = false

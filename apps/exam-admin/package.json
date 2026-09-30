@@ -1,5 +1,6 @@
 {
   "name": "@my-platform/exam-admin",
+  "description": "考试业务管理后台前端（Vue 3 + Element Plus）",
   "private": true,
   "version": "0.0.0",
   "type": "module",

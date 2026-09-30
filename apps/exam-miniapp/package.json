@@ -1,7 +1,8 @@
 {
   "name": "@my-platform/exam-miniapp",
   "version": "1.0.0",
-  "description": "",
+  "description": "考试学习微信小程序（原生 + TypeScript）",
+  "private": true,
   "scripts": {
     "check:miniprogram": "node scripts/check-miniprogram-paths.js && node scripts/check-miniprogram-source.js && node --test scripts/*.test.js",
     "check:compliance:trial": "node scripts/check-compliance-config.js trial",

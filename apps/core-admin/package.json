@@ -1,5 +1,6 @@
 {
   "name": "@my-platform/core-admin",
+  "description": "综合业务管理后台前端（React 19 + Ant Design）",
   "private": true,
   "version": "0.0.0",
   "type": "module",

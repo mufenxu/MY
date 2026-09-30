@@ -28,10 +28,17 @@
 # Secrets and local configuration
 .env
 /.env.ci
+/.env.release-smoke
 **/.env
 **/env
 **/*.local
 **/project.private.config.json
+
+# CI by-products that must never be committed
+/release-artifacts.tsv
+/changed-files.txt
+/build-metadata-*.json
+/blackbox-spool.jsonl
 
 # Editors and operating systems
 .idea/

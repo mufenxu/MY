@@ -1,5 +1,6 @@
 {
   "name": "@my-platform/platform-browser-runtime",
+  "description": "浏览器侧共享运行时：平台 SSO 跳转、带超时请求与体验上报",
   "version": "0.1.0",
   "private": true,
   "type": "module",

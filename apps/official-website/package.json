@@ -1,12 +1,14 @@
 {
   "name": "@my-platform/official-website",
+  "description": "对外官网单页站点（无框架，手写 HTML + main.js）",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node dev-server.mjs",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check": "node --check main.js && npm run build"
   },
   "devDependencies": {
     "vite": "^5.0.0"

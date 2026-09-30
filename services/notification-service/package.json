@@ -2,6 +2,7 @@
   "name": "@my-platform/notification-service",
   "version": "1.0.0",
   "description": "企业微信通知 API（Node.js 版本），用于通过 HTTP 接口发送企业微信消息",
+  "private": true,
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {

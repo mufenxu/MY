@@ -1,5 +1,6 @@
 {
   "name": "@my-platform/admin-console",
+  "description": "统一运维、安全、发布与容灾管理门户（React 客户端 + Express 服务端同包）",
   "version": "0.1.0",
   "private": true,
   "type": "module",

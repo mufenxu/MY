@@ -1,7 +1,8 @@
 {
-  "name": "miniprogram",
+  "name": "@my-platform/smart-campus-miniapp",
   "version": "1.0.0",
-  "description": "微信小程序",
+  "private": true,
+  "description": "智慧校园微信小程序",
   "main": "app.ts",
   "keywords": [],
   "author": "",

@@ -8,36 +8,39 @@
 
 在 GitHub 仓库中，依次打开 Settings → Secrets and variables → Actions。
 
-### 1. SSH 所需 Secrets（支持密码或私钥；支持代理/多账号）
+### 1. SSH 所需 Secrets（支持密码登录；支持代理/多账号）
 
 - `SSH_HOST`：服务器地址或域名（必填）
 - `SSH_USER`：SSH 用户名（单账号时必填）
-- `SSH_PASSWORD`：密码登录（推荐与本仓库方案搭配）
-- `SSH_PRIVATE_KEY`：私钥登录（OpenSSH 格式，可选）
+- `SSH_PASSWORD`：密码登录（**当前唯一支持的登录方式**，workflow 通过 `sshpass` 使用）
 - `SSH_PORT`：端口，可选，默认 22
-- `SSH_PASSPHRASE`：如果私钥有口令，填此项，可选
 - `PROXY_LIST`：可选，多行代理（如 `socks5://user:pass@ip:port`），将随机轮换
 - `ACCOUNTS_JSON`：可选，多账号 JSON（见下）
 - `USERS_LIST`：可选，仅用户名列表（见下），其余 `SSH_HOST/SSH_PASSWORD/SSH_PORT` 复用
 
-> `SSH_PRIVATE_KEY` 需要粘贴完整的 OpenSSH 私钥内容，包括标准的起始行和结束行；不要把真实私钥写入仓库文件。
+> 私钥登录（`SSH_PRIVATE_KEY`/`SSH_PASSPHRASE`）**已移除**，配置它们不会生效。请勿把真实密码或私钥写入仓库文件。
 
-### 2. 网页面板所需 Secrets / Variables
+### 2. 参数总览（与 `ssh-login.yml` 一致）
 
-Secrets（敏感信息）：
+**Secrets**（本 workflow 实际读取的全部变量；未列出的一律不生效）：
 
-- `PANEL_URL`：登录页地址（必填）
-- `PANEL_USERNAME`：用户名（必填）
-- `PANEL_PASSWORD`：密码（必填）
+| Secret | 必填 | 用途 |
+| --- | --- | --- |
+| `SSH_HOST` | 是 | 目标主机 |
+| `SSH_USER` | 单账号时是 | SSH 用户名 |
+| `SSH_PASSWORD` | 是 | SSH 密码（当前仅支持密码登录，使用 `sshpass`） |
+| `SSH_PORT` | 否 | 端口，默认 22 |
+| `PROXY_LIST` | 否 | 多行代理池，随机轮换 |
+| `USERS_LIST` | 否 | 仅用户名不同的多账号列表 |
+| `ACCOUNTS_JSON` | 否 | 完整账号 JSON（主机/端口/用户/密码可各不同） |
+| `RESULT_CALLBACK_URL` | 否 | 结果回调地址 |
+| `RESULT_CALLBACK_AUTH` | 否 | 回调鉴权头取值 |
+| `EMAS_SPACE_SECRET` | 否 | 阿里云 EMAS 空间密钥 |
+| `EMAS_SPACE_SECRET_HEADER` | 否 | EMAS 密钥所在请求头名 |
 
-Variables（可选，便于自定义选择器）：
+**Variables**：本 workflow **不读取任何 `vars.*`**。
 
-- `LOGIN_USERNAME_SELECTOR`：用户名输入框 CSS 选择器（可多个用英文逗号分隔）
-- `LOGIN_PASSWORD_SELECTOR`：密码输入框 CSS 选择器（可多个用英文逗号分隔）
-- `LOGIN_SUBMIT_SELECTOR`：提交按钮 CSS 选择器（可多个用英文逗号分隔）
-- `SUCCESS_SELECTOR`：登录成功后的页面元素选择器（可选）
-
-> 若不提供自定义选择器，脚本会尝试通用选择器（如 `input[name="username"]`、`input[name="password"]`、`button[type="submit"]` 等）。
+> 早期版本曾支持网页端（`PANEL_*` 与 `*_SELECTOR`）登录与私钥登录（`SSH_PRIVATE_KEY`/`SSH_PASSPHRASE`），这些能力**已移除**。配置它们不会产生任何效果。
 
 ## 二、如何使用
 
@@ -46,11 +49,12 @@ Variables（可选，便于自定义选择器）：
 - 打开 Actions → 选择 `SSH Login` → `Run workflow`
 - 可在输入框自定义登录后执行的命令，默认 `uname -a`
 
-工作流文件：`.github/workflows/ssh-login.yml`
+工作流文件位于本子项目内：`automation/ct8-automation/.github/workflows/ssh-login.yml`。
+注意它**不在仓库根的 `.github/workflows/` 下**，因此无法从本仓库的 Actions 页面直接 dispatch；如需运行，请按 GitHub 对工作流目录的要求部署，或把该文件复制到根 `.github/workflows/`（复制前请确认根仓库的权限与 secrets 配置）。
 
 #### 1.1 单账号登录（最简单）
 
-在 Secrets 配置 `SSH_HOST`、`SSH_USER`、`SSH_PASSWORD`（或 `SSH_PRIVATE_KEY`），然后运行 `SSH Login`。
+在 Secrets 配置 `SSH_HOST`、`SSH_USER`、`SSH_PASSWORD`，然后运行 `SSH Login`。
 
 #### 1.2 多账号（两种方式）
 
@@ -88,11 +92,9 @@ Variables（可选，便于自定义选择器）：
   ```
   若未设置 `PROXY_LIST`，则仅用 Tor；二者都不用时，直连。
 
-（已移除网页端登录相关内容，仓库仅保留 SSH 方案）
-
 ## 三、常见问题
 
-- 选择器不匹配：请在仓库 Variables 中配置自定义选择器。
+- 选择器不匹配：**已不适用**，网页端登录能力已移除。
 - 二步验证/验证码：当前脚本未内置处理，需要按站点机制扩展。
 - 证书/受信任主机：SSH 工作流会自动 `ssh-keyscan` 添加到 `known_hosts`。
  - Tor 指定国家：可行但不稳定，建议使用指定国家的代理池或跳板机。

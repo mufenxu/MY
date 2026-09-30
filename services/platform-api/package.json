@@ -1,5 +1,6 @@
 {
   "name": "@my-platform/platform-api",
+  "description": "统一网关：单域名入口、模块路由、会话与内部身份票据签发",
   "version": "0.1.0",
   "private": true,
   "type": "module",

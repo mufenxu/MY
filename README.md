@@ -1,6 +1,8 @@
 # MY Unified Platform
 
-Unified workspace for the WeChat miniapps, admin consoles, backend services, deployment config, and operations scripts.
+Unified workspace for the WeChat miniapps, admin consoles, Android app, backend services, deployment config, and operations scripts.
+
+New to the repository, or about to change code? Read [AGENTS.md](./AGENTS.md) for the repository map and red lines, and [docs/engineering-standards.md](./docs/engineering-standards.md) for the authoritative engineering conventions.
 
 ## Project layout
 
@@ -10,6 +12,8 @@ MY/
 |   |-- admin-console/          # unified operations, security, release and disaster-recovery portal
 |   |-- core-admin/             # core business admin console
 |   |-- exam-admin/             # exam admin console
+|   |-- official-website/       # public marketing site
+|   |-- android-app/            # Android client (Kotlin + Compose)
 |   |-- smart-campus-miniapp/   # smart campus WeChat miniapp
 |   `-- exam-miniapp/           # exam learning WeChat miniapp
 |-- services/
@@ -40,10 +44,12 @@ Default URL: `http://127.0.0.1:5180`.
 ## Integrated productivity features
 
 - Exam miniapp: a server-backed daily review queue with adaptive intervals, mastery tracking, and per-question recall feedback.
-- Campus workspace: private ICS calendar subscriptions and configurable WeCom course reminders.
+- Campus workspace: private ICS calendar subscriptions, library seat and room booking, campus card and utility bills, and configurable WeCom course reminders.
 - Notification service: reusable templates, scheduled jobs, quiet-hour preferences, retry policy, and delivery audit history.
 - IoT console: persisted automation rules and scenes with cooldowns, edge-trigger evaluation, and truthful command audit states.
 - Management console: a cross-service task center, request-chain diagnostics, public status page, and versioned configuration approval/rollback.
+- Android client: agenda and study tooling (timetable, todos, study timer, grade tracking), plus video share-link parsing. The gateway resolves metadata and direct media URLs only; the device downloads from the platform CDN, so media bytes never traverse the platform. See [docs/architecture.md](./docs/architecture.md#media-download).
+- Official website: a framework-free public site whose status panel reads `/api/public/status`.
 
 All management state remains in the owning service database. The browser only presents these server-side sources of truth.
 
@@ -52,6 +58,8 @@ All management state remains in the owning service database. The browser only pr
 ```powershell
 npm run check
 ```
+
+The root `check` script chains every per-project gate (consoles, website, workspace scripts, packages, release, backup, MongoDB, supply chain, topology, gateway, all services, both miniapps) with `&&`, so the first failure stops the run. CI runs the same command on Node 24. See [docs/engineering-standards.md](./docs/engineering-standards.md) for what each gate must contain.
 
 ## Containers
 
