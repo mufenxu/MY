@@ -1,11 +1,10 @@
 package cn.pxyb.mycontrol.ui.feature.agenda
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.CampusTimetable
@@ -14,7 +13,6 @@ import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonList
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
-import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -22,25 +20,27 @@ import java.time.format.DateTimeFormatter
 
 internal fun agendaTime(value: Long): String = Instant.ofEpochMilli(value).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm"))
 
-@Composable
-fun AgendaScreen(state: AgendaUiState, timetable: CampusTimetable?, todos: List<TodoTask>, contentPadding: PaddingValues,
-    onBack: () -> Unit, onRefresh: () -> Unit, onOpen: (String) -> Unit) {
-    var selectedDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
-    val date = LocalDate.parse(selectedDate)
+internal fun LazyListScope.agendaItems(
+    state: AgendaUiState,
+    timetable: CampusTimetable?,
+    todos: List<TodoTask>,
+    date: LocalDate,
+    onDateChange: (LocalDate) -> Unit,
+    onRefresh: () -> Unit,
+    onOpen: (String) -> Unit,
+) {
     val courseWarning = agendaCourseWarning(timetable, date)
-    val items = remember(date, timetable, todos, state.rooms, state.seats) { buildAgenda(date, timetable, todos, state.rooms, state.seats) }
-    LaunchedEffect(Unit) { onRefresh() }
-    AppSubPage("统一日程", onBack, contentPadding, subtitle = "课程、预约与待办截止时间", pinHeader = true, refreshing = state.loading, onRefresh = onRefresh) {
+    val items = buildAgenda(date, timetable, todos, state.rooms, state.seats)
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AppSecondaryButton(text = "前一天", onClick = { selectedDate = date.minusDays(1).toString() }, modifier = Modifier.weight(1f))
-                AppSecondaryButton(text = "今天", onClick = { selectedDate = LocalDate.now().toString() }, modifier = Modifier.weight(1f))
-                AppSecondaryButton(text = "后一天", onClick = { selectedDate = date.plusDays(1).toString() }, modifier = Modifier.weight(1f))
+                AppSecondaryButton(text = "前一天", onClick = { onDateChange(date.minusDays(1)) }, modifier = Modifier.weight(1f))
+                AppSecondaryButton(text = "今天", onClick = { onDateChange(LocalDate.now()) }, modifier = Modifier.weight(1f))
+                AppSecondaryButton(text = "后一天", onClick = { onDateChange(date.plusDays(1)) }, modifier = Modifier.weight(1f))
             }
         }
-        item { Text("$selectedDate · ${listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")[date.dayOfWeek.value - 1]}", style = MaterialTheme.typography.titleMedium) }
+        item { Text("$date · ${listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")[date.dayOfWeek.value - 1]}", style = MaterialTheme.typography.titleMedium) }
         if (courseWarning != null || state.errors.isNotEmpty()) item {
-            AppFeedbackBanner("日程可能不完整或含缓存数据，请刷新后确认。" + state.errors.joinToString("\n", prefix = "\n"), error = true, onRetry = onRefresh)
+            AppFeedbackBanner("日程可能不完整或含缓存数据，请刷新后确认。" + (listOfNotNull(courseWarning) + state.errors).joinToString("\n", prefix = "\n"), error = true, onRetry = onRefresh)
         }
         if (state.loading && !state.loaded) item { AppSkeletonList() }
         items(items, key = { it.id }) { item ->
@@ -66,5 +66,4 @@ fun AgendaScreen(state: AgendaUiState, timetable: CampusTimetable?, todos: List<
             }
         }
         }
-    }
 }

@@ -31,12 +31,11 @@ data class GlobalSearchUiState(
 )
 
 internal val featureSearchItems = listOf(
-    GlobalSearchItem("feature:agenda", "统一日程", "课程、预约、待办时间轴与冲突提醒", "日常安排", SearchDestination.Today, featureRoute = AppRoute.Agenda),
     GlobalSearchItem("feature:study", "学习计时", "课程与待办的学习记录、每周科目投入", "日常安排", SearchDestination.Today, featureRoute = AppRoute.Study),
     GlobalSearchItem("feature:screenshot", "截图转待办", "本地中文识别、截止时间与原图", "日常安排", SearchDestination.Today, featureRoute = AppRoute.Screenshot),
     GlobalSearchItem("feature:energy", "电费账单与提醒", "余额、消费变化与低余额提醒", "校园服务", SearchDestination.Today, featureRoute = AppRoute.Energy),
     GlobalSearchItem("feature:grades", "成绩与学分", "成绩录入导入、学分进度与目标绩点", "校园服务", SearchDestination.Today, featureRoute = AppRoute.Grades),
-    GlobalSearchItem("feature:today", "今日安排", "今日课程、个人待办与到期提醒", "日常安排", SearchDestination.Today, featureRoute = AppRoute.Today),
+    GlobalSearchItem("feature:today", "日程", "课程、预约、待办时间轴、冲突与到期提醒", "日常安排", SearchDestination.Today, featureRoute = AppRoute.Today),
     GlobalSearchItem("feature:timetable", "本学期课表", "课程、上课地点与校历", "校园服务", SearchDestination.Timetable, featureRoute = AppRoute.Timetable),
     GlobalSearchItem("feature:todos", "个人待办", "添加任务、截止时间、优先级与重复提醒", "日常安排", SearchDestination.Todos, featureRoute = AppRoute.Todos),
     GlobalSearchItem("feature:campus", "校园服务", "一卡通余额、宿舍能耗、绩点与校园工具", "校园服务", SearchDestination.Today, featureRoute = AppRoute.Campus),

@@ -121,7 +121,7 @@ internal fun homeQuickActionSpec(
 ): HomeQuickActionSpec = when (action) {
     HomeQuickAction.Today -> HomeQuickActionSpec(
         icon = Icons.Outlined.CalendarMonth,
-        label = "今日安排",
+        label = "日程",
         accent = ColorTokens.Blue.foreground,
         accentPale = ColorTokens.Blue.container,
     ) { onOpenWorkspace(WorkspaceDestination.Today) }
@@ -243,7 +243,7 @@ internal fun QuickActionsDialog(
     onDismiss: () -> Unit,
     onSave: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
 ) {
-    var localOrder by remember(order) { mutableStateOf(order) }
+    var localOrder by remember(order) { mutableStateOf(order.filterNot { it == HomeQuickAction.Today }) }
     var localHidden by remember(hidden) { mutableStateOf(hidden) }
     val visibleCount = localOrder.count { it !in localHidden }
     val dark = isAppInDarkTheme()
@@ -251,7 +251,7 @@ internal fun QuickActionsDialog(
         onDismissRequest = onDismiss,
         icon = Icons.Outlined.Edit,
         title = "调整快捷操作",
-        subtitle = "已显示 $visibleCount 项 · 开关控制显示，箭头调整顺序",
+        subtitle = "已显示 $visibleCount 项 · 日程已在首页展示",
         modifier = Modifier.heightIn(max = 700.dp),
         footer = {
             Row(
@@ -265,7 +265,12 @@ internal fun QuickActionsDialog(
                 )
                 AppDialogPrimaryButton(
                     text = "保存配置",
-                    onClick = { onSave(localOrder, localHidden) },
+                    onClick = {
+                        val savedOrder = localOrder.toMutableList()
+                        val todayIndex = order.indexOf(HomeQuickAction.Today)
+                        if (todayIndex >= 0) savedOrder.add(todayIndex.coerceAtMost(savedOrder.size), HomeQuickAction.Today)
+                        onSave(savedOrder, localHidden)
+                    },
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -327,7 +332,7 @@ internal fun QuickActionsDialog(
                         }
                         AppSwitch(
                             checked = isChecked,
-                            enabled = isChecked || visibleCount > 1,
+                            enabled = !isChecked || visibleCount > 1,
                             onCheckedChange = { checked ->
                                 localHidden = if (checked) localHidden - action else localHidden + action
                             },
@@ -400,7 +405,7 @@ private fun QuickActionArrowButton(
 }
 
 private fun homeQuickActionLabel(action: HomeQuickAction): String = when (action) {
-    HomeQuickAction.Today -> "今日安排"
+    HomeQuickAction.Today -> "日程"
     HomeQuickAction.Notifications -> "通知中心"
     HomeQuickAction.DailyNews -> "每日新闻"
     HomeQuickAction.Scenes -> "场景与自动化"

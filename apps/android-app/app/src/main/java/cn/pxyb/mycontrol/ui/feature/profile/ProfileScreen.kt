@@ -35,7 +35,6 @@ import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -99,7 +98,6 @@ fun ProfileScreen(
     onLogout: () -> Unit,
     onRefresh: () -> Unit,
     onClearCache: () -> Unit,
-    onForceFullSync: () -> Unit,
     onOpenAccountManagement: () -> Unit,
     onOpenGoogleAccountDesk: () -> Unit,
     onOpenAuthenticator: () -> Unit,
@@ -159,10 +157,8 @@ fun ProfileScreen(
                 AppDivider()
                 AppSwitchRow("AI 小助手", assistantButtonVisible, onAssistantButtonVisibleChange, subtitle = "显示悬浮助手入口")
             }
-            ProfileSectionTitle("通用与维护", "数据同步、缓存与应用更新")
+            ProfileSectionTitle("通用与维护", "缓存清理与应用更新")
             AppPanel {
-                AppActionRow("重新同步数据", subtitle = "刷新当前页面数据并检测网络连接", icon = Icons.Outlined.Sync, enabled = !state.refreshing, onClick = onForceFullSync)
-                AppDivider()
                 AppActionRow("清理本地缓存", subtitle = "可释放 ${state.cacheStorageInfo.totalFormatted}，保留登录与个人设置", icon = Icons.Outlined.CleaningServices, enabled = state.busyAction != "clear-cache", onClick = { confirmClearCache = true })
                 AppDivider()
                 AppActionRow("关于与更新", subtitle = "当前版本 v${BuildConfig.VERSION_NAME} · 检查更新", icon = Icons.Outlined.Info, onClick = { showUpdateDialog = true; onCheckUpdates() })

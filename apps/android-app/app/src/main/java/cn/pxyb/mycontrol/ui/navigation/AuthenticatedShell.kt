@@ -304,9 +304,9 @@ internal fun AuthenticatedShell(
             AppRoute.GitHubProjects -> viewModel.syncNavigationDestination(MainTab.Operations, githubProjectsOpen = true)
             AppRoute.Search -> viewModel.syncNavigationDestination(MainTab.Overview, globalSearchOpen = true)
             AppRoute.Assistant -> viewModel.syncNavigationDestination(MainTab.Overview, assistantOpen = true)
-            AppRoute.Today -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
+            AppRoute.Today, AppRoute.Agenda -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Today)
             AppRoute.FreeClassrooms -> viewModel.syncNavigationDestination(MainTab.Overview)
-            AppRoute.Agenda, AppRoute.Study, AppRoute.Energy, AppRoute.Grades, AppRoute.Screenshot -> viewModel.syncNavigationDestination(MainTab.Overview, autoRefresh = false)
+            AppRoute.Study, AppRoute.Energy, AppRoute.Grades, AppRoute.Screenshot -> viewModel.syncNavigationDestination(MainTab.Overview, autoRefresh = false)
             AppRoute.Reservation -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.LibrarySeatReservation -> viewModel.syncNavigationDestination(MainTab.Overview)
             AppRoute.DailyNews -> viewModel.syncNavigationDestination(MainTab.Overview, autoRefresh = false)
@@ -606,7 +606,6 @@ internal fun AuthenticatedShell(
                         onLogout = viewModel::logout,
                         onRefresh = onRefresh,
                         onClearCache = viewModel::clearLocalCache,
-                        onForceFullSync = viewModel::forceFullSync,
                         onOpenAccountManagement = viewModel::openAccountManagement,
                         onOpenGoogleAccountDesk = { navigateToSubScreen(AppRoute.GoogleAccounts) },
                         onOpenAuthenticator = { navigateToSubScreen(AppRoute.Authenticator) },
@@ -811,9 +810,11 @@ internal fun AuthenticatedShell(
                         onExecuteAction = viewModel::performAssistantAction,
                     )
                 }
-                listOf(WorkspaceDestination.Today, WorkspaceDestination.Timetable, WorkspaceDestination.Campus, WorkspaceDestination.Todos).forEach { destination ->
-                    composable(destination.route()) {
+                (listOf(WorkspaceDestination.Today, WorkspaceDestination.Timetable, WorkspaceDestination.Campus, WorkspaceDestination.Todos)
+                    .map { it.route() to it } + (AppRoute.Agenda to WorkspaceDestination.Today)).forEach { (route, destination) ->
+                    composable(route) {
                         val todayState by viewModel.todayState.collectAsStateWithLifecycle()
+                        val agendaState by viewModel.agenda.state.collectAsStateWithLifecycle()
                         val context = LocalContext.current
                         val calendarPermissions = remember {
                             arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
@@ -829,6 +830,8 @@ internal fun AuthenticatedShell(
                         }
                         TodayScreen(
                             state = todayState,
+                            agendaState = agendaState,
+                            onRefreshAgenda = viewModel.agenda::refresh,
                             contentPadding = contentPadding,
                             onBack = navigateBackFromSubScreen,
                             onRefresh = { viewModel.refreshCurrentWorkspace() },
@@ -864,14 +867,6 @@ internal fun AuthenticatedShell(
                             initialSection = destination,
                         )
                     }
-                }
-                composable(AppRoute.Agenda) {
-                    val agendaState by viewModel.agenda.state.collectAsStateWithLifecycle()
-                    val today by viewModel.todayState.collectAsStateWithLifecycle()
-                    cn.pxyb.mycontrol.ui.feature.agenda.AgendaScreen(agendaState, today.timetable, today.todoSnapshot.tasks, contentPadding,
-                        navigateBackFromSubScreen, { viewModel.refreshCurrentWorkspace(); viewModel.agenda.refresh() }, { kind ->
-                            navigateToSubScreen(when (kind) { "课程" -> AppRoute.Timetable; "研讨间" -> AppRoute.Reservation; "座位" -> AppRoute.LibrarySeatReservation; else -> AppRoute.Todos })
-                        })
                 }
                 composable(AppRoute.Study) {
                     val study by viewModel.study.state.collectAsStateWithLifecycle()
@@ -1179,6 +1174,10 @@ internal fun AuthenticatedShell(
                     themePreference = themePreference,
                     initialSetup = initialSetupOpen,
                     onRequestNotifications = onRequestNotifications,
+                    onOpenNotificationSettings = {
+                        settingsOpen = false
+                        navigateToSubScreen(AppRoute.NotificationSettings)
+                    },
                     onForceFullSync = viewModel::forceFullSync,
                     onThemePreferenceChange = onThemePreferenceChange,
                     onDismiss = {

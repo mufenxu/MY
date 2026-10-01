@@ -218,18 +218,14 @@ fun ToolsScreen(
             }
             AppPanel {
                 AppActionRow(
-                    title = "连接详情",
-                    subtitle = if (showConnectionDetails) "收起连接状态与消息统计" else "查看连接状态与消息统计",
+                    title = "消息统计",
+                    subtitle = if (showConnectionDetails) "收起消息统计" else "查看消息统计",
                     icon = Icons.Outlined.Router,
                     onClick = { showConnectionDetails = !showConnectionDetails },
                 )
             }
             if (showConnectionDetails) {
                 ModernMqttStatusPanel(
-                    mqttConnected = iot?.mqttConnected == true,
-                    connectionState = iot?.connectionState ?: "等待设备状态",
-                    onlineDevices = iot?.devices?.count { it.online } ?: 0,
-                    totalDevices = iot?.devices?.size ?: 0,
                     messagesReceived = iot?.messagesReceived ?: 0,
                 )
             }
@@ -515,7 +511,7 @@ private fun LightweightHeaderBanner(
                                     ),
                             )
                             Text(
-                                text = if (mqttConnected) "LIVE · 智控" else "OFFLINE",
+                                text = "IoT 智控",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
@@ -535,7 +531,7 @@ private fun LightweightHeaderBanner(
                             .background(if (mqttConnected) ColorTokens.Green.foreground else ColorTokens.Red.foreground, CircleShape),
                     )
                     Text(
-                        text = if (mqttConnected) "连接正常 · IoT 场景自动化联动" else "离线模式 · 等待网关连接恢复",
+                        text = "设备控制 · 环境监测 · 场景联动",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -573,10 +569,6 @@ private fun ToolSectionTitle(
 /** Bento Grid IoT 状态面板 (清爽马卡龙配色) */
 @Composable
 private fun ModernMqttStatusPanel(
-    mqttConnected: Boolean,
-    connectionState: String,
-    onlineDevices: Int,
-    totalDevices: Int,
     messagesReceived: Long,
 ) {
     Surface(
@@ -590,53 +582,11 @@ private fun ModernMqttStatusPanel(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // 通道 Status Header
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                AppIconTile(
-                    if (mqttConnected) Icons.Outlined.Router else Icons.Outlined.WifiOff,
-                    if (mqttConnected) ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
-                    if (mqttConnected) ColorTokens.Green.container else ColorTokens.Amber.container,
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        if (mqttConnected) "MQTT 消息总线 (已连接)" else "MQTT 异常断开",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    )
-                    Text(
-                        connectionState,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                AppStatusBadge(if (mqttConnected) "healthy" else "degraded")
-            }
-
             // Bento 三格指标 (清爽极浅彩底 + 亮色加粗数字)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                LightBentoMetricCard(
-                    label = "在线设备",
-                    value = onlineDevices.toString(),
-                    subText = "正常运行",
-                    valueColor = ColorTokens.Green.foreground,
-                    bgColor = ColorTokens.Green.container,
-                    borderColor = ColorTokens.Green.border,
-                    modifier = Modifier.weight(1f),
-                )
-                LightBentoMetricCard(
-                    label = "设备总数",
-                    value = totalDevices.toString(),
-                    subText = "全网注册",
-                    valueColor = ColorTokens.Blue.foreground,
-                    bgColor = ColorTokens.Blue.container,
-                    borderColor = ColorTokens.Blue.border,
-                    modifier = Modifier.weight(1f),
-                )
                 LightBentoMetricCard(
                     label = "接收消息",
                     value = if (messagesReceived > 9999) "${messagesReceived / 1000}k" else messagesReceived.toString(),

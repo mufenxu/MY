@@ -40,6 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import cn.pxyb.mycontrol.ui.feature.agenda.AgendaUiState
+import cn.pxyb.mycontrol.ui.feature.agenda.agendaItems
 import cn.pxyb.mycontrol.data.CampusCourse
 import cn.pxyb.mycontrol.data.TodoTask
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
@@ -69,6 +71,8 @@ private enum class CampusWorkspaceSection { Today, Timetable, Campus, Todos }
 @Composable
 fun TodayScreen(
     state: TodayUiState,
+    agendaState: AgendaUiState,
+    onRefreshAgenda: () -> Unit,
     contentPadding: PaddingValues,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
@@ -97,6 +101,14 @@ fun TodayScreen(
             WorkspaceDestination.Todos -> CampusWorkspaceSection.Todos
             else -> CampusWorkspaceSection.Today
         })
+    }
+    var selectedDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
+    LaunchedEffect(campusSection) {
+        if (campusSection == CampusWorkspaceSection.Today) onRefreshAgenda()
+    }
+    val refreshWorkspace = {
+        onRefresh()
+        if (campusSection == CampusWorkspaceSection.Today) onRefreshAgenda()
     }
     LaunchedEffect(state.sharedTodoDraft) {
         if (!state.sharedTodoDraft.isNullOrBlank()) {
@@ -152,7 +164,7 @@ fun TodayScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             listOf(
-                CampusWorkspaceSection.Today to "今日安排",
+                CampusWorkspaceSection.Today to "日程",
                 CampusWorkspaceSection.Todos to "个人待办",
                 CampusWorkspaceSection.Timetable to "本学期课表",
                 CampusWorkspaceSection.Campus to "校园服务",
@@ -213,7 +225,7 @@ fun TodayScreen(
     fun featureLinks() {
         val routes = cn.pxyb.mycontrol.ui.navigation.AppRoute
         val entries = if (campusSection == CampusWorkspaceSection.Campus) listOf("电费账单与提醒" to routes.Energy, "成绩与学分" to routes.Grades)
-            else listOf("统一日程" to routes.Agenda, "截图转待办" to routes.Screenshot, "学习计时" to routes.Study)
+            else listOf("截图转待办" to routes.Screenshot, "学习计时" to routes.Study)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             entries.forEach { (label, route) ->
                 cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton(text = label, onClick = { onOpenFeature(route) })
@@ -223,7 +235,7 @@ fun TodayScreen(
 
     AppSubPage(
         title = when (campusSection) {
-            CampusWorkspaceSection.Today -> "今日安排"
+            CampusWorkspaceSection.Today -> "日程"
             CampusWorkspaceSection.Timetable -> "本学期课表"
             CampusWorkspaceSection.Campus -> "校园服务"
             CampusWorkspaceSection.Todos -> "个人待办"
@@ -235,8 +247,8 @@ fun TodayScreen(
         ).joinToString(" · "),
         contentPadding = contentPadding,
         onBack = onBack,
-        refreshing = state.refreshing,
-        onRefresh = if (wideTimetable) null else onRefresh,
+        refreshing = state.refreshing || (campusSection == CampusWorkspaceSection.Today && agendaState.loading),
+        onRefresh = if (wideTimetable) null else refreshWorkspace,
         actions = {
             if (wideTimetable) {
                 AppHeaderIconButton(
@@ -298,159 +310,28 @@ fun TodayScreen(
 
         when (campusSection) {
             CampusWorkspaceSection.Today -> {
-                if (isTablet) {
-                    // 平板双列布局：左列为今日与明日课程，右列为个人待办与到期提醒
-                    item(key = "tablet-today-layout", contentType = "tablet-today") {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                        ) {
-                            // 左列：今日课程 + 明日课程预告
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                AppSectionHeader(title = "今天的课程", subtitle = state.timetable?.currentCalendarText)
-                                if (state.refreshing && courses.isEmpty()) {
-                                    AppSkeletonList(
-                                        rowCount = 2,
-                                        leadingSize = 32.dp,
-                                        lineWidths = listOf(0.36f, 0.62f),
-                                    )
-                                } else if (courses.isEmpty()) {
-                                    AppEmptyState("今天没有课程", detail = "可以把时间留给个人待办或需要处理的事项。")
-                                } else {
-                                    courses.forEach { course ->
-                                        CourseCard(course)
-                                    }
-                                }
-
-                                AppSectionHeader(
-                                    title = "明日课程预告",
-                                    subtitle = if (tomorrowCourses.isNotEmpty()) {
-                                        "第${tomorrowWeek ?: currentWeek ?: 1}周 · $tomorrowDayName (共 ${tomorrowCourses.size} 节)"
-                                    } else {
-                                        "$tomorrowDayName 暂无排课"
-                                    },
-                                )
-                                if (tomorrowCourses.isEmpty()) {
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(16.dp),
-                                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                                        border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f)),
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        ) {
-                                            AppIconTile(
-                                                icon = Icons.Outlined.CheckCircle,
-                                                tint = ColorTokens.Green.foreground,
-                                                background = ColorTokens.Green.container,
-                                                modifier = Modifier.size(34.dp),
-                                            )
-                                            Column {
-                                                Text(
-                                                    "明天暂无排课",
-                                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                                                )
-                                                Text(
-                                                    "可以提前规划自主学习或处理个人待办",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    tomorrowCourses.forEach { course ->
-                                        CourseCard(
-                                            course = course,
-                                            selectedWeek = tomorrowWeek,
-                                            tag = "明日",
-                                        )
-                                    }
-                                }
-                            }
-
-                            // 右列：个人待办 + 需要处理 + 即将到期
-                            Column(
-                                modifier = Modifier.weight(1f),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                AppSectionHeader(
-                                    title = "个人待办",
-                                    subtitle = "${activeTodos.size} 项未完成",
-                                    trailing = {
-                                        IconButton(onClick = { addingTodo = true }) {
-                                            Icon(Icons.Outlined.Add, contentDescription = "添加待办")
-                                        }
-                                    },
-                                )
-                                if (state.todoSnapshot.tasks.isEmpty()) {
-                                    AppPanel(onClick = { addingTodo = true }) {
-                                        Row(
-                                            modifier = Modifier.padding(18.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                        ) {
-                                            AppIconTile(Icons.Outlined.Add, MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primaryContainer)
-                                            Column {
-                                                Text("添加第一项待办", style = MaterialTheme.typography.titleMedium)
-                                                Text("支持截止时间、优先级、重复和课程关联", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    state.todoSnapshot.tasks.forEach { task ->
-                                        TodoCard(task, onToggleTodo, { editingTodoId = task.id }, onDeleteTodo)
-                                    }
-                                }
-
-                                AppSectionHeader(title = "需要处理", subtitle = "系统提醒统一进入通知中心")
-                                AttentionCard(
-                                    label = "系统通知",
-                                    value = state.unreadAlerts,
-                                    onClick = onOpenNotifications,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-
-                                if (expiringResources.isNotEmpty()) {
-                                    AppSectionHeader(title = "即将到期", subtitle = "脱敏资源摘要，不包含密码或连接凭据")
-                                    expiringResources.take(6).forEach { (resource, days) ->
-                                        ResourceExpiryCard(resource, days)
-                                    }
-                                }
-                            }
+                agendaItems(
+                    state = agendaState,
+                    timetable = state.timetable,
+                    todos = state.todoSnapshot.tasks,
+                    date = LocalDate.parse(selectedDate),
+                    onDateChange = { selectedDate = it.toString() },
+                    onRefresh = refreshWorkspace,
+                    onOpen = { kind ->
+                        when (kind) {
+                            "课程" -> campusSection = CampusWorkspaceSection.Timetable
+                            "研讨间" -> onOpenReservation()
+                            "座位" -> onOpenLibrarySeatReservation()
+                            else -> campusSection = CampusWorkspaceSection.Todos
                         }
-                    }
-                } else {
-                    // 手机单列流
-                    item(key = "today-courses-title", contentType = "section") {
-                        AppSectionHeader(title = "今天的课程", subtitle = state.timetable?.currentCalendarText)
-                    }
-                    if (state.refreshing && courses.isEmpty()) {
-                        item(key = "today-courses-loading", contentType = "loading") {
-                            AppSkeletonList(
-                                rowCount = 3,
-                                leadingSize = 32.dp,
-                                lineWidths = listOf(0.36f, 0.62f),
-                            )
-                        }
-                    } else if (courses.isEmpty()) {
-                        item(key = "today-courses-empty", contentType = "empty") {
-                            AppEmptyState("今天没有课程", detail = "可以把时间留给个人待办或需要处理的事项。")
-                        }
-                    } else {
-                        items(courses, key = CampusCourse::id, contentType = { "course" }) { course ->
-                            CourseCard(course)
-                        }
-                    }
-
-                    todoItems()
-
+                    },
+                )
+                item(key = "todo-actions") {
+                    cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton(
+                        text = "添加待办",
+                        onClick = { addingTodo = true },
+                    )
+                }
                     // 🌟 明日课程预告
                     item(key = "tomorrow-courses-title", contentType = "section") {
                         AppSectionHeader(
@@ -529,7 +410,6 @@ fun TodayScreen(
                             ResourceExpiryCard(resource, days)
                         }
                     }
-                }
             }
             CampusWorkspaceSection.Todos -> todoItems()
             CampusWorkspaceSection.Timetable -> item(key = "timetable", contentType = "workspace") {

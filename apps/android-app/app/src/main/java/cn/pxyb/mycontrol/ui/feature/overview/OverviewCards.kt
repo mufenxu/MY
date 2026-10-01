@@ -65,11 +65,11 @@ internal fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (Workspac
         state.todoSnapshot.tasks.filterNot { it.completed }.sortedBy { it.dueAt ?: Long.MAX_VALUE }
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        OverviewSectionTitle("今日安排", "课程、待办与校园日常")
+        OverviewSectionTitle("日程", "课程、待办与校园日常")
         AppPanel {
             AppActionRow(
                 title = courseAction?.title ?: if (state.timetable == null) "今日课程" else "今天暂无后续课程",
-                subtitle = courseAction?.detail ?: if (state.timetable == null) "查看课程与日程" else "查看今日安排或本学期课表",
+                subtitle = courseAction?.detail ?: if (state.timetable == null) "查看课程与日程" else "查看日程或本学期课表",
                 icon = Icons.Outlined.CalendarMonth,
                 onClick = { onOpenWorkspace(WorkspaceDestination.Today) },
             )

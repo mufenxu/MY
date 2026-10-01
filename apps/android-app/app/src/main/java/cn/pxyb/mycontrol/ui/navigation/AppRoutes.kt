@@ -121,7 +121,7 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
 
 internal fun parentRouteForSubScreen(route: String?, previousRoute: String?): String? = when (route) {
     AppRoute.Energy, AppRoute.Grades, AppRoute.Chaoxing -> AppRoute.Campus
-    AppRoute.Agenda, AppRoute.Study, AppRoute.Screenshot -> AppRoute.Today
+    AppRoute.Study, AppRoute.Screenshot -> AppRoute.Today
     AppRoute.GitHubProjects, AppRoute.AndroidReleases, AppRoute.RegistryImages -> AppRoute.Projects
     AppRoute.LoginSessions -> AppRoute.Account
     AppRoute.NotificationSettings -> if (previousRoute == AppRoute.Notifications) AppRoute.Notifications else AppRoute.Profile

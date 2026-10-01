@@ -96,7 +96,7 @@ fun OverviewScreen(
     val quickActionWidth = if (isTablet) (width - AppPageHorizontalPadding * 2 - 12.dp) * 0.42f else width
     val quickActionColumns = quickActionColumnCount(quickActionWidth, LocalDensity.current.fontScale)
     val quickActionRows = remember(state.homeQuickActionOrder, state.hiddenHomeQuickActions, quickActionColumns) {
-        state.homeQuickActionOrder.filterNot(state.hiddenHomeQuickActions::contains).chunked(quickActionColumns)
+        state.homeQuickActionOrder.filterNot { it == HomeQuickAction.Today || it in state.hiddenHomeQuickActions }.chunked(quickActionColumns)
     }
     val applicationRows = remember(state.externalApplications) { state.externalApplications.chunked(2) }
     val listState = rememberLazyListState()
@@ -173,7 +173,7 @@ fun OverviewScreen(
             OverviewSectionTitle("常用入口", "按习惯选择并排列", trailing = {
                 AppHeaderIconButton(Icons.Outlined.Edit, "调整常用入口", { customizingQuickActions = true })
             })
-            AppPanel {
+            if (quickActionRows.isNotEmpty()) AppPanel {
                 Column(Modifier.padding(horizontal = 6.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     quickActionRows.forEach { row ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {

@@ -64,6 +64,7 @@ internal fun AppSettingsDialog(
     themePreference: AppThemePreference,
     initialSetup: Boolean,
     onRequestNotifications: () -> Unit,
+    onOpenNotificationSettings: () -> Unit,
     onForceFullSync: () -> Unit,
     onThemePreferenceChange: (AppThemePreference) -> Unit,
     onDismiss: () -> Unit,
@@ -94,12 +95,17 @@ internal fun AppSettingsDialog(
                     }
                 },
             )
-            1 -> SettingsStatusRow(
+            1 -> if (initialSetup) SettingsStatusRow(
                 title = "系统通知权限",
                 detail = if (notificationsEnabled) "已开启" else "未开启",
                 healthy = notificationsEnabled,
                 actionLabel = if (notificationsEnabled) null else "去开启",
                 onAction = onRequestNotifications,
+            ) else AppActionRow(
+                title = "通知设置",
+                subtitle = "通知权限、免打扰、业务订阅与每日简报",
+                icon = Icons.Outlined.NotificationsActive,
+                onClick = onOpenNotificationSettings,
             )
             2 -> SettingsStatusRow(
                 title = when {
