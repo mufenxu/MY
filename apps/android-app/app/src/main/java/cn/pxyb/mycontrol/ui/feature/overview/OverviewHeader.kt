@@ -48,148 +48,22 @@ internal fun ModernOverviewHeader(
     onOpenNotifications: () -> Unit,
     calendarText: String? = null,
 ) {
-    val isDark = isAppInDarkTheme()
-    val glass = rememberGlassPalette(radius = 22.dp)
-    val weekTag = remember(calendarText) {
-        extractHeaderWeekTag(calendarText)
-    }
-    val searchInteractionSource = remember { MutableInteractionSource() }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .glassPanel(glass)
-            .padding(horizontal = 14.dp, vertical = 11.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            // 1. 左侧：工作台标题 + 周次微标 Pill + 绿色微光状态呼吸灯
-            Column(
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                modifier = Modifier.weight(1f, fill = false),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text(
-                        text = "工作台",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Black,
-                            fontSize = 21.sp,
-                            letterSpacing = (-0.3).sp,
-                            color = MaterialTheme.colorScheme.onBackground,
-                        ),
-                    )
-                    Surface(
-                        shape = CircleShape,
-                        color = if (isDark) {
-                            ColorTokens.BlueDark.container.copy(alpha = 0.5f)
-                        } else {
-                            ColorTokens.Blue.container.copy(alpha = 0.85f)
-                        },
-                        border = BorderStroke(
-                            0.6.dp,
-                            if (isDark) ColorTokens.BlueDark.border else ColorTokens.Blue.border,
-                        ),
-                    ) {
-                        Text(
-                            text = weekTag,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isDark) ColorTokens.BlueDark.foreground else ColorTokens.Blue.foreground,
-                            ),
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                        )
-                    }
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .background(ColorTokens.Green.foreground, CircleShape),
-                    )
-                    Text(
-                        text = "服务稳定 · 综合校园控制台",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-
-            // 2. 右侧操作区：半展开触控搜索胶囊 + 圆形触感通知按钮 + 圆形触感扫码按钮
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                // 灵动搜索胶囊
-                Surface(
-                    onClick = onOpenSearch,
-                    interactionSource = searchInteractionSource,
-                    shape = CircleShape,
-                    color = if (isDark) {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f)
-                    } else {
-                        ColorTokens.Blue.container.copy(alpha = 0.65f)
-                    },
-                    border = BorderStroke(
-                        0.7.dp,
-                        if (isDark) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f) else ColorTokens.Blue.border,
-                    ),
-                    modifier = Modifier.pressFeedback(searchInteractionSource, pressedScale = 0.95f),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Search,
-                            contentDescription = "搜索",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(15.dp),
-                        )
-                        Text(
-                            text = "搜索...",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                            ),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                // 消息通知
-                AppNotificationButton(
-                    unreadCount = unreadCount,
-                    onClick = onOpenNotifications,
-                    shape = CircleShape,
-                )
-
-                // 扫码登录
-                ModernHeaderIconButton(
-                    icon = Icons.Outlined.CenterFocusWeak,
-                    contentDescription = "扫码登录",
-                    onClick = onOpenQrLogin,
-                    size = 36.dp,
-                    iconSize = 18.dp,
-                    shape = CircleShape,
-                )
-            }
-        }
-    }
+    val weekTag = remember(calendarText) { extractHeaderWeekTag(calendarText) }
+    cn.pxyb.mycontrol.ui.components.layout.AppSecondaryHeader(
+        title = "我的工作台",
+        subtitle = weekTag,
+        onBack = {},
+        showBack = false,
+        actions = {
+            cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
+                icon = Icons.Outlined.Search, contentDescription = "全局搜索", onClick = onOpenSearch,
+            )
+            AppNotificationButton(unreadCount = unreadCount, onClick = onOpenNotifications, shape = CircleShape)
+            cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
+                icon = Icons.Outlined.CenterFocusWeak, contentDescription = "扫码登录", onClick = onOpenQrLogin,
+            )
+        },
+    )
 }
 
 private fun extractHeaderWeekTag(calendarText: String?): String {

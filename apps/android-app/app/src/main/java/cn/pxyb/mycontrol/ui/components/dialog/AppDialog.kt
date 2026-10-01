@@ -92,7 +92,7 @@ fun AppDialog(
     iconBackground: Color = MaterialTheme.colorScheme.primaryContainer,
     title: String? = null,
     subtitle: String? = null,
-    contentPadding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
+    contentPadding: PaddingValues = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
     size: AppDialogSize = AppDialogSize.Compact,
     footer: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
@@ -133,14 +133,14 @@ fun AppDialog(
         val isTablet = adaptive.isTabletOrExpanded
 
         val sheetColor = if (dark) {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+            MaterialTheme.colorScheme.surface
         } else {
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.97f)
+            MaterialTheme.colorScheme.surface
         }
         val sheetBorder = if (dark) {
-            Color.White.copy(alpha = 0.14f)
+            MaterialTheme.colorScheme.outlineVariant
         } else {
-            Color.Black.copy(alpha = 0.08f)
+            MaterialTheme.colorScheme.outlineVariant
         }
         val topHighlight = Brush.verticalGradient(
             colorStops = arrayOf(
@@ -247,8 +247,8 @@ fun AppDialog(
                                     .padding(
                                         start = 20.dp,
                                         end = 16.dp,
-                                        top = if (isTablet) 20.dp else 10.dp,
-                                        bottom = 4.dp,
+                                        top = if (isTablet) 20.dp else 12.dp,
+                                        bottom = 12.dp,
                                     ),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -271,16 +271,12 @@ fun AppDialog(
                                 }
                                 Column(
                                     modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
                                 ) {
                                     if (title != null) {
                                         Text(
                                             text = title,
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 17.sp,
-                                                letterSpacing = (-0.2).sp,
-                                            ),
+                                            style = MaterialTheme.typography.titleLarge,
                                             color = MaterialTheme.colorScheme.onSurface,
                                         )
                                     }

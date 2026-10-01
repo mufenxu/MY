@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -46,18 +47,9 @@ import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 /** 弹窗主操作按钮：对齐 BrandBlue 官方科技蓝与 46dp 标准高度。 */
-// ---------------- 全 App 现代统一按钮体系 (方案 A：极光流光玻璃胶囊) ----------------
+// 主操作、次要操作与危险操作共享触控尺寸和胶囊形状。
 
-// ---------------- 全 App 现代统一按钮体系 (方案 A：极光立体胶囊·纯净不泛白) ----------------
-
-/**
- * 全 App 现代主行动按钮 (Pure Royal Convex Pill)
- *
- * 1. 纯净深邃科技蓝：顶部 #2563EB -> 中部 #1D4ED8 -> 底部 #1E40AF 实体收口，无任何泛白白雾蒙层；
- * 2. 真实物理立体悬浮：3.dp 纯正深蓝软光晕微阴影，让胶囊从画布自然“浮凸而起”；
- * 3. 同色发丝微描边：顶部天蓝微反光 (#60A5FA 0.35f) 替代刺眼白光，边缘清晰锐利；
- * 4. 触感与状态：全圆角胶囊 RoundedCornerShape(50) + pressFeedback 物理微缩放 + AppHaptics.tick 细腻触觉。
- */
+/** 主操作使用主题强调色；浅色蓝底白字，深色浅蓝底深字，保留轻微渐变与按压反馈。 */
 @Composable
 fun AppButton(
     text: String,
@@ -72,30 +64,13 @@ fun AppButton(
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
 
-    // 1. 清澈鲜活科技蓝立体微弧渐变（提亮纯度，消除深沉暗色，绝不泛白）
-    val gradientBrush = if (enabled || loading) {
-        Brush.verticalGradient(
-            listOf(
-                BrandCyan, // BrandCyan 鲜活明朗科技蓝（顶部）
-                BrandBlue, // BrandBlue 经典品牌科技蓝（底部）
-            ),
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-            ),
-        )
-    }
-
-    // 2. 清澈同色系柔光发丝切边
-    val borderBrush = Brush.verticalGradient(
-        listOf(
-            ColorTokens.BlueDark.foreground.copy(alpha = 0.40f), // 浅天蓝微光边
-            BrandBlue.copy(alpha = 0.25f),
-        ),
+    val primary = MaterialTheme.colorScheme.primary
+    val contentColor = MaterialTheme.colorScheme.onPrimary
+    val gradientBrush = Brush.verticalGradient(
+        if (enabled || loading) listOf(lerp(primary, contentColor, 0.04f), primary)
+        else listOf(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f), MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
     )
+    val borderBrush = Brush.verticalGradient(listOf(primary, primary))
 
     Button(
         onClick = {
@@ -106,9 +81,9 @@ fun AppButton(
             .minimumInteractiveComponentSize()
             .heightIn(min = height)
             .shadow(
-                elevation = if (enabled && !loading) 2.5.dp else 0.dp,
+                elevation = if (enabled && !loading) 1.dp else 0.dp,
                 shape = shape,
-                spotColor = BrandCyan.copy(alpha = 0.35f),
+                spotColor = primary.copy(alpha = 0.18f),
                 ambientColor = Color.Black.copy(alpha = 0.08f),
             )
             .clip(shape)
@@ -127,9 +102,9 @@ fun AppButton(
         ),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color.Transparent,
-            contentColor = Color.White,
+            contentColor = contentColor,
             disabledContainerColor = Color.Transparent,
-            disabledContentColor = if (loading) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+            disabledContentColor = if (loading) contentColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
         ),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
     ) {
@@ -164,12 +139,7 @@ fun AppButton(
     }
 }
 
-/**
- * 全 App 现代次要行动按钮 (Aurora Gradient Outline Pill)
- *
- * 方案 E：玻璃底 + 蓝→青→紫品牌渐变发丝描边 + 50% 胶囊全圆角，精致有科技感且不喧哗。
- * 禁用/加载态自动退回中性描边，避免彩色描边误导为可点击。
- */
+/** 中性磨砂次要操作，与主按钮形成明确权重。 */
 @Composable
 fun AppSecondaryButton(
     text: String,
@@ -182,31 +152,14 @@ fun AppSecondaryButton(
     shape: RoundedCornerShape = RoundedCornerShape(50),
     compact: Boolean = false,
 ) {
-    val dark = isAppInDarkTheme()
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
 
-    val gradientBrush = Brush.linearGradient(
-        listOf(
-            MaterialTheme.colorScheme.surface,
-            ColorTokens.Blue.foreground.copy(alpha = if (dark) 0.10f else 0.06f)
-                .compositeOver(MaterialTheme.colorScheme.surface),
-        ),
+    val container = MaterialTheme.colorScheme.surfaceContainerLow
+    val gradientBrush = Brush.linearGradient(listOf(container, container))
+    val borderBrush = Brush.linearGradient(
+        listOf(MaterialTheme.colorScheme.outlineVariant, MaterialTheme.colorScheme.outlineVariant),
     )
-
-    val borderBrush = if (enabled && !loading) {
-        Brush.linearGradient(
-            listOf(
-                ColorTokens.Blue.foreground.copy(alpha = if (dark) 0.70f else 0.60f),
-                ColorTokens.Teal.foreground.copy(alpha = if (dark) 0.42f else 0.28f),
-                ColorTokens.Purple.foreground.copy(alpha = if (dark) 0.60f else 0.45f),
-            ),
-        )
-    } else {
-        Brush.linearGradient(
-            listOf(MaterialTheme.colorScheme.outlineVariant, MaterialTheme.colorScheme.outlineVariant),
-        )
-    }
 
     Button(
         onClick = {
@@ -216,15 +169,9 @@ fun AppSecondaryButton(
         modifier = modifier
             .minimumInteractiveComponentSize()
             .heightIn(min = height)
-            .shadow(
-                elevation = if (enabled && !loading) 1.5.dp else 0.dp,
-                shape = shape,
-                spotColor = Color.Black.copy(alpha = if (dark) 0.25f else 0.06f),
-                ambientColor = Color.Black.copy(alpha = 0.08f),
-            )
             .clip(shape)
             .background(gradientBrush)
-            .border(1.2.dp, borderBrush, shape)
+            .border(0.5.dp, borderBrush, shape)
             .pressFeedback(interactionSource),
         interactionSource = interactionSource,
         enabled = enabled && !loading,
@@ -317,7 +264,7 @@ fun AppDangerButton(
             .minimumInteractiveComponentSize()
             .heightIn(min = height)
             .shadow(
-                elevation = if (enabled && !loading) 3.dp else 0.dp,
+                elevation = if (enabled && !loading) 1.dp else 0.dp,
                 shape = shape,
                 spotColor = Color(0xFFDC2626).copy(alpha = 0.35f),
                 ambientColor = Color.Black.copy(alpha = 0.15f),

@@ -42,7 +42,14 @@ fun ScreenshotTodoScreen(state: ScreenshotUiState, contentPadding: PaddingValues
     if (datePicker) AppDatePickerModal(currentDate = date, onDismiss = { datePicker = false }, onConfirm = { date = it; datePicker = false }, daysCount = 366, pastDaysCount = 30)
     if (timePicker) AppTimePickerModal(currentTime = time, onDismiss = { timePicker = false }, onConfirm = { time = it; timePicker = false })
     AppSubPage("截图转待办", onBack, contentPadding, subtitle = "本地识别，确认后保存", pinHeader = true) {
-        item { AppSecondaryButton(text = "选择截图", onClick = { picker.launch(arrayOf("image/*")) }, enabled = !state.loading) }
+        if (state.text.isBlank() && !state.loading) item {
+            AppPanel {
+                AppEmptyState("从截图开始", detail = "选择课程或事项截图，在本机识别后核对内容，再保存为待办。",
+                    actionText = "选择截图", onAction = { picker.launch(arrayOf("image/*")) })
+            }
+        } else item {
+            AppSecondaryButton(text = "重新选择截图", onClick = { picker.launch(arrayOf("image/*")) }, enabled = !state.loading)
+        }
         state.error?.let { item { AppFeedbackBanner(it, true) } }
         if (state.loading) item { AppSkeletonList() }
         if (state.savedTaskId != null) item { AppPanel {
@@ -62,8 +69,8 @@ fun ScreenshotTodoScreen(state: ScreenshotUiState, contentPadding: PaddingValues
                     AppSecondaryButton(text = date, onClick = { datePicker = true })
                     AppSecondaryButton(text = time, onClick = { timePicker = true })
                 }
-                Text("识别出的日期仅为建议；未识别到时刻时默认 18:00，请核对后保存。", style = MaterialTheme.typography.bodySmall)
-                AppButton(text = "确认创建待办", onClick = {
+                Text("识别出的日期仅为建议；未识别到时刻时默认 18:00，请核对后保存。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                AppButton(modifier = Modifier.fillMaxWidth(), text = "确认创建待办", onClick = {
                     val due = if (hasDue) LocalDate.parse(date).atTime(LocalTime.parse(time)).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() else null
                     onSave(TodoTask(id = taskId, title = title.trim(), dueAt = due, reminderAt = due?.minus(30 * 60_000)), location)
                 }, enabled = title.isNotBlank(), loading = state.loading)
@@ -74,7 +81,7 @@ fun ScreenshotTodoScreen(state: ScreenshotUiState, contentPadding: PaddingValues
                 Text("识别原文", style = MaterialTheme.typography.titleMedium)
                 Text(state.text)
                 AsyncImage(state.bytes, "待办来源截图", modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp))
-                Text("原图仅在本机加密保存，不上传、不随待办跨设备同步。", style = MaterialTheme.typography.bodySmall)
+                Text("原图仅在本机加密保存，不上传、不随待办跨设备同步。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } }
         }

@@ -39,55 +39,10 @@ fun ImmersiveHeader(
     actions: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val glass = rememberGlassPalette(radius = 22.dp)
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .glassPanel(glass)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 22.sp,
-                        letterSpacing = (-0.2).sp
-                    ),
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(top = 3.dp)
-                ) {
-                    Box(
-                        Modifier
-                            .size(7.dp)
-                            .background(ColorTokens.Green.foreground, CircleShape)
-                    )
-                    Text(
-                        subtitle,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 6.dp)
-                    )
-                }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(start = 12.dp)
-            ) {
-                actions?.invoke()
-            }
-        }
-    }
+    AppSecondaryHeader(
+        title = title, subtitle = subtitle, modifier = modifier,
+        showBack = false, onBack = {}, actions = { actions?.invoke() },
+    )
 }
 
 /**

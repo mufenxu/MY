@@ -63,7 +63,7 @@ fun AppEmptyState(
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(16.dp))
 
         Text(
             text = title,
@@ -79,7 +79,7 @@ fun AppEmptyState(
             Spacer(Modifier.height(4.dp))
             Text(
                 text = detail,
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(0.85f),
@@ -87,9 +87,9 @@ fun AppEmptyState(
         }
 
         if (actionText != null && onAction != null) {
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(16.dp))
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (secondaryActionText != null && onSecondaryAction != null) {

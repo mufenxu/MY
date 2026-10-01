@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -44,19 +44,19 @@ fun AppFilterChip(
     val interactionSource = remember { MutableInteractionSource() }
 
     val bgColor = when {
-        selected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (dark) 0.85f else 0.95f)
+        selected -> MaterialTheme.colorScheme.primary
         dark -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
         else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
     }
 
     val borderColor = when {
-        selected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+        selected -> Color.Transparent
         dark -> Color.White.copy(alpha = 0.12f)
         else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     }
 
     val textColor = when {
-        selected -> MaterialTheme.colorScheme.primary
+        selected -> MaterialTheme.colorScheme.onPrimary
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 
@@ -72,11 +72,11 @@ fun AppFilterChip(
         interactionSource = interactionSource,
         modifier = modifier
             .minimumInteractiveComponentSize()
-            .height(34.dp)
+            .heightIn(min = 36.dp)
             .pressFeedback(interactionSource, pressedScale = 0.94f),
     ) {
         Box(
-            modifier = Modifier.padding(horizontal = 14.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center,
         ) {
             Text(

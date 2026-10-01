@@ -65,7 +65,7 @@ fun rememberGlassPalette(radius: Dp = 20.dp): GlassPalette {
 @Composable
 fun glassCardColor(): Color {
     val dark = isAppInDarkTheme()
-    return MaterialTheme.colorScheme.surface.copy(alpha = if (dark) 0.76f else 0.82f)
+    return MaterialTheme.colorScheme.surface.copy(alpha = if (dark) 0.96f else 0.94f)
 }
 
 /** 将组件渲染为毛玻璃面板：半透明底色 + 顶部高光 + 发丝描边 */
@@ -76,7 +76,7 @@ fun Modifier.glassPanel(palette: GlassPalette): Modifier = this
 
 /** 页面底层极光光斑背景（固定不随内容滚动），为玻璃面板提供可透出的色彩。已采用 drawWithCache 缓存渐变着色器避免滚动掉帧 */
 fun Modifier.auroraBackdrop(dark: Boolean): Modifier = this.drawWithCache {
-    val blobAlpha = if (dark) 0.18f else 0.20f
+    val blobAlpha = if (dark) 0.10f else 0.12f
     val c1 = if (dark) Color(0xFF3B82F6) else Color(0xFF60A5FA)
     val c2 = if (dark) Color(0xFF8B5CF6) else Color(0xFFA78BFA)
     val c3 = if (dark) Color(0xFF14B8A6) else Color(0xFF5EEAD4)
@@ -90,8 +90,8 @@ fun Modifier.auroraBackdrop(dark: Boolean): Modifier = this.drawWithCache {
     val center3 = Offset(size.width * 0.88f, size.height * 0.55f)
 
     val brush1 = Brush.radialGradient(listOf(c1.copy(alpha = blobAlpha), Color.Transparent), center1, r1)
-    val brush2 = Brush.radialGradient(listOf(c2.copy(alpha = blobAlpha - 0.04f), Color.Transparent), center2, r2)
-    val brush3 = Brush.radialGradient(listOf(c3.copy(alpha = blobAlpha - 0.09f), Color.Transparent), center3, r3)
+    val brush2 = Brush.radialGradient(listOf(c2.copy(alpha = blobAlpha * 0.45f), Color.Transparent), center2, r2)
+    val brush3 = Brush.radialGradient(listOf(c3.copy(alpha = blobAlpha * 0.25f), Color.Transparent), center3, r3)
 
     onDrawBehind {
         drawCircle(brush = brush1, radius = r1, center = center1)

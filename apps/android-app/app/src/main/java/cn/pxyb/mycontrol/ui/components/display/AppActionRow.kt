@@ -75,12 +75,12 @@ fun AppActionRow(
                 AppHaptics.tick(haptics)
                 onClick()
             }
-            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 16.dp)
     } else {
         modifier
             .fillMaxWidth()
             .minimumInteractiveComponentSize()
-            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 16.dp)
     }
 
     Row(
@@ -108,14 +108,14 @@ fun AppActionRow(
                     fontSize = 15.sp,
                 ),
                 color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -164,8 +164,8 @@ fun AppSwitchRow(
 @Composable
 fun AppDivider(
     modifier: Modifier = Modifier,
-    paddingStart: androidx.compose.ui.unit.Dp = 14.dp,
-    paddingEnd: androidx.compose.ui.unit.Dp = 14.dp,
+    paddingStart: androidx.compose.ui.unit.Dp = 16.dp,
+    paddingEnd: androidx.compose.ui.unit.Dp = 16.dp,
 ) {
     val dark = isAppInDarkTheme()
     HorizontalDivider(

@@ -67,12 +67,20 @@ internal fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (Workspac
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         OverviewSectionTitle("日程", "课程、待办与校园日常")
         AppPanel {
-            AppActionRow(
-                title = courseAction?.title ?: if (state.timetable == null) "今日课程" else "今天暂无后续课程",
-                subtitle = courseAction?.detail ?: if (state.timetable == null) "查看课程与日程" else "查看日程或本学期课表",
-                icon = Icons.Outlined.CalendarMonth,
-                onClick = { onOpenWorkspace(WorkspaceDestination.Today) },
-            )
+            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(if (courseAction != null) "下一项课程安排" else "今天的安排",
+                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text(courseAction?.title ?: if (state.timetable == null) "查看今日课程" else "今天暂无后续课程",
+                    style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurface)
+                Text(courseAction?.detail ?: if (state.timetable == null) "课表尚未加载，打开日程查看或刷新。" else "可以安排自主学习，或处理个人待办。",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                cn.pxyb.mycontrol.ui.components.button.AppButton(
+                    text = "查看日程",
+                    onClick = { onOpenWorkspace(WorkspaceDestination.Today) },
+                    modifier = Modifier.align(Alignment.End),
+                    icon = Icons.Outlined.CalendarMonth,
+                )
+            }
             AppDivider()
             AppActionRow(
                 title = "个人待办 · ${pendingTodos.size} 项未完成",
@@ -80,7 +88,7 @@ internal fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (Workspac
                 icon = Icons.Outlined.FactCheck,
                 onClick = { onOpenWorkspace(WorkspaceDestination.Todos) },
             )
-            Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 AppSecondaryButton(
                     text = "本学期课表",
                     onClick = { onOpenWorkspace(WorkspaceDestination.Timetable) },

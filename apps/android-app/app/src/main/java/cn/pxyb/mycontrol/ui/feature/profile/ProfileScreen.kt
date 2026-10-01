@@ -448,108 +448,18 @@ private fun ModernProfileHeader(
     onOpenNotifications: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    val isDark = isAppInDarkTheme()
-    val glass = rememberGlassPalette(radius = 22.dp)
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .glassPanel(glass)
-            .padding(horizontal = 14.dp, vertical = 11.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                modifier = Modifier.weight(1f, fill = false),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text(
-                        text = "我的",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Black,
-                            fontSize = 21.sp,
-                            letterSpacing = (-0.3).sp,
-                            color = MaterialTheme.colorScheme.onBackground,
-                        ),
-                    )
-                    Surface(
-                        shape = CircleShape,
-                        color = if (isDark) {
-                            ColorTokens.PurpleDark.container.copy(alpha = 0.5f)
-                        } else {
-                            ColorTokens.Purple.container.copy(alpha = 0.85f)
-                        },
-                        border = BorderStroke(
-                            0.6.dp,
-                            if (isDark) ColorTokens.PurpleDark.border else ColorTokens.Purple.border,
-                        ),
-                    ) {
-                        Text(
-                            text = "个人中心",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isDark) ColorTokens.PurpleDark.foreground else ColorTokens.Purple.foreground,
-                            ),
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                        )
-                    }
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .background(ColorTokens.Green.foreground, CircleShape),
-                    )
-                    Text(
-                        text = "账号、工具与个人偏好",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                AppNotificationButton(
-                    unreadCount = unreadCount,
-                    onClick = onOpenNotifications,
-                    shape = CircleShape,
-                )
-                ModernHeaderIconButton(
-                    icon = Icons.Outlined.Settings,
-                    contentDescription = "应用设置",
-                    onClick = onOpenSettings,
-                    size = 36.dp,
-                    iconSize = 18.dp,
-                    shape = CircleShape,
-                )
-                ModernHeaderIconButton(
-                    icon = Icons.Outlined.CenterFocusWeak,
-                    contentDescription = "扫码登录",
-                    onClick = onOpenQrLogin,
-                    size = 36.dp,
-                    iconSize = 18.dp,
-                    shape = CircleShape,
-                )
-            }
-        }
-    }
+    cn.pxyb.mycontrol.ui.components.layout.AppSecondaryHeader(
+        title = "我的", subtitle = "账号、工具与个人偏好", showBack = false, onBack = {},
+        actions = {
+            AppNotificationButton(unreadCount = unreadCount, onClick = onOpenNotifications, shape = CircleShape)
+            cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
+                icon = Icons.Outlined.Settings, contentDescription = "应用设置", onClick = onOpenSettings,
+            )
+            cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
+                icon = Icons.Outlined.CenterFocusWeak, contentDescription = "扫码登录", onClick = onOpenQrLogin,
+            )
+        },
+    )
 }
 /** 分组标题：灵动微岛毛玻璃浮标 (Dynamic Floating Island Pill) */
 @Composable

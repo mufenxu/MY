@@ -243,7 +243,7 @@ fun ToolsScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(key = "tools-header") {
-                LightweightHeaderBanner(iot?.mqttConnected == true, state.unreadAlerts, onOpenNotifications)
+                LightweightHeaderBanner(state.unreadAlerts, onOpenNotifications)
             }
             item(key = "connection-summary") {
                 AppPanel {
@@ -430,124 +430,16 @@ private fun TelemetryInsightUnavailable() {
 /** 玻璃 Header Banner（与「我的」页一致） */
 @Composable
 private fun LightweightHeaderBanner(
-    mqttConnected: Boolean,
     unreadCount: Int,
     onOpenNotifications: () -> Unit,
 ) {
-    val dotAlpha = if (mqttConnected) {
-        val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-        val alphaPulse by infiniteTransition.animateFloat(
-            initialValue = 0.4f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(1200, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "pulse-alpha",
-        )
-        alphaPulse
-    } else {
-        1f
-    }
-
-    val isDark = isAppInDarkTheme()
-    val glass = rememberGlassPalette(radius = 22.dp)
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .glassPanel(glass)
-            .padding(horizontal = 14.dp, vertical = 11.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                modifier = Modifier.weight(1f, fill = false),
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Text(
-                        text = "设备与自动化",
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Black,
-                            fontSize = 21.sp,
-                            letterSpacing = (-0.3).sp,
-                            color = MaterialTheme.colorScheme.onBackground,
-                        ),
-                    )
-                    Surface(
-                        shape = CircleShape,
-                        color = if (mqttConnected) {
-                            if (isDark) ColorTokens.GreenDark.container.copy(alpha = 0.5f) else ColorTokens.Green.container.copy(alpha = 0.85f)
-                        } else {
-                            if (isDark) ColorTokens.RedDark.container.copy(alpha = 0.5f) else ColorTokens.Red.container.copy(alpha = 0.85f)
-                        },
-                        border = BorderStroke(
-                            0.6.dp,
-                            if (mqttConnected) {
-                                if (isDark) ColorTokens.GreenDark.border else ColorTokens.Green.border
-                            } else {
-                                if (isDark) ColorTokens.RedDark.border else ColorTokens.Red.border
-                            },
-                        ),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .graphicsLayer { alpha = dotAlpha }
-                                    .background(
-                                        color = if (mqttConnected) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
-                                        shape = CircleShape,
-                                    ),
-                            )
-                            Text(
-                                text = "IoT 智控",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (mqttConnected) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
-                                ),
-                            )
-                        }
-                    }
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(6.dp)
-                            .background(if (mqttConnected) ColorTokens.Green.foreground else ColorTokens.Red.foreground, CircleShape),
-                    )
-                    Text(
-                        text = "设备控制 · 环境监测 · 场景联动",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            AppNotificationButton(
-                unreadCount = unreadCount,
-                onClick = onOpenNotifications,
-                shape = CircleShape,
-            )
-        }
-    }
+    cn.pxyb.mycontrol.ui.components.layout.AppSecondaryHeader(
+        title = "设备与自动化", subtitle = "设备控制 · 环境监测 · 场景联动",
+        showBack = false, onBack = {},
+        actions = {
+            AppNotificationButton(unreadCount = unreadCount, onClick = onOpenNotifications, shape = CircleShape)
+        },
+    )
 }
 
 /** 分组标题：灵动微岛毛玻璃浮标 (Dynamic Floating Island Pill) */

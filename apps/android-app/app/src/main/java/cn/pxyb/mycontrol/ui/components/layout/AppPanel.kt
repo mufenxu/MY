@@ -11,6 +11,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
@@ -33,6 +34,7 @@ fun AppPanel(
                     Modifier
                         .pressFeedback(interactionSource)
                         .clickable(
+                            role = Role.Button,
                             interactionSource = interactionSource,
                             indication = LocalIndication.current,
                             onClick = onClick,

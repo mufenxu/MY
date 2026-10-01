@@ -435,7 +435,7 @@ internal fun QuickAction(
 
     Column(
         modifier = modifier
-            .pressFeedback(interactionSource, pressedScale = 0.90f)
+            .pressFeedback(interactionSource, pressedScale = 0.97f)
             .clip(RoundedCornerShape(16.dp))
             .clickable(
                 interactionSource = interactionSource,
@@ -445,15 +445,12 @@ internal fun QuickAction(
             )
             .padding(vertical = 4.dp, horizontal = 2.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(5.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        QuickActionGlassTile(
+        cn.pxyb.mycontrol.ui.components.display.AppIconTile(
             icon = icon,
-            accent = accent,
-            accentPale = accentPale,
-            modifier = Modifier.size(38.dp),
-            iconSize = 20.dp,
-            contentDescription = label,
+            tint = MaterialTheme.colorScheme.primary,
+            background = MaterialTheme.colorScheme.surfaceContainerLow,
         )
         Text(
             text = label,

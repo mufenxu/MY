@@ -83,11 +83,11 @@ fun GradesScreen(state: GradesUiState, official: CampusGpa?, contentPadding: Pad
             AppTextField(score, { score = it }, label = "原始成绩（可填文字等级）")
             AppTextField(points, { points = it }, label = "学校给出的绩点（可留空）")
             AppSwitchRow("已获得该课程学分", earned, { earned = it })
-            AppButton(text = "保存成绩", onClick = { credit?.let { onSave(listOf(GradeRecord(term.trim(), course.trim(), it, score.trim(), point, earned))) } },
+            AppButton(modifier = Modifier.fillMaxWidth(), text = "保存成绩", onClick = { credit?.let { onSave(listOf(GradeRecord(term.trim(), course.trim(), it, score.trim(), point, earned))) } },
                 enabled = state.loaded && term.isNotBlank() && course.isNotBlank() && credit != null && (points.isBlank() || point != null), loading = state.loading)
-            Text("同学期同名课程会更新原记录；重修请在课程名中区分。", style = MaterialTheme.typography.bodySmall)
+            Text("同学期同名课程会更新原记录；重修请在课程名中区分。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             AppSecondaryButton(text = if (importing) "读取中…" else "导入 CSV 成绩单", onClick = { launcher.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel")) }, enabled = !importing && state.loaded)
-            Text("UTF-8 CSV 表头：学期,课程,学分,成绩,绩点,已获学分\n已获学分填“是”或“否”；导入后先预览，再确认保存。", style = MaterialTheme.typography.bodySmall)
+            Text("UTF-8 CSV 表头：学期,课程,学分,成绩,绩点,已获学分\n已获学分填“是”或“否”；导入后先预览，再确认保存。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         } }
         if (preview.isNotEmpty()) item { AppPanel {
@@ -111,7 +111,7 @@ fun GradesScreen(state: GradesUiState, official: CampusGpa?, contentPadding: Pad
             if (targetValue != null && futureValue != null && summary.gpaCredits > 0) {
                 val needed = ((summary.gpaCredits + futureValue) * targetValue - summary.weightedPoints) / futureValue
                 Text("后续平均绩点需达到 ${"%.3f".format(needed.coerceAtLeast(0.0))}")
-                Text("仅按已填写绩点的记录计算。是否可达到以及对应分数，请按学校绩点满分与换算规则判断。", style = MaterialTheme.typography.bodySmall)
+                Text("仅按已填写绩点的记录计算。是否可达到以及对应分数，请按学校绩点满分与换算规则判断。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         } }

@@ -64,7 +64,7 @@ fun AppErrorState(
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(16.dp))
 
         Text(
             text = title,
@@ -80,13 +80,13 @@ fun AppErrorState(
 
         Text(
             text = message,
-            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth(0.85f),
         )
 
-        Spacer(Modifier.height(18.dp))
+        Spacer(Modifier.height(16.dp))
 
         AppButton(
             text = retryText,

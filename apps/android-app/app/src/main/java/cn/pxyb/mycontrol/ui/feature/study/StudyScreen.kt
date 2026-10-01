@@ -7,6 +7,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.CampusCourse
@@ -43,20 +44,28 @@ fun StudyScreen(state: StudyUiState, courses: List<CampusCourse>, todos: List<To
         state.error?.let { item { AppFeedbackBanner(it, error = true, onRetry = onLoad) } }
         item { AppPanel {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("今日 ${state.sessions.sumOf { durationSince(todayStart, it) } / 60_000} 分钟 · 本周 ${state.sessions.sumOf { durationSince(weekStart, it) } / 60_000} 分钟", style = MaterialTheme.typography.titleMedium)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                listOf("今日专注" to todayStart, "本周累计" to weekStart).forEach { (label, since) ->
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${state.sessions.sumOf { durationSince(since, it) } / 60_000} 分钟",
+                            style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
+                    }
+                }
+            }
             if (state.running != null) {
                 Text(state.running.subject, style = MaterialTheme.typography.titleLarge)
                 Text("%02d:%02d:%02d".format(elapsed / 3_600_000, elapsed / 60_000 % 60, elapsed / 1000 % 60), style = MaterialTheme.typography.headlineLarge)
                 AppTextField(note, { note = it }, label = "本次学了什么", singleLine = false)
-                AppButton(text = "结束并保存", onClick = { onFinish(note) }, loading = state.loading)
-                Text("退出页面、锁屏后仍会计时；重启手机会停止本次计时。", style = MaterialTheme.typography.bodySmall)
+                AppButton(modifier = Modifier.fillMaxWidth(), text = "结束并保存", onClick = { onFinish(note) }, loading = state.loading)
+                Text("退出页面、锁屏后仍会计时；重启手机会停止本次计时。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 AppSelectField("关联课程或待办", taskId, options, { key ->
                     taskId = key
                     subject = options.first { it.value == key }.label
                 }, expanded, { expanded = it })
                 AppTextField(subject, { subject = it; taskId = null }, label = "学习内容")
-                AppButton(text = "开始学习", onClick = { onStart(subject, taskId) }, enabled = state.loaded && subject.isNotBlank(), loading = state.loading)
+                AppButton(modifier = Modifier.fillMaxWidth(), text = "开始学习", onClick = { onStart(subject, taskId) }, enabled = state.loaded && subject.isNotBlank(), loading = state.loading)
             }
         }
         } }
