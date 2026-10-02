@@ -28,6 +28,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +50,7 @@ import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
+import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import cn.pxyb.mycontrol.ui.components.input.AppSwitch
 import cn.pxyb.mycontrol.ui.components.picker.AppDatePickerModal
 import cn.pxyb.mycontrol.ui.components.picker.AppTimePickerModal
@@ -58,6 +60,10 @@ import java.time.format.DateTimeFormatter
 @Composable
 internal fun AutoReservationEditDialog(
     spaces: List<CampusReservationSpace>,
+    spacesDate: String?,
+    spacesLoading: Boolean,
+    spacesError: String?,
+    onLoadSpaces: (String) -> Unit,
     task: CampusAutoReservationTask?,
     saving: Boolean,
     onDismiss: () -> Unit,
@@ -78,6 +84,13 @@ internal fun AutoReservationEditDialog(
     var content by rememberSaveable { mutableStateOf(task?.content?.ifBlank { null } ?: "用于个人课程自主研读、文献查阅及学术研讨。") }
     var open by rememberSaveable { mutableStateOf(task?.open ?: false) }
 
+    LaunchedEffect(reservationDate) {
+        onLoadSpaces(reservationDate)
+    }
+    val loadingSpaces = spacesDate != reservationDate || spacesLoading
+    val currentSpacesError = spacesError.takeIf { spacesDate == reservationDate }
+    val candidateSpaces = if (!loadingSpaces && currentSpacesError == null) spaces else emptyList()
+
     val candidates = remember {
         mutableStateListOf<CampusAutoReservationCandidate>().apply {
             if (task?.candidates?.isNotEmpty() == true) {
@@ -85,7 +98,7 @@ internal fun AutoReservationEditDialog(
             } else {
                 add(
                     CampusAutoReservationCandidate(
-                        areaId = spaces.firstOrNull()?.id ?: 1,
+                        areaId = 0,
                         startTime = "09:00",
                         endTime = "11:00",
                     )
@@ -201,7 +214,7 @@ internal fun AutoReservationEditDialog(
                             return@AppDialogPrimaryButton
                         }
                         val invalidCandidate = candidates.firstOrNull { candidate ->
-                            spaces.none { it.id == candidate.areaId } || !isReservationDurationValid(candidate.startTime, candidate.endTime)
+                            candidateSpaces.none { it.id == candidate.areaId } || !isReservationDurationValid(candidate.startTime, candidate.endTime)
                         }
                         if (invalidCandidate != null) {
                             validationError = "候选空间需从空间列表中选择，且预约时长需为 1 至 4 小时"
@@ -224,6 +237,7 @@ internal fun AutoReservationEditDialog(
                         taskToConfirm = newTask
                     },
                     modifier = Modifier.weight(1f),
+                    enabled = candidateSpaces.isNotEmpty(),
                     busy = saving,
                 )
             }
@@ -439,15 +453,34 @@ internal fun AutoReservationEditDialog(
                 )
             }
 
+            when {
+                loadingSpaces -> Text(
+                    text = "正在加载 $reservationDate 的候选研讨间…",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                currentSpacesError != null -> AppFeedbackBanner(
+                    message = currentSpacesError,
+                    error = true,
+                    onRetry = { onLoadSpaces(reservationDate) },
+                )
+                candidateSpaces.isEmpty() -> AppFeedbackBanner(
+                    message = "$reservationDate 暂无候选研讨间，请切换预约日期或重试。",
+                    type = AppFeedbackType.Info,
+                    onRetry = { onLoadSpaces(reservationDate) },
+                )
+            }
+
             candidates.forEachIndexed { index, candidate ->
                 CandidateEditRow(
                     index = index,
                     candidate = candidate,
-                    spaces = spaces,
+                    spaces = candidateSpaces,
+                    spacesLoading = loadingSpaces,
                     canMoveUp = index > 0,
                     canMoveDown = index < candidates.size - 1,
                     canDelete = candidates.size > 1,
-                    onUpdate = { updated -> candidates[index] = updated },
+                    onUpdate = { updated -> candidates[index] = updated; validationError = null },
                     onMoveUp = {
                         val temp = candidates[index]
                         candidates[index] = candidates[index - 1]
@@ -470,7 +503,7 @@ internal fun AutoReservationEditDialog(
                         val lastCandidate = candidates.lastOrNull()
                         candidates.add(
                             CampusAutoReservationCandidate(
-                                areaId = spaces.firstOrNull()?.id ?: 1,
+                                areaId = candidateSpaces.firstOrNull()?.id ?: 0,
                                 startTime = lastCandidate?.startTime ?: "09:00",
                                 endTime = lastCandidate?.endTime ?: "11:00",
                             )
@@ -542,7 +575,7 @@ internal fun AutoReservationEditDialog(
                 append("运行时间：${target.executeDate} ${target.executeTime}\n")
                 append("预约日期：${target.reservationDate}\n")
                 target.candidates.forEach { candidate ->
-                    val spaceName = spaces.firstOrNull { it.id == candidate.areaId }?.name ?: "${candidate.areaId}"
+                    val spaceName = candidateSpaces.firstOrNull { it.id == candidate.areaId }?.name ?: "${candidate.areaId}"
                     append("$spaceName ${candidate.startTime} - ${candidate.endTime}\n")
                 }
                 append(if (target.enabled) "到运行时间会自动向学校提交预约，无需再次确认。" else "保存后任务保持停用。")

@@ -991,6 +991,7 @@ internal fun AuthenticatedShell(
                         onBack = navigateBackFromSubScreen,
                         onRefresh = viewModel.reservations::refreshReservation,
                         onLoadSpaces = viewModel.reservations::loadReservationSpaces,
+                        onLoadAutoCandidateSpaces = viewModel.reservations::loadAutoCandidateSpaces,
                         onLoadMyReservations = viewModel.reservations::loadMyReservations,
                         onOpenOfficialReservation = {
                             viewModel.openOfficialCampusReservation { session ->

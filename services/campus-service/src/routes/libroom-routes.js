@@ -82,7 +82,7 @@ export async function handleLibroomRoutes(req, res, url, {
         spaces = await client.listSpaces({ date });
       }
     } else {
-      spaces = await client.listSpaces({});
+      spaces = await client.listSpaces(date ? { date } : {});
     }
 
     if (date && startTime && endTime && Array.isArray(spaces) && spaces.length > 0) {

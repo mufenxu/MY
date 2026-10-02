@@ -46,11 +46,15 @@ import java.time.LocalDate
 @Composable
 internal fun AutoReservationPanel(
     spaces: List<CampusReservationSpace>,
+    candidateSpaces: List<CampusReservationSpace>,
+    candidateSpacesDate: String?,
+    candidateSpacesLoading: Boolean,
+    candidateSpacesError: String?,
     tasks: List<CampusAutoReservationTask>,
     tasksLoading: Boolean,
     savingTask: Boolean,
     deletingTaskId: String?,
-    onReloadSpaces: () -> Unit,
+    onLoadCandidateSpaces: (String) -> Unit,
     onSaveTask: (CampusAutoReservationTask, () -> Unit) -> Unit,
     onToggleTask: (CampusAutoReservationTask) -> Unit,
     onDeleteTask: (String) -> Unit,
@@ -114,7 +118,11 @@ internal fun AutoReservationPanel(
     // 编辑/新建任务弹窗升级为 AppDialog
     if (isEditing) {
         AutoReservationEditDialog(
-            spaces = spaces,
+            spaces = candidateSpaces,
+            spacesDate = candidateSpacesDate,
+            spacesLoading = candidateSpacesLoading,
+            spacesError = candidateSpacesError,
+            onLoadSpaces = onLoadCandidateSpaces,
             task = editingTask,
             saving = savingTask,
             onDismiss = { isEditing = false },

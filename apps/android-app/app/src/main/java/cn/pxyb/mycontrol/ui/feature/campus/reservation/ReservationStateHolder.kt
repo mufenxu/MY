@@ -5,8 +5,11 @@ import cn.pxyb.mycontrol.data.CampusRepository
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.ui.state.FeatureStateHolder
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -15,8 +18,14 @@ class ReservationStateHolder(
     private val campus: CampusRepository,
     onSessionExpired: (String) -> Unit,
 ) : FeatureStateHolder<ReservationUiState>(parentScope, ReservationUiState(), onSessionExpired) {
+    private var autoCandidateSpacesJob: Job? = null
+
     override fun clearPendingState(current: ReservationUiState) = current.copy(
         spacesLoading = false,
+        autoCandidateSpaces = emptyList(),
+        autoCandidateSpacesDate = null,
+        autoCandidateSpacesLoading = false,
+        autoCandidateSpacesError = null,
         availableSpacesLoading = false,
         queryLoading = false,
         submitLoading = false,
@@ -49,6 +58,39 @@ class ReservationStateHolder(
         success = { spaces -> copy(spaces = spaces, spacesLoading = false) },
         failure = { error -> copy(spacesLoading = false, error = error.message ?: "空间加载失败，请重试。") },
     )
+
+    fun loadAutoCandidateSpaces(date: String) {
+        if (date.isBlank()) return
+        val current = mutableState.value
+        if (current.autoCandidateSpacesDate == date && current.autoCandidateSpacesLoading) return
+        autoCandidateSpacesJob?.cancel()
+        mutableState.update {
+            it.copy(
+                autoCandidateSpaces = emptyList(),
+                autoCandidateSpacesDate = date,
+                autoCandidateSpacesLoading = true,
+                autoCandidateSpacesError = null,
+            )
+        }
+        autoCandidateSpacesJob = scope.launch {
+            try {
+                val spaces = campus.campusReservationSpaces(date = date)
+                currentCoroutineContext().ensureActive()
+                mutableState.update {
+                    it.copy(autoCandidateSpaces = spaces, autoCandidateSpacesLoading = false)
+                }
+            } catch (error: Throwable) {
+                currentCoroutineContext().ensureActive()
+                handleRequestFailure(error)
+                mutableState.update {
+                    it.copy(
+                        autoCandidateSpacesLoading = false,
+                        autoCandidateSpacesError = error.message ?: "候选研讨间加载失败，请重试。",
+                    )
+                }
+            }
+        }
+    }
 
     fun queryReservationRulesAndAvailability(spaceId: Int, date: String) {
         if (spaceId <= 0 || date.isBlank() || mutableState.value.queryLoading) return

@@ -48,6 +48,7 @@ internal fun CandidateEditRow(
     index: Int,
     candidate: CampusAutoReservationCandidate,
     spaces: List<CampusReservationSpace>,
+    spacesLoading: Boolean,
     canMoveUp: Boolean,
     canMoveDown: Boolean,
     canDelete: Boolean,
@@ -56,9 +57,14 @@ internal fun CandidateEditRow(
     onMoveDown: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    var spaceMenuOpen by remember { mutableStateOf(false) }
+    var spaceMenuOpen by remember(spacesLoading) { mutableStateOf(false) }
     val selectedSpace = spaces.firstOrNull { it.id == candidate.areaId }
-    val spaceName = selectedSpace?.name ?: "空间 ${candidate.areaId}"
+    val spaceName = selectedSpace?.name ?: when {
+        spacesLoading -> "正在加载研讨间…"
+        spaces.isEmpty() -> "暂无候选研讨间"
+        candidate.areaId > 0 -> "原研讨间不在当前列表，请重新选择"
+        else -> "请选择研讨间"
+    }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
