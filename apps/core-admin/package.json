@@ -17,7 +17,7 @@
     "@marsidev/react-turnstile": "^1.4.2",
     "@my-platform/platform-browser-runtime": "file:../../packages/platform-browser-runtime",
     "antd": "^6.0.0",
-    "axios": "^1.18.1",
+    "axios": "^1.20.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router": "^8.3.0",
