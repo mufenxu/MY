@@ -50,8 +50,8 @@ internal fun ModernOverviewHeader(
 ) {
     val weekTag = remember(calendarText) { extractHeaderWeekTag(calendarText) }
     cn.pxyb.mycontrol.ui.components.layout.AppSecondaryHeader(
-        title = "我的工作台",
-        subtitle = weekTag,
+        title = "今日",
+        subtitle = "我的工作台 · $weekTag",
         onBack = {},
         showBack = false,
         actions = {
@@ -81,7 +81,7 @@ private fun extractHeaderWeekTag(calendarText: String?): String {
 @Composable
 internal fun OverviewSectionTitle(
     title: String,
-    subtitle: String,
+    subtitle: String = "",
     dotColor: Color = MaterialTheme.colorScheme.primary,
     tag: String? = null,
     trailing: (@Composable () -> Unit)? = null,

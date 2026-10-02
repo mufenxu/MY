@@ -434,7 +434,7 @@ private fun LightweightHeaderBanner(
     onOpenNotifications: () -> Unit,
 ) {
     cn.pxyb.mycontrol.ui.components.layout.AppSecondaryHeader(
-        title = "设备与自动化", subtitle = "设备控制 · 环境监测 · 场景联动",
+        title = "设备", subtitle = "设备控制 · 环境监测 · 场景联动",
         showBack = false, onBack = {},
         actions = {
             AppNotificationButton(unreadCount = unreadCount, onClick = onOpenNotifications, shape = CircleShape)

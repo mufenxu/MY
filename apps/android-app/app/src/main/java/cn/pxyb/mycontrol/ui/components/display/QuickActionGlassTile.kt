@@ -5,22 +5,25 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
+import cn.pxyb.mycontrol.ui.theme.AppCardShape
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
+/**
+ * 常用入口玻璃格：半透明磨砂底 + 极光透出 + 发丝描边，0 阴影。
+ * 不在滑动项内构建渐变画笔，圆角统一取 AppCardShape。
+ */
 @Composable
 fun QuickActionGlassTile(
     icon: ImageVector,
@@ -31,23 +34,12 @@ fun QuickActionGlassTile(
     contentDescription: String? = null,
 ) {
     val darkTheme = isAppInDarkTheme()
-    val shape = RoundedCornerShape(19.dp)
-    val glassColors = if (darkTheme) {
-        listOf(Color.White.copy(alpha = 0.08f), Color.Transparent)
-    } else {
-        listOf(Color.White.copy(alpha = 0.64f), accentPale.copy(alpha = 0.34f))
-    }
+    val shape = AppCardShape
     Box(
         modifier = modifier
-            .shadow(
-                elevation = 3.dp,
-                shape = shape,
-                ambientColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.16f),
-                spotColor = accent.copy(alpha = 0.20f),
-            )
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.78f), shape)
-            .background(Brush.linearGradient(colors = glassColors), shape)
+            .background(glassCardColor(), shape)
+            .background(if (darkTheme) accent.copy(alpha = 0.10f) else accentPale.copy(alpha = 0.30f), shape)
             .border(
                 border = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
                 shape = shape,

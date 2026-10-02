@@ -232,7 +232,7 @@ fun OverviewScreen(
             if (state.offlineMode) {
                 item(key = "offline-notice") { OfflineSnapshotNotice(state.cachedAtMillis) }
             }
-            if (needsAttention) { item(key = "attention-summary") { statusSummary() } }
+            item(key = "status-summary") { statusSummary() }
             item(key = "overview-workspace") {
                 FlowRow(
                     maxItemsInEachRow = if (isTablet) 2 else 1,
@@ -243,7 +243,6 @@ fun OverviewScreen(
                     Column(Modifier.weight(if (isTablet) 0.42f else 1f)) { quickActions() }
                 }
             }
-            if (!needsAttention) { item(key = "status-summary") { statusSummary() } }
             if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {
                 item(key = "applications-title") { OverviewSectionTitle("接入应用", "已接入的应用快捷访问") }
                 externalApplicationOpenError?.let { message ->
