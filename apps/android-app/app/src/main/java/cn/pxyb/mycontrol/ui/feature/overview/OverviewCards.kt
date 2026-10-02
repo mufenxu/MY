@@ -68,8 +68,13 @@ internal fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (Workspac
         OverviewSectionTitle("今天的安排")
         AppPanel {
             Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(if (courseAction != null) "下一项课程安排" else "今天的安排",
-                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                courseAction?.let {
+                    Text(
+                        "下一项课程安排",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
                 Text(courseAction?.title ?: if (state.timetable == null) "查看今日课程" else "今天暂无后续课程",
                     style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
                 Text(courseAction?.detail ?: if (state.timetable == null) "课表尚未加载，打开日程查看或刷新。" else "可以安排自主学习，或处理个人待办。",

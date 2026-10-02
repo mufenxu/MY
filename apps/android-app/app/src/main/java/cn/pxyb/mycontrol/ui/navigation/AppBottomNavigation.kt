@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.components.layout.glassPanel
 import cn.pxyb.mycontrol.ui.components.layout.rememberGlassPalette
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 @Composable
 internal fun AppBottomNavigation(
@@ -52,14 +53,14 @@ internal fun AppBottomNavigation(
     onSelect: (MainTab) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val glass = rememberGlassPalette(radius = 31.dp)
+    val glass = rememberGlassPalette(radius = 31.dp, baseAlpha = if (isAppInDarkTheme()) 0.94f else 0.97f)
     Surface(
         modifier = modifier
             .padding(horizontal = 16.dp, vertical = 10.dp)
             .widthIn(max = 420.dp)
             .fillMaxWidth()
             .height(62.dp)
-            .glassPanel(glass),
+            .glassPanel(glass, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f)),
         color = Color.Transparent,
         shape = glass.shape,
         shadowElevation = 0.dp,

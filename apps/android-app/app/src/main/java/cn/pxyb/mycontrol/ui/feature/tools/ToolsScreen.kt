@@ -74,6 +74,7 @@ import cn.pxyb.mycontrol.data.TelemetryMetricSummary
 import cn.pxyb.mycontrol.data.TelemetrySeriesPoint
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppNotificationButton
+import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppDivider
@@ -848,12 +849,12 @@ private fun ModernSceneRow(
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
             )
             Text(
-                "${scene.actionCount} 个设备动作联动 · ${formatPlatformTime(scene.updatedAt)}",
+                "${scene.actionCount} 个设备动作联动" + if (scene.updatedAt.isNullOrBlank()) "" else " · ${formatPlatformTime(scene.updatedAt)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        AppButton(
+        AppSecondaryButton(
             text = "触发场景",
             icon = Icons.Outlined.PlayArrow,
             onClick = onRun,

@@ -124,7 +124,7 @@ fun ProfileScreen(
     val dark = isAppInDarkTheme()
     val accountSections: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            ProfileSectionTitle("账号与安全", "保护当前平台账号与登录设备")
+            ProfileSectionTitle("安全", "保护当前平台账号与登录设备")
             AppPanel {
                 AppActionRow(
                     title = "账号与安全",
