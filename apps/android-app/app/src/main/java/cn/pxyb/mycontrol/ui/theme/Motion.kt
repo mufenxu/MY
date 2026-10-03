@@ -59,6 +59,9 @@ object MotionTokens {
 
     /** 弹层更重一些，减少长距离进入时的过冲。 */
     fun <T> sheetSpring() = spring<T>(dampingRatio = 0.88f, stiffness = 380f)
+
+    /** 滚动进度柔性追随，不过冲；宽高与淡入淡出共用一个进度。 */
+    fun followSpring() = spring(dampingRatio = 1f, stiffness = 1100f, visibilityThreshold = 0.001f)
 }
 
 /**

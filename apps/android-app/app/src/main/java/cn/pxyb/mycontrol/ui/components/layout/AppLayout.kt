@@ -3,7 +3,6 @@ package cn.pxyb.mycontrol.ui.components.layout
 import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -50,6 +49,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.constrainWidth
+import androidx.compose.ui.unit.constrainHeight
+import kotlin.math.roundToInt
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -76,7 +85,7 @@ import cn.pxyb.mycontrol.ui.theme.AppHaptics
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 internal val LocalAppNavigationHandlesBack = staticCompositionLocalOf { false }
-private val LocalTopBarCompact = staticCompositionLocalOf { false }
+private val LocalTopBarProgress = staticCompositionLocalOf { 0f }
 
 internal val AppPageHorizontalPadding = 16.dp
 internal val AppPageTopSpacing = 6.dp
@@ -133,11 +142,10 @@ internal fun appPageContentPadding(
 @Composable
 internal fun AppTopBarSurface(
     modifier: Modifier = Modifier,
-    compact: Boolean = false,
+    collapseProgress: Float = 0f,
     content: @Composable RowScope.() -> Unit,
 ) {
-    val surfaceHeight by animateDpAsState(if (compact) 44.dp else 56.dp,
-        MotionTokens.softSpring(), label = "top-bar-height")
+    val surfaceHeight = 56.dp - 12.dp * collapseProgress
     Box(modifier.fillMaxWidth().heightIn(min = 56.dp), contentAlignment = Alignment.Center) {
     Surface(
         modifier = Modifier.fillMaxWidth().height(surfaceHeight.coerceIn(44.dp, 56.dp)),
@@ -161,16 +169,12 @@ fun AppSecondaryHeader(
     showBack: Boolean = true,
     actions: (@Composable RowScope.() -> Unit)? = null,
 ) {
-    val compact = LocalTopBarCompact.current
-    var moreOpen by remember { mutableStateOf(false) }
-    LaunchedEffect(compact) { moreOpen = false }
-    val titleSize by animateFloatAsState(if (compact) 16f else 18f,
-        MotionTokens.standardTween(), label = "top-bar-title")
+    val progress = LocalTopBarProgress.current
+    val titleSize = 18f - 2f * progress
     Column(modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        val barWidth by animateDpAsState(if (compact) minOf(maxWidth, 186.dp) else maxWidth,
-            MotionTokens.softSpring(), label = "top-bar-width")
-        AppTopBarSurface(Modifier.width(barWidth), compact = compact) {
+        val barWidth = maxWidth - (maxWidth - minOf(maxWidth, 186.dp)) * progress
+        AppTopBarSurface(Modifier.width(barWidth), collapseProgress = progress) {
             if (showBack) AppHeaderIconButton(
                 icon = Icons.AutoMirrored.Outlined.ArrowBack,
                 contentDescription = "返回", onClick = onBack,
@@ -183,20 +187,50 @@ fun AppSecondaryHeader(
             Text(title, modifier = Modifier.weight(1f).padding(horizontal = 4.dp).semantics { heading() },
                 style = MaterialTheme.typography.titleLarge.copy(fontSize = titleSize.sp),
                 color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (compact && actions != null) {
-                Box {
-                    AppHeaderIconButton(Icons.Outlined.MoreHoriz, "更多操作", { moreOpen = !moreOpen })
-                    DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
-                        Row(Modifier.widthIn(max = 320.dp).horizontalScroll(rememberScrollState()).padding(4.dp),
-                            verticalAlignment = Alignment.CenterVertically) { actions() }
-                    }
-                }
-            } else Row(verticalAlignment = Alignment.CenterVertically) { actions?.invoke(this) }
+            if (actions != null) AppTopBarActions(progress, actions)
         }
         }
         if (showBack && subtitle.isNotBlank() && appContentHeight() >= 360.dp) {
             Text(subtitle, modifier = Modifier.padding(horizontal = 12.dp), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+private fun AppTopBarActions(progress: Float, actions: @Composable RowScope.() -> Unit) {
+    var moreOpen by remember { mutableStateOf(false) }
+    val useMore = progress >= 0.5f
+    LaunchedEffect(useMore) { if (!useMore) moreOpen = false }
+    val fade = progress * progress * (3f - 2f * progress)
+    Layout(modifier = Modifier.clipToBounds(), content = {
+        Row(
+            modifier = Modifier
+                .then(if (useMore) Modifier.clearAndSetSemantics {} else Modifier)
+                .pointerInput(useMore) {
+                    if (useMore) awaitPointerEventScope {
+                        while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
+                    }
+                },
+            verticalAlignment = Alignment.CenterVertically, content = actions,
+        )
+        Box(Modifier.then(if (!useMore) Modifier.clearAndSetSemantics {} else Modifier)) {
+            AppHeaderIconButton(Icons.Outlined.MoreHoriz, "更多操作", { moreOpen = !moreOpen }, enabled = useMore)
+            DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
+                Row(Modifier.widthIn(max = 320.dp).horizontalScroll(rememberScrollState()).padding(4.dp),
+                    verticalAlignment = Alignment.CenterVertically, content = actions)
+            }
+        }
+    }) { measurables, constraints ->
+        val expanded = measurables[0].measure(constraints.copy(minWidth = 0, maxWidth = Constraints.Infinity))
+        val more = measurables[1].measure(constraints.copy(minWidth = 0))
+        val width = constraints.constrainWidth((expanded.width + (more.width - expanded.width) * progress).roundToInt())
+        val height = constraints.constrainHeight(maxOf(expanded.height, more.height))
+        layout(width, height) {
+            // 当前可交互的一层最后放置，避免渐变中的禁用按钮拦截下面的点击。
+            if (!useMore && progress > 0f) more.placeRelativeWithLayer(width - more.width, (height - more.height) / 2) { alpha = fade }
+            expanded.placeRelativeWithLayer(width - expanded.width, (height - expanded.height) / 2) { alpha = 1f - fade }
+            if (useMore) more.placeRelativeWithLayer(width - more.width, (height - more.height) / 2) { alpha = fade }
         }
     }
 }
@@ -282,15 +316,28 @@ fun AppSubPage(
     BackHandler(enabled = showBack && !LocalAppNavigationHandlesBack.current, onBack = onBack)
     val dark = isAppInDarkTheme()
     val density = LocalDensity.current
-    var compact by remember(listState) { mutableStateOf(false) }
-    val collapseThreshold = with(density) { 64.dp.toPx() }
-    val expandThreshold = with(density) { 12.dp.toPx() }
-    LaunchedEffect(listState, collapseThreshold, expandThreshold) {
-        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }.collect { (index, offset) ->
-            compact = if (compact) index > 0 || offset > expandThreshold
-                else index > 0 || offset > collapseThreshold
+    var targetProgress by remember(listState) { mutableFloatStateOf(0f) }
+    val collapseDistance = with(density) { 200.dp.toPx() }
+    LaunchedEffect(listState, collapseDistance) {
+        // 记录收拢区间内的条目尺寸，避免首条短内容滚出后进度突然跳到 100%。
+        val itemSizes = mutableMapOf<Int, Int>()
+        snapshotFlow {
+            Triple(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset,
+                listState.layoutInfo.visibleItemsInfo.map { it.index to it.size })
+        }.collect { (index, offset, visibleItems) ->
+            visibleItems.filter { it.first < 32 }.forEach { (i, size) -> itemSizes[i] = size }
+            var distance = offset.toFloat()
+            for (i in 0 until minOf(index, 32)) {
+                distance += (itemSizes[i] ?: collapseDistance.toInt()) + listState.layoutInfo.mainAxisItemSpacing
+                if (distance >= collapseDistance) break
+            }
+            if (index >= 32) distance = collapseDistance
+            targetProgress = (distance / collapseDistance).coerceIn(0f, 1f)
         }
     }
+    val followedProgress by animateFloatAsState(targetProgress,
+        animationSpec = MotionTokens.followSpring(),
+        label = "top-bar-follow-progress")
     var headerHeightPx by remember { mutableIntStateOf(0) }
     val topContentPadding = if (headerHeightPx > 0) with(density) { headerHeightPx.toDp() } + 4.dp
         else contentPadding.calculateTopPadding() + AppPageTopSpacing + 84.dp
@@ -330,7 +377,7 @@ fun AppSubPage(
         Box(contentWidth.onSizeChanged { headerHeightPx = it.height }
             .padding(start = AppPageHorizontalPadding, end = AppPageHorizontalPadding,
                 top = contentPadding.calculateTopPadding() + AppPageTopSpacing, bottom = 4.dp)) {
-            CompositionLocalProvider(LocalTopBarCompact provides compact) {
+            CompositionLocalProvider(LocalTopBarProgress provides followedProgress.coerceIn(0f, 1f)) {
             if (header != null) header() else AppSecondaryHeader(
                 title = title, subtitle = "", onBack = onBack, actions = actions, showBack = showBack,
             )
