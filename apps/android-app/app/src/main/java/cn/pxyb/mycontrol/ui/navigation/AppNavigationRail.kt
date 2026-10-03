@@ -31,7 +31,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CenterFocusWeak
+import cn.pxyb.mycontrol.ui.components.layout.AppScanIcon
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -210,7 +210,7 @@ fun AppNavigationRail(
                 )
 
                 RailActionButton(
-                    icon = Icons.Outlined.CenterFocusWeak,
+                    icon = AppScanIcon,
                     contentDescription = "扫码登录",
                     onClick = onOpenQrLogin,
                 )

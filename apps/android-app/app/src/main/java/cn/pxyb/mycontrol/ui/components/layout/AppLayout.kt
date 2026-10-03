@@ -58,6 +58,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
@@ -78,6 +82,19 @@ internal val AppPageHorizontalPadding = 16.dp
 internal val AppPageTopSpacing = 6.dp
 internal val AppPageBottomSpacing = 16.dp
 internal val AppPageActionSize = 36.dp
+/** 极简取景：圆头细线四角与扫描线，由按钮继承主题前景色。 */
+internal val AppScanIcon: ImageVector by lazy {
+    ImageVector.Builder("AppScan", 24.dp, 24.dp, 24f, 24f).apply {
+        path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+            strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round) {
+            moveTo(4f, 7f); lineTo(4f, 5f); quadTo(4f, 3f, 6f, 3f); lineTo(8f, 3f)
+            moveTo(16f, 3f); lineTo(18f, 3f); quadTo(20f, 3f, 20f, 5f); lineTo(20f, 7f)
+            moveTo(20f, 17f); lineTo(20f, 19f); quadTo(20f, 21f, 18f, 21f); lineTo(16f, 21f)
+            moveTo(8f, 21f); lineTo(6f, 21f); quadTo(4f, 21f, 4f, 19f); lineTo(4f, 17f)
+            moveTo(7f, 12f); lineTo(17f, 12f)
+        }
+    }.build()
+}
 /** 默认页面宽度；工作台、阅读和表单由外壳按用途覆盖。 */
 internal val AppTabletContentMaxWidth = 1120.dp
 

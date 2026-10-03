@@ -26,7 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.outlined.CenterFocusWeak
+import cn.pxyb.mycontrol.ui.components.layout.AppScanIcon
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.Email
@@ -424,7 +424,7 @@ private fun ModernProfileHeader(
                 icon = Icons.Outlined.Settings, contentDescription = "应用设置", onClick = onOpenSettings,
             )
             cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
-                icon = Icons.Outlined.CenterFocusWeak, contentDescription = "扫码登录", onClick = onOpenQrLogin,
+                icon = AppScanIcon, contentDescription = "扫码登录", onClick = onOpenQrLogin,
             )
         },
     )

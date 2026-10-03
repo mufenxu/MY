@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.CenterFocusWeak
+import cn.pxyb.mycontrol.ui.components.layout.AppScanIcon
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -61,7 +61,7 @@ internal fun ModernOverviewHeader(
                 icon = Icons.Outlined.Search, contentDescription = "全局搜索", onClick = onOpenSearch)
             AppNotificationButton(unreadCount = unreadCount, onClick = onOpenNotifications, shape = CircleShape)
             cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
-                icon = Icons.Outlined.CenterFocusWeak, contentDescription = "扫码登录", onClick = onOpenQrLogin)
+                icon = AppScanIcon, contentDescription = "扫码登录", onClick = onOpenQrLogin)
         },
     )
 }
