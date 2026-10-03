@@ -34,6 +34,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -43,6 +46,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -104,7 +109,7 @@ internal fun AppTopBarSurface(
         shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
         color = if (isAppInDarkTheme()) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface,
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
-        shadowElevation = 1.dp,
+        shadowElevation = 8.dp,
     ) {
         Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically, content = content)
@@ -203,7 +208,7 @@ fun AppHeaderIconButton(
     }
 }
 
-/** 固定顶部胶囊栏；页面说明与业务内容共用下方滚动区域。 */
+/** 胶囊叠放在滚动内容上；首屏避让通过滚动内容的内边距实现。 */
 @Composable
 fun AppSubPage(
     title: String,
@@ -216,29 +221,27 @@ fun AppSubPage(
     actions: (@Composable RowScope.() -> Unit)? = null,
     listState: LazyListState = rememberLazyListState(),
     showBack: Boolean = true,
-    body: (@Composable () -> Unit)? = null,
+    body: (@Composable (topContentPadding: Dp) -> Unit)? = null,
     header: (@Composable () -> Unit)? = null,
     content: LazyListScope.() -> Unit = {},
 ) {
     BackHandler(enabled = showBack && !LocalAppNavigationHandlesBack.current, onBack = onBack)
     val dark = isAppInDarkTheme()
-    Column(
+    val density = LocalDensity.current
+    var headerHeightPx by remember { mutableIntStateOf(0) }
+    val topContentPadding = if (headerHeightPx > 0) with(density) { headerHeightPx.toDp() } + 4.dp
+        else contentPadding.calculateTopPadding() + AppPageTopSpacing + 84.dp
+    Box(
         modifier = modifier.fillMaxSize().auroraBackdrop(dark),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        contentAlignment = Alignment.TopCenter,
     ) {
         val contentWidth = Modifier.widthIn(max = LocalAppContentMaxWidth.current).fillMaxWidth()
-        Box(contentWidth.padding(start = AppPageHorizontalPadding, end = AppPageHorizontalPadding,
-            top = contentPadding.calculateTopPadding() + AppPageTopSpacing, bottom = 4.dp)) {
-            if (header != null) header() else AppSecondaryHeader(
-                title = title, subtitle = "", onBack = onBack, actions = actions, showBack = showBack,
-            )
-        }
-        Box(Modifier.weight(1f).then(contentWidth)) {
+        Box(Modifier.fillMaxHeight().then(contentWidth)) {
             if (body != null) {
                 ProvideAppContentLayout(
                     modifier = Modifier.fillMaxSize()
                         .padding(bottom = contentPadding.calculateBottomPadding() + AppPageBottomSpacing),
-                ) { body() }
+                ) { body(topContentPadding) }
             } else PullToRefresh(
                 isRefreshing = refreshing,
                 onRefresh = onRefresh,
@@ -249,7 +252,7 @@ fun AppSubPage(
                     state = listState, modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(
                         start = AppPageHorizontalPadding, end = AppPageHorizontalPadding,
-                        top = 4.dp, bottom = contentPadding.calculateBottomPadding() + AppPageBottomSpacing),
+                        top = topContentPadding, bottom = contentPadding.calculateBottomPadding() + AppPageBottomSpacing),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     if (subtitle.isNotBlank()) item(key = "app-page-description", contentType = "description") {
@@ -259,6 +262,14 @@ fun AppSubPage(
                     content()
                 }
             }
+        }
+        // 最后绘制胶囊；外部留白透明，不占用下方列表的滚动视口。
+        Box(contentWidth.onSizeChanged { headerHeightPx = it.height }
+            .padding(start = AppPageHorizontalPadding, end = AppPageHorizontalPadding,
+                top = contentPadding.calculateTopPadding() + AppPageTopSpacing, bottom = 4.dp)) {
+            if (header != null) header() else AppSecondaryHeader(
+                title = title, subtitle = "", onBack = onBack, actions = actions, showBack = showBack,
+            )
         }
     }
 }

@@ -121,14 +121,15 @@ fun AssistantScreen(
         onBack = onBack,
         contentPadding = contentPadding,
         listState = listState,
-        body = {
+        body = { topContentPadding ->
             Row(Modifier.fillMaxSize()) {
                 ProvideAppContentLayout(Modifier.weight(1f).fillMaxHeight()) {
                     Column(Modifier.fillMaxSize()) {
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxWidth().weight(1f),
-                            contentPadding = PaddingValues(horizontal = AppPageHorizontalPadding, vertical = 12.dp),
+                            contentPadding = PaddingValues(start = AppPageHorizontalPadding, end = AppPageHorizontalPadding,
+                                top = topContentPadding + 12.dp, bottom = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             if (state.messages.isEmpty()) {
@@ -185,7 +186,7 @@ fun AssistantScreen(
                             .width(280.dp)
                             .fillMaxHeight()
                             .verticalScroll(rememberScrollState())
-                            .padding(start = 12.dp, end = AppPageHorizontalPadding),
+                            .padding(start = 12.dp, end = AppPageHorizontalPadding, top = topContentPadding),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Text("快捷指令", style = MaterialTheme.typography.titleMedium)

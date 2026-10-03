@@ -95,7 +95,7 @@ internal fun NotificationTwoPaneLayout(
         onBack = onBack,
         contentPadding = contentPadding,
         actions = actions,
-        body = {
+        body = { topContentPadding ->
             AppAdaptivePanes(
                 showDetail = true,
                 twoPane = true,
@@ -113,7 +113,7 @@ internal fun NotificationTwoPaneLayout(
                             contentPadding = PaddingValues(
                                 start = AppPageHorizontalPadding,
                                 end = AppPageHorizontalPadding,
-                                top = 4.dp,
+                                top = topContentPadding,
                             ),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             content = {
@@ -142,10 +142,11 @@ internal fun NotificationTwoPaneLayout(
                                     onArchive = onArchive,
                                     onSnooze = onSnooze,
                                     modifier = detailModifier,
+                                    topContentPadding = topContentPadding,
                                 )
                             }
                         } else {
-                            NotificationDetailPlaceholder(modifier = detailModifier)
+                            NotificationDetailPlaceholder(modifier = detailModifier.padding(top = topContentPadding))
                         }
                     }
                 },
@@ -200,6 +201,7 @@ private fun NotificationDetailPane(
     onArchive: (String) -> Unit,
     onSnooze: (String) -> Unit,
     modifier: Modifier = Modifier,
+    topContentPadding: androidx.compose.ui.unit.Dp = 0.dp,
 ) {
     val kind = alert.kind()
     val accent = notificationKindColors(kind)
@@ -215,8 +217,8 @@ private fun NotificationDetailPane(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(20.dp)
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, top = topContentPadding + 20.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Row(

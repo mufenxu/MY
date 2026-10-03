@@ -6,7 +6,7 @@
 - **推荐统一使用标准脚手架 `AppSubPage`**：
   新增二级页面一律使用共享脚手架 `AppSubPage`（位于 `ui/components/layout/AppLayout.kt`），它已自动集成 `BackHandler`、`AppSecondaryHeader`、缓存极光背景、大屏宽度限制（`AppTabletContentMaxWidth = 1120.dp`）、统一间距与可选下拉刷新。禁止再手写冗余的 `LazyColumn` 样板代码。
 - **统一滚动规则**：
-  所有主页面与二级页面仅固定顶部悬浮胶囊栏。副标题、统计、筛选、课表切换和快捷指令进入内容滚动区；聊天输入框等必要操作区保留原位。`AppSubPage` 不再提供 `pinHeader` 开关，下拉刷新只作用于内容区。
+  所有主页面与二级页面仅固定顶部悬浮胶囊栏，以叠层覆盖内容，周围留白透明；首屏避让使用滚动内容内边距，禁止固定整块顶部占位。自定义 `body` 使用脚手架传入的顶部内边距。副标题、统计、筛选、课表切换和快捷指令进入内容滚动区；聊天输入框等必要操作区保留原位。`AppSubPage` 不再提供 `pinHeader` 开关，下拉刷新只作用于内容区。
 - **路由与返回约束**：
   新增二级路由必须在 `parentTabForSubScreen` 登记唯一父页面；页头返回和系统返回统一调用认证导航外壳的回退方法，页面内部不得混用状态关闭与 `NavController.popBackStack()`。
 
