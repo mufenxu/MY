@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -60,6 +61,7 @@ import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
+import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
@@ -606,17 +608,7 @@ private fun AndroidReleaseCard(
 
 @Composable
 private fun AndroidReleaseSectionTitle(title: String, detail: String) {
-    Column(modifier = Modifier.padding(top = 4.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-        )
-        Text(
-            text = detail,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+    AppSectionHeader(title = title, subtitle = detail)
 }
 
 // 应用版本管理预加载骨架：按真实区块同构占位，叠加微光扫过与呼吸脉冲，数据到达后自然渲染
@@ -696,12 +688,17 @@ private fun ReleaseSkeletonBlock(
 
 @Composable
 private fun ReleaseSkeletonSectionTitle(pulse: Float) {
-    Column(
-        modifier = Modifier.padding(top = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+    Row(
+        modifier = Modifier.fillMaxWidth()
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .heightIn(min = 42.dp)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         ReleaseSkeletonBlock(Modifier.width(88.dp).height(16.dp), pulse, corner = 8.dp)
-        ReleaseSkeletonBlock(Modifier.width(178.dp).height(10.dp), pulse)
+        ReleaseSkeletonBlock(Modifier.width(120.dp).height(12.dp), pulse)
     }
 }
 

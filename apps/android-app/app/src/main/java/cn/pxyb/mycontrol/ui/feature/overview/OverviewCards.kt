@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CloudOff
+import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -120,7 +121,7 @@ internal fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (Workspac
                 }
             }
         }
-        OverviewSectionTitle("待办", trailing = {
+        OverviewSectionTitle("待办", icon = Icons.Outlined.Checklist, trailing = {
             HomeTextAction("查看全部", onClick = { onOpenWorkspace(WorkspaceDestination.Todos) })
         })
         AppPanel(onClick = { onOpenWorkspace(WorkspaceDestination.Todos) }) {

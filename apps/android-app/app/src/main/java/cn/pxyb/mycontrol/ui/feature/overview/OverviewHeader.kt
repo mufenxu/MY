@@ -26,8 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -66,24 +64,23 @@ internal fun ModernOverviewHeader(
     )
 }
 
-/** 分组标题：灵动微岛毛玻璃浮标 (Dynamic Floating Island Pill) */
 @Composable
 internal fun OverviewSectionTitle(
     title: String,
     subtitle: String = "",
     dotColor: Color = MaterialTheme.colorScheme.primary,
     tag: String? = null,
+    icon: ImageVector? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, Modifier.weight(1f).semantics { heading() },
-            style = MaterialTheme.typography.titleLarge)
-        if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        if (!tag.isNullOrBlank()) Text(tag, style = MaterialTheme.typography.labelSmall, color = dotColor)
-        trailing?.invoke()
-    }
+    AppSectionHeader(
+        title = title,
+        subtitle = subtitle,
+        accent = dotColor,
+        tag = tag,
+        icon = icon,
+        trailing = trailing,
+    )
 }
 
 @Composable

@@ -21,10 +21,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.CloudDone
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -177,7 +179,7 @@ fun OverviewScreen(
 
     val quickActions: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            OverviewSectionTitle("我的常用", trailing = {
+            OverviewSectionTitle("我的常用", icon = Icons.Outlined.StarOutline, trailing = {
                 if (quickActionRows.size > 1) HomeTextAction(if (showAllQuickActions) "收起" else "展开") { showAllQuickActions = !showAllQuickActions }
                 HomeTextAction("编辑") { customizingQuickActions = true }
             })
@@ -249,7 +251,7 @@ fun OverviewScreen(
             }
             item(key = "status-summary") { statusSummary() }
             if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {
-                item(key = "applications-title") { OverviewSectionTitle("接入应用", "已接入的应用快捷访问") }
+                item(key = "applications-title") { OverviewSectionTitle("接入应用", "已接入的应用快捷访问", icon = Icons.Outlined.Apps) }
                 externalApplicationOpenError?.let { message ->
                     item(key = "applications-error") { AppFeedbackBanner(message, error = true) }
                 }

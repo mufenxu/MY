@@ -50,6 +50,7 @@ import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogSize
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
+import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.layout.AppAdaptivePanes
 import cn.pxyb.mycontrol.ui.components.layout.AppListDetailMinWidth
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
@@ -198,10 +199,7 @@ internal fun AppSettingsDialog(
 
 @Composable
 private fun SettingsSectionTitle(icon: ImageVector, title: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-    }
+    AppSectionHeader(title = title, icon = icon)
 }
 
 @Composable
