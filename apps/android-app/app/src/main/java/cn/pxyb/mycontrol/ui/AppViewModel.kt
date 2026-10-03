@@ -940,7 +940,7 @@ class AppViewModel(
             }
         }
         persistNavigationState()
-        if (autoRefresh) {
+        if (autoRefresh && !(cn.pxyb.mycontrol.BuildConfig.DEBUG && mutableState.value.user?.id == "admin-demo")) {
             refreshDestination(
                 tab = tab,
                 accountManagementOpen = accountManagementOpen,
@@ -2211,6 +2211,8 @@ class AppViewModel(
 
     private fun forceReauthentication(message: String) {
         val current = mutableState.value
+        // 评审数据没有真实会话：保留页面的错误/空态，供离线视觉比较。
+        if (cn.pxyb.mycontrol.BuildConfig.DEBUG && current.user?.id == "admin-demo") return
         stopOperationalPolling()
         cancelRefreshes()
         clearRefreshCache()
@@ -2405,6 +2407,111 @@ class AppViewModel(
 
     fun clearRegistryImageFeedback() = registryImages.clearFeedback()
 
+    fun enterUiReviewMode(targetTab: MainTab = MainTab.Overview) {
+        if (!cn.pxyb.mycontrol.BuildConfig.DEBUG) return
+        stopOperationalPolling()
+        cancelRefreshes()
+        val sampleUser = cn.pxyb.mycontrol.data.PlatformUser(
+            username = "mufenxu",
+            role = "超级管理员",
+            totpEnabled = true,
+            passkeyCount = 2,
+            id = "admin-demo",
+        )
+        val sampleServices = listOf(
+            cn.pxyb.mycontrol.data.ServiceInfo("platform-api", "platform-api 统一网关", "gateway", "healthy", 9L, 200, null),
+            cn.pxyb.mycontrol.data.ServiceInfo("core-api", "core-api 综合业务", "business", "healthy", 14L, 200, null),
+            cn.pxyb.mycontrol.data.ServiceInfo("campus-service", "campus-service 校园连接器", "connector", "healthy", 21L, 200, null),
+            cn.pxyb.mycontrol.data.ServiceInfo("iot-service", "iot-service 物联网服务", "iot", "healthy", 6L, 200, null),
+            cn.pxyb.mycontrol.data.ServiceInfo("notification-service", "notification-service 通知中心", "notify", "healthy", 11L, 200, null),
+            cn.pxyb.mycontrol.data.ServiceInfo("exam-api", "exam-api 考试业务", "exam", "healthy", 12L, 200, null),
+        )
+        val sampleOverview = cn.pxyb.mycontrol.data.OverviewData(
+            services = sampleServices,
+            incidents = emptyList(),
+            audits = emptyList(),
+            refreshedAt = "刚刚",
+        )
+        val now = java.time.LocalDate.now()
+        val dayOfWeek = now.dayOfWeek.value
+        val dayName = "周" + "一二三四五六日"[dayOfWeek - 1]
+        val sampleCourse = cn.pxyb.mycontrol.data.CampusCourse(
+            id = "course-1",
+            courseCode = "CS301",
+            courseName = "计算机网络原理",
+            teacher = "李教授",
+            weekText = "第1-16周",
+            weeks = (1..16).toList(),
+            day = dayOfWeek,
+            dayName = dayName,
+            sectionText = "1-2节",
+            startSection = 1,
+            endSection = 2,
+            timeRange = "08:00 - 09:35",
+            location = "知行楼 402",
+        )
+        val sampleTimetable = cn.pxyb.mycontrol.data.CampusTimetable(
+            currentCalendarText = "第5周 $dayName",
+            termText = "2026-2027学年 秋季学期",
+            courses = listOf(sampleCourse),
+        )
+        val sampleTodos = cn.pxyb.mycontrol.data.TodoSnapshot(
+            tasks = listOf(
+                cn.pxyb.mycontrol.data.TodoTask("todo-1", "完成操作系统实验报告", false, priority = "high"),
+                cn.pxyb.mycontrol.data.TodoTask("todo-2", "预订周四图书馆研讨间", false),
+                cn.pxyb.mycontrol.data.TodoTask("todo-3", "提交设备巡检日志", false),
+            ),
+        )
+        val sampleExternalApps = listOf(
+            cn.pxyb.mycontrol.data.ExternalApplication("core-admin", "sso", "综合业务管理台", "综合业务与用户管理系统", "https://core-admin.pxyb.cn", null, "admin", "browser", true, true, cn.pxyb.mycontrol.data.ExternalApplicationHealth("healthy", 200, 12L, "刚刚")),
+            cn.pxyb.mycontrol.data.ExternalApplication("exam-admin", "sso", "考试系统管理台", "考试中心与题库管理系统", "https://exam-admin.pxyb.cn", null, "admin", "browser", true, true, cn.pxyb.mycontrol.data.ExternalApplicationHealth("healthy", 200, 15L, "刚刚")),
+        )
+        val sampleSecurity = cn.pxyb.mycontrol.data.SecurityData(
+            sessions = emptyList(),
+            totpEnabled = true,
+            passkeyCount = 2,
+            recoveryCodesRemaining = 8,
+            sessionTtlHours = 72,
+            sessionIdleMinutes = 15,
+        )
+        val sampleDevices = listOf(
+            cn.pxyb.mycontrol.data.DeviceInfo("dev-1", "主办公区温控器", true, 22.4, 55.0, System.currentTimeMillis()),
+            cn.pxyb.mycontrol.data.DeviceInfo("dev-2", "智能水控阀门", true, null, null, System.currentTimeMillis()),
+            cn.pxyb.mycontrol.data.DeviceInfo("dev-3", "机房排风系统", true, 24.1, 48.0, System.currentTimeMillis()),
+            cn.pxyb.mycontrol.data.DeviceInfo("dev-4", "实验室智能电闸", true, null, null, System.currentTimeMillis()),
+        )
+        val sampleIot = cn.pxyb.mycontrol.data.IotData(
+            mqttConnected = true,
+            deviceOnline = true,
+            connectionState = "connected",
+            messagesReceived = 1420L,
+            devices = sampleDevices,
+            scenes = emptyList(),
+            rules = emptyList(),
+            runs = emptyList(),
+            insights = emptyList(),
+        )
+        mutableState.update {
+            it.copy(
+                booting = false,
+                locked = false,
+                user = sampleUser,
+                error = null,
+                message = null,
+                sectionLoadStates = emptyMap(),
+                selectedTab = targetTab,
+                workspaceDestination = null,
+                overview = sampleOverview,
+                campusTimetable = sampleTimetable,
+                todoSnapshot = sampleTodos,
+                externalApplications = sampleExternalApps,
+                security = sampleSecurity,
+                iot = sampleIot,
+                cacheStorageInfo = cn.pxyb.mycontrol.ui.feature.profile.CacheStorageInfo(snapshotSizeBytes = 14_800_000L, totalFormatted = "14.8 MB"),
+                appLockEnabled = false,
+            )
+        }
+    }
 }
 
 internal fun formatBytes(bytes: Long): String = when {

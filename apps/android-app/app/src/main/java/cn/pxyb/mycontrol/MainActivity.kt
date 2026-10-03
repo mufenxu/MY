@@ -75,7 +75,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val appPreferences = remember { AppPreferences(this) }
             val themePreference = remember { mutableStateOf(appPreferences.themePreference()) }
-            val useDarkTheme = when (themePreference.value) {
+            val useDarkTheme = if (BuildConfig.DEBUG && intent.hasExtra("design_scheme")) intent.getBooleanExtra("review_dark", false) else when (themePreference.value) {
                 AppThemePreference.System -> androidx.compose.foundation.isSystemInDarkTheme()
                 AppThemePreference.Light -> false
                 AppThemePreference.Dark -> true
@@ -114,7 +114,7 @@ class MainActivity : ComponentActivity() {
                         appPreferences.setThemePreference(preference)
                         themePreference.value = preference
                     },
-                    showInitialSetup = appPreferences.shouldShowInitialSetup(),
+                    showInitialSetup = appPreferences.shouldShowInitialSetup() && !(BuildConfig.DEBUG && intent.getBooleanExtra("preview_mode", false)),
                     onInitialSetupComplete = appPreferences::completeInitialSetup,
                 )
             }
@@ -264,6 +264,16 @@ class MainActivity : ComponentActivity() {
 
     private fun handleOpenIntent(intent: Intent?) {
         if (intent == null) return
+        if (BuildConfig.DEBUG && intent.getBooleanExtra("preview_mode", false)) {
+            val target = when (intent.getStringExtra("target_tab")?.lowercase()) {
+                "operations", "status" -> cn.pxyb.mycontrol.ui.navigation.MainTab.Operations
+                "tools", "devices" -> cn.pxyb.mycontrol.ui.navigation.MainTab.Tools
+                "profile", "mine" -> cn.pxyb.mycontrol.ui.navigation.MainTab.Profile
+                else -> cn.pxyb.mycontrol.ui.navigation.MainTab.Overview
+            }
+            appViewModel.enterUiReviewMode(target)
+            return
+        }
         if (intent.action == NfcAdapter.ACTION_TAG_DISCOVERED ||
             intent.action == NfcAdapter.ACTION_TECH_DISCOVERED ||
             intent.action == NfcAdapter.ACTION_NDEF_DISCOVERED

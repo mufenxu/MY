@@ -94,7 +94,12 @@ fun OverviewScreen(
     val isTablet = useTwoPaneLayout()
     val width = appContentWidth()
     val quickActionWidth = if (isTablet) (width - AppPageHorizontalPadding * 2 - 12.dp) * 0.42f else width
-    val quickActionColumns = quickActionColumnCount(quickActionWidth, LocalDensity.current.fontScale)
+    val review = cn.pxyb.mycontrol.ui.theme.LocalDesignReview.current
+    val quickActionColumns = when (review) {
+        cn.pxyb.mycontrol.ui.theme.DesignReview.Telegram -> 1
+        cn.pxyb.mycontrol.ui.theme.DesignReview.Quiet -> 2
+        else -> quickActionColumnCount(quickActionWidth, LocalDensity.current.fontScale)
+    }
     val quickActionRows = remember(state.homeQuickActionOrder, state.hiddenHomeQuickActions, quickActionColumns) {
         state.homeQuickActionOrder.filterNot { it == HomeQuickAction.Today || it in state.hiddenHomeQuickActions }.chunked(quickActionColumns)
     }
@@ -186,7 +191,13 @@ fun OverviewScreen(
                                     onOpenAccountManagement,
                                     onOpenMediaDownload,
                                 )
-                                QuickAction(spec.icon, spec.label, spec.accent, spec.accentPale, Modifier.weight(1f), spec.onClick)
+                                if (review == cn.pxyb.mycontrol.ui.theme.DesignReview.Telegram || review == cn.pxyb.mycontrol.ui.theme.DesignReview.Quiet) {
+                                    AppActionRow(title = spec.label, icon = spec.icon,
+                                        modifier = Modifier.weight(1f), onClick = spec.onClick,
+                                        trailingContent = null)
+                                } else {
+                                    QuickAction(spec.icon, spec.label, spec.accent, spec.accentPale, Modifier.weight(1f), spec.onClick)
+                                }
                             }
                             repeat(quickActionColumns - row.size) { Spacer(Modifier.weight(1f)) }
                         }

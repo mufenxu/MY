@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.LoginBotChallengeDialog
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
+import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppTabletContentMaxWidth
 import cn.pxyb.mycontrol.ui.components.layout.LocalAdaptiveWindow
 import cn.pxyb.mycontrol.ui.components.layout.WindowHeightSizeClass
@@ -78,6 +79,7 @@ internal fun LoginScreen(
     onBotChallengeComplete: (String) -> Unit,
     onRecoverAccount: (String, String) -> Unit,
     onRecoveryCodesSaved: () -> Unit,
+    onEnterReviewMode: (() -> Unit)? = null,
 ) {
     var username by remember(state.suggestedUsername) { mutableStateOf(state.suggestedUsername) }
     var password by remember { mutableStateOf("") }
@@ -246,6 +248,14 @@ internal fun LoginScreen(
                                         onStartDeviceLogin = onStartDeviceLogin,
                                         onCancelDeviceLogin = onCancelDeviceLogin,
                                     )
+                                    if (onEnterReviewMode != null) {
+                                        Spacer(Modifier.height(14.dp))
+                                        AppSecondaryButton(
+                                            text = "🎨 进入 UI 审查与全模块预览",
+                                            onClick = onEnterReviewMode,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
                                 } else {
                                     state.loginEnrollment?.let { LoginTotpEnrollment(it) }
                                     if (state.recoveryCodeAllowed && state.loginEnrollment == null) {
@@ -419,6 +429,14 @@ internal fun LoginScreen(
                                         onStartDeviceLogin = onStartDeviceLogin,
                                         onCancelDeviceLogin = onCancelDeviceLogin,
                                     )
+                                    if (onEnterReviewMode != null) {
+                                        Spacer(Modifier.height(14.dp))
+                                        AppSecondaryButton(
+                                            text = "🎨 进入 UI 审查与全模块预览",
+                                            onClick = onEnterReviewMode,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
                                 } else {
                                     state.loginEnrollment?.let { LoginTotpEnrollment(it) }
                                     if (state.recoveryCodeAllowed && state.loginEnrollment == null) {

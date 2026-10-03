@@ -26,3 +26,21 @@ val AppTypography = Typography(
     labelMedium = TextStyle(fontFamily = Sans, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 17.sp),
     labelSmall = TextStyle(fontFamily = Sans, fontWeight = FontWeight.Medium, fontSize = 11.sp, lineHeight = 16.sp),
 )
+
+internal fun reviewTypography(review: DesignReview): Typography = when (review) {
+    DesignReview.Original -> AppTypography
+    DesignReview.Telegram -> AppTypography.copy(
+        headlineMedium = AppTypography.headlineMedium.copy(fontSize = 21.sp, lineHeight = 28.sp),
+        headlineLarge = AppTypography.headlineLarge.copy(fontSize = 24.sp, lineHeight = 32.sp),
+        titleLarge = AppTypography.titleLarge.copy(fontWeight = FontWeight.Medium),
+    )
+    DesignReview.Material -> AppTypography.copy(
+        headlineMedium = AppTypography.headlineMedium.copy(fontSize = 28.sp, lineHeight = 36.sp, fontWeight = FontWeight.Normal),
+        headlineLarge = AppTypography.headlineLarge.copy(fontSize = 32.sp, lineHeight = 40.sp, fontWeight = FontWeight.Normal),
+    )
+    DesignReview.Quiet -> AppTypography.copy(
+        headlineMedium = AppTypography.headlineMedium.copy(fontSize = 30.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold),
+        headlineLarge = AppTypography.headlineLarge.copy(fontSize = 34.sp, lineHeight = 42.sp, fontWeight = FontWeight.Bold),
+        titleLarge = AppTypography.titleLarge.copy(fontSize = 20.sp, lineHeight = 28.sp),
+    )
+}

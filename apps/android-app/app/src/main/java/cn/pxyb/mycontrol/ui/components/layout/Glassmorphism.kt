@@ -42,12 +42,13 @@ data class GlassPalette(
 
 @Composable
 fun rememberGlassPalette(radius: Dp = 20.dp, baseAlpha: Float? = null): GlassPalette {
+    val review = cn.pxyb.mycontrol.ui.theme.LocalDesignReview.current
     val dark = isAppInDarkTheme()
     val surface = MaterialTheme.colorScheme.surface
-    return remember(dark, surface, radius, baseAlpha) {
-        val highlightColor = if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.2f)
+    return remember(dark, surface, radius, baseAlpha, review) {
+        val highlightColor = if (review != cn.pxyb.mycontrol.ui.theme.DesignReview.Original) Color.Transparent else if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.2f)
         GlassPalette(
-            base = surface.copy(alpha = baseAlpha ?: if (dark) 0.76f else 0.72f),
+            base = if (review != cn.pxyb.mycontrol.ui.theme.DesignReview.Original) surface else surface.copy(alpha = baseAlpha ?: if (dark) 0.76f else 0.72f),
             highlight = Brush.verticalGradient(
                 colorStops = arrayOf(
                     0.0f to highlightColor,
@@ -64,6 +65,7 @@ fun rememberGlassPalette(radius: Dp = 20.dp, baseAlpha: Float? = null): GlassPal
 /** 卡片底色：半透明磨砂白，让极光背景透出一层淡彩（与白色纯卡形成统一质感） */
 @Composable
 fun glassCardColor(): Color {
+    if (cn.pxyb.mycontrol.ui.theme.LocalDesignReview.current != cn.pxyb.mycontrol.ui.theme.DesignReview.Original) return MaterialTheme.colorScheme.surface
     val dark = isAppInDarkTheme()
     return MaterialTheme.colorScheme.surface.copy(alpha = if (dark) 0.74f else 0.68f)
 }
@@ -75,7 +77,13 @@ fun Modifier.glassPanel(palette: GlassPalette, borderColor: Color = palette.bord
     .border(1.dp, borderColor, palette.shape)
 
 /** 页面底层极光光斑背景（固定不随内容滚动），为玻璃面板提供可透出的色彩。已采用 drawWithCache 缓存渐变着色器避免滚动掉帧 */
-fun Modifier.auroraBackdrop(dark: Boolean): Modifier = this.drawWithCache {
+fun Modifier.auroraBackdrop(dark: Boolean): Modifier = composed {
+    if (cn.pxyb.mycontrol.ui.theme.LocalDesignReview.current != cn.pxyb.mycontrol.ui.theme.DesignReview.Original) {
+        this.background(MaterialTheme.colorScheme.background)
+    } else this.originalAuroraBackdrop(dark)
+}
+
+private fun Modifier.originalAuroraBackdrop(dark: Boolean): Modifier = this.drawWithCache {
     val blobAlpha = if (dark) 0.34f else 0.40f
     val c1 = if (dark) Color(0xFF3B82F6) else Color(0xFF5B9BF8)
     val c2 = if (dark) Color(0xFF8B5CF6) else Color(0xFF9B8DF7)

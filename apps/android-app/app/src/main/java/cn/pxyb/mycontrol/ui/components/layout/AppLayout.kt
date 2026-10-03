@@ -102,7 +102,11 @@ fun AppSecondaryHeader(
     actions: (@Composable RowScope.() -> Unit)? = null,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().padding(vertical = 12.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = when (cn.pxyb.mycontrol.ui.theme.LocalDesignReview.current) {
+            cn.pxyb.mycontrol.ui.theme.DesignReview.Telegram -> 8.dp
+            cn.pxyb.mycontrol.ui.theme.DesignReview.Quiet -> 20.dp
+            else -> 12.dp
+        }),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

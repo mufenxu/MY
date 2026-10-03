@@ -29,6 +29,7 @@ fun AppPanel(
     onClick: (() -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
+    val review = cn.pxyb.mycontrol.ui.theme.LocalDesignReview.current
     val dark = isAppInDarkTheme()
     val interactionSource = remember { MutableInteractionSource() }
     Card(
@@ -52,12 +53,12 @@ fun AppPanel(
             .fillMaxWidth(),
         shape = AppCardShape,
         colors = CardDefaults.cardColors(containerColor = glassCardColor()),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = if (review == cn.pxyb.mycontrol.ui.theme.DesignReview.Original) BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant) else null,
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         // 顶部高光 + Column 容器：保持调用方多子项纵向排列的既有约定。
         Column(
-            modifier = Modifier.background(
+            modifier = if (review != cn.pxyb.mycontrol.ui.theme.DesignReview.Original) Modifier else Modifier.background(
                 Brush.verticalGradient(
                     colorStops = arrayOf(
                         0.0f to Color.White.copy(alpha = if (dark) 0.10f else 0.34f),

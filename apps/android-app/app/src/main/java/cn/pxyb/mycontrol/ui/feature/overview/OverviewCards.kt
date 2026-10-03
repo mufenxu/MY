@@ -16,7 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CloudOff
-import androidx.compose.material.icons.outlined.FactCheck
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,9 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.assistant.buildPersonalAssistantSnapshot
-import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
-import cn.pxyb.mycontrol.ui.components.display.AppDivider
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.navigation.WorkspaceDestination
@@ -65,47 +63,48 @@ internal fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (Workspac
         state.todoSnapshot.tasks.filterNot { it.completed }.sortedBy { it.dueAt ?: Long.MAX_VALUE }
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        OverviewSectionTitle("今天的安排")
+        OverviewSectionTitle("今天的安排", tag = "${pendingTodos.size} 项待办")
         AppPanel {
-            Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                courseAction?.let {
-                    Text(
-                        "下一项课程安排",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Text(courseAction?.title ?: if (state.timetable == null) "查看今日课程" else "今天暂无后续课程",
-                    style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
-                Text(courseAction?.detail ?: if (state.timetable == null) "课表尚未加载，打开日程查看或刷新。" else "可以安排自主学习，或处理个人待办。",
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                AppSecondaryButton(
-                    text = "查看日程",
-                    onClick = { onOpenWorkspace(WorkspaceDestination.Today) },
-                    modifier = Modifier.align(Alignment.End),
-                    icon = Icons.Outlined.CalendarMonth,
-                )
-            }
-            AppDivider()
             AppActionRow(
-                title = "个人待办 · ${pendingTodos.size} 项未完成",
-                subtitle = pendingTodos.firstOrNull()?.title ?: "记录下一件要完成的事",
-                icon = Icons.Outlined.FactCheck,
-                onClick = { onOpenWorkspace(WorkspaceDestination.Todos) },
+                title = courseAction?.title ?: if (state.timetable == null) "查看今日课程" else "今天暂无后续课程",
+                subtitle = courseAction?.detail ?: if (state.timetable == null) "打开日程加载课表" else "打开日程，安排接下来的时间",
+                icon = Icons.Outlined.CalendarMonth,
+                onClick = { onOpenWorkspace(WorkspaceDestination.Today) },
             )
-            Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AppSecondaryButton(
-                    text = "本学期课表",
-                    onClick = { onOpenWorkspace(WorkspaceDestination.Timetable) },
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Outlined.CalendarMonth,
-                )
-                AppSecondaryButton(
-                    text = "校园服务",
-                    onClick = { onOpenWorkspace(WorkspaceDestination.Campus) },
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Outlined.Apps,
-                )
+        }
+        AppPanel(onClick = { onOpenWorkspace(WorkspaceDestination.Todos) }) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("待办清单", modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("查看全部", style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary)
+                }
+                if (pendingTodos.isEmpty()) {
+                    Text("暂无待办，记录下一件要完成的事", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    pendingTodos.take(2).forEach { todo ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+                            Icon(Icons.Outlined.RadioButtonUnchecked, contentDescription = null,
+                                modifier = Modifier.padding(top = 2.dp).size(18.dp),
+                                tint = MaterialTheme.colorScheme.outline)
+                            Text(todo.title, style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface, maxLines = 2,
+                                overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            AppPanel(modifier = Modifier.weight(1f)) {
+                AppActionRow(title = "本学期课表", icon = Icons.Outlined.CalendarMonth,
+                    trailingContent = null, onClick = { onOpenWorkspace(WorkspaceDestination.Timetable) })
+            }
+            AppPanel(modifier = Modifier.weight(1f)) {
+                AppActionRow(title = "校园服务", icon = Icons.Outlined.Apps,
+                    trailingContent = null, onClick = { onOpenWorkspace(WorkspaceDestination.Campus) })
             }
         }
     }

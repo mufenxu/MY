@@ -217,6 +217,17 @@ internal fun AuthenticatedShell(
         }
     }
 
+    val reviewActivity = LocalContext.current as? android.app.Activity
+    LaunchedEffect(Unit) {
+        if (cn.pxyb.mycontrol.BuildConfig.DEBUG && reviewActivity?.intent?.getBooleanExtra("preview_mode", false) == true) {
+            val route = reviewActivity.intent.getStringExtra("review_route")
+            if (route != null && parentTabForSubScreen(route, null) != null) {
+                delay(600)
+                navigateToSubScreen(route)
+            }
+        }
+    }
+
     val sharedImage by viewModel.sharedImage.collectAsStateWithLifecycle()
     LaunchedEffect(sharedImage) {
         sharedImage?.let { uri ->
