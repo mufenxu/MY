@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui
 
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -63,7 +64,7 @@ fun MyControlApp(
     var startupUpdateDialogVisible by rememberSaveable { mutableStateOf(false) }
     val state by viewModel.entryState.collectAsStateWithLifecycle()
     val profileState by viewModel.profileState.collectAsStateWithLifecycle()
-    val reviewIntent = (androidx.compose.ui.platform.LocalContext.current as? android.app.Activity)?.intent
+    val reviewIntent = LocalActivity.current?.intent
     LaunchedEffect(state.booting) {
         if (BuildConfig.DEBUG && !state.booting && reviewIntent?.getBooleanExtra("preview_mode", false) == true) {
             val tab = cn.pxyb.mycontrol.ui.navigation.MainTab.entries.firstOrNull {

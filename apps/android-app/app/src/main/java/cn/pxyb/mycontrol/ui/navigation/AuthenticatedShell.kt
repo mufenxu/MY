@@ -2,6 +2,7 @@ package cn.pxyb.mycontrol.ui.navigation
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.activity.result.contract.ActivityResultContracts
@@ -215,7 +216,7 @@ internal fun AuthenticatedShell(
         }
     }
 
-    val reviewActivity = LocalContext.current as? android.app.Activity
+    val reviewActivity = LocalActivity.current
     LaunchedEffect(Unit) {
         if (cn.pxyb.mycontrol.BuildConfig.DEBUG && reviewActivity?.intent?.getBooleanExtra("preview_mode", false) == true) {
             val route = reviewActivity.intent.getStringExtra("review_route")
