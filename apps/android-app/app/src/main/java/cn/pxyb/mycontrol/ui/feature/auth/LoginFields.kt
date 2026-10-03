@@ -39,6 +39,7 @@ import androidx.compose.ui.autofill.AutofillNode
 import androidx.compose.ui.autofill.AutofillType
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -87,22 +88,20 @@ internal fun LoginTextField(
     val containerBgColor = if (isFocused) {
         MaterialTheme.colorScheme.surfaceContainerHigh
     } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f)
+        MaterialTheme.colorScheme.surfaceVariant
     }
     val iconColor = if (isFocused) primaryColor else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f)
     val borderColor = if (isFocused) {
         primaryColor
     } else {
-        MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
+        Color.Transparent
     }
     val fieldShape = RoundedCornerShape(16.dp)
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
             label,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontWeight = FontWeight.SemiBold,
-            ),
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
             modifier = Modifier.padding(bottom = 7.dp, start = 2.dp)
         )
@@ -114,7 +113,7 @@ internal fun LoginTextField(
             shape = fieldShape,
             color = containerBgColor,
             border = BorderStroke(if (isFocused) 1.5.dp else 1.dp, borderColor),
-            shadowElevation = if (isFocused) 3.dp else 0.dp,
+            shadowElevation = 0.dp,
         ) {
             Row(
                 modifier = Modifier

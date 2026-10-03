@@ -227,24 +227,14 @@ internal fun LoginScreen(
                                             modifier = Modifier.fillMaxWidth(),
                                         )
                                     }
-                                    if (state.androidPasskeySupported) {
-                                        Spacer(Modifier.height(20.dp))
-                                        PasskeyLoginMethod(
-                                            enabled = !state.loginBusy && (!state.botChallengeRequired || state.botChallengeReady),
-                                            onClick = {
-                                                focusManager.clearFocus()
-                                                onPasskeyLogin(username)
-                                            },
-                                        )
-                                    }
-                                    AppSecondaryButton(
-                                        text = "使用账号恢复凭据",
-                                        onClick = { showRecovery = true },
-                                        enabled = !state.loginBusy,
-                                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                                    )
-                                    DeviceLoginSection(
+                                    Spacer(Modifier.height(24.dp))
+                                    LoginAlternativeMethods(
                                         state = state,
+                                        onPasskeyLogin = {
+                                            focusManager.clearFocus()
+                                            onPasskeyLogin(username)
+                                        },
+                                        onRecoverAccount = { showRecovery = true },
                                         onStartDeviceLogin = onStartDeviceLogin,
                                         onCancelDeviceLogin = onCancelDeviceLogin,
                                     )
@@ -321,7 +311,7 @@ internal fun LoginScreen(
                     ) {
                         LoginHeader()
 
-                        Spacer(Modifier.height(26.dp))
+                        Spacer(Modifier.height(28.dp))
 
                         Surface(
                             modifier = Modifier
@@ -329,11 +319,10 @@ internal fun LoginScreen(
                                 .fillMaxWidth(),
                             shape = AppCardShape,
                             color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
-                            shadowElevation = 2.dp,
+                            shadowElevation = 0.dp,
                         ) {
                             Column(
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp)
+                                modifier = Modifier.fillMaxWidth()
                             ) {
                                 if (!state.message.isNullOrBlank()) {
                                     AppFeedbackBanner(state.message, type = AppFeedbackType.Info, modifier = Modifier.padding(bottom = 14.dp))
@@ -400,24 +389,14 @@ internal fun LoginScreen(
                                             modifier = Modifier.fillMaxWidth(),
                                         )
                                     }
-                                    if (state.androidPasskeySupported) {
-                                        Spacer(Modifier.height(20.dp))
-                                        PasskeyLoginMethod(
-                                            enabled = !state.loginBusy && (!state.botChallengeRequired || state.botChallengeReady),
-                                            onClick = {
-                                                focusManager.clearFocus()
-                                                onPasskeyLogin(username)
-                                            },
-                                        )
-                                    }
-                                    AppSecondaryButton(
-                                        text = "使用账号恢复凭据",
-                                        onClick = { showRecovery = true },
-                                        enabled = !state.loginBusy,
-                                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                                    )
-                                    DeviceLoginSection(
+                                    Spacer(Modifier.height(24.dp))
+                                    LoginAlternativeMethods(
                                         state = state,
+                                        onPasskeyLogin = {
+                                            focusManager.clearFocus()
+                                            onPasskeyLogin(username)
+                                        },
+                                        onRecoverAccount = { showRecovery = true },
                                         onStartDeviceLogin = onStartDeviceLogin,
                                         onCancelDeviceLogin = onCancelDeviceLogin,
                                     )
