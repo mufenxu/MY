@@ -1,6 +1,5 @@
 package cn.pxyb.mycontrol.ui.feature.overview
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 
@@ -220,7 +219,7 @@ fun OverviewScreen(
     ) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
+            modifier = Modifier.fillMaxSize().auroraBackdrop(dark),
             contentPadding = appPageContentPadding(contentPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
