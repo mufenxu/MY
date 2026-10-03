@@ -3,11 +3,18 @@ package cn.pxyb.mycontrol.ui.components.layout
 import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -26,6 +33,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,6 +42,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -59,6 +72,7 @@ import cn.pxyb.mycontrol.ui.theme.AppHaptics
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 internal val LocalAppNavigationHandlesBack = staticCompositionLocalOf { false }
+private val LocalTopBarCompact = staticCompositionLocalOf { false }
 
 internal val AppPageHorizontalPadding = 16.dp
 internal val AppPageTopSpacing = 6.dp
@@ -102,16 +116,21 @@ internal fun appPageContentPadding(
 @Composable
 internal fun AppTopBarSurface(
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
     content: @Composable RowScope.() -> Unit,
 ) {
+    val surfaceHeight by animateDpAsState(if (compact) 44.dp else 56.dp,
+        MotionTokens.softSpring(), label = "top-bar-height")
+    Box(modifier.fillMaxWidth().heightIn(min = 56.dp), contentAlignment = Alignment.Center) {
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().height(surfaceHeight.coerceIn(44.dp, 56.dp)),
         shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
         color = if (isAppInDarkTheme()) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface,
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
         shadowElevation = 8.dp,
-    ) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {}
+        // 内容层保留 48dp 热区，视觉表面可收至 44dp。
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically, content = content)
     }
 }
@@ -125,20 +144,38 @@ fun AppSecondaryHeader(
     showBack: Boolean = true,
     actions: (@Composable RowScope.() -> Unit)? = null,
 ) {
+    val compact = LocalTopBarCompact.current
+    var moreOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(compact) { moreOpen = false }
+    val titleSize by animateFloatAsState(if (compact) 16f else 18f,
+        MotionTokens.standardTween(), label = "top-bar-title")
     Column(modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        AppTopBarSurface {
+        BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        val barWidth by animateDpAsState(if (compact) minOf(maxWidth, 186.dp) else maxWidth,
+            MotionTokens.softSpring(), label = "top-bar-width")
+        AppTopBarSurface(Modifier.width(barWidth), compact = compact) {
             if (showBack) AppHeaderIconButton(
                 icon = Icons.AutoMirrored.Outlined.ArrowBack,
                 contentDescription = "返回", onClick = onBack,
-            ) else Box(Modifier.padding(start = 4.dp, end = 8.dp).size(32.dp)
-                .background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) {
-                Text("M", color = MaterialTheme.colorScheme.onPrimary,
-                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            ) else Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(26.dp).background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) {
+                    Text("M", color = MaterialTheme.colorScheme.onPrimary,
+                        style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                }
             }
             Text(title, modifier = Modifier.weight(1f).padding(horizontal = 4.dp).semantics { heading() },
-                style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = titleSize.sp),
                 color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Row(verticalAlignment = Alignment.CenterVertically) { actions?.invoke(this) }
+            if (compact && actions != null) {
+                Box {
+                    AppHeaderIconButton(Icons.Outlined.MoreHoriz, "更多操作", { moreOpen = !moreOpen })
+                    DropdownMenu(expanded = moreOpen, onDismissRequest = { moreOpen = false }) {
+                        Row(Modifier.widthIn(max = 320.dp).horizontalScroll(rememberScrollState()).padding(4.dp),
+                            verticalAlignment = Alignment.CenterVertically) { actions() }
+                    }
+                }
+            } else Row(verticalAlignment = Alignment.CenterVertically) { actions?.invoke(this) }
+        }
         }
         if (showBack && subtitle.isNotBlank() && appContentHeight() >= 360.dp) {
             Text(subtitle, modifier = Modifier.padding(horizontal = 12.dp), style = MaterialTheme.typography.bodySmall,
@@ -228,6 +265,15 @@ fun AppSubPage(
     BackHandler(enabled = showBack && !LocalAppNavigationHandlesBack.current, onBack = onBack)
     val dark = isAppInDarkTheme()
     val density = LocalDensity.current
+    var compact by remember(listState) { mutableStateOf(false) }
+    val collapseThreshold = with(density) { 64.dp.toPx() }
+    val expandThreshold = with(density) { 12.dp.toPx() }
+    LaunchedEffect(listState, collapseThreshold, expandThreshold) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }.collect { (index, offset) ->
+            compact = if (compact) index > 0 || offset > expandThreshold
+                else index > 0 || offset > collapseThreshold
+        }
+    }
     var headerHeightPx by remember { mutableIntStateOf(0) }
     val topContentPadding = if (headerHeightPx > 0) with(density) { headerHeightPx.toDp() } + 4.dp
         else contentPadding.calculateTopPadding() + AppPageTopSpacing + 84.dp
@@ -267,9 +313,11 @@ fun AppSubPage(
         Box(contentWidth.onSizeChanged { headerHeightPx = it.height }
             .padding(start = AppPageHorizontalPadding, end = AppPageHorizontalPadding,
                 top = contentPadding.calculateTopPadding() + AppPageTopSpacing, bottom = 4.dp)) {
+            CompositionLocalProvider(LocalTopBarCompact provides compact) {
             if (header != null) header() else AppSecondaryHeader(
                 title = title, subtitle = "", onBack = onBack, actions = actions, showBack = showBack,
             )
+            }
         }
     }
 }

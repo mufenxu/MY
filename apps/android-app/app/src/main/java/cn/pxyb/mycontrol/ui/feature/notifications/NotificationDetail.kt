@@ -95,6 +95,7 @@ internal fun NotificationTwoPaneLayout(
         onBack = onBack,
         contentPadding = contentPadding,
         actions = actions,
+        listState = listState,
         body = { topContentPadding ->
             AppAdaptivePanes(
                 showDetail = true,
