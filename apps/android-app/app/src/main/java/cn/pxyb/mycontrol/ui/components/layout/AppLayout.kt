@@ -136,7 +136,7 @@ fun AppHeaderIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = AppPageActionSize,
-    iconSize: Dp = 18.dp,
+    iconSize: Dp = 22.dp,
     shape: Shape = CircleShape,
     enabled: Boolean = true,
     loading: Boolean = false,
@@ -146,16 +146,8 @@ fun AppHeaderIconButton(
 ) {
     val isDark = isAppInDarkTheme()
     val haptics = LocalHapticFeedback.current
-    val resolvedBg = containerColor ?: if (isDark) {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f)
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-    }
-    val resolvedBorder = borderColor ?: if (isDark) {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.22f)
-    } else {
-        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.30f)
-    }
+    val resolvedBg = containerColor ?: Color.Transparent
+    val resolvedBorder = borderColor ?: Color.Transparent
 
     val interactionSource = remember { MutableInteractionSource() }
     Surface(

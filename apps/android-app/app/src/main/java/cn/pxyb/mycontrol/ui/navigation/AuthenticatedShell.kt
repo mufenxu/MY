@@ -64,7 +64,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -100,7 +99,7 @@ import cn.pxyb.mycontrol.ui.components.layout.resolveAuthenticatedShellInsets
 import cn.pxyb.mycontrol.ui.feature.account.AccountManagementScreen
 import cn.pxyb.mycontrol.ui.feature.account.LoginSessionsScreen
 import cn.pxyb.mycontrol.ui.feature.assistant.AssistantScreen
-import cn.pxyb.mycontrol.ui.feature.assistant.FloatingAssistantButton
+import cn.pxyb.mycontrol.ui.feature.assistant.AssistantDockButton
 import cn.pxyb.mycontrol.ui.feature.auth.AppEntryUiState
 import cn.pxyb.mycontrol.ui.feature.auth.QrLoginScreen
 import cn.pxyb.mycontrol.ui.feature.authenticator.AuthenticatorScreen
@@ -160,7 +159,6 @@ internal fun AuthenticatedShell(
     var toastDragging by remember { mutableStateOf(false) }
     var settingsOpen by remember { mutableStateOf(false) }
     var searchFocusRequest by remember { mutableIntStateOf(0) }
-    var assistantAnchorSize by remember { mutableStateOf(IntSize.Zero) }
     var initialSetupOpen by remember(showInitialSetup, state.user) {
         mutableStateOf(showInitialSetup && state.user != null)
     }
@@ -439,8 +437,7 @@ internal fun AuthenticatedShell(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
-                    .onSizeChanged { assistantAnchorSize = it },
+                    .fillMaxHeight(),
             ) {
                 val shellInsets = resolveAuthenticatedShellInsets(
                     safeTop = padding.calculateTopPadding(),
@@ -1156,14 +1153,12 @@ internal fun AuthenticatedShell(
             }
                 }
 
-            FloatingAssistantButton(
-                anchorSize = assistantAnchorSize,
-                visible = state.assistantButtonVisible,
-                hidden = state.assistantOpen || settingsOpen || keyboardVisible,
-                bottomInset = shellInsets.contentBottom,
-                modifier = Modifier.align(Alignment.TopStart),
-                onOpen = viewModel::openAssistant,
-            )
+            if (isTablet && state.assistantButtonVisible && !state.assistantOpen && !settingsOpen && !keyboardVisible) {
+                AssistantDockButton(
+                    modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(16.dp),
+                    onOpen = viewModel::openAssistant,
+                )
+            }
 
             androidx.compose.animation.AnimatedVisibility(
                 visible = !isTablet && !isSubScreen && !keyboardVisible,
@@ -1176,6 +1171,9 @@ internal fun AuthenticatedShell(
                 AppBottomNavigation(
                     selected = primaryTabForRoute(currentRoute) ?: state.selectedTab,
                     onSelect = navigateToTab,
+                    assistant = if (state.assistantButtonVisible && !settingsOpen) ({
+                        AssistantDockButton(onOpen = viewModel::openAssistant)
+                    }) else null,
                 )
             }
 

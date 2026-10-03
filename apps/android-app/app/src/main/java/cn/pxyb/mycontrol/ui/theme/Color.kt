@@ -110,7 +110,7 @@ internal fun reviewColors(base: androidx.compose.material3.ColorScheme, review: 
     if (review == DesignReview.Original) return base
     val background = if (dark) Color(0xFF101419) else when (review) {
         DesignReview.Telegram -> Color(0xFFF1F3F5)
-        DesignReview.Material -> Color(0xFFF2F5FC)
+        DesignReview.Material -> Color(0xFFF2F2F5)
         else -> Color(0xFFF6F5F2)
     }
     val surface = if (dark) Color(0xFF1B222B) else Color.White

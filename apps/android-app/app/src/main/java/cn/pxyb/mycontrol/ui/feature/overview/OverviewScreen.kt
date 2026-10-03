@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.overview
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 
@@ -175,7 +176,7 @@ fun OverviewScreen(
 
     val quickActions: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            OverviewSectionTitle("常用入口", "按习惯选择并排列", trailing = {
+            OverviewSectionTitle("常用入口", trailing = {
                 AppHeaderIconButton(Icons.Outlined.Edit, "调整常用入口", { customizingQuickActions = true })
             })
             if (quickActionRows.isNotEmpty()) AppPanel {
@@ -230,7 +231,7 @@ fun OverviewScreen(
     ) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().auroraBackdrop(dark),
+            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface),
             contentPadding = appPageContentPadding(contentPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -243,7 +244,6 @@ fun OverviewScreen(
             if (state.offlineMode) {
                 item(key = "offline-notice") { OfflineSnapshotNotice(state.cachedAtMillis) }
             }
-            item(key = "status-summary") { statusSummary() }
             item(key = "overview-workspace") {
                 FlowRow(
                     maxItemsInEachRow = if (isTablet) 2 else 1,
@@ -254,6 +254,7 @@ fun OverviewScreen(
                     Column(Modifier.weight(if (isTablet) 0.42f else 1f)) { quickActions() }
                 }
             }
+            item(key = "status-summary") { statusSummary() }
             if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {
                 item(key = "applications-title") { OverviewSectionTitle("接入应用", "已接入的应用快捷访问") }
                 externalApplicationOpenError?.let { message ->

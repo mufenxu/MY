@@ -64,7 +64,7 @@ fun AppActionRow(
     val rowPadding = when (review) {
         cn.pxyb.mycontrol.ui.theme.DesignReview.Telegram -> 12.dp
         cn.pxyb.mycontrol.ui.theme.DesignReview.Quiet -> 20.dp
-        else -> 16.dp
+        else -> 12.dp
     }
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
@@ -99,7 +99,7 @@ fun AppActionRow(
                 imageVector = icon,
                 contentDescription = null,
                 tint = if (enabled) iconTint else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(24.dp),
             )
         }
 
@@ -111,7 +111,7 @@ fun AppActionRow(
                 text = title,
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontWeight = FontWeight.Medium,
-                    fontSize = 15.sp,
+                    fontSize = 16.sp,
                 ),
                 color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 maxLines = 2,
@@ -120,7 +120,7 @@ fun AppActionRow(
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,

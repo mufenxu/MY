@@ -447,16 +447,17 @@ internal fun QuickAction(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        cn.pxyb.mycontrol.ui.components.display.AppIconTile(
-            icon = icon,
-            tint = MaterialTheme.colorScheme.primary,
-            background = MaterialTheme.colorScheme.surfaceContainerLow,
-        )
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(26.dp),
+                tint = MaterialTheme.colorScheme.primary)
+        }
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall.copy(
                 fontWeight = FontWeight.Medium,
-                fontSize = 11.5.sp,
+                fontSize = 12.sp,
                 letterSpacing = (-0.1).sp,
             ),
             color = MaterialTheme.colorScheme.onSurface,

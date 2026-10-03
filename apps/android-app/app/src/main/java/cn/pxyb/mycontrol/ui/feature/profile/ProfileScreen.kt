@@ -155,7 +155,7 @@ fun ProfileScreen(
                 AppDivider()
                 AppActionRow("应用设置", subtitle = "外观、系统权限与数据同步", icon = Icons.Outlined.Settings, onClick = onOpenSettings)
                 AppDivider()
-                AppSwitchRow("AI 小助手", assistantButtonVisible, onAssistantButtonVisibleChange, subtitle = "显示悬浮助手入口")
+                AppSwitchRow("AI 小助手", assistantButtonVisible, onAssistantButtonVisibleChange, subtitle = "显示底部助手入口")
             }
             ProfileSectionTitle("通用与维护", "缓存清理与应用更新")
             AppPanel {

@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.assistant.buildPersonalAssistantSnapshot
+import cn.pxyb.mycontrol.ui.components.display.AppDivider
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
@@ -72,6 +73,7 @@ internal fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (Workspac
                 onClick = { onOpenWorkspace(WorkspaceDestination.Today) },
             )
         }
+        AppDivider()
         AppPanel(onClick = { onOpenWorkspace(WorkspaceDestination.Todos) }) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -97,6 +99,7 @@ internal fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (Workspac
                 }
             }
         }
+        AppDivider()
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             AppPanel(modifier = Modifier.weight(1f)) {
                 AppActionRow(title = "本学期课表", icon = Icons.Outlined.CalendarMonth,

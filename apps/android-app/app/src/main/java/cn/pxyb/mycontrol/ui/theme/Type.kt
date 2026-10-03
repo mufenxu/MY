@@ -35,8 +35,8 @@ internal fun reviewTypography(review: DesignReview): Typography = when (review) 
         titleLarge = AppTypography.titleLarge.copy(fontWeight = FontWeight.Medium),
     )
     DesignReview.Material -> AppTypography.copy(
-        headlineMedium = AppTypography.headlineMedium.copy(fontSize = 28.sp, lineHeight = 36.sp, fontWeight = FontWeight.Normal),
-        headlineLarge = AppTypography.headlineLarge.copy(fontSize = 32.sp, lineHeight = 40.sp, fontWeight = FontWeight.Normal),
+        headlineMedium = AppTypography.headlineMedium.copy(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold),
+        headlineLarge = AppTypography.headlineLarge.copy(fontSize = 26.sp, lineHeight = 32.sp, fontWeight = FontWeight.SemiBold),
     )
     DesignReview.Quiet -> AppTypography.copy(
         headlineMedium = AppTypography.headlineMedium.copy(fontSize = 30.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold),
