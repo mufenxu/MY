@@ -2,6 +2,7 @@ package cn.pxyb.mycontrol.ui.navigation
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
 import cn.pxyb.mycontrol.ui.theme.MotionTokens
+import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
 
 @Composable
 internal fun AppBottomNavigation(
@@ -43,9 +45,20 @@ internal fun AppBottomNavigation(
             border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
             shadowElevation = 2.dp,
         ) {
-            Row(Modifier.padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            BoxWithConstraints(Modifier.padding(4.dp)) {
+                val itemWidth = maxWidth / appNavigationTabs.size
+                val indicatorOffset by animateDpAsState(
+                    targetValue = itemWidth * appNavigationTabs.indexOfFirst { it.tab == selected }.coerceAtLeast(0),
+                    animationSpec = MotionTokens.softSpring(), label = "nav-indicator-offset",
+                )
+                Box(Modifier.matchParentSize()) {
+                    Box(Modifier.offset(x = indicatorOffset).width(itemWidth).fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.10f), RoundedCornerShape(28.dp)))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
                 appNavigationTabs.forEach { item ->
                     BottomNavigationItem(item, selected == item.tab) { onSelect(item.tab) }
+                }
                 }
             }
         }
@@ -62,13 +75,10 @@ private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onCl
         if (selected) colors.primary else colors.onSurface,
         tween(MotionTokens.DurationShort), label = "nav-foreground",
     )
-    val background by animateColorAsState(
-        if (selected) colors.primary.copy(alpha = 0.10f) else Color.Transparent,
-        tween(MotionTokens.DurationShort), label = "nav-background",
-    )
     Column(
         modifier = Modifier.weight(1f).heightIn(min = 56.dp)
-            .clip(RoundedCornerShape(28.dp)).background(background)
+            .pressFeedback(interaction)
+            .clip(RoundedCornerShape(28.dp))
             .selectable(selected = selected, role = Role.Tab,
                 interactionSource = interaction, indication = LocalIndication.current,
                 onClick = { if (!selected) { AppHaptics.tick(haptics); onClick() } })

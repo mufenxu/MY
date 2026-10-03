@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui.feature.overview
 
+import androidx.compose.animation.animateContentSize
+
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.FlowRow
@@ -180,7 +182,8 @@ fun OverviewScreen(
                 HomeTextAction("编辑") { customizingQuickActions = true }
             })
             if (quickActionRows.isNotEmpty()) AppPanel {
-                Column(Modifier.padding(horizontal = 6.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.animateContentSize(cn.pxyb.mycontrol.ui.theme.MotionTokens.softSpring())
+                    .padding(horizontal = 6.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     visibleQuickActionRows.forEach { row ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                             row.forEach { action ->

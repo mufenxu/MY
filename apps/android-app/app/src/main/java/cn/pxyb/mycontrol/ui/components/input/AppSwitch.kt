@@ -73,18 +73,12 @@ fun AppSwitch(
 
     val thumbOffset by animateDpAsState(
         targetValue = if (checked) thumbTravel else 0.dp,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        animationSpec = MotionTokens.softSpring(),
         label = "appSwitchThumb",
     )
     val thumbScale by animateFloatAsState(
-        targetValue = if (pressed) 1.12f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        targetValue = if (pressed) 1.06f else 1f,
+        animationSpec = if (pressed) MotionTokens.pressTween() else MotionTokens.releaseSpring(),
         label = "appSwitchThumbScale",
     )
     val trackColor by animateColorAsState(

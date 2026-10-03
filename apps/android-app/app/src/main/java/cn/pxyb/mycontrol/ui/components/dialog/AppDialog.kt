@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -97,11 +98,15 @@ fun AppDialog(
     footer: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
 ) {
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { visible = true }
+    val visibility = remember { MutableTransitionState(false).apply { targetState = true } }
+    var dismissRequested by remember { mutableStateOf(false) }
+    val requestDismiss = { dismissRequested = true; visibility.targetState = false }
+    LaunchedEffect(visibility.isIdle, visibility.currentState, dismissRequested) {
+        if (dismissRequested && visibility.isIdle && !visibility.currentState) onDismissRequest()
+    }
 
     Dialog(
-        onDismissRequest = onDismissRequest,
+        onDismissRequest = requestDismiss,
         properties = DialogProperties(
             usePlatformDefaultWidth = false,
             decorFitsSystemWindows = false,
@@ -147,19 +152,19 @@ fun AppDialog(
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
-                    onClick = onDismissRequest,
+                    onClick = requestDismiss,
                 ),
             contentAlignment = if (isTablet) Alignment.Center else Alignment.BottomCenter,
         ) {
             AnimatedVisibility(
-                visible = visible,
+                visibleState = visibility,
                 enter = if (isTablet) {
                     fadeIn(animationSpec = tween(MotionTokens.DurationShort, easing = MotionTokens.FastEasing)) +
-                        scaleIn(initialScale = 0.98f, animationSpec = tween(MotionTokens.DurationMedium, easing = MotionTokens.EmphasizedDecelerate))
+                        scaleIn(initialScale = 0.96f, animationSpec = MotionTokens.softSpring())
                 } else {
                     slideInVertically(
                         initialOffsetY = { it },
-                        animationSpec = tween(durationMillis = MotionTokens.DurationMedium, easing = CubicBezierEasing(0.1f, 0.9f, 0.2f, 1.0f)),
+                        animationSpec = MotionTokens.sheetSpring(),
                     ) + fadeIn(animationSpec = tween(MotionTokens.DurationShort, easing = MotionTokens.FastEasing))
                 },
                 exit = if (isTablet) {
@@ -278,7 +283,7 @@ fun AppDialog(
                                 AppHeaderIconButton(
                                     icon = Icons.Outlined.Close,
                                     contentDescription = "关闭",
-                                    onClick = onDismissRequest,
+                                    onClick = requestDismiss,
                                     size = 32.dp,
                                 )
                             }

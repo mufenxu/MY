@@ -135,6 +135,11 @@ fun AssistantScreen(
                                 item(key = "assistant-welcome") { AssistantWelcomeCard() }
                             } else {
                                 items(state.messages, key = { it.id }, contentType = { it.role }) { message ->
+                                    androidx.compose.foundation.layout.Box(Modifier.animateItem(
+                                        fadeInSpec = cn.pxyb.mycontrol.ui.theme.MotionTokens.fastTween(),
+                                        placementSpec = cn.pxyb.mycontrol.ui.theme.MotionTokens.softSpring(),
+                                        fadeOutSpec = cn.pxyb.mycontrol.ui.theme.MotionTokens.fastTween(),
+                                    )) {
                                     AssistantMessageBubble(
                                         message = message,
                                         onSuggestionClick = { destination ->
@@ -147,6 +152,7 @@ fun AssistantScreen(
                                         },
                                         onActionClick = { pendingAction = it },
                                     )
+                                    }
                                 }
                             }
                             if (state.sending) {

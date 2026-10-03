@@ -43,7 +43,7 @@
   - 微交互（图标缩放、指示器、高亮切换）：`MotionTokens.DurationShort` (160ms)；
   - 组件与卡片过渡展开：`MotionTokens.DurationMedium` (240ms)；
   - 页面级转场与弹窗展开：`MotionTokens.DurationLong` (320ms)；
-  - 通用按压使用 `MotionTokens.fastTween()`，缩放幅度不超过 3%；开关不使用弹跳。
+  - 已选定“柔韧跟手”：按下使用 `MotionTokens.pressTween()`，松开使用 `releaseSpring()`，按压缩放幅度不超过 3%；导航指示器、开关位移、展开和页面进入使用 `softSpring()`，弹层进入使用 `sheetSpring()`。颜色、透明度和退出仍使用短缓动，不循环弹跳。
 - **触觉微反馈 (`AppHaptics`)**：
   - 底部导航 Tab 切换、`AppSwitch` 开关切换、分段选择：触发 `AppHaptics.tick(haptics)`；
   - `PullToRefresh` 下拉刷新超过临界刻度：触发 `AppHaptics.refreshSnap(haptics)`；

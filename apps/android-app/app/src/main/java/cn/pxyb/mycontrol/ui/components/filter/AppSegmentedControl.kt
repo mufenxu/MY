@@ -1,6 +1,15 @@
 package cn.pxyb.mycontrol.ui.components.filter
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
+import androidx.compose.runtime.getValue
+import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -47,7 +56,18 @@ fun <T> AppSegmentedControl(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Row(modifier = Modifier.padding(4.dp).selectableGroup()) {
+        BoxWithConstraints(Modifier.padding(4.dp)) {
+            if (options.isNotEmpty()) {
+                val itemWidth = maxWidth / options.size
+                val offset by animateDpAsState(
+                    targetValue = itemWidth * options.indexOf(selected).coerceAtLeast(0),
+                    animationSpec = MotionTokens.softSpring(), label = "segment-indicator",
+                )
+                Box(Modifier.matchParentSize()) {
+                    Box(Modifier.offset(x = offset).width(itemWidth).fillMaxHeight().background(glassCardColor(), shape))
+                }
+            }
+        Row(modifier = Modifier.selectableGroup()) {
             options.forEach { option ->
                 key(option) {
                     val active = selected == option
@@ -72,7 +92,7 @@ fun <T> AppSegmentedControl(
                                 },
                             ),
                         shape = shape,
-                        color = if (active) glassCardColor() else Color.Transparent,
+                        color = Color.Transparent,
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
@@ -95,6 +115,7 @@ fun <T> AppSegmentedControl(
                     }
                 }
             }
+        }
         }
     }
 }

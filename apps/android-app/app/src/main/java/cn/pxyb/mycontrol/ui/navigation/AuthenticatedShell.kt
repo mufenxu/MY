@@ -468,9 +468,9 @@ internal fun AuthenticatedShell(
                 enterTransition = {
                     slideInHorizontally(
                         initialOffsetX = { fullWidth -> (fullWidth * 0.08f).toInt() },
-                        animationSpec = MotionTokens.standardTween(),
+                        animationSpec = MotionTokens.softSpring(),
                     ) + fadeIn(animationSpec = MotionTokens.standardTween()) +
-                    scaleIn(initialScale = 0.97f, animationSpec = MotionTokens.standardTween())
+                    scaleIn(initialScale = 0.98f, animationSpec = MotionTokens.softSpring())
                 },
                 exitTransition = {
                     slideOutHorizontally(
@@ -481,9 +481,9 @@ internal fun AuthenticatedShell(
                 popEnterTransition = {
                     slideInHorizontally(
                         initialOffsetX = { fullWidth -> (-fullWidth * 0.04f).toInt() },
-                        animationSpec = MotionTokens.standardTween(),
+                        animationSpec = MotionTokens.softSpring(),
                     ) + fadeIn(animationSpec = MotionTokens.standardTween()) +
-                    scaleIn(initialScale = 0.97f, animationSpec = MotionTokens.standardTween())
+                    scaleIn(initialScale = 0.98f, animationSpec = MotionTokens.softSpring())
                 },
                 popExitTransition = {
                     slideOutHorizontally(

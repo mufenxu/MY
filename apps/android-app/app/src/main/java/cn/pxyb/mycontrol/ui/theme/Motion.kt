@@ -45,6 +45,16 @@ object MotionTokens {
     fun <T> fastTween() = tween<T>(DurationShort, easing = FastEasing)
     fun <T> standardTween() = tween<T>(DurationMedium, easing = EmphasizedDecelerate)
     fun <T> pageTween() = tween<T>(DurationLong, easing = EmphasizedDecelerate)
+
+    /** 柔韧跟手：位移轻微回弹，连续操作时保留弹簧速度。 */
+    fun <T> softSpring() = spring<T>(dampingRatio = 0.78f, stiffness = 420f)
+
+    /** 按下迅速响应，松开轻弹；不用于透明度与颜色。 */
+    fun <T> pressTween() = tween<T>(90, easing = FastEasing)
+    fun <T> releaseSpring() = spring<T>(dampingRatio = 0.62f, stiffness = 650f)
+
+    /** 弹层更重一些，减少长距离进入时的过冲。 */
+    fun <T> sheetSpring() = spring<T>(dampingRatio = 0.88f, stiffness = 380f)
 }
 
 /**
