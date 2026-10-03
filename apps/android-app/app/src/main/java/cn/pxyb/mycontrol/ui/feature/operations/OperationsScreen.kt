@@ -140,21 +140,11 @@ fun OperationsScreen(
 
     val isTablet = useTwoPaneLayout()
 
-    PullToRefresh(
-        isRefreshing = state.refreshing,
-        onRefresh = onRefresh,
-        atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
-    ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .auroraBackdrop(dark),
-            contentPadding = appPageContentPadding(contentPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item(key = "status-header", contentType = "header") {
-                ImmersiveHeader(
+    cn.pxyb.mycontrol.ui.components.layout.AppSubPage(
+        title = "状态", onBack = {}, showBack = false,
+        contentPadding = contentPadding, listState = listState,
+        refreshing = state.refreshing, onRefresh = onRefresh,
+        header = { ImmersiveHeader(
                     title = "状态",
                     subtitle = "系统健康、提醒与必要维护",
                     actions = {
@@ -163,8 +153,8 @@ fun OperationsScreen(
                             onClick = onOpenNotifications,
                         )
                     },
-                )
-            }
+                ) },
+    ) {
 
             state.sectionError?.let { message ->
                 item(key = "section-error", contentType = "banner") {
@@ -699,7 +689,6 @@ fun OperationsScreen(
             }
 
 
-        }
     }
 
     if (confirmBackup) {

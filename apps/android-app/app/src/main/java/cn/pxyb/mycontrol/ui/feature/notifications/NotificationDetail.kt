@@ -94,7 +94,6 @@ internal fun NotificationTwoPaneLayout(
         subtitle = subtitle,
         onBack = onBack,
         contentPadding = contentPadding,
-        pinHeader = true,
         actions = actions,
         body = {
             AppAdaptivePanes(
@@ -117,7 +116,13 @@ internal fun NotificationTwoPaneLayout(
                                 top = 4.dp,
                             ),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
-                            content = listContent,
+                            content = {
+                                if (subtitle.isNotBlank()) item(key = "notification-page-description") {
+                                    Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                listContent()
+                            },
                         )
                     }
                 },

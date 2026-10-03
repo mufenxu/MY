@@ -108,7 +108,6 @@ internal fun AndroidReleaseScreen(
         title = "Android 发布管理",
         subtitle = "安装包归档与下一次 Android 发布",
         onBack = onBack,
-        pinHeader = true,
         contentPadding = contentPadding,
         refreshing = state.refreshing,
         onRefresh = onRefresh,

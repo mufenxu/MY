@@ -167,20 +167,12 @@ fun ProfileScreen(
             }
         }
     }
-    PullToRefresh(
-        isRefreshing = state.refreshing,
-        onRefresh = onRefresh,
-        atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
+    cn.pxyb.mycontrol.ui.components.layout.AppSubPage(
+        title = "我的", onBack = {}, showBack = false,
+        contentPadding = contentPadding, listState = listState,
+        refreshing = state.refreshing, onRefresh = onRefresh,
+        header = { ModernProfileHeader(onOpenQrLogin, state.unreadAlerts, onOpenNotifications, onOpenSettings) },
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize().auroraBackdrop(dark),
-            contentPadding = appPageContentPadding(contentPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item(key = "profile-header") {
-                ModernProfileHeader(onOpenQrLogin, state.unreadAlerts, onOpenNotifications, onOpenSettings)
-            }
             item(key = "profile-account") {
                 ModernProfileCard(user.username, user.role, BuildConfig.VERSION_NAME)
             }
@@ -207,7 +199,6 @@ fun ProfileScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-        }
     }
 
     if (showUpdateDialog) {

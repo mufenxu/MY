@@ -248,7 +248,7 @@ fun TodayScreen(
         contentPadding = contentPadding,
         onBack = onBack,
         refreshing = state.refreshing || (campusSection == CampusWorkspaceSection.Today && agendaState.loading),
-        onRefresh = if (wideTimetable) null else refreshWorkspace,
+        onRefresh = refreshWorkspace,
         actions = {
             if (wideTimetable) {
                 AppHeaderIconButton(
@@ -266,24 +266,6 @@ fun TodayScreen(
                 loading = state.calendarSyncing,
             )
         },
-        body = if (wideTimetable) {
-            {
-                Column(
-                    Modifier.fillMaxSize().padding(horizontal = AppPageHorizontalPadding),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    workspaceTabs()
-                    featureLinks()
-                    state.sectionError?.let { message ->
-                        AppFeedbackBanner(message, error = true, onRetry = onRefresh)
-                    }
-                    if (state.offlineMode) {
-                        AppFeedbackBanner("当前展示离线课表，联网后可刷新。", error = false)
-                    }
-                    timetableContent(Modifier.weight(1f), true)
-                }
-            }
-        } else null,
     ) {
         if (state.offlineMode || state.pendingTodoMutations > 0) {
             item(key = "today-offline", contentType = "banner") {

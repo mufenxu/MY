@@ -93,7 +93,6 @@ fun LoginSessionsScreen(
         subtitle = "管理已登录的设备和浏览器",
         contentPadding = contentPadding,
         onBack = onBack,
-        pinHeader = true,
         refreshing = state.refreshing,
         onRefresh = onRefresh,
     ) {

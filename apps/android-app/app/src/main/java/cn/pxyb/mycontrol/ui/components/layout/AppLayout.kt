@@ -203,20 +203,7 @@ fun AppHeaderIconButton(
     }
 }
 
-/**
- * 标准二级页面脚手架 (AppSubPage)
- *
- * 统一承载所有二级页面的通用布局规范：
- * 1. 导航容器负责系统返回，独立呈现时由脚手架处理；
- * 2. 沿用外壳按页面用途提供的内容宽度，并保持居中；
- * 3. 统一绘制带 drawWithCache 缓存的极光背景 (auroraBackdrop)；
- * 4. 统一处理页面安全区与 appPageContentPadding；
- * 5. 支持 pinHeader：
- *    - pinHeader = false（默认）：二级页头作为列表第一个 item 随内容滚动（适合短卡片/配置页）；
- *    - pinHeader = true：二级页头吸顶固定，下方内容滚动时透出毛玻璃质感（适合长列表/搜索结果/审计日志）；
- * 6. 可选集成 PullToRefresh 下拉刷新机制；
- * 7. 严格遵循 12.dp 垂直间距标准。
- */
+/** 固定顶部胶囊栏；页面说明与业务内容共用下方滚动区域。 */
 @Composable
 fun AppSubPage(
     title: String,
@@ -224,7 +211,6 @@ fun AppSubPage(
     contentPadding: PaddingValues,
     modifier: Modifier = Modifier,
     subtitle: String = "",
-    pinHeader: Boolean = false,
     refreshing: Boolean = false,
     onRefresh: (() -> Unit)? = null,
     actions: (@Composable RowScope.() -> Unit)? = null,
@@ -234,94 +220,41 @@ fun AppSubPage(
     header: (@Composable () -> Unit)? = null,
     content: LazyListScope.() -> Unit = {},
 ) {
-    BackHandler(enabled = !LocalAppNavigationHandlesBack.current, onBack = onBack)
+    BackHandler(enabled = showBack && !LocalAppNavigationHandlesBack.current, onBack = onBack)
     val dark = isAppInDarkTheme()
-
-    PullToRefresh(
-        isRefreshing = refreshing,
-        onRefresh = onRefresh,
-        enabled = onRefresh != null,
-        atTop = {
-            listState.firstVisibleItemIndex == 0 &&
-                listState.firstVisibleItemScrollOffset == 0
-        },
+    Column(
+        modifier = modifier.fillMaxSize().auroraBackdrop(dark),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Box(
-            modifier = modifier
-                .fillMaxSize()
-                .auroraBackdrop(dark),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            val contentMaxWidthModifier = Modifier
-                .widthIn(max = LocalAppContentMaxWidth.current)
-                .fillMaxWidth()
-
-            if (pinHeader || body != null) {
-                // 吸顶模式：页头固定于顶部，下方为 LazyColumn
-                Column(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .then(contentMaxWidthModifier)
-                        .padding(
-                            top = contentPadding.calculateTopPadding() + AppPageTopSpacing,
-                        ),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = AppPageHorizontalPadding)
-                            .padding(bottom = 12.dp),
-                    ) {
-                        if (header != null) header() else AppSecondaryHeader(
-                            title = title,
-                            subtitle = subtitle,
-                            onBack = onBack,
-                            actions = actions,
-                            showBack = showBack,
-                        )
-                    }
-                    if (body != null) {
-                        ProvideAppContentLayout(
-                            modifier = Modifier
-                                .weight(1f)
-                                .fillMaxWidth()
-                                .padding(bottom = contentPadding.calculateBottomPadding() + AppPageBottomSpacing),
-                        ) {
-                            body()
-                        }
-                    } else LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        contentPadding = PaddingValues(
-                            start = AppPageHorizontalPadding,
-                            end = AppPageHorizontalPadding,
-                            bottom = contentPadding.calculateBottomPadding() + AppPageBottomSpacing,
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        content()
-                    }
-                }
-            } else {
-                // 随动模式：页头作为 LazyColumn 的第一个 item
+        val contentWidth = Modifier.widthIn(max = LocalAppContentMaxWidth.current).fillMaxWidth()
+        Box(contentWidth.padding(start = AppPageHorizontalPadding, end = AppPageHorizontalPadding,
+            top = contentPadding.calculateTopPadding() + AppPageTopSpacing, bottom = 4.dp)) {
+            if (header != null) header() else AppSecondaryHeader(
+                title = title, subtitle = "", onBack = onBack, actions = actions, showBack = showBack,
+            )
+        }
+        Box(Modifier.weight(1f).then(contentWidth)) {
+            if (body != null) {
+                ProvideAppContentLayout(
+                    modifier = Modifier.fillMaxSize()
+                        .padding(bottom = contentPadding.calculateBottomPadding() + AppPageBottomSpacing),
+                ) { body() }
+            } else PullToRefresh(
+                isRefreshing = refreshing,
+                onRefresh = onRefresh,
+                enabled = onRefresh != null,
+                atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
+            ) {
                 LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .then(contentMaxWidthModifier),
-                    contentPadding = appPageContentPadding(contentPadding),
+                    state = listState, modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = AppPageHorizontalPadding, end = AppPageHorizontalPadding,
+                        top = 4.dp, bottom = contentPadding.calculateBottomPadding() + AppPageBottomSpacing),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    item(key = "app-subpage-header", contentType = "header") {
-                        if (header != null) header() else AppSecondaryHeader(
-                            title = title,
-                            subtitle = subtitle,
-                            onBack = onBack,
-                            actions = actions,
-                            showBack = showBack,
-                        )
+                    if (subtitle.isNotBlank()) item(key = "app-page-description", contentType = "description") {
+                        Text(subtitle, modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     content()
                 }

@@ -149,7 +149,6 @@ internal fun RegistryImagesScreen(
         title = "镜像仓库",
         subtitle = if (selectedCount > 0) "已选 $selectedCount 个历史版本" else "清理阿里云 ACR 历史版本",
         onBack = onBack,
-        pinHeader = true,
         contentPadding = contentPadding,
         refreshing = state.refreshing,
         onRefresh = onRefresh,

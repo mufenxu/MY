@@ -232,20 +232,12 @@ fun ToolsScreen(
             }
         }
     }
-    PullToRefresh(
-        isRefreshing = state.refreshing,
-        onRefresh = onRefresh,
-        atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
+    cn.pxyb.mycontrol.ui.components.layout.AppSubPage(
+        title = "设备", onBack = {}, showBack = false,
+        contentPadding = contentPadding, listState = listState,
+        refreshing = state.refreshing, onRefresh = onRefresh,
+        header = { LightweightHeaderBanner(state.unreadAlerts, onOpenNotifications) },
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize().auroraBackdrop(dark),
-            contentPadding = appPageContentPadding(contentPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item(key = "tools-header") {
-                LightweightHeaderBanner(state.unreadAlerts, onOpenNotifications)
-            }
             item(key = "connection-summary") {
                 AppPanel {
                     AppActionRow(
@@ -269,7 +261,6 @@ fun ToolsScreen(
                     Column(Modifier.weight(1f)) { controls() }
                 }
             }
-        }
     }
     confirmation?.let { scene ->
         ToolConfirmDialog(

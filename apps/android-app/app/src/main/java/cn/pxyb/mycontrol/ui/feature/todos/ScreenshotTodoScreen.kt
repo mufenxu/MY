@@ -41,7 +41,7 @@ fun ScreenshotTodoScreen(state: ScreenshotUiState, contentPadding: PaddingValues
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(onRecognize) }
     if (datePicker) AppDatePickerModal(currentDate = date, onDismiss = { datePicker = false }, onConfirm = { date = it; datePicker = false }, daysCount = 366, pastDaysCount = 30)
     if (timePicker) AppTimePickerModal(currentTime = time, onDismiss = { timePicker = false }, onConfirm = { time = it; timePicker = false })
-    AppSubPage("截图转待办", onBack, contentPadding, subtitle = "本地识别，确认后保存", pinHeader = true) {
+    AppSubPage("截图转待办", onBack, contentPadding, subtitle = "本地识别，确认后保存") {
         if (state.text.isBlank() && !state.loading) item {
             AppPanel {
                 AppEmptyState("从截图开始", detail = "选择课程或事项截图，在本机识别后核对内容，再保存为待办。",

@@ -173,7 +173,6 @@ fun GoogleAccountDeskScreen(
                 subtitle = "记录主邮箱、别名和 OpenAI 使用状态",
                 onBack = onDismiss,
                 contentPadding = contentPadding,
-                pinHeader = true,
                 refreshing = state.loading,
                 onRefresh = onRefresh,
                 actions = {
@@ -394,7 +393,6 @@ fun GoogleAccountDeskScreen(
                     subtitle = detailAccount?.primaryEmail ?: "选择主邮箱查看状态与别名",
                     onBack = onDismiss,
                     showBack = false,
-                    pinHeader = true,
                     contentPadding = contentPadding,
                 ) {
                     item {

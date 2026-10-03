@@ -68,7 +68,6 @@ fun ProjectsScreen(
         subtitle = "仓库、应用发布与自动化任务",
         contentPadding = contentPadding,
         onBack = onBack,
-        pinHeader = true,
         refreshing = state.refreshing,
         onRefresh = onRefresh,
     ) {

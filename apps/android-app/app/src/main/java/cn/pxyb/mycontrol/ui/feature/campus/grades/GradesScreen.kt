@@ -62,7 +62,7 @@ fun GradesScreen(state: GradesUiState, official: CampusGpa?, contentPadding: Pad
     val summary = remember(state.records) { summarizeGrades(state.records) }
     val credit = credits.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 }
     val point = points.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }
-    AppSubPage("成绩与学分", onBack, contentPadding, subtitle = "个人成绩记录与目标规划", pinHeader = true) {
+    AppSubPage("成绩与学分", onBack, contentPadding, subtitle = "个人成绩记录与目标规划") {
         item { AppFeedbackBanner("官方汇总 GPA：${official?.overall ?: "尚未同步"}。以下明细为个人录入或导入，仅保存在本机并按账号加密；尚未接通学校单科成绩接口。", false) }
         (state.error ?: importError)?.let { item { AppFeedbackBanner(it, true, onRetry = onLoad) } }
         item { AppPanel {

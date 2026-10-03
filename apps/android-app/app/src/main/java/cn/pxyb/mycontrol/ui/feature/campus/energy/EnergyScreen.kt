@@ -24,7 +24,7 @@ fun EnergyScreen(state: EnergyUiState, contentPadding: PaddingValues, onBack: ()
     var enabled by rememberSaveable(state.enabled) { mutableStateOf(state.enabled) }
     val parsedThreshold = threshold.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }
     LaunchedEffect(Unit) { onLoad(state.month) }
-    AppSubPage("电费账单与提醒", onBack, contentPadding, subtitle = "官方账单与本机积累的每日用量", pinHeader = true, refreshing = state.loading, onRefresh = { onLoad(state.month) }) {
+    AppSubPage("电费账单与提醒", onBack, contentPadding, subtitle = "官方账单与本机积累的每日用量", refreshing = state.loading, onRefresh = { onLoad(state.month) }) {
         state.error?.let { item { AppFeedbackBanner(it, true, onRetry = { onLoad(state.month) }) } }
         item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             AppSecondaryButton(text = "上月", onClick = { onLoad(YearMonth.parse(state.month).minusMonths(1).toString()) }, enabled = !state.loading)

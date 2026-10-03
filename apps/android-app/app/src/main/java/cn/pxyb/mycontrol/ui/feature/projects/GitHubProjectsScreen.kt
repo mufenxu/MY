@@ -127,7 +127,6 @@ fun GitHubProjectsScreen(
                 subtitle = "账号与仓库管理",
                 onBack = onBack,
                 contentPadding = contentPadding,
-                pinHeader = true,
                 refreshing = busy,
                 onRefresh = onRefresh,
                 actions = {
@@ -197,7 +196,6 @@ fun GitHubProjectsScreen(
                     subtitle = "选择仓库后查看版本与发布信息",
                     onBack = onBack,
                     showBack = false,
-                    pinHeader = true,
                     contentPadding = contentPadding,
                 ) {
                     item {
@@ -277,7 +275,6 @@ private fun GitHubReleasesPane(
         onBack = onBack,
         contentPadding = contentPadding,
         showBack = showBack,
-        pinHeader = true,
         refreshing = busy,
         onRefresh = onRefresh,
         actions = {

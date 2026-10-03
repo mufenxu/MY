@@ -101,7 +101,6 @@ fun ScenesScreen(
         subtitle = "手动控制场景或配置条件自动联动执行",
         contentPadding = contentPadding,
         onBack = onBack,
-        pinHeader = true,
         refreshing = state.refreshing,
         onRefresh = onRefresh,
         actions = {

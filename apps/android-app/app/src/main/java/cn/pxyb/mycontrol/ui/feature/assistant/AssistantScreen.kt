@@ -120,7 +120,6 @@ fun AssistantScreen(
         subtitle = "基于工作台状态回答并跳转",
         onBack = onBack,
         contentPadding = contentPadding,
-        pinHeader = true,
         listState = listState,
         body = {
             Row(Modifier.fillMaxSize()) {
@@ -153,12 +152,12 @@ fun AssistantScreen(
                             if (state.sending) {
                                 item(key = "assistant-loading") { AssistantTypingBubble() }
                             }
+                            if (!twoPane) item(key = "assistant-quick-commands") {
+                                QuickCommandRow(onCommand = onSend, enabled = !state.sending)
+                            }
                             state.error?.let { message ->
                                 item(key = "assistant-error") { AppFeedbackBanner(message, error = true) }
                             }
-                        }
-                        if (!twoPane && appContentHeight() >= 400.dp) {
-                            QuickCommandRow(onCommand = onSend, enabled = !state.sending)
                         }
                         AssistantInputBar(
                             value = input,

@@ -153,7 +153,6 @@ fun AuthenticatorScreen(
             title = "本地验证器",
             subtitle = "离线生成 TOTP 动态验证码",
             onBack = onBack,
-            pinHeader = true,
             contentPadding = contentPadding,
             actions = {
                 AppHeaderIconButton(

@@ -107,7 +107,6 @@ fun GlobalSearchScreen(
         subtitle = "功能入口、应用与个人数据",
         onBack = onBack,
         contentPadding = contentPadding,
-        pinHeader = true,
         listState = listState,
         refreshing = state.refreshing,
         header = {

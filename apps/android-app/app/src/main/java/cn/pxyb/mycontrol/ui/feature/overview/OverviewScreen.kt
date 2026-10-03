@@ -222,20 +222,12 @@ fun OverviewScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
-    PullToRefresh(
-        isRefreshing = state.refreshing,
-        onRefresh = onRefresh,
-        atTop = { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 },
+    cn.pxyb.mycontrol.ui.components.layout.AppSubPage(
+        title = "今日", onBack = {}, showBack = false,
+        contentPadding = contentPadding, listState = listState,
+        refreshing = state.refreshing, onRefresh = onRefresh,
+        header = { ModernOverviewHeader(onOpenQrLogin, onOpenSearch, state.unreadAlerts, onOpenNotifications, state.timetable?.currentCalendarText) },
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize().auroraBackdrop(dark),
-            contentPadding = appPageContentPadding(contentPadding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            item(key = "overview-header") {
-                ModernOverviewHeader(onOpenQrLogin, onOpenSearch, state.unreadAlerts, onOpenNotifications, state.timetable?.currentCalendarText)
-            }
             state.sectionError?.let { message ->
                 item(key = "overview-error") { AppFeedbackBanner(message, error = true, onRetry = onRefresh) }
             }
@@ -275,7 +267,6 @@ fun OverviewScreen(
                     }
                 }
             }
-        }
     }
     if (confirmBackup) {
         AppConfirmDialog(

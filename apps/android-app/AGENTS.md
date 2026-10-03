@@ -5,9 +5,8 @@
 - **系统安全区由外壳统一管理**：认证后的页面统一由 `AuthenticatedShell` 处理 `WindowInsets.safeDrawing`；页面内部**严禁再次调用 `statusBarsPadding()`**，避免产生双重顶部空白。
 - **推荐统一使用标准脚手架 `AppSubPage`**：
   新增二级页面一律使用共享脚手架 `AppSubPage`（位于 `ui/components/layout/AppLayout.kt`），它已自动集成 `BackHandler`、`AppSecondaryHeader`、缓存极光背景、大屏宽度限制（`AppTabletContentMaxWidth = 1120.dp`）、统一间距与可选下拉刷新。禁止再手写冗余的 `LazyColumn` 样板代码。
-- **二级页头交互模式规范 (`pinHeader`)**：
-  - **吸顶模式 (`pinHeader = true`)**：适用于**长信息流、大量数据列表、全局搜索、操作日志、发布管理**等页面。页头固定悬浮在顶部并透出毛玻璃背景，确保用户深层滑动后标题上下文不丢失、随时可一键返回或执行页头操作。
-  - **随动模式 (`pinHeader = false`，默认)**：适用于**短卡片页、设置表单页、概要信息页**等内容较短的页面，页头作为列表首项随内容滑动。
+- **统一滚动规则**：
+  所有主页面与二级页面仅固定顶部悬浮胶囊栏。副标题、统计、筛选、课表切换和快捷指令进入内容滚动区；聊天输入框等必要操作区保留原位。`AppSubPage` 不再提供 `pinHeader` 开关，下拉刷新只作用于内容区。
 - **路由与返回约束**：
   新增二级路由必须在 `parentTabForSubScreen` 登记唯一父页面；页头返回和系统返回统一调用认证导航外壳的回退方法，页面内部不得混用状态关闭与 `NavController.popBackStack()`。
 

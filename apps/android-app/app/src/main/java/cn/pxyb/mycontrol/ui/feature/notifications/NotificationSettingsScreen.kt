@@ -73,7 +73,6 @@ fun NotificationSettingsScreen(
         subtitle = "免打扰、业务订阅与每日简报",
         contentPadding = contentPadding,
         onBack = onBack,
-        pinHeader = true,
     ) {
         item(key = "background-delivery") { BackgroundDeliverySettings() }
         item(key = "permission") {

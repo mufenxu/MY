@@ -40,7 +40,7 @@ fun StudyScreen(state: StudyUiState, courses: List<CampusCourse>, todos: List<To
     fun durationSince(start: Long, session: StudySession) = (session.start + session.duration - maxOf(session.start, start)).coerceIn(0, session.duration)
     val options = courses.distinctBy { it.courseName }.map { AppSelectOption("course:${it.id}", it.courseName) } +
         todos.filterNot { it.completed }.map { AppSelectOption("todo:${it.id}", it.title, it.courseRef?.name) }
-    AppSubPage("学习计时", onBack, contentPadding, subtitle = "记录课程与待办的实际学习时间", pinHeader = true) {
+    AppSubPage("学习计时", onBack, contentPadding, subtitle = "记录课程与待办的实际学习时间") {
         state.error?.let { item { AppFeedbackBanner(it, error = true, onRetry = onLoad) } }
         item { AppPanel {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

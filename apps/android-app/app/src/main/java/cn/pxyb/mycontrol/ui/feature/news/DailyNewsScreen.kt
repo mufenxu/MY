@@ -47,7 +47,6 @@ fun DailyNewsScreen(
         subtitle = "每日 60 秒读懂世界",
         onBack = onBack,
         contentPadding = contentPadding,
-        pinHeader = true,
         refreshing = state.refreshing,
         onRefresh = { onRefresh(true) },
     ) {

@@ -236,7 +236,6 @@ fun NotificationCenterScreen(
                 subtitle = notificationSubtitle(unreadCount),
                 onBack = onBack,
                 contentPadding = contentPadding,
-                pinHeader = true,
                 refreshing = refreshing,
                 onRefresh = onRefresh,
                 actions = headerActions,
