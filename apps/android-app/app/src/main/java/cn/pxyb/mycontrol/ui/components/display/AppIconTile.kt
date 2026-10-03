@@ -26,8 +26,8 @@ fun AppIconTile(icon: ImageVector, tint: Color, background: Color, modifier: Mod
     }
     Box(
         modifier = modifier
-            .size(44.dp)
-            .background(container, MaterialTheme.shapes.medium),
+            .size(40.dp)
+            .background(container, androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
         contentAlignment = Alignment.Center,
     ) {
         Icon(icon, contentDescription = null, tint = contentTint, modifier = Modifier.size(22.dp))

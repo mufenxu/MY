@@ -82,7 +82,7 @@ fun AppFilterChip(
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium.copy(
-                    fontSize = 12.5.sp,
+                    fontSize = 13.sp,
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 ),
                 color = textColor,

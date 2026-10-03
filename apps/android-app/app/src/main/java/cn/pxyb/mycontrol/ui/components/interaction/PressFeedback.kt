@@ -19,11 +19,8 @@ fun Modifier.pressFeedback(
 ): Modifier {
     val pressed by interactionSource.collectIsPressedAsState()
     val scale = animateFloatAsState(
-        targetValue = if (pressed) pressedScale else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        targetValue = if (pressed) pressedScale.coerceIn(0.97f, 1f) else 1f,
+        animationSpec = cn.pxyb.mycontrol.ui.theme.MotionTokens.fastTween(),
         label = "press-scale",
     )
     return this.graphicsLayer {

@@ -108,14 +108,18 @@ object ColorTokens {
 }
 
 internal fun appColors(base: androidx.compose.material3.ColorScheme, dark: Boolean): androidx.compose.material3.ColorScheme {
-    val background = if (dark) Color(0xFF101419) else Color(0xFFF2F2F5)
+    val background = if (dark) Color(0xFF101419) else Color(0xFFF2F4F8)
     val surface = if (dark) Color(0xFF1B222B) else Color.White
-    val primary = if (dark) Color(0xFF9FCBFF) else Color(0xFF365DA8)
+    val primary = if (dark) Color(0xFF9FCBFF) else HomeFocusBlue
     return base.copy(background = background, surface = surface, primary = primary,
         surfaceTint = primary, onSurface = if (dark) Color(0xFFE9EDF3) else Color(0xFF20262D),
         onBackground = if (dark) Color(0xFFE9EDF3) else Color(0xFF20262D),
         onSurfaceVariant = if (dark) Color(0xFFB5BFCB) else Color(0xFF606C79),
         primaryContainer = if (dark) Color(0xFF263C55) else Color(0xFFE6EFF8),
-        surfaceContainerLow = background, surfaceContainer = background,
+        surfaceVariant = if (dark) Color(0xFF293340) else Color(0xFFEDF0F6),
+        surfaceContainerLow = if (dark) Color(0xFF161D26) else Color(0xFFF5F6FA),
+        surfaceContainer = surface,
+        surfaceContainerHigh = if (dark) Color(0xFF252F3D) else Color(0xFFEBEEF5),
+        surfaceContainerHighest = if (dark) Color(0xFF303C4C) else Color(0xFFE4E8F0),
         outlineVariant = if (dark) Color(0xFF35404D) else Color(0xFFE2E6EB))
 }

@@ -46,10 +46,10 @@ import cn.pxyb.mycontrol.ui.theme.BrandCyan
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
-/** 弹窗主操作按钮：对齐 BrandBlue 官方科技蓝与 46dp 标准高度。 */
+/** 弹窗主操作按钮：对齐 BrandBlue 官方科技蓝与 48dp 最小高度。 */
 // 主操作、次要操作与危险操作共享触控尺寸和胶囊形状。
 
-/** 主操作使用主题强调色；浅色蓝底白字，深色浅蓝底深字，保留轻微渐变与按压反馈。 */
+/** 主操作使用主题强调色；浅色蓝底白字，深色浅蓝底深字，使用实色与轻量按压反馈。 */
 @Composable
 fun AppButton(
     text: String,
@@ -58,7 +58,7 @@ fun AppButton(
     icon: ImageVector? = null,
     enabled: Boolean = true,
     loading: Boolean = false,
-    height: Dp = 46.dp,
+    height: Dp = 48.dp,
     shape: RoundedCornerShape = RoundedCornerShape(50),
 ) {
     val haptics = LocalHapticFeedback.current
@@ -66,12 +66,6 @@ fun AppButton(
 
     val primary = MaterialTheme.colorScheme.primary
     val contentColor = MaterialTheme.colorScheme.onPrimary
-    val gradientBrush = Brush.verticalGradient(
-        if (enabled || loading) listOf(lerp(primary, contentColor, 0.04f), primary)
-        else listOf(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f), MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)),
-    )
-    val borderBrush = Brush.verticalGradient(listOf(primary, primary))
-
     Button(
         onClick = {
             AppHaptics.tick(haptics)
@@ -80,15 +74,7 @@ fun AppButton(
         modifier = modifier
             .minimumInteractiveComponentSize()
             .heightIn(min = height)
-            .shadow(
-                elevation = if (enabled && !loading) 1.dp else 0.dp,
-                shape = shape,
-                spotColor = primary.copy(alpha = 0.18f),
-                ambientColor = Color.Black.copy(alpha = 0.08f),
-            )
             .clip(shape)
-            .background(gradientBrush)
-            .border(1.dp, borderBrush, shape)
             .pressFeedback(interactionSource),
         interactionSource = interactionSource,
         enabled = enabled && !loading,
@@ -101,9 +87,9 @@ fun AppButton(
             disabledElevation = 0.dp,
         ),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Color.Transparent,
+            containerColor = primary,
             contentColor = contentColor,
-            disabledContainerColor = Color.Transparent,
+            disabledContainerColor = if (loading) primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
             disabledContentColor = if (loading) contentColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
         ),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
@@ -130,7 +116,7 @@ fun AppButton(
                 Text(
                     text = text,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.5.sp,
+                    fontSize = 14.sp,
                     letterSpacing = (-0.1).sp,
                     color = LocalContentColor.current,
                 )
@@ -148,18 +134,12 @@ fun AppSecondaryButton(
     icon: ImageVector? = null,
     enabled: Boolean = true,
     loading: Boolean = false,
-    height: Dp = 46.dp,
+    height: Dp = 48.dp,
     shape: RoundedCornerShape = RoundedCornerShape(50),
     compact: Boolean = false,
 ) {
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
-
-    val container = MaterialTheme.colorScheme.surfaceContainerLow
-    val gradientBrush = Brush.linearGradient(listOf(container, container))
-    val borderBrush = Brush.linearGradient(
-        listOf(MaterialTheme.colorScheme.outlineVariant, MaterialTheme.colorScheme.outlineVariant),
-    )
 
     Button(
         onClick = {
@@ -170,17 +150,15 @@ fun AppSecondaryButton(
             .minimumInteractiveComponentSize()
             .heightIn(min = height)
             .clip(shape)
-            .background(gradientBrush)
-            .border(0.5.dp, borderBrush, shape)
             .pressFeedback(interactionSource),
         interactionSource = interactionSource,
         enabled = enabled && !loading,
         shape = shape,
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Color.Transparent,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             contentColor = MaterialTheme.colorScheme.onSurface,
-            disabledContainerColor = Color.Transparent,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
             disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
         ),
         contentPadding = PaddingValues(horizontal = if (compact) 12.dp else 20.dp, vertical = 4.dp),
@@ -207,9 +185,9 @@ fun AppSecondaryButton(
                 Text(
                     text = text,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = if (compact) 13.sp else 14.5.sp,
+                    fontSize = if (compact) 13.sp else 14.sp,
                     letterSpacing = (-0.1).sp,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -220,7 +198,7 @@ fun AppSecondaryButton(
 /**
  * 全 App 现代危险警示按钮 (Pure Rose Convex Pill)
  *
- * 纯正珊瑚红立体微凸渐变 + 悬浮深红微光晕，无泛白起雾，质感明确纯正。
+ * 使用主题 error / onError 实色，深浅色与禁用状态统一处理。
  */
 @Composable
 fun AppDangerButton(
@@ -230,30 +208,12 @@ fun AppDangerButton(
     icon: ImageVector? = null,
     enabled: Boolean = true,
     loading: Boolean = false,
-    height: Dp = 46.dp,
+    height: Dp = 48.dp,
     shape: RoundedCornerShape = RoundedCornerShape(50),
     compact: Boolean = false,
 ) {
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
-
-    val gradientBrush = Brush.verticalGradient(
-        if (enabled || loading) listOf(
-            Color(0xFFEF4444), // 纯正警告红（顶部）
-            Color(0xFFDC2626), // 饱满深红（中部）
-            ColorTokens.RedLight.foreground, // 底部阴影收边暗红
-        ) else listOf(
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
-        ),
-    )
-
-    val borderBrush = Brush.verticalGradient(
-        listOf(
-            Color(0xFFF87171).copy(alpha = 0.35f),
-            Color(0xFF991B1B).copy(alpha = 0.30f),
-        ),
-    )
 
     Button(
         onClick = {
@@ -263,25 +223,17 @@ fun AppDangerButton(
         modifier = modifier
             .minimumInteractiveComponentSize()
             .heightIn(min = height)
-            .shadow(
-                elevation = if (enabled && !loading) 1.dp else 0.dp,
-                shape = shape,
-                spotColor = Color(0xFFDC2626).copy(alpha = 0.35f),
-                ambientColor = Color.Black.copy(alpha = 0.15f),
-            )
             .clip(shape)
-            .background(gradientBrush)
-            .border(1.dp, borderBrush, shape)
             .pressFeedback(interactionSource),
         interactionSource = interactionSource,
         enabled = enabled && !loading,
         shape = shape,
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Color.Transparent,
-            contentColor = Color.White,
-            disabledContainerColor = Color.Transparent,
-            disabledContentColor = if (loading) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+            containerColor = MaterialTheme.colorScheme.error,
+            contentColor = MaterialTheme.colorScheme.onError,
+            disabledContainerColor = if (loading) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+            disabledContentColor = if (loading) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
         ),
         contentPadding = PaddingValues(horizontal = if (compact) 12.dp else 20.dp, vertical = 4.dp),
     ) {
@@ -307,10 +259,10 @@ fun AppDangerButton(
                 Text(
                     text = text,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = if (compact) 13.sp else 14.5.sp,
+                    fontSize = if (compact) 13.sp else 14.sp,
                     letterSpacing = (-0.1).sp,
                     color = LocalContentColor.current,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
             }

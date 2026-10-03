@@ -132,23 +132,8 @@ fun AppDialog(
         val adaptive = LocalAdaptiveWindow.current
         val isTablet = adaptive.isTabletOrExpanded
 
-        val sheetColor = if (dark) {
-            MaterialTheme.colorScheme.surface
-        } else {
-            MaterialTheme.colorScheme.surface
-        }
-        val sheetBorder = if (dark) {
-            MaterialTheme.colorScheme.outlineVariant
-        } else {
-            MaterialTheme.colorScheme.outlineVariant
-        }
-        val topHighlight = Brush.verticalGradient(
-            colorStops = arrayOf(
-                0.0f to (if (dark) Color.White.copy(alpha = 0.09f) else Color.White.copy(alpha = 0.35f)),
-                0.15f to Color.Transparent,
-                1.0f to Color.Transparent,
-            ),
-        )
+        val sheetColor = MaterialTheme.colorScheme.surface
+        val sheetBorder = MaterialTheme.colorScheme.outlineVariant
 
         val sheetShape = if (isTablet) {
             RoundedCornerShape(24.dp)
@@ -170,11 +155,11 @@ fun AppDialog(
                 visible = visible,
                 enter = if (isTablet) {
                     fadeIn(animationSpec = tween(MotionTokens.DurationShort, easing = MotionTokens.FastEasing)) +
-                        scaleIn(initialScale = 0.94f, animationSpec = tween(MotionTokens.DurationMedium, easing = MotionTokens.EmphasizedDecelerate))
+                        scaleIn(initialScale = 0.98f, animationSpec = tween(MotionTokens.DurationMedium, easing = MotionTokens.EmphasizedDecelerate))
                 } else {
                     slideInVertically(
                         initialOffsetY = { it },
-                        animationSpec = tween(durationMillis = 260, easing = CubicBezierEasing(0.1f, 0.9f, 0.2f, 1.0f)),
+                        animationSpec = tween(durationMillis = MotionTokens.DurationMedium, easing = CubicBezierEasing(0.1f, 0.9f, 0.2f, 1.0f)),
                     ) + fadeIn(animationSpec = tween(MotionTokens.DurationShort, easing = MotionTokens.FastEasing))
                 },
                 exit = if (isTablet) {
@@ -183,7 +168,7 @@ fun AppDialog(
                 } else {
                     slideOutVertically(
                         targetOffsetY = { it },
-                        animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                        animationSpec = tween(durationMillis = MotionTokens.DurationShort, easing = FastOutSlowInEasing),
                     ) + fadeOut(animationSpec = tween(MotionTokens.DurationShort, easing = MotionTokens.FastEasing))
                 },
                 modifier = if (isTablet) {
@@ -216,8 +201,7 @@ fun AppDialog(
                         )
                         .clip(sheetShape)
                         .background(sheetColor)
-                        .background(topHighlight)
-                        .border(1.dp, sheetBorder, sheetShape),
+                        .border(0.5.dp, sheetBorder, sheetShape),
                 ) {
                     Column(
                         modifier = Modifier
@@ -284,8 +268,8 @@ fun AppDialog(
                                         Text(
                                             text = subtitle,
                                             style = MaterialTheme.typography.bodySmall.copy(
-                                                fontSize = 12.5.sp,
-                                                lineHeight = 17.sp,
+                                                fontSize = 13.sp,
+                                                lineHeight = 20.sp,
                                             ),
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
@@ -322,11 +306,11 @@ fun AppDialog(
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 18.dp, vertical = 10.dp),
+                                    .padding(horizontal = 20.dp, vertical = 12.dp),
                             ) {
                                 Column(
                                     modifier = Modifier.fillMaxWidth(),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
                                 ) {
                                     footer()
                                 }

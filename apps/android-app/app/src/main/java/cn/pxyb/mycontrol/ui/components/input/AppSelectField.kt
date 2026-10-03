@@ -1,5 +1,9 @@
 package cn.pxyb.mycontrol.ui.components.input
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -58,12 +62,12 @@ fun <T> AppSelectField(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 56.dp)
-                .clip(AppCardShape)
+                .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
                 .clickable(enabled = canExpand, role = Role.Button) {
                     AppHaptics.tick(haptics)
                     onExpandedChange(true)
                 },
-            shape = AppCardShape,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceContainerLow,
             border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
         ) {
@@ -89,35 +93,38 @@ fun <T> AppSelectField(
                 Icon(Icons.Outlined.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        DropdownMenu(
-            expanded = expanded && canExpand,
-            onDismissRequest = { onExpandedChange(false) },
-            modifier = Modifier.heightIn(max = 280.dp),
-        ) {
-            options.forEach { option ->
-                key(option.value) {
-                    val active = option.value == value
-                    DropdownMenuItem(
-                        modifier = Modifier.semantics { selected = active },
-                        text = {
-                            Column {
-                                Text(
-                                    option.label,
-                                    fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                if (!option.detail.isNullOrBlank()) {
-                                    Text(option.detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (expanded && canExpand) {
+            cn.pxyb.mycontrol.ui.components.dialog.AppDialog(
+                title = label, onDismissRequest = { onExpandedChange(false) },
+            ) {
+                Column(Modifier.fillMaxWidth().heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState()).selectableGroup()) {
+                    options.forEach { option ->
+                        key(option.value) {
+                            val active = option.value == value
+                            Row(
+                                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium)
+                                    .selectable(selected = active, role = Role.RadioButton) {
+                                        AppHaptics.tick(haptics)
+                                        onExpandedChange(false)
+                                        onValueChange(option.value)
+                                    }.heightIn(min = 56.dp).padding(horizontal = 12.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(option.label, style = MaterialTheme.typography.bodyLarge,
+                                        color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal)
+                                    option.detail?.takeIf { it.isNotBlank() }?.let {
+                                        Text(it, style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                 }
+                                androidx.compose.material3.RadioButton(selected = active, onClick = null)
                             }
-                        },
-                        onClick = {
-                            AppHaptics.tick(haptics)
-                            onExpandedChange(false)
-                            onValueChange(option.value)
-                        },
-                    )
+                        }
+                    }
                 }
             }
         }

@@ -74,7 +74,7 @@ fun AppSwitch(
     val thumbOffset by animateDpAsState(
         targetValue = if (checked) thumbTravel else 0.dp,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
+            dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMedium,
         ),
         label = "appSwitchThumb",
@@ -132,19 +132,6 @@ fun AppSwitch(
     ) {
         Box(
             modifier = Modifier
-                .matchParentSize()
-                .clip(RoundedCornerShape(50))
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = if (dark) 0.10f else 0.26f),
-                            Color.Transparent,
-                        )
-                    )
-                )
-        )
-        Box(
-            modifier = Modifier
                 .align(Alignment.CenterStart)
                 .offset(x = 1.dp + thumbOffset)
                 .size(thumbSize)
@@ -159,10 +146,10 @@ fun AppSwitch(
         ) {
             AnimatedVisibility(
                 visible = checked,
-                enter = scaleIn(animationSpec = tween(durationMillis = 150), initialScale = 0.4f) +
-                    fadeIn(animationSpec = tween(durationMillis = 120)),
-                exit = scaleOut(animationSpec = tween(durationMillis = 120), targetScale = 0.4f) +
-                    fadeOut(animationSpec = tween(durationMillis = 90)),
+                enter = scaleIn(animationSpec = tween(durationMillis = MotionTokens.DurationShort), initialScale = 0.9f) +
+                    fadeIn(animationSpec = tween(durationMillis = MotionTokens.DurationShort)),
+                exit = scaleOut(animationSpec = tween(durationMillis = MotionTokens.DurationShort), targetScale = 0.9f) +
+                    fadeOut(animationSpec = tween(durationMillis = MotionTokens.DurationShort)),
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Check,

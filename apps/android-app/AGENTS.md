@@ -44,7 +44,7 @@
   - 微交互（图标缩放、指示器、高亮切换）：`MotionTokens.DurationShort` (160ms)；
   - 组件与卡片过渡展开：`MotionTokens.DurationMedium` (240ms)；
   - 页面级转场与弹窗展开：`MotionTokens.DurationLong` (320ms)；
-  - 弹性回弹使用 `MotionTokens.BouncySpring`。
+  - 通用按压使用 `MotionTokens.fastTween()`，缩放幅度不超过 3%；开关不使用弹跳。
 - **触觉微反馈 (`AppHaptics`)**：
   - 底部导航 Tab 切换、`AppSwitch` 开关切换、分段选择：触发 `AppHaptics.tick(haptics)`；
   - `PullToRefresh` 下拉刷新超过临界刻度：触发 `AppHaptics.refreshSnap(haptics)`；
@@ -64,16 +64,16 @@
 
 - **三级按钮体系选型准则**：
   1. **主行动按钮 (`AppButton`)**：
-     - **视觉形态**：全圆角胶囊 `RoundedCornerShape(50)`，标准高度 `46.dp`；
-     - **色彩渐变**：使用 `colorScheme.primary` 的轻微渐变；浅色为蓝底白字，深色为浅蓝底深字，文字取 `onPrimary`；
-     - **立体光感**：保留 `1.dp`、主题色 `alpha = 0.18f` 的轻微阴影，不使用强光晕；
+     - **视觉形态**：全圆角胶囊 `RoundedCornerShape(50)`，最小高度 `48.dp`；
+     - **实色表面**：使用 `colorScheme.primary` 实色；浅色为蓝底白字，深色为浅蓝底深字，文字取 `onPrimary`；
+     - **层次**：不添加阴影、高光或渐变描边；
      - **纯净原则（坚决不泛白）**：**绝对禁止在按钮表面叠加半透明白色高光雾蒙层**，蓝白文字对比必须锋利纯正；
-     - **交互触觉**：内置 `pressFeedback` 物理弹性微缩放（按下 0.96 缩放）+ `AppHaptics.tick` 细腻物理微震动；
+     - **交互触觉**：内置 `pressFeedback` 物理弹性微缩放（按下最多 0.97 缩放）+ `AppHaptics.tick` 细腻物理微震动；
      - **状态集成**：直接支持 `loading = true` 平滑加载转圈动画与 `icon` 矢量图标，无需外层手写 `CircularProgressIndicator` 样板代码。
   2. **次要行动按钮 (`AppSecondaryButton`)**：
-     - 采用全圆角胶囊、中性 `surfaceContainerLow` 底色和 `0.5.dp` 中性描边，不加阴影或彩色渐变边框，用于“取消”、“查看说明”、“返回查询”、“写入 NFC”等次要操作，清爽通透，绝不发灰泛白。
+     - 采用全圆角胶囊、中性 `surfaceContainerHigh` 实色底色，不加阴影或彩色渐变边框，用于“取消”、“查看说明”、“返回查询”、“写入 NFC”等次要操作，清爽通透，绝不发灰泛白。
   3. **危险/破坏性按钮 (`AppDangerButton`)**：
-     - 采用珊瑚红立体微凸渐变（`#EF4444` $\rightarrow$ `#DC2626`）+ 红色微光晕投影，用于“删除”、“撤销”、“清空”、“重置”等不可逆高危操作，警示明确、质感高级。
+     - 采用主题 `error` / `onError` 实色配对，用于“删除”、“撤销”、“清空”、“重置”等不可逆高危操作，警示明确、质感高级。
   4. **弹窗按钮配套**：
      - 弹窗内的操作按钮统一使用 `AppDialogPrimaryButton`、`AppDialogSecondaryButton`、`AppDialogDangerButton`，底层已全量委托映射至上述三级胶囊按钮。
      - 注意这三个符号位于同包的 **`ui/components/button/AppDialogButtons.kt`**（不是 `AppButtons.kt`）；`AppButtons.kt` 只放三级胶囊主体与行内危险微胶囊。
@@ -85,6 +85,8 @@
   - **严禁**使用直角、小圆角（如 8dp/10dp/12dp）或方形按钮，必须保持 `RoundedCornerShape(50)` 胶囊圆角；
   - **严禁**在按钮表面覆盖白色渐变雾层导致表面泛白起雾；
   - **严禁**在业务页面私自使用原生 `Button(...)`、`OutlinedButton(...)` 拼凑粗糙按钮。
+
+- **表单与选择**：输入框和选择框统一 16dp 圆角与主题字段底色；`AppSelectField` 使用共享底部选择面板，保留单选语义与可滚动选项。弹窗不叠加白色高光，按钮区间距为 12dp。
 
 ## 7. 加载与网络容错规范 (Loading & Resilience)
 

@@ -90,11 +90,11 @@ fun AppSearchBar(
                 onSearch?.invoke(query)
             },
         ),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = if (borderless) Color.Transparent else MaterialTheme.colorScheme.surface,
-            unfocusedContainerColor = if (borderless) Color.Transparent else MaterialTheme.colorScheme.surface,
-            focusedBorderColor = if (borderless) Color.Transparent else MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
+            focusedContainerColor = if (borderless) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow,
+            unfocusedContainerColor = if (borderless) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow,
+            focusedBorderColor = if (borderless) Color.Transparent else MaterialTheme.colorScheme.primary,
             unfocusedBorderColor = if (borderless) Color.Transparent else if (dark) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.outlineVariant,
             cursorColor = MaterialTheme.colorScheme.primary,
         ),

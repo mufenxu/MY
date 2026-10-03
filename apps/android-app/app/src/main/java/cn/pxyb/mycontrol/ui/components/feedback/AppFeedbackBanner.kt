@@ -152,23 +152,8 @@ fun AppFeedbackBanner(
 
     val shape = RoundedCornerShape(20.dp)
 
-    // 半透明磨砂底色（透出底层动态极光）
-    val surfaceColor = if (dark) {
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
-    } else {
-        MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
-    }
-
-    // 顶部纳米高光微渐变
-    val highlightBrush = Brush.verticalGradient(
-        listOf(
-            if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.35f),
-            Color.Transparent,
-        ),
-    )
-
-    // 1dp 发丝级微描边
-    val borderStrokeColor = accentColor.copy(alpha = if (dark) 0.35f else 0.45f)
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val borderStrokeColor = MaterialTheme.colorScheme.outlineVariant
 
     // 主文本与次文本颜色
     val primaryTextColor = MaterialTheme.colorScheme.onSurface
@@ -186,30 +171,20 @@ fun AppFeedbackBanner(
     AnimatedVisibility(
         visible = isVisible,
         enter = expandVertically(
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessMediumLow,
-            ),
-        ) + fadeIn(tween(240)),
+            animationSpec = cn.pxyb.mycontrol.ui.theme.MotionTokens.standardTween(),
+        ) + fadeIn(cn.pxyb.mycontrol.ui.theme.MotionTokens.fastTween()),
         exit = shrinkVertically(
-            animationSpec = tween(300, easing = FastOutSlowInEasing),
-        ) + fadeOut(tween(200)),
+            animationSpec = cn.pxyb.mycontrol.ui.theme.MotionTokens.standardTween(),
+        ) + fadeOut(cn.pxyb.mycontrol.ui.theme.MotionTokens.fastTween()),
         modifier = modifier,
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .shadow(
-                    elevation = 2.dp,
-                    shape = shape,
-                    spotColor = accentColor.copy(alpha = 0.16f),
-                    ambientColor = Color.Transparent,
-                )
                 .background(surfaceColor, shape)
-                .background(highlightBrush, shape)
-                .border(1.dp, borderStrokeColor, shape)
+                .border(0.5.dp, borderStrokeColor, shape)
                 .clip(shape)
-                .padding(horizontal = 14.dp, vertical = 11.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -267,6 +242,7 @@ fun AppFeedbackBanner(
                     if (onRetry != null) {
                         val retryInteraction = remember { MutableInteractionSource() }
                         Surface(
+                            interactionSource = retryInteraction,
                             onClick = {
                                 AppHaptics.tick(haptics)
                                 onRetry()

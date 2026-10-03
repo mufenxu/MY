@@ -11,18 +11,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-/**
- * 统一加载占位（AppLoadingState）
- *
- * 替代系统默认菊花：极光轨道加载环 + 呼吸脉冲文案，深浅色自适应，可嵌入卡片、弹窗与列表任意容器。
- * 长列表与首屏优先使用同构骨架屏（AppSkeletonList / AppSkeletonInlineRows）。
- */
+/** 轻量加载进度与静态说明；首屏长列表继续使用骨架屏。 */
 @Composable
 fun AppLoadingState(
     label: String,
     modifier: Modifier = Modifier,
 ) {
-    val pulse = rememberSkeletonPulse(minAlpha = 0.5f, maxAlpha = 1f, durationMillis = 980)
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -30,11 +24,15 @@ fun AppLoadingState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        AppOrbitLoader(size = 34.dp, strokeWidth = 3.dp)
+        androidx.compose.material3.LinearProgressIndicator(
+            modifier = Modifier.fillMaxWidth(0.35f),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        )
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = pulse),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

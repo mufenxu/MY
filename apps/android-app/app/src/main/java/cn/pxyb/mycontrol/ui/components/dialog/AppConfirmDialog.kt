@@ -59,7 +59,7 @@ fun AppConfirmDialog(
         footer = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 AppDialogSecondaryButton(
                     text = dismissLabel,

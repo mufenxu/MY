@@ -142,7 +142,7 @@ fun AppTextField(
                 focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
                 disabledBorderColor = MaterialTheme.colorScheme.outlineVariant,
                 errorBorderColor = MaterialTheme.colorScheme.error,
@@ -155,8 +155,8 @@ fun AppTextField(
 
         AnimatedVisibility(
             visible = isError,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(cn.pxyb.mycontrol.ui.theme.MotionTokens.fastTween()),
+            exit = fadeOut(cn.pxyb.mycontrol.ui.theme.MotionTokens.fastTween()),
         ) {
             Text(
                 text = errorMessage.orEmpty(),
