@@ -37,6 +37,8 @@ fun AppSearchBar(
     onSearch: ((String) -> Unit)? = null,
     trailingContent: (@Composable () -> Unit)? = null,
     keyboardType: KeyboardType = KeyboardType.Text,
+    leadingContent: (@Composable () -> Unit)? = null,
+    borderless: Boolean = false,
 ) {
     val dark = isAppInDarkTheme()
     val focusManager = LocalFocusManager.current
@@ -54,7 +56,7 @@ fun AppSearchBar(
             )
         },
         leadingIcon = {
-            Icon(
+            if (leadingContent != null) leadingContent() else Icon(
                 imageVector = Icons.Outlined.Search,
                 contentDescription = "搜索",
                 tint = MaterialTheme.colorScheme.primary,
@@ -90,10 +92,10 @@ fun AppSearchBar(
         ),
         shape = RoundedCornerShape(20.dp),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surface,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-            focusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
-            unfocusedBorderColor = if (dark) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.outlineVariant,
+            focusedContainerColor = if (borderless) Color.Transparent else MaterialTheme.colorScheme.surface,
+            unfocusedContainerColor = if (borderless) Color.Transparent else MaterialTheme.colorScheme.surface,
+            focusedBorderColor = if (borderless) Color.Transparent else MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
+            unfocusedBorderColor = if (borderless) Color.Transparent else if (dark) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.outlineVariant,
             cursorColor = MaterialTheme.colorScheme.primary,
         ),
     )

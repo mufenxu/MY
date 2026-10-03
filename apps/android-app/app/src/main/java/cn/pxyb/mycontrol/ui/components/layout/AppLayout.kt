@@ -35,6 +35,8 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -93,6 +95,23 @@ internal fun appPageContentPadding(
 )
 
 @Composable
+internal fun AppTopBarSurface(
+    modifier: Modifier = Modifier,
+    content: @Composable RowScope.() -> Unit,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(32.dp),
+        color = if (isAppInDarkTheme()) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
+        shadowElevation = 1.dp,
+    ) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically, content = content)
+    }
+}
+
+@Composable
 fun AppSecondaryHeader(
     title: String,
     subtitle: String,
@@ -101,26 +120,24 @@ fun AppSecondaryHeader(
     showBack: Boolean = true,
     actions: (@Composable RowScope.() -> Unit)? = null,
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth().padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (showBack) AppHeaderIconButton(
-            icon = Icons.AutoMirrored.Outlined.ArrowBack,
-            contentDescription = "返回", onClick = onBack,
-        )
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface)
-            if (subtitle.isNotBlank() && appContentHeight() >= 360.dp) {
-                Text(subtitle, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
-                    overflow = TextOverflow.Ellipsis)
+    Column(modifier.fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        AppTopBarSurface {
+            if (showBack) AppHeaderIconButton(
+                icon = Icons.AutoMirrored.Outlined.ArrowBack,
+                contentDescription = "返回", onClick = onBack,
+            ) else Box(Modifier.padding(start = 4.dp, end = 8.dp).size(32.dp)
+                .background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) {
+                Text("M", color = MaterialTheme.colorScheme.onPrimary,
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
+            Text(title, modifier = Modifier.weight(1f).padding(horizontal = 4.dp).semantics { heading() },
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
+                color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) { actions?.invoke(this) }
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            actions?.invoke(this)
+        if (showBack && subtitle.isNotBlank() && appContentHeight() >= 360.dp) {
+            Text(subtitle, modifier = Modifier.padding(horizontal = 12.dp), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -214,6 +231,7 @@ fun AppSubPage(
     listState: LazyListState = rememberLazyListState(),
     showBack: Boolean = true,
     body: (@Composable () -> Unit)? = null,
+    header: (@Composable () -> Unit)? = null,
     content: LazyListScope.() -> Unit = {},
 ) {
     BackHandler(enabled = !LocalAppNavigationHandlesBack.current, onBack = onBack)
@@ -254,7 +272,7 @@ fun AppSubPage(
                             .padding(horizontal = AppPageHorizontalPadding)
                             .padding(bottom = 12.dp),
                     ) {
-                        AppSecondaryHeader(
+                        if (header != null) header() else AppSecondaryHeader(
                             title = title,
                             subtitle = subtitle,
                             onBack = onBack,
@@ -297,7 +315,7 @@ fun AppSubPage(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     item(key = "app-subpage-header", contentType = "header") {
-                        AppSecondaryHeader(
+                        if (header != null) header() else AppSecondaryHeader(
                             title = title,
                             subtitle = subtitle,
                             onBack = onBack,

@@ -54,25 +54,16 @@ internal fun ModernOverviewHeader(
     onOpenNotifications: () -> Unit,
     calendarText: String? = null,
 ) {
-    val hour = java.time.LocalTime.now().hour
-    val greeting = when (hour) {
-        in 5..10 -> "早上好"
-        in 11..13 -> "中午好"
-        in 14..17 -> "下午好"
-        else -> "晚上好"
-    }
-    Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(greeting, style = MaterialTheme.typography.headlineLarge)
-            Text("把今天，安排得刚刚好。", style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
-            icon = Icons.Outlined.Search, contentDescription = "全局搜索", onClick = onOpenSearch)
-        AppNotificationButton(unreadCount = unreadCount, onClick = onOpenNotifications, shape = CircleShape)
-        cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
-            icon = Icons.Outlined.CenterFocusWeak, contentDescription = "扫码登录", onClick = onOpenQrLogin)
-    }
+    cn.pxyb.mycontrol.ui.components.layout.AppSecondaryHeader(
+        title = "今日", subtitle = "", showBack = false, onBack = {},
+        actions = {
+            cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
+                icon = Icons.Outlined.Search, contentDescription = "全局搜索", onClick = onOpenSearch)
+            AppNotificationButton(unreadCount = unreadCount, onClick = onOpenNotifications, shape = CircleShape)
+            cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
+                icon = Icons.Outlined.CenterFocusWeak, contentDescription = "扫码登录", onClick = onOpenQrLogin)
+        },
+    )
 }
 
 /** 分组标题：灵动微岛毛玻璃浮标 (Dynamic Floating Island Pill) */

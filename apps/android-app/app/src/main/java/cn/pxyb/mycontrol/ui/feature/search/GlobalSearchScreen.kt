@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Checklist
@@ -29,7 +31,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,7 +57,6 @@ import cn.pxyb.mycontrol.ui.components.layout.appContentWidth
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
-import kotlinx.coroutines.flow.first
 
 @Composable
 fun GlobalSearchScreen(
@@ -72,7 +72,7 @@ fun GlobalSearchScreen(
     val listState = rememberLazyListState()
     LaunchedEffect(focusRequest) {
         listState.scrollToItem(0)
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.any { it.key == "search-input" } }.first { it }
+        androidx.compose.runtime.withFrameNanos { }
         searchFocus.requestFocus()
     }
     val categories = remember(state.items) { state.items.map { it.category }.distinct() }
@@ -110,15 +110,27 @@ fun GlobalSearchScreen(
         pinHeader = true,
         listState = listState,
         refreshing = state.refreshing,
+        header = {
+            cn.pxyb.mycontrol.ui.components.layout.AppTopBarSurface(Modifier.padding(vertical = 8.dp)) {
+                AppSearchBar(
+                    modifier = Modifier.weight(1f).focusRequester(searchFocus),
+                    query = query, onQueryChange = { query = it },
+                    placeholder = "搜索功能、课程、设备或任务",
+                    borderless = true,
+                    leadingContent = {
+                        cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
+                            androidx.compose.material.icons.Icons.AutoMirrored.Outlined.ArrowBack, "返回", onBack)
+                    },
+                    trailingContent = {
+                        cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
+                            androidx.compose.material.icons.Icons.Outlined.Close,
+                            if (query.isEmpty()) "关闭搜索" else "清除搜索",
+                            { if (query.isEmpty()) onBack() else query = "" })
+                    },
+                )
+            }
+        },
     ) {
-        item(key = "search-input") {
-            AppSearchBar(
-                modifier = Modifier.focusRequester(searchFocus),
-                query = query,
-                onQueryChange = { query = it },
-                placeholder = "搜索功能、课程、设备或任务",
-            )
-        }
         item(key = "search-categories") {
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
