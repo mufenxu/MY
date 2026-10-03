@@ -439,7 +439,7 @@ internal fun QuickAction(
             .clip(RoundedCornerShape(16.dp))
             .clickable(
                 interactionSource = interactionSource,
-                indication = null,
+                indication = androidx.compose.foundation.LocalIndication.current,
                 role = Role.Button,
                 onClick = onClick,
             )
@@ -448,21 +448,21 @@ internal fun QuickAction(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         androidx.compose.foundation.layout.Box(
-            modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center,
+            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)), contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(26.dp),
+            Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp),
                 tint = MaterialTheme.colorScheme.primary)
         }
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall.copy(
                 fontWeight = FontWeight.Medium,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 letterSpacing = (-0.1).sp,
             ),
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,
-            minLines = 2,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )

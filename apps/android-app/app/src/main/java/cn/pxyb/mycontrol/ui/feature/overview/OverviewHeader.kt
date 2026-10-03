@@ -1,6 +1,7 @@
 package cn.pxyb.mycontrol.ui.feature.overview
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -22,6 +24,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -48,33 +54,25 @@ internal fun ModernOverviewHeader(
     onOpenNotifications: () -> Unit,
     calendarText: String? = null,
 ) {
-    val weekTag = remember(calendarText) { extractHeaderWeekTag(calendarText) }
-    cn.pxyb.mycontrol.ui.components.layout.AppSecondaryHeader(
-        title = "今日",
-        subtitle = "我的工作台 · $weekTag",
-        onBack = {},
-        showBack = false,
-        actions = {
-            cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
-                icon = Icons.Outlined.Search, contentDescription = "全局搜索", onClick = onOpenSearch,
-            )
-            AppNotificationButton(unreadCount = unreadCount, onClick = onOpenNotifications, shape = CircleShape)
-            cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
-                icon = Icons.Outlined.CenterFocusWeak, contentDescription = "扫码登录", onClick = onOpenQrLogin,
-            )
-        },
-    )
-}
-
-private fun extractHeaderWeekTag(calendarText: String?): String {
-    if (calendarText.isNullOrBlank()) return "第3周"
-    val regex = Regex("""第\s*\d+\s*周""")
-    val match = regex.find(calendarText)
-    if (match != null) return match.value.replace(" ", "")
-    val weekdayRegex = Regex("""周[一二三四五六日天]""")
-    val weekdayMatch = weekdayRegex.find(calendarText)
-    if (weekdayMatch != null) return weekdayMatch.value
-    return "第3周"
+    val hour = java.time.LocalTime.now().hour
+    val greeting = when (hour) {
+        in 5..10 -> "早上好"
+        in 11..13 -> "中午好"
+        in 14..17 -> "下午好"
+        else -> "晚上好"
+    }
+    Row(Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(greeting, style = MaterialTheme.typography.headlineLarge)
+            Text("把今天，安排得刚刚好。", style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
+            icon = Icons.Outlined.Search, contentDescription = "全局搜索", onClick = onOpenSearch)
+        AppNotificationButton(unreadCount = unreadCount, onClick = onOpenNotifications, shape = CircleShape)
+        cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton(
+            icon = Icons.Outlined.CenterFocusWeak, contentDescription = "扫码登录", onClick = onOpenQrLogin)
+    }
 }
 
 /** 分组标题：灵动微岛毛玻璃浮标 (Dynamic Floating Island Pill) */
@@ -86,13 +84,25 @@ internal fun OverviewSectionTitle(
     tag: String? = null,
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    AppSectionHeader(
-        title = title,
-        subtitle = subtitle,
-        accent = dotColor,
-        tag = tag,
-        trailing = trailing,
-    )
+    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, Modifier.weight(1f).semantics { heading() },
+            style = MaterialTheme.typography.titleLarge)
+        if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!tag.isNullOrBlank()) Text(tag, style = MaterialTheme.typography.labelSmall, color = dotColor)
+        trailing?.invoke()
+    }
+}
+
+@Composable
+internal fun HomeTextAction(text: String, onClick: () -> Unit) {
+    Box(Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+        .clickable(role = Role.Button, onClick = onClick).heightIn(min = 48.dp)
+        .padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
+        Text(text, style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 
 private var scanViewfinder: ImageVector? = null

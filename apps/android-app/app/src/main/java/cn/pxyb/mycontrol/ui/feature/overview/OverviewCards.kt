@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.overview
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,11 +8,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -20,6 +24,7 @@ import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,6 +33,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -57,57 +63,88 @@ internal fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (Workspac
             nowMillis = System.currentTimeMillis()
         }
     }
-    val courseAction = remember(state.timetable, nowMillis) {
-        buildPersonalAssistantSnapshot(nowMillis = nowMillis, timetable = state.timetable).nextAction.takeIf { it.id.startsWith("course:") }
+    val snapshot = remember(state.timetable, nowMillis) {
+        buildPersonalAssistantSnapshot(nowMillis = nowMillis, timetable = state.timetable)
     }
+    val course = state.timetable?.courses?.firstOrNull { "course:${it.id}" == snapshot.nextAction.id }
     val pendingTodos = remember(state.todoSnapshot.tasks) {
         state.todoSnapshot.tasks.filterNot { it.completed }.sortedBy { it.dueAt ?: Long.MAX_VALUE }
     }
+    val colors = MaterialTheme.colorScheme
+    val accent = if (isAppInDarkTheme()) colors.primary else cn.pxyb.mycontrol.ui.theme.HomeFocusBlue
+    val onAccent = if (isAppInDarkTheme()) colors.onPrimary else colors.surface
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        OverviewSectionTitle("今天的安排", tag = "${pendingTodos.size} 项待办")
         AppPanel {
-            AppActionRow(
-                title = courseAction?.title ?: if (state.timetable == null) "查看今日课程" else "今天暂无后续课程",
-                subtitle = courseAction?.detail ?: if (state.timetable == null) "打开日程加载课表" else "打开日程，安排接下来的时间",
-                icon = Icons.Outlined.CalendarMonth,
-                onClick = { onOpenWorkspace(WorkspaceDestination.Today) },
-            )
-        }
-        AppDivider()
-        AppPanel(onClick = { onOpenWorkspace(WorkspaceDestination.Todos) }) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("待办清单", modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("查看全部", style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary)
-                }
-                if (pendingTodos.isEmpty()) {
-                    Text("暂无待办，记录下一件要完成的事", style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    pendingTodos.take(2).forEach { todo ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-                            Icon(Icons.Outlined.RadioButtonUnchecked, contentDescription = null,
-                                modifier = Modifier.padding(top = 2.dp).size(18.dp),
-                                tint = MaterialTheme.colorScheme.outline)
-                            Text(todo.title, style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface, maxLines = 2,
-                                overflow = TextOverflow.Ellipsis)
-                        }
+            Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                listOf("今日概览", "本周课表", "校园服务").forEachIndexed { index, label ->
+                    Box(
+                        Modifier.weight(1f).clip(RoundedCornerShape(24.dp))
+                            .background(if (index == 0) accent.copy(alpha = 0.10f) else Color.Transparent)
+                            .clickable(role = Role.Button) {
+                                if (index != 0) onOpenWorkspace(if (index == 1) WorkspaceDestination.Timetable else WorkspaceDestination.Campus)
+                            }.heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(label, style = MaterialTheme.typography.labelMedium,
+                            color = if (index == 0) accent else colors.onSurfaceVariant,
+                            fontWeight = if (index == 0) FontWeight.SemiBold else FontWeight.Normal)
                     }
                 }
             }
         }
-        AppDivider()
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            AppPanel(modifier = Modifier.weight(1f)) {
-                AppActionRow(title = "本学期课表", icon = Icons.Outlined.CalendarMonth,
-                    trailingContent = null, onClick = { onOpenWorkspace(WorkspaceDestination.Timetable) })
+        Surface(
+            onClick = { onOpenWorkspace(WorkspaceDestination.Today) },
+            shape = RoundedCornerShape(24.dp), color = accent, contentColor = onAccent,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    if (course == null) "今日课程" else if (snapshot.classFocusUntilMillis != null) "正在上课" else "下一节课",
+                    modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(onAccent.copy(alpha = 0.14f))
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                )
+                Text(course?.courseName ?: if (state.timetable == null) "查看今日课程" else "今天暂无后续课程",
+                    style = MaterialTheme.typography.headlineMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(course?.let { listOf(it.location, it.teacher).filter(String::isNotBlank).joinToString(" · ") }
+                        ?.ifBlank { "打开日程查看课程详情" }
+                        ?: if (state.timetable == null) "打开日程加载课表" else "把时间留给想做的事",
+                    color = onAccent.copy(alpha = 0.8f), style = MaterialTheme.typography.bodySmall)
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(course?.timeRange?.ifBlank { "查看日程" } ?: "查看日程",
+                        modifier = Modifier.weight(1f), style = if (course != null) MaterialTheme.typography.headlineLarge else MaterialTheme.typography.titleLarge)
+                    Box(Modifier.size(44.dp).clip(CircleShape).background(onAccent), contentAlignment = Alignment.Center) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowForward, null, tint = accent, modifier = Modifier.size(22.dp))
+                    }
+                }
             }
-            AppPanel(modifier = Modifier.weight(1f)) {
-                AppActionRow(title = "校园服务", icon = Icons.Outlined.Apps,
-                    trailingContent = null, onClick = { onOpenWorkspace(WorkspaceDestination.Campus) })
+        }
+        OverviewSectionTitle("待办", trailing = {
+            HomeTextAction("查看全部", onClick = { onOpenWorkspace(WorkspaceDestination.Todos) })
+        })
+        AppPanel(onClick = { onOpenWorkspace(WorkspaceDestination.Todos) }) {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                if (pendingTodos.isEmpty()) {
+                    Text("暂无待办，记录下一件要完成的事", Modifier.padding(vertical = 16.dp),
+                        style = MaterialTheme.typography.bodyMedium, color = colors.onSurfaceVariant)
+                } else pendingTodos.take(2).forEachIndexed { index, todo ->
+                    if (index > 0) AppDivider()
+                    Row(Modifier.fillMaxWidth().padding(vertical = 16.dp), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Icon(Icons.Outlined.RadioButtonUnchecked, null, tint = colors.outline, modifier = Modifier.size(20.dp))
+                        Text(todo.title, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        val dueToday = todo.dueAt?.let {
+                            java.time.Instant.ofEpochMilli(it).atZone(java.time.ZoneId.systemDefault()).toLocalDate() ==
+                                java.time.Instant.ofEpochMilli(nowMillis).atZone(java.time.ZoneId.systemDefault()).toLocalDate()
+                        } == true
+                        if (dueToday) Text("今天到期", style = MaterialTheme.typography.labelSmall,
+                            color = cn.pxyb.mycontrol.ui.theme.ColorTokens.Amber.foreground,
+                            modifier = Modifier.clip(RoundedCornerShape(16.dp))
+                                .background(cn.pxyb.mycontrol.ui.theme.ColorTokens.Amber.container)
+                                .padding(horizontal = 8.dp, vertical = 4.dp))
+                    }
+                }
             }
         }
     }

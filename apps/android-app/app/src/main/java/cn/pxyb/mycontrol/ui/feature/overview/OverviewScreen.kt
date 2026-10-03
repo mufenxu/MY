@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui.feature.overview
 
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 
@@ -25,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -81,6 +84,7 @@ fun OverviewScreen(
     onUpdateQuickActions: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
     requestExternalApplicationLaunch: suspend (String) -> ExternalApplicationLaunch,
 ) {
+    var showAllQuickActions by rememberSaveable { mutableStateOf(false) }
     var customizingQuickActions by remember { mutableStateOf(false) }
     var confirmBackup by remember { mutableStateOf(false) }
     var openingExternalApplicationId by remember { mutableStateOf<String?>(null) }
@@ -98,6 +102,7 @@ fun OverviewScreen(
     val quickActionRows = remember(state.homeQuickActionOrder, state.hiddenHomeQuickActions, quickActionColumns) {
         state.homeQuickActionOrder.filterNot { it == HomeQuickAction.Today || it in state.hiddenHomeQuickActions }.chunked(quickActionColumns)
     }
+    val visibleQuickActionRows = if (showAllQuickActions) quickActionRows else quickActionRows.take(1)
     val applicationRows = remember(state.externalApplications) { state.externalApplications.chunked(2) }
     val listState = rememberLazyListState()
     val dark = isAppInDarkTheme()
@@ -170,12 +175,13 @@ fun OverviewScreen(
 
     val quickActions: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            OverviewSectionTitle("常用入口", trailing = {
-                AppHeaderIconButton(Icons.Outlined.Edit, "调整常用入口", { customizingQuickActions = true })
+            OverviewSectionTitle("我的常用", trailing = {
+                if (quickActionRows.size > 1) HomeTextAction(if (showAllQuickActions) "收起" else "展开") { showAllQuickActions = !showAllQuickActions }
+                HomeTextAction("编辑") { customizingQuickActions = true }
             })
             if (quickActionRows.isNotEmpty()) AppPanel {
                 Column(Modifier.padding(horizontal = 6.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    quickActionRows.forEach { row ->
+                    visibleQuickActionRows.forEach { row ->
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                             row.forEach { action ->
                                 val spec = homeQuickActionSpec(
@@ -196,20 +202,24 @@ fun OverviewScreen(
         }
     }
     val statusSummary: @Composable () -> Unit = {
-        AppPanel {
-            AppActionRow(
-                title = when {
-                    activeIncidents.isNotEmpty() -> "${activeIncidents.size} 项系统问题需要关注"
-                    needsAttention -> "部分服务需要关注"
-                    monitored.isNotEmpty() -> "系统运行正常"
-                    else -> "系统状态"
-                },
-                subtitle = if (activeIncidents.isNotEmpty()) activeIncidents.take(2).joinToString("；") { it.title }
-                    else "${monitored.count { it.state == "healthy" }} / ${monitored.size} 项服务正常 · 查看状态与维护",
-                icon = if (needsAttention) Icons.Outlined.ErrorOutline else Icons.Outlined.CloudDone,
-                iconTint = if (needsAttention) ColorTokens.Amber.foreground else MaterialTheme.colorScheme.primary,
-                onClick = onOpenOperations,
-            )
+        Row(Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onOpenOperations)
+            .padding(horizontal = 8.dp, vertical = 16.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            androidx.compose.material3.Icon(
+                if (needsAttention) Icons.Outlined.ErrorOutline else Icons.Outlined.CloudDone, null,
+                tint = if (needsAttention) ColorTokens.Amber.foreground else ColorTokens.Green.foreground,
+                modifier = Modifier.size(16.dp))
+            androidx.compose.material3.Text(when {
+                activeIncidents.isNotEmpty() -> "${activeIncidents.size} 项系统问题需要关注"
+                needsAttention -> "部分服务需要关注"
+                monitored.isNotEmpty() -> "${monitored.size} 项服务运行正常"
+                else -> "服务状态待更新"
+            }, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            androidx.compose.material3.Text("查看状态", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
     PullToRefresh(

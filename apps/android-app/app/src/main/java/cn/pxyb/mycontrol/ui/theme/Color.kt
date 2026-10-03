@@ -6,6 +6,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
 
 // Primary Tech Accent Colors
+val HomeFocusBlue = Color(0xFF4B64DE)
 val BrandBlue = Color(0xFF2563EB)
 val BrandCyan = Color(0xFF3B82F6)
 val BrandLightBlue = Color(0xFF60A5FA)
