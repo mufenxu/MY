@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.workspace
 
+import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.material.icons.outlined.Refresh
@@ -275,13 +276,14 @@ fun TodayScreen(
                     } else {
                         "当前展示离线快照，个人待办仍可编辑。"
                     },
-                    error = false,
+                    type = AppFeedbackType.Info,
+                    showCloseButton = false,
                 )
             }
         }
         state.sectionError?.let { message ->
             item(key = "today-error", contentType = "banner") {
-                AppFeedbackBanner("部分今日数据暂不可用：$message", error = true)
+                AppFeedbackBanner("部分今日数据暂不可用：$message", error = true, onRetry = refreshWorkspace)
             }
         }
 

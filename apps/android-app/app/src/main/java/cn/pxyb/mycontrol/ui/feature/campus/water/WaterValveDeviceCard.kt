@@ -39,7 +39,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.CampusWaterValveDevice
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
@@ -151,7 +150,7 @@ internal fun WaterValveDeviceCard(
                         )
                         Text(
                             text = if (device.running) "出水中" else "待命中",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                             color = if (device.running) {
                                 MaterialTheme.colorScheme.onPrimaryContainer
                             } else {
@@ -234,7 +233,6 @@ internal fun WaterValveDeviceCard(
                     Text(
                         text = if (device.running) "设备状态：高速供水中" else "设备状态：阀门已就绪",
                         style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 11.sp,
                             fontWeight = if (device.running) FontWeight.Bold else FontWeight.Medium,
                         ),
                         color = if (device.running) {
@@ -260,7 +258,7 @@ internal fun WaterValveDeviceCard(
             }
             Text(
                 text = "同步于 ${formatPlatformTime(device.updatedAt)}",
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier.align(Alignment.End),
             )
@@ -303,13 +301,12 @@ private fun WaterValveMetricTile(
             ) {
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
                     text = tag,
                     style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 9.5.sp,
                         fontWeight = FontWeight.Medium,
                     ),
                     color = if (running) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
@@ -331,7 +328,6 @@ private fun WaterValveMetricTile(
                     text = value,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Black,
-                        fontSize = 17.sp,
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -340,7 +336,7 @@ private fun WaterValveMetricTile(
                 if (!unit.isNullOrBlank() && value != "--") {
                     Text(
                         text = unit,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                         modifier = Modifier.padding(bottom = 1.dp),
                     )

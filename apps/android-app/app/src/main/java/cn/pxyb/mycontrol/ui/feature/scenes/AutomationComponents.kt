@@ -65,7 +65,7 @@ internal fun AutomationRuleCard(
     var pendingEnabled by remember(rule.id) { mutableStateOf<Boolean?>(null) }
     var confirmDelete by remember(rule.id) { mutableStateOf(false) }
     AppPanel {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 AppIconTile(
                     icon = if (matched) Icons.Outlined.Bolt else Icons.Outlined.Tune,

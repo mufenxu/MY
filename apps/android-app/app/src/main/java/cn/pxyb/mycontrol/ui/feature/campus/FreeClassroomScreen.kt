@@ -35,7 +35,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.CampusFreeClassroomBuilding
 import cn.pxyb.mycontrol.data.CampusFreeClassroomOption
 import cn.pxyb.mycontrol.data.CampusFreeClassroomRoom
@@ -402,12 +401,11 @@ private fun FreeClassroomBuildingHeader(building: CampusFreeClassroomBuilding) {
                     building.name.ifBlank { "教学楼" },
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
                     ),
                 )
                 Text(
                     building.number.takeIf(String::isNotBlank)?.let { "楼宇编号 $it" } ?: "新校区",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -419,7 +417,7 @@ private fun FreeClassroomBuildingHeader(building: CampusFreeClassroomBuilding) {
                 )
                 Text(
                     "${building.seats} 座",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -438,7 +436,6 @@ private fun FreeClassroomRoomCard(room: CampusFreeClassroomRoom, modifier: Modif
                 room.room.ifBlank { "教室待同步" },
                 style = MaterialTheme.typography.titleSmall.copy(
                     fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
                 ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -448,7 +445,7 @@ private fun FreeClassroomRoomCard(room: CampusFreeClassroomRoom, modifier: Modif
                     room.floor?.takeIf(String::isNotBlank),
                     room.seats?.let { "$it 座" },
                 ).joinToString(" · ").ifBlank { "可用" },
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

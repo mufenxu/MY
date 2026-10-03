@@ -61,7 +61,7 @@ internal fun SceneCard(
 ) {
     var pendingAction by remember(scene.id) { mutableStateOf<String?>(null) }
     AppPanel {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 AppIconTile(Icons.Outlined.Tune, ColorTokens.Green.foreground, ColorTokens.Green.container)
                 Column(Modifier.weight(1f)) {

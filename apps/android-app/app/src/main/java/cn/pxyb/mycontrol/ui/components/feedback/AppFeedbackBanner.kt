@@ -57,6 +57,10 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalAccessibilityManager
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
@@ -74,17 +78,7 @@ enum class AppFeedbackType {
     Info,
 }
 
-/**
- * 标准页面内嵌操作反馈横幅 (AppFeedbackBanner)
- *
- * 采用 2026 视觉规范【极光微光毛玻璃胶囊 (Aurora Glass Capsule)】+【方案 D 灵动倒计时微光圆环】：
- * - 20dp 饱满圆角 + 75% 半透明磨砂毛玻璃底座，透出底层极光光斑；
- * - 顶部纳米级高光渐变 + 1dp 发丝级状态微光描边（翠绿 ColorTokens.Green.foreground / 珊瑚红 ColorTokens.Red.foreground）；
- * - 左侧 32dp 同心光环 3D 拟态微徽标舱，立体透亮；
- * - 右侧方案 D 倒计时微光进度圆环：成功类通知支持 4 秒平滑倒计时收窄并在结束时自动向上折叠淡出；
- * - 随时支持点击叉号手动立即关闭，满足 48×48 dp 无障碍判定热区与弹性触控微震动；
- * - 内置自主状态控制，即使外层 ViewModel 未显式清空，用户点击关闭即可就地平滑消失。
- */
+/** 主题反馈横幅：成功短暂显示，持续状态保留；重试与关闭由调用方决定。 */
 @Composable
 fun AppFeedbackBanner(
     message: String,
@@ -95,11 +89,20 @@ fun AppFeedbackBanner(
     onRetry: (() -> Unit)? = null,
     retryText: String = "重试",
     showCloseButton: Boolean = true,
-    autoDismissDurationMillis: Long? = 4000L,
+    autoDismissDurationMillis: Long? = if (type == AppFeedbackType.Success) 4000L else null,
     onDismiss: (() -> Unit)? = null,
 ) {
     val dark = isAppInDarkTheme()
     val haptics = LocalHapticFeedback.current
+    val accessibilityManager = LocalAccessibilityManager.current
+    val dismissTimeout = autoDismissDurationMillis?.let {
+        accessibilityManager?.calculateRecommendedTimeoutMillis(
+            originalTimeoutMillis = it,
+            containsIcons = true,
+            containsText = true,
+            containsControls = showCloseButton || onRetry != null,
+        ) ?: it
+    }
 
     val accentColor = when (type) {
         AppFeedbackType.Success -> ColorTokens.Green.foreground
@@ -113,8 +116,8 @@ fun AppFeedbackBanner(
 
     // 倒计时动画（1f -> 0f）
     val progressAnim = remember(message, type) { Animatable(1f) }
-    val isAutoDismissable = autoDismissDurationMillis != null &&
-        autoDismissDurationMillis > 0L &&
+    val isAutoDismissable = dismissTimeout != null &&
+        dismissTimeout > 0L &&
         type != AppFeedbackType.Error
 
     // 触觉反馈联动（当提示刷新出现时给用户细腻触感）
@@ -127,14 +130,14 @@ fun AppFeedbackBanner(
     }
 
     // 4 秒自动倒计时平滑收起
-    LaunchedEffect(message, type, isVisible) {
+    LaunchedEffect(message, type, isVisible, dismissTimeout) {
         if (!isVisible) return@LaunchedEffect
         if (isAutoDismissable) {
             progressAnim.snapTo(1f)
             progressAnim.animateTo(
                 targetValue = 0f,
                 animationSpec = tween(
-                    durationMillis = autoDismissDurationMillis.toInt(),
+                    durationMillis = dismissTimeout!!.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
                     easing = LinearEasing,
                 ),
             )
@@ -176,7 +179,7 @@ fun AppFeedbackBanner(
         exit = shrinkVertically(
             animationSpec = cn.pxyb.mycontrol.ui.theme.MotionTokens.standardTween(),
         ) + fadeOut(cn.pxyb.mycontrol.ui.theme.MotionTokens.fastTween()),
-        modifier = modifier,
+        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
     ) {
         Box(
             modifier = Modifier

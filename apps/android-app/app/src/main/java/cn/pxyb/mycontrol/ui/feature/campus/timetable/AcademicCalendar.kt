@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.CampusAcademicCalendar
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
@@ -29,7 +28,7 @@ internal fun AcademicCalendarSummary(calendar: CampusAcademicCalendar) {
     AppPanel {
         Column(
             modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -45,7 +44,6 @@ internal fun AcademicCalendarSummary(calendar: CampusAcademicCalendar) {
                             "学校校历",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp,
                             ),
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -53,7 +51,6 @@ internal fun AcademicCalendarSummary(calendar: CampusAcademicCalendar) {
                             calendar.termLabel.ifBlank { "本学期" },
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
                             ),
                         )
                     }
@@ -64,7 +61,7 @@ internal fun AcademicCalendarSummary(calendar: CampusAcademicCalendar) {
                     if (dateRange.isNotBlank()) {
                         Text(
                             dateRange,
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -78,7 +75,6 @@ internal fun AcademicCalendarSummary(calendar: CampusAcademicCalendar) {
                         calendar.statusText.ifBlank { if (calendar.isHoliday) "假期中" else "在校周" },
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
                             color = if (calendar.isHoliday) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.primary,
                         ),
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -115,7 +111,7 @@ internal fun AcademicCalendarSummary(calendar: CampusAcademicCalendar) {
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.40f))
                 Text(
                     "校历安排",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.5.sp),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 calendar.events.take(4).forEach { event ->
@@ -123,7 +119,7 @@ internal fun AcademicCalendarSummary(calendar: CampusAcademicCalendar) {
                         listOf(event.label, event.startDate.takeIf(String::isNotBlank), event.endDate.takeIf { it.isNotBlank() && it != event.startDate })
                             .filterNotNull()
                             .joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
@@ -153,7 +149,7 @@ private fun CalendarFactBlock(
         ) {
             Text(
                 label,
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
@@ -161,7 +157,6 @@ private fun CalendarFactBlock(
                 value,
                 style = MaterialTheme.typography.labelLarge.copy(
                     fontWeight = FontWeight.Bold,
-                    fontSize = 13.5.sp,
                     color = accent,
                 ),
                 maxLines = 1,

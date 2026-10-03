@@ -65,7 +65,6 @@ import androidx.core.view.WindowCompat
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.LocalAdaptiveWindow
 import cn.pxyb.mycontrol.ui.components.layout.ProvideAppContentLayout
-import cn.pxyb.mycontrol.ui.theme.BrandBlue
 import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
@@ -75,15 +74,7 @@ enum class AppDialogSize(val maxWidth: Dp) {
     Workspace(1040.dp),
 }
 
-/**
- * 全 App 统一的原生极光弹窗体系 (AppDialog / Bottom Sheet Drawer)
- *
- * 1. 手机端自适应为【底部半模态流光抽屉】(Bottom Sheet)，带有顶部 36×4dp 极简拖拽手柄、28dp 大圆角与弹性滑出动效，
- *    彻底解决旧版居中大方块单手难以够到、压迫感强烈的痛点；
- * 2. 大屏居中显示，按确认、表单和工作区分别限宽，内容测量独立于底层页面；
- * 3. 材质纯正：去除旧版粗暴的彩色彩晕与深色脏阴影，采用 App 原生磨砂底色 + 顶部微高光 + 1dp 发丝白描边；
- * 4. 页眉标配轻巧关闭键与精致微标，底部标配 BrandBlue (#2563EB) 高度统一的胶囊按钮组。
- */
+/** 统一弹窗：手机底部弹层、大屏居中；主题实色表面与共享进出场动效。 */
 @Composable
 fun AppDialog(
     onDismissRequest: () -> Unit,

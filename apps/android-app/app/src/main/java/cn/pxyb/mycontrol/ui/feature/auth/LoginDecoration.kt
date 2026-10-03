@@ -130,7 +130,6 @@ internal fun LoginHeader() {
             "智控中心",
             style = MaterialTheme.typography.headlineLarge.copy(
                 fontWeight = FontWeight.Bold,
-                fontSize = 27.sp,
                 letterSpacing = 0.sp,
             ),
             color = MaterialTheme.colorScheme.onBackground,
@@ -158,7 +157,6 @@ internal fun LoginHeader() {
                     Text(
                         "安全高效的设备管理平台",
                         style = MaterialTheme.typography.labelSmall.copy(
-                            fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         ),
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
@@ -186,19 +184,19 @@ internal fun LoginFooter() {
             Spacer(Modifier.width(4.dp))
             Text(
                 "© 2026 智控中心 · 安全传输已加密",
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f)
             )
         }
         Text(
             "系统版本 v${BuildConfig.VERSION_NAME}",
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
             modifier = Modifier.padding(top = 3.dp)
         )
         Text(
             "登录即代表你已阅读并同意《隐私政策》",
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.58f),
             modifier = Modifier.padding(top = 6.dp).clickable { showPrivacyPolicy = true },
         )

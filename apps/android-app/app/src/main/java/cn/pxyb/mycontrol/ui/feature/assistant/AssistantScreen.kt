@@ -67,7 +67,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.AssistantActionItem
 import cn.pxyb.mycontrol.data.AssistantSuggestion
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
@@ -277,7 +276,6 @@ private fun AssistantWelcomeCard() {
                         "可以直接提问，或点下方快捷指令生成今日概览",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.5.sp,
                     )
                 }
             }

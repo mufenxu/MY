@@ -195,7 +195,6 @@ internal fun NotificationCard(
                                 text = alert.title,
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = if (alert.read) FontWeight.Medium else FontWeight.Bold,
-                                    fontSize = 15.sp,
                                     letterSpacing = (-0.2).sp,
                                 ),
                                 color = if (alert.read) {
@@ -222,7 +221,7 @@ internal fun NotificationCard(
                         ) {
                             Text(
                                 text = relativeTimeLabel(alert.createdAt),
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 maxLines = 1,
                             )
@@ -241,7 +240,7 @@ internal fun NotificationCard(
                 if (alert.body.isNotBlank()) {
                     Text(
                         text = alert.body,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp, lineHeight = 19.sp),
+                        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 19.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (alert.read) 0.72f else 0.92f),
                         maxLines = 3,
                         overflow = TextOverflow.Ellipsis,
@@ -265,7 +264,6 @@ internal fun NotificationCard(
                             text = "包含 ${alert.contentBlocks.size} 项详细内容 · 点击查看",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Medium,
-                                fontSize = 11.5.sp,
                             ),
                             color = accent.foreground,
                         )
@@ -315,7 +313,7 @@ internal fun NotificationTag(text: String, accent: AccentColors, modifier: Modif
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.5.sp),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
             color = accent.foreground,
             maxLines = 1,
             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
@@ -352,7 +350,7 @@ private fun NotificationCardAction(
             Icon(icon, contentDescription = null, modifier = Modifier.size(13.dp), tint = accent.foreground)
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.5.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                 color = accent.foreground,
             )
         }

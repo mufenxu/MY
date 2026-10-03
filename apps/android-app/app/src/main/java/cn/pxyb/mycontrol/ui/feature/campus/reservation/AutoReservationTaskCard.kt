@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.campus.reservation
 
+import cn.pxyb.mycontrol.ui.theme.AppCardShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -40,7 +41,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.ui.components.button.AppButton
@@ -96,12 +96,12 @@ internal fun AutoTaskCard(
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
+        shape = AppCardShape,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
         color = glassCardColor(),
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
@@ -133,7 +133,6 @@ internal fun AutoTaskCard(
                         text = task.name,
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
                         ),
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
@@ -222,7 +221,7 @@ internal fun AutoTaskCard(
                         ) {
                             Text(
                                 text = "${task.candidates.size} 个",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp),
                             )
@@ -253,7 +252,6 @@ internal fun AutoTaskCard(
                                     Text(
                                         text = "${index + 1}",
                                         style = MaterialTheme.typography.labelSmall.copy(
-                                            fontSize = 10.5.sp,
                                             fontWeight = FontWeight.Bold,
                                         ),
                                         color = if (index == 0) {
@@ -265,7 +263,7 @@ internal fun AutoTaskCard(
                                 }
                                 Text(
                                     text = sName,
-                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.5.sp),
+                                    style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
@@ -282,7 +280,7 @@ internal fun AutoTaskCard(
                                 ) {
                                     Text(
                                         text = "${candidate.startTime} - ${candidate.endTime}",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                        style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
                                     )
@@ -336,13 +334,13 @@ internal fun AutoTaskCard(
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             text = "最近执行结果",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.SemiBold,
                             color = resultForeground,
                         )
                         Text(
                             text = resultText,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 3,
                             overflow = TextOverflow.Ellipsis,
@@ -399,7 +397,7 @@ internal fun AutoTaskCard(
                                     )
                                     Text(
                                         text = "候选 ${attempt.candidateIndex + 1} · 第 ${attempt.attempt} 次 · $attemptResult${attempt.message?.let { "：$it" } ?: ""}",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                        style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis,
@@ -410,7 +408,7 @@ internal fun AutoTaskCard(
                             if (task.lastAttempts.size > 4) {
                                 Text(
                                     text = "其余 ${task.lastAttempts.size - 4} 次尝试已省略",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }

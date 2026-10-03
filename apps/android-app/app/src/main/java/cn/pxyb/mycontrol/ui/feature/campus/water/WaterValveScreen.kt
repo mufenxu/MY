@@ -1,7 +1,7 @@
 package cn.pxyb.mycontrol.ui.feature.campus.water
 
+import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -175,8 +175,8 @@ fun WaterValveScreen(
                 ) { device ->
                     AnimatedVisibility(
                         visible = true,
-                        enter = fadeIn(animationSpec = tween(380)) + slideInVertically(
-                            animationSpec = tween(380),
+                        enter = fadeIn(animationSpec = MotionTokens.standardTween()) + slideInVertically(
+                            animationSpec = MotionTokens.standardTween(),
                             initialOffsetY = { 35 },
                         ),
                     ) {

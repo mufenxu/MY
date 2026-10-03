@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.auth
 
+import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -162,7 +163,7 @@ internal fun LoginScreen(
                                     .padding(horizontal = 24.dp, vertical = 24.dp),
                             ) {
                                 if (!state.message.isNullOrBlank()) {
-                                    AppFeedbackBanner(state.message, error = false, modifier = Modifier.padding(bottom = 14.dp))
+                                    AppFeedbackBanner(state.message, type = AppFeedbackType.Info, modifier = Modifier.padding(bottom = 14.dp))
                                 }
                                 if (!state.error.isNullOrBlank()) {
                                     AppFeedbackBanner(state.error, error = true, modifier = Modifier.padding(bottom = 14.dp))
@@ -335,7 +336,7 @@ internal fun LoginScreen(
                                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 22.dp)
                             ) {
                                 if (!state.message.isNullOrBlank()) {
-                                    AppFeedbackBanner(state.message, error = false, modifier = Modifier.padding(bottom = 14.dp))
+                                    AppFeedbackBanner(state.message, type = AppFeedbackType.Info, modifier = Modifier.padding(bottom = 14.dp))
                                 }
                                 if (!state.error.isNullOrBlank()) {
                                     AppFeedbackBanner(state.error, error = true, modifier = Modifier.padding(bottom = 14.dp))

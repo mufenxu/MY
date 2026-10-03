@@ -69,6 +69,7 @@ fun AppActionRow(
             .minimumInteractiveComponentSize()
             .pressFeedback(interactionSource, pressedScale = 0.98f)
             .clickable(
+                role = androidx.compose.ui.semantics.Role.Button,
                 interactionSource = interactionSource,
                 indication = null,
             ) {

@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui.feature.operations
 
+import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
+import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -21,12 +23,10 @@ import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.VolumeOff
 import androidx.compose.material.icons.outlined.Wifi
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,7 +45,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.IncidentInfo
 import cn.pxyb.mycontrol.data.ServiceInfo
 import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
@@ -158,7 +157,7 @@ fun OperationsScreen(
 
             state.sectionError?.let { message ->
                 item(key = "section-error", contentType = "banner") {
-                    AppFeedbackBanner("部分状态数据暂不可用：$message", error = true)
+                    AppFeedbackBanner("部分状态数据暂不可用：$message", error = true, onRetry = onRefresh)
                 }
             }
 
@@ -725,31 +724,26 @@ fun OperationsScreen(
         )
     }
     noteTarget?.let { incident ->
-        AlertDialog(
+        AppDialogForm(
+            title = "记录处理进展",
             onDismissRequest = { noteTarget = null },
-            title = { Text("记录处理进展") },
-            text = {
-                OutlinedTextField(
-                    value = noteText,
-                    onValueChange = { noteText = it.take(500) },
-                    label = { Text("备注") },
-                    placeholder = { Text("例如：已重启服务，等待指标恢复") },
-                    minLines = 3,
-                    maxLines = 5,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+            onConfirm = {
+                onIncidentNote(incident.id, noteText)
+                noteTarget = null
             },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onIncidentNote(incident.id, noteText)
-                        noteTarget = null
-                    },
-                    enabled = noteText.isNotBlank(),
-                ) { Text("保存记录") }
-            },
-            dismissButton = { TextButton(onClick = { noteTarget = null }) { Text("取消") } },
-        )
+            confirmText = "保存记录",
+            enabled = noteText.isNotBlank(),
+        ) {
+            AppTextField(
+                value = noteText,
+                onValueChange = { noteText = it.take(500) },
+                label = "备注",
+                placeholder = "例如：已重启服务，等待指标恢复",
+                singleLine = false,
+                minLines = 3,
+                maxLines = 5,
+            )
+        }
     }
 }
 
@@ -781,12 +775,11 @@ private fun OperationsStatusRow(
                     title,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.5.sp,
                     ),
                 )
                 Text(
                     subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -801,7 +794,7 @@ private fun OperationsStatusRow(
             } else {
                 Text(
                     trailing,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                     color = iconTint,
                 )
             }

@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui.feature.profile
 
+import cn.pxyb.mycontrol.ui.components.display.AppGroupedCard
+import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 
@@ -57,9 +59,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.ui.components.button.AppButton
@@ -69,12 +68,10 @@ import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppDivider
-import cn.pxyb.mycontrol.ui.components.display.AppIconTile
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.display.AppSwitchRow
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
-import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.ModernHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.PullToRefresh
 import cn.pxyb.mycontrol.ui.components.layout.appPageContentPadding
@@ -125,7 +122,7 @@ fun ProfileScreen(
     val accountSections: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             ProfileSectionTitle("安全", "保护当前平台账号与登录设备")
-            AppPanel {
+            AppGroupedCard {
                 AppActionRow(
                     title = "账号与安全",
                     subtitle = "密码、MFA、Passkey、应用锁与登录会话",
@@ -135,7 +132,7 @@ fun ProfileScreen(
                 )
             }
             ProfileSectionTitle("账号工具", "第三方账号与离线验证码")
-            AppPanel {
+            AppGroupedCard {
                 AppActionRow("Google 邮箱台账", subtitle = "主邮箱、别名与 OpenAI 使用状态", icon = Icons.Outlined.Email, onClick = onOpenGoogleAccountDesk)
                 AppDivider()
                 AppActionRow("本地验证器", subtitle = "离线生成第三方网站的 TOTP 动态码", icon = Icons.Outlined.LockClock, onClick = onOpenAuthenticator)
@@ -145,7 +142,7 @@ fun ProfileScreen(
     val preferenceSections: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             ProfileSectionTitle("通知与偏好", "提醒方式与应用外观")
-            AppPanel {
+            AppGroupedCard {
                 AppActionRow(
                     title = "通知设置",
                     subtitle = if (state.alertPreferences.quietHoursEnabled) "安静时段已开启 · 订阅与每日简报" else "业务订阅、免打扰与每日简报",
@@ -158,7 +155,7 @@ fun ProfileScreen(
                 AppSwitchRow("AI 小助手", assistantButtonVisible, onAssistantButtonVisibleChange, subtitle = "显示底部助手入口")
             }
             ProfileSectionTitle("通用与维护", "缓存清理与应用更新")
-            AppPanel {
+            AppGroupedCard {
                 AppActionRow("清理本地缓存", subtitle = "可释放 ${state.cacheStorageInfo.totalFormatted}，保留登录与个人设置", icon = Icons.Outlined.CleaningServices, enabled = state.busyAction != "clear-cache", onClick = { confirmClearCache = true })
                 AppDivider()
                 AppActionRow("关于与更新", subtitle = "当前版本 v${BuildConfig.VERSION_NAME} · 检查更新", icon = Icons.Outlined.Info, onClick = { showUpdateDialog = true; onCheckUpdates() })
@@ -202,103 +199,13 @@ fun ProfileScreen(
     }
 
     if (showUpdateDialog) {
-        Dialog(
+        AppDialog(
             onDismissRequest = { showUpdateDialog = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false),
-        ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .padding(16.dp),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 6.dp,
-            ) {
-                Column(modifier = Modifier.padding(22.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        AppIconTile(Icons.Outlined.SystemUpdate, ColorTokens.Blue.foreground, ColorTokens.Blue.container, modifier = Modifier.size(44.dp))
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("关于 MY Control", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold))
-                            Text("当前本地版本: v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-
-                    when (state.appUpdate.phase) {
-                        AppUpdatePhase.Idle,
-                        AppUpdatePhase.Checking,
-                        -> AppUpdateStatusPanel(
-                            icon = Icons.Outlined.SystemUpdate,
-                            tint = ColorTokens.Blue.foreground,
-                            background = ColorTokens.Blue.container,
-                            title = "正在检查 GitHub Releases",
-                            detail = "正在读取最新稳定版信息...",
-                            loading = true,
-                        )
-
-                        AppUpdatePhase.Current -> AppUpdateStatusPanel(
-                            icon = Icons.Outlined.CheckCircle,
-                            tint = ColorTokens.Green.foreground,
-                            background = ColorTokens.Green.container,
-                            title = "当前已是最新稳定版",
-                            detail = "本机 v${BuildConfig.VERSION_NAME} · GitHub v${state.appUpdate.info?.versionName ?: BuildConfig.VERSION_NAME}",
-                        )
-
-                        AppUpdatePhase.Available -> AppUpdateStatusPanel(
-                            icon = Icons.Outlined.SystemUpdate,
-                            tint = ColorTokens.Blue.foreground,
-                            background = ColorTokens.Blue.container,
-                            title = "发现新版本 v${state.appUpdate.info?.versionName.orEmpty()}",
-                            detail = state.appUpdate.info?.notes?.ifBlank { "包含新的功能与稳定性改进" }
-                                ?: "包含新的功能与稳定性改进",
-                        )
-
-                        AppUpdatePhase.Downloading -> AppUpdateStatusPanel(
-                            icon = Icons.Outlined.FileDownload,
-                            tint = ColorTokens.Blue.foreground,
-                            background = ColorTokens.Blue.container,
-                            title = "正在下载并校验安装包",
-                            detail = "${state.appUpdate.progress}% · 完成后将打开系统安装器",
-                            progress = state.appUpdate.progress,
-                        )
-
-                        AppUpdatePhase.ReadyToInstall -> AppUpdateStatusPanel(
-                            icon = Icons.Outlined.CheckCircle,
-                            tint = ColorTokens.Green.foreground,
-                            background = ColorTokens.Green.container,
-                            title = "安装包校验通过",
-                            detail = "可以继续交给 Android 系统安装器安装。",
-                        )
-
-                        AppUpdatePhase.InstallPermissionRequired -> AppUpdateStatusPanel(
-                            icon = Icons.Outlined.SystemUpdate,
-                            tint = ColorTokens.Amber.foreground,
-                            background = ColorTokens.Amber.container,
-                            title = "需要允许此来源安装应用",
-                            detail = "在系统设置中开启权限，返回后点击继续安装。",
-                        )
-
-                        AppUpdatePhase.Installing -> AppUpdateStatusPanel(
-                            icon = Icons.Outlined.SystemUpdate,
-                            tint = ColorTokens.Green.foreground,
-                            background = ColorTokens.Green.container,
-                            title = "系统安装器已打开",
-                            detail = "请按系统提示完成更新安装。",
-                        )
-
-                        AppUpdatePhase.Error -> AppUpdateStatusPanel(
-                            icon = Icons.Outlined.SystemUpdate,
-                            tint = ColorTokens.Red.foreground,
-                            background = ColorTokens.Red.container,
-                            title = "更新检查或安装未完成",
-                            detail = state.appUpdate.error ?: "请稍后重试，或前往 GitHub Releases 手动下载。",
-                        )
-                    }
-
-                    Spacer(Modifier.height(16.dp))
-
+            title = "关于 MY Control",
+            subtitle = "当前本地版本：v${BuildConfig.VERSION_NAME}",
+            icon = Icons.Outlined.SystemUpdate,
+            footer = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     when (state.appUpdate.phase) {
                         AppUpdatePhase.Available -> AppButton(
                             text = "下载并安装",
@@ -323,7 +230,6 @@ fun ProfileScreen(
                                 onClick = onCheckUpdates,
                                 modifier = Modifier.fillMaxWidth(),
                             )
-                            Spacer(Modifier.height(8.dp))
                             AppSecondaryButton(
                                 text = "打开 GitHub Releases",
                                 icon = Icons.AutoMirrored.Outlined.OpenInNew,
@@ -339,6 +245,77 @@ fun ProfileScreen(
                         )
                     }
                 }
+            },
+        ) {
+            when (state.appUpdate.phase) {
+                AppUpdatePhase.Idle,
+                AppUpdatePhase.Checking,
+                -> AppUpdateStatusPanel(
+                    icon = Icons.Outlined.SystemUpdate,
+                    tint = ColorTokens.Blue.foreground,
+                    background = ColorTokens.Blue.container,
+                    title = "正在检查 GitHub Releases",
+                    detail = "正在读取最新稳定版信息...",
+                    loading = true,
+                )
+
+                AppUpdatePhase.Current -> AppUpdateStatusPanel(
+                    icon = Icons.Outlined.CheckCircle,
+                    tint = ColorTokens.Green.foreground,
+                    background = ColorTokens.Green.container,
+                    title = "当前已是最新稳定版",
+                    detail = "本机 v${BuildConfig.VERSION_NAME} · GitHub v${state.appUpdate.info?.versionName ?: BuildConfig.VERSION_NAME}",
+                )
+
+                AppUpdatePhase.Available -> AppUpdateStatusPanel(
+                    icon = Icons.Outlined.SystemUpdate,
+                    tint = ColorTokens.Blue.foreground,
+                    background = ColorTokens.Blue.container,
+                    title = "发现新版本 v${state.appUpdate.info?.versionName.orEmpty()}",
+                    detail = state.appUpdate.info?.notes?.ifBlank { "包含新的功能与稳定性改进" }
+                        ?: "包含新的功能与稳定性改进",
+                )
+
+                AppUpdatePhase.Downloading -> AppUpdateStatusPanel(
+                    icon = Icons.Outlined.FileDownload,
+                    tint = ColorTokens.Blue.foreground,
+                    background = ColorTokens.Blue.container,
+                    title = "正在下载并校验安装包",
+                    detail = "${state.appUpdate.progress}% · 完成后将打开系统安装器",
+                    progress = state.appUpdate.progress,
+                )
+
+                AppUpdatePhase.ReadyToInstall -> AppUpdateStatusPanel(
+                    icon = Icons.Outlined.CheckCircle,
+                    tint = ColorTokens.Green.foreground,
+                    background = ColorTokens.Green.container,
+                    title = "安装包校验通过",
+                    detail = "可以继续交给 Android 系统安装器安装。",
+                )
+
+                AppUpdatePhase.InstallPermissionRequired -> AppUpdateStatusPanel(
+                    icon = Icons.Outlined.SystemUpdate,
+                    tint = ColorTokens.Amber.foreground,
+                    background = ColorTokens.Amber.container,
+                    title = "需要允许此来源安装应用",
+                    detail = "在系统设置中开启权限，返回后点击继续安装。",
+                )
+
+                AppUpdatePhase.Installing -> AppUpdateStatusPanel(
+                    icon = Icons.Outlined.SystemUpdate,
+                    tint = ColorTokens.Green.foreground,
+                    background = ColorTokens.Green.container,
+                    title = "系统安装器已打开",
+                    detail = "请按系统提示完成更新安装。",
+                )
+
+                AppUpdatePhase.Error -> AppUpdateStatusPanel(
+                    icon = Icons.Outlined.SystemUpdate,
+                    tint = ColorTokens.Red.foreground,
+                    background = ColorTokens.Red.container,
+                    title = "更新检查或安装未完成",
+                    detail = state.appUpdate.error ?: "请稍后重试，或前往 GitHub Releases 手动下载。",
+                )
             }
         }
     }
@@ -392,7 +369,7 @@ private fun AppUpdateStatusPanel(
         border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 if (loading) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = tint)
@@ -516,9 +493,8 @@ private fun ModernProfileCard(
                     ) {
                         Text(
                             username,
-                            style = MaterialTheme.typography.titleLarge.copy(
+                            style = MaterialTheme.typography.headlineSmall.copy(
                                 fontWeight = FontWeight.ExtraBold,
-                                fontSize = 20.sp,
                             ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -532,7 +508,6 @@ private fun ModernProfileCard(
                                 text = roleLabel(role),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 11.sp,
                                 ),
                                 color = ColorTokens.Blue.foreground,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),

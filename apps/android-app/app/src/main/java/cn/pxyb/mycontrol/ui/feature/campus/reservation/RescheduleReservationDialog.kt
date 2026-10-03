@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.campus.reservation
 
+import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,7 +24,6 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -192,7 +192,7 @@ internal fun RescheduleReservationDialog(
                 )
                 Text(
                     text = "学校系统不支持直接修改预约：改期会先取消原预约，再立即创建新预约。若新预约恰好被其他同学抢占，原预约不会自动恢复，需要重新选择时段。",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp, lineHeight = 16.sp),
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -260,7 +260,7 @@ internal fun RescheduleReservationDialog(
                         )
                         Text(
                             text = "选日期",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                            style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -291,7 +291,6 @@ internal fun RescheduleReservationDialog(
                             Text(
                                 text = "$name(${weekdayName(candidate)})",
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 11.5.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 ),
                                 color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
@@ -371,43 +370,35 @@ internal fun RescheduleReservationDialog(
             subtitle = "改期需要重新提交预约申请，请确认主题、用途与联系电话",
         )
 
-        OutlinedTextField(
+        AppTextField(
             value = title,
             onValueChange = { title = it },
-            label = { Text("申请主题 *") },
-            placeholder = { Text("例如：小组课程研讨 / 论文开题讨论") },
-            leadingIcon = {
-                Icon(Icons.Outlined.EditNote, contentDescription = null, modifier = Modifier.size(18.dp))
-            },
-            shape = RoundedCornerShape(8.dp),
+            label = "申请主题 *",
+            placeholder = "例如：小组课程研讨 / 论文开题讨论",
+            leadingIcon = Icons.Outlined.EditNote,
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
 
-        OutlinedTextField(
+        AppTextField(
             value = mobile,
             onValueChange = { mobile = it },
-            label = { Text("联系电话 *") },
-            placeholder = { Text("11 位手机号码") },
-            leadingIcon = {
-                Icon(Icons.Outlined.Phone, contentDescription = null, modifier = Modifier.size(18.dp))
-            },
-            shape = RoundedCornerShape(8.dp),
+            label = "联系电话 *",
+            placeholder = "11 位手机号码",
+            leadingIcon = Icons.Outlined.Phone,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
         )
 
-        OutlinedTextField(
+        AppTextField(
             value = content,
             onValueChange = { content = it },
-            label = { Text("申请用途 / 说明 *") },
-            placeholder = { Text("简要说明使用研讨间的具体用途与参与人数（最多 500 字）") },
-            leadingIcon = {
-                Icon(Icons.Outlined.Description, contentDescription = null, modifier = Modifier.size(18.dp))
-            },
-            shape = RoundedCornerShape(8.dp),
+            label = "申请用途 / 说明 *",
+            placeholder = "简要说明使用研讨间的具体用途与参与人数（最多 500 字）",
+            leadingIcon = Icons.Outlined.Description,
             modifier = Modifier.fillMaxWidth(),
+            singleLine = false,
             minLines = 3,
             maxLines = 5,
         )

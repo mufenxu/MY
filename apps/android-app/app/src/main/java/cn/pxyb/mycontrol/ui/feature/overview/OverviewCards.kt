@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.overview
 
+import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -229,7 +230,6 @@ internal fun OverviewServiceCardShell(
                     text = title,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.5.sp,
                         letterSpacing = (-0.2).sp,
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
@@ -259,7 +259,8 @@ internal fun OfflineSnapshotNotice(cachedAtMillis: Long?) {
     AppFeedbackBanner(
         title = "部分内容使用缓存，请留意更新时间",
         message = updatedAt?.let { "缓存更新时间 $it" } ?: "联网后将自动恢复同步",
-        error = false,
+        type = AppFeedbackType.Info,
+        showCloseButton = false,
         icon = Icons.Outlined.CloudOff,
         modifier = Modifier.fillMaxWidth(),
     )

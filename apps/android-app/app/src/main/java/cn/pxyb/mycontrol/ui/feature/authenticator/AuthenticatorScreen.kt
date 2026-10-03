@@ -566,7 +566,7 @@ private fun AuthenticatorScannerOverlay(
                 text = "扫描验证器二维码",
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
+                style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(start = 12.dp),
             )
         }

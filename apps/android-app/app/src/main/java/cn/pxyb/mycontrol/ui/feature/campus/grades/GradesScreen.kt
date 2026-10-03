@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.campus.grades
 
+import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import cn.pxyb.mycontrol.util.readBoundedBytes
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
@@ -63,7 +64,7 @@ fun GradesScreen(state: GradesUiState, official: CampusGpa?, contentPadding: Pad
     val credit = credits.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 }
     val point = points.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }
     AppSubPage("成绩与学分", onBack, contentPadding, subtitle = "个人成绩记录与目标规划") {
-        item { AppFeedbackBanner("官方汇总 GPA：${official?.overall ?: "尚未同步"}。以下明细为个人录入或导入，仅保存在本机并按账号加密；尚未接通学校单科成绩接口。", false) }
+        item { AppFeedbackBanner("官方汇总 GPA：${official?.overall ?: "尚未同步"}。以下明细为个人录入或导入，仅保存在本机并按账号加密；尚未接通学校单科成绩接口。", type = AppFeedbackType.Info, showCloseButton = false) }
         (state.error ?: importError)?.let { item { AppFeedbackBanner(it, true, onRetry = onLoad) } }
         item { AppPanel {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

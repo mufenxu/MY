@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui.feature.campus.water
 
+import cn.pxyb.mycontrol.ui.theme.MotionTokens
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -40,7 +42,6 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
 
@@ -53,30 +54,38 @@ internal fun WaterValveRingDialButton(
     modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
-    val transition = rememberInfiniteTransition(label = "ringDialTransition")
-    val sweepAngle by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 4000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart,
-        ),
-        label = "ringSweepAngle",
-    )
-    val pulseAlpha by transition.animateFloat(
-        initialValue = 0.5f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1400, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "ringPulseAlpha",
-    )
+    val ringAccent = ColorTokens.Cyan.foreground
+    val ringSecondary = ColorTokens.Indigo.foreground
+    val (sweepAngle, pulseAlpha) = if (running) {
+        val transition = rememberInfiniteTransition(label = "ringDialTransition")
+        val sweep = transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = MotionTokens.DurationStatusRotation, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "ringSweepAngle",
+        )
+        val pulse = transition.animateFloat(
+            initialValue = 0.5f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = MotionTokens.DurationStatusPulse, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "ringPulseAlpha",
+        )
+        sweep to pulse
+    } else {
+        remember { androidx.compose.runtime.mutableFloatStateOf(0f) } to
+            remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    }
 
     val dialInteractionSource = remember { MutableInteractionSource() }
 
     val runningGradient = Brush.linearGradient(
-        colors = listOf(Color(0xFF2563EB), Color(0xFF4F46E5)),
+        colors = listOf(MaterialTheme.colorScheme.primary, ringSecondary),
     )
 
     Box(
@@ -84,6 +93,7 @@ internal fun WaterValveRingDialButton(
             .size(108.dp)
             .pressFeedback(dialInteractionSource, pressedScale = 0.94f)
             .clickable(
+                role = androidx.compose.ui.semantics.Role.Button,
                 enabled = !busy,
                 indication = null,
                 interactionSource = dialInteractionSource,
@@ -99,13 +109,13 @@ internal fun WaterValveRingDialButton(
                 val strokeWidth = 2.dp.toPx()
                 val sweepBrush = Brush.sweepGradient(
                     colors = listOf(
-                        Color(0xFF38BDF8),
-                        Color(0xFF818CF8),
-                        Color(0xFF38BDF8).copy(alpha = 0.15f),
-                        Color(0xFF38BDF8),
+                        ringAccent,
+                        ringSecondary,
+                        ringAccent.copy(alpha = 0.15f),
+                        ringAccent,
                     ),
                 )
-                rotate(sweepAngle) {
+                rotate(sweepAngle.value) {
                     drawCircle(
                         brush = sweepBrush,
                         style = Stroke(
@@ -127,13 +137,13 @@ internal fun WaterValveRingDialButton(
                 .shadow(
                     elevation = if (running) 8.dp else 2.dp,
                     shape = CircleShape,
-                    spotColor = if (running) Color(0xFF2563EB).copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.08f),
+                    spotColor = if (running) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else Color.Black.copy(alpha = 0.08f),
                 )
                 .then(
                     if (running) {
                         Modifier
                             .background(runningGradient, CircleShape)
-                            .border(2.dp, Color(0xFF67E8F9).copy(alpha = pulseAlpha), CircleShape)
+                            .border(2.dp, ringAccent.copy(alpha = pulseAlpha.value), CircleShape)
                     } else {
                         Modifier
                             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f), CircleShape)
@@ -146,7 +156,7 @@ internal fun WaterValveRingDialButton(
                 CircularProgressIndicator(
                     modifier = Modifier.size(26.dp),
                     strokeWidth = 2.5.dp,
-                    color = if (running) Color.White else MaterialTheme.colorScheme.primary,
+                    color = if (running) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
                 )
             } else {
                 Column(
@@ -157,7 +167,7 @@ internal fun WaterValveRingDialButton(
                     Icon(
                         imageVector = if (running) Icons.Outlined.Stop else Icons.Outlined.WaterDrop,
                         contentDescription = if (running) "点击停水" else "轻触出水",
-                        tint = if (running) Color.White else MaterialTheme.colorScheme.primary,
+                        tint = if (running) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(26.dp),
                     )
                     Spacer(modifier = Modifier.height(3.dp))
@@ -166,9 +176,8 @@ internal fun WaterValveRingDialButton(
                         text = if (running) "点击停水" else "轻触出水",
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp,
                         ),
-                        color = if (running) Color.White else MaterialTheme.colorScheme.onSurface,
+                        color = if (running) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     // 3. 底部副标题（方案二同款：500 mL / 出水中...）
@@ -176,9 +185,8 @@ internal fun WaterValveRingDialButton(
                         text = if (running) "出水中..." else (defaultValue?.ifBlank { "500 mL" } ?: "500 mL"),
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Medium,
-                            fontSize = 10.sp,
                         ),
-                        color = if (running) Color(0xFFA5F3FC) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+                        color = if (running) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                     )
                 }
             }

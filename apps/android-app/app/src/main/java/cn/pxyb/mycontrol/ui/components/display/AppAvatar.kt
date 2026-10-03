@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui.components.display
 
+import cn.pxyb.mycontrol.ui.theme.AccentColors
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -13,7 +15,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
@@ -22,16 +23,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.SubcomposeAsyncImage
-import kotlin.math.abs
-
-private val AvatarGradients = listOf(
-    Color(0xFF3B82F6) to Color(0xFF1D4ED8), // 科技蓝
-    Color(0xFF8B5CF6) to Color(0xFF6D28D9), // 极光紫
-    Color(0xFF10B981) to Color(0xFF047857), // 翡翠绿
-    Color(0xFFF59E0B) to Color(0xFFD97706), // 琥珀黄
-    Color(0xFFEC4899) to Color(0xFFBE185D), // 玫粉
-    Color(0xFF06B6D4) to Color(0xFF0E7490), // 青蓝
-)
 
 /**
  * 通用头像组件
@@ -45,11 +36,9 @@ fun AppAvatar(
     shape: Shape = CircleShape,
     statusColor: Color? = null,
 ) {
-    val gradient = remember(name) {
-        val hash = abs(name.hashCode())
-        val pair = AvatarGradients[hash % AvatarGradients.size]
-        Brush.linearGradient(listOf(pair.first, pair.second))
-    }
+    val accents = listOf(ColorTokens.Blue, ColorTokens.Purple, ColorTokens.Green,
+        ColorTokens.Amber, ColorTokens.Pink, ColorTokens.Cyan)
+    val accent = accents[Math.floorMod(name.hashCode(), accents.size)]
 
     val initials = remember(name) {
         val trimmed = name.trim()
@@ -70,14 +59,14 @@ fun AppAvatar(
                     .size(size)
                     .clip(shape),
                 loading = {
-                    DefaultInitialsAvatar(initials, gradient, shape, size)
+                    DefaultInitialsAvatar(initials, accent, shape, size)
                 },
                 error = {
-                    DefaultInitialsAvatar(initials, gradient, shape, size)
+                    DefaultInitialsAvatar(initials, accent, shape, size)
                 },
             )
         } else {
-            DefaultInitialsAvatar(initials, gradient, shape, size)
+            DefaultInitialsAvatar(initials, accent, shape, size)
         }
 
         if (statusColor != null) {
@@ -98,7 +87,7 @@ fun AppAvatar(
 @Composable
 private fun DefaultInitialsAvatar(
     initials: String,
-    gradient: Brush,
+    accent: AccentColors,
     shape: Shape,
     size: Dp,
 ) {
@@ -107,7 +96,7 @@ private fun DefaultInitialsAvatar(
         modifier = Modifier
             .size(size)
             .clip(shape)
-            .background(gradient),
+            .background(accent.container),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -116,7 +105,7 @@ private fun DefaultInitialsAvatar(
                 fontSize = fontSize,
                 fontWeight = FontWeight.Bold,
             ),
-            color = Color.White,
+            color = accent.foreground,
         )
     }
 }

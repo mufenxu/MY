@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.campus.library
 
+import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -40,7 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.LibrarySeatArea
 import cn.pxyb.mycontrol.data.LibrarySeatFloorSeat
 import cn.pxyb.mycontrol.data.LibrarySeatReservationRequest
@@ -286,6 +286,34 @@ internal fun LibrarySeatReservationScreen(
             wantWindow,
         )
     }
+    val reservationItems = if (selectedTab == LibrarySeatTab.My) {
+        rememberSeatReservationItems(
+            reservations = state.reservations,
+            loading = state.reservationsLoading,
+            history = state.historyReservations,
+            historyLoading = state.historyReservationsLoading,
+            currentUse = state.currentUse,
+            currentUseLoading = state.currentUseLoading,
+            breaches = state.breaches,
+            breachesLoading = state.breachesLoading,
+            doorLogs = state.doorLogs,
+            doorLogsLoading = state.doorLogsLoading,
+            makeLife = state.makeLife,
+            makeLifeLoading = state.makeLifeLoading,
+            makeLifeReservationId = state.makeLifeReservationId,
+            usageAction = state.usageAction,
+            onLoadReservations = onLoadReservations,
+            onLoadHistory = onLoadReservationHistory,
+            onLoadBreaches = onLoadBreaches,
+            onLoadDoorLogs = onLoadDoorLogs,
+            onLoadMakeLife = onLoadMakeLife,
+            onCheckIn = onCheckIn,
+            onLeaveSeat = onLeaveSeat,
+            onStopSeat = onStopSeat,
+            onCancelReservation = onCancelReservation,
+            onGoToBookSeat = { selectedTab = LibrarySeatTab.Book },
+        )
+    } else null
     AppSubPage(
         title = "座位预约",
         subtitle = "图书馆座位预约 · 官方系统同步",
@@ -355,7 +383,7 @@ internal fun LibrarySeatReservationScreen(
                             Spacer(Modifier.width(5.dp))
                             Text(
                                 text = tab.label,
-                                style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.sp),
+                                style = MaterialTheme.typography.titleSmall,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                             )
@@ -367,7 +395,7 @@ internal fun LibrarySeatReservationScreen(
                                 ) {
                                     Text(
                                         text = "$badgeCount",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                        style = MaterialTheme.typography.labelSmall,
                                         color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
@@ -399,7 +427,7 @@ internal fun LibrarySeatReservationScreen(
         }
         queryHint?.let { hint ->
             item(key = "seat-hint", contentType = "banner") {
-                AppFeedbackBanner(hint, error = false)
+                AppFeedbackBanner(hint, type = AppFeedbackType.Info)
             }
         }
 
@@ -568,7 +596,7 @@ internal fun LibrarySeatReservationScreen(
         }
 
         item(key = "seat-areas", contentType = "areas") {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 AppSectionHeader(
                     title = "可预约阅览区",
                     subtitle = if (selectedAreas.isEmpty() && !state.areasLoading) "先点击查询，学校返回可预约区域后再选座位" else "点击某个阅览区后加载座位列表",
@@ -713,34 +741,7 @@ internal fun LibrarySeatReservationScreen(
         }
 
         } else if (selectedTab == LibrarySeatTab.My) {
-            item(key = "my-reservations-panel", contentType = "my") {
-                MySeatReservationsPanel(
-                    reservations = state.reservations,
-                    loading = state.reservationsLoading,
-                    history = state.historyReservations,
-                    historyLoading = state.historyReservationsLoading,
-                    currentUse = state.currentUse,
-                    currentUseLoading = state.currentUseLoading,
-                    breaches = state.breaches,
-                    breachesLoading = state.breachesLoading,
-                    doorLogs = state.doorLogs,
-                    doorLogsLoading = state.doorLogsLoading,
-                    makeLife = state.makeLife,
-                    makeLifeLoading = state.makeLifeLoading,
-                    makeLifeReservationId = state.makeLifeReservationId,
-                    usageAction = state.usageAction,
-                    onLoadReservations = onLoadReservations,
-                    onLoadHistory = onLoadReservationHistory,
-                    onLoadBreaches = onLoadBreaches,
-                    onLoadDoorLogs = onLoadDoorLogs,
-                    onLoadMakeLife = onLoadMakeLife,
-                    onCheckIn = onCheckIn,
-                    onLeaveSeat = onLeaveSeat,
-                    onStopSeat = onStopSeat,
-                    onCancelReservation = onCancelReservation,
-                    onGoToBookSeat = { selectedTab = LibrarySeatTab.Book },
-                )
-            }
+            reservationItems?.invoke(this)
         } else {
             item(key = "waitlist-panel", contentType = "waitlist") {
                 LibrarySeatWaitlistPanel(

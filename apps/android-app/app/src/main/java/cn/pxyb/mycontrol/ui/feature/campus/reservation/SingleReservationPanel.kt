@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.campus.reservation
 
+import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,7 +34,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,7 +49,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.CampusMyReservation
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.data.CampusReservationSpace
@@ -165,7 +164,7 @@ internal fun SingleReservationPanel(
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         AppDetailRow("预约空间", selectedSpaceName)
                         AppDetailRow("预约日期", "$selectedDate (${weekdayName(today.plusDays(dayOffset.toLong()))})")
@@ -235,7 +234,7 @@ internal fun SingleReservationPanel(
                                 }
                                 Text(
                                     text = if (spacesLoading) "刷新中..." else "刷新空间",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                    style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
                                 )
@@ -306,7 +305,7 @@ internal fun SingleReservationPanel(
                                 )
                                 Text(
                                     text = "滑动选日期",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                    style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
                                 )
@@ -345,7 +344,6 @@ internal fun SingleReservationPanel(
                                     Text(
                                         text = "$name($wk)",
                                         style = MaterialTheme.typography.labelSmall.copy(
-                                            fontSize = 11.5.sp,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                         ),
                                         color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
@@ -380,7 +378,7 @@ internal fun SingleReservationPanel(
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 "正在查询该空间空闲时段...",
-                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                                style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold,
                             )
@@ -394,7 +392,7 @@ internal fun SingleReservationPanel(
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 if (isQueriedCurrent) "刷新当前空间空闲时段" else "查询该空间开放规则与空闲时段",
-                                style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp),
+                                style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold,
                             )
@@ -442,7 +440,7 @@ internal fun SingleReservationPanel(
                                             )
                                             Text(
                                                 text = "${win.start} - ${win.end}",
-                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                                                style = MaterialTheme.typography.labelSmall,
                                                 fontWeight = FontWeight.Bold,
                                                 color = ColorTokens.Green.foreground,
                                             )
@@ -470,7 +468,7 @@ internal fun SingleReservationPanel(
                                     )
                                     Text(
                                         text = "该空间在所选日期无空闲时段或已被全部约满",
-                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                        style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.error,
                                     )
                                 }
@@ -495,7 +493,7 @@ internal fun SingleReservationPanel(
                                 )
                                 Text(
                                     text = "选择空间和日期后，点击下方按钮查询空间空闲与已预约时段",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                    style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
@@ -631,50 +629,42 @@ internal fun SingleReservationPanel(
         AppPanel {
             Column(
                 modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 AppSectionHeader(
                     title = "预约申请信息",
                     subtitle = "填写研讨间用途与申请人联系方式",
                 )
 
-                OutlinedTextField(
+                AppTextField(
                     value = title,
                     onValueChange = { title = it; onClearFeedback() },
-                    label = { Text("申请主题 *") },
-                    placeholder = { Text("例如：小组课程研讨 / 论文开题讨论") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.EditNote, contentDescription = null, modifier = Modifier.size(20.dp))
-                    },
-                    shape = RoundedCornerShape(8.dp),
+                    label = "申请主题 *",
+                    placeholder = "例如：小组课程研讨 / 论文开题讨论",
+                    leadingIcon = Icons.Outlined.EditNote,
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
 
-                OutlinedTextField(
+                AppTextField(
                     value = mobile,
                     onValueChange = { mobile = it; onClearFeedback() },
-                    label = { Text("联系电话 *") },
-                    placeholder = { Text("11 位手机号码") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Phone, contentDescription = null, modifier = Modifier.size(18.dp))
-                    },
-                    shape = RoundedCornerShape(8.dp),
+                    label = "联系电话 *",
+                    placeholder = "11 位手机号码",
+                    leadingIcon = Icons.Outlined.Phone,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                 )
 
-                OutlinedTextField(
+                AppTextField(
                     value = content,
                     onValueChange = { content = it; onClearFeedback() },
-                    label = { Text("申请用途 / 说明 *") },
-                    placeholder = { Text("简要说明使用研讨间的具体用途与参与人数（最多 500 字）") },
-                    leadingIcon = {
-                        Icon(Icons.Outlined.Description, contentDescription = null, modifier = Modifier.size(18.dp))
-                    },
-                    shape = RoundedCornerShape(8.dp),
+                    label = "申请用途 / 说明 *",
+                    placeholder = "简要说明使用研讨间的具体用途与参与人数（最多 500 字）",
+                    leadingIcon = Icons.Outlined.Description,
                     modifier = Modifier.fillMaxWidth(),
+                    singleLine = false,
                     minLines = 3,
                     maxLines = 5,
                 )
@@ -761,20 +751,20 @@ internal fun SingleReservationPanel(
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 cardSpaceAndTime()
                 cardRulesAndAvailability()
             }
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 cardApplicationInfo()
             }
         }
     } else {
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             cardSpaceAndTime()
             cardApplicationInfo()
             cardRulesAndAvailability()

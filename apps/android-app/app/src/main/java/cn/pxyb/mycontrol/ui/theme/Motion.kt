@@ -24,6 +24,10 @@ object MotionTokens {
     /** 页面级大转场/全屏弹窗时长：320ms */
     const val DurationLong = 320
 
+    const val DurationShimmer = 1100
+    const val DurationStatusRotation = 4000
+    const val DurationStatusPulse = 1400
+
     /** 快速缓动曲线 */
     val FastEasing: Easing = FastOutSlowInEasing
 

@@ -34,15 +34,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/**
- * 现代毛玻璃标准输入框
- *
- * 遵循项目毛玻璃与科技蓝设计规范：
- * - 纯净半透明微填色背景与柔和发丝边框；
- * - 聚焦时高亮清澈科技蓝；
- * - 内置可选的一键清空（clearable）与密码眼睛显隐功能；
- * - 支持前缀/后缀图标及平滑动画错误提示。
- */
+/** 统一主题字段，提供清空、密码显隐和就地校验提示。 */
 @Composable
 fun AppTextField(
     value: String,

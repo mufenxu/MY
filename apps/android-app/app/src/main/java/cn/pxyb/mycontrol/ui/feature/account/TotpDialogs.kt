@@ -26,7 +26,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.TotpEnrollment
 import cn.pxyb.mycontrol.ui.components.button.AppDialogDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
@@ -74,7 +73,7 @@ internal fun TotpSetupDialog(
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 when (step) {
                     "reauth" -> {
@@ -100,7 +99,7 @@ internal fun TotpSetupDialog(
                                 Text(
                                     enrollment?.secret.orEmpty(),
                                     fontFamily = FontFamily.Monospace,
-                                    fontSize = 14.sp,
+                                    style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.SemiBold,
                                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                                 )
@@ -129,7 +128,7 @@ internal fun TotpSetupDialog(
                                         Text(
                                             codeText,
                                             fontFamily = FontFamily.Monospace,
-                                            fontSize = 14.sp,
+                                            style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.SemiBold,
                                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                                         )
@@ -336,7 +335,7 @@ internal fun RecoveryCodesDialog(
                             Text(
                                 code,
                                 fontFamily = FontFamily.Monospace,
-                                fontSize = 14.sp,
+                                style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                             )

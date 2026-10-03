@@ -137,9 +137,8 @@ internal fun LockScreen(onUnlock: () -> Unit, onUseLogin: () -> Unit, error: Str
 
                 Text(
                     "欢迎回来",
-                    style = MaterialTheme.typography.headlineMedium.copy(
+                    style = MaterialTheme.typography.headlineLarge.copy(
                         fontWeight = FontWeight.Bold,
-                        fontSize = 26.sp,
                         letterSpacing = 0.sp
                     ),
                     color = MaterialTheme.colorScheme.onBackground
@@ -147,7 +146,7 @@ internal fun LockScreen(onUnlock: () -> Unit, onUseLogin: () -> Unit, error: Str
 
                 Text(
                     "验证设备身份以继续使用",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f),
                     modifier = Modifier.padding(top = 6.dp),
                 )
@@ -193,7 +192,6 @@ internal fun LockScreen(onUnlock: () -> Unit, onUseLogin: () -> Unit, error: Str
                             "改用平台账号登录",
                             style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = FontWeight.Medium,
-                                fontSize = 14.sp
                             ),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -226,7 +224,7 @@ internal fun LockScreen(onUnlock: () -> Unit, onUseLogin: () -> Unit, error: Str
                     Spacer(Modifier.width(4.dp))
                     Text(
                         "MY Control · 会话已受安全保护",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                     )
                 }

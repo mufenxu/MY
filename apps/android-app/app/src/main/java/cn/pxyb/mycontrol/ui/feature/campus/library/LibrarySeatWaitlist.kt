@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.campus.library
 
+import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -21,7 +22,6 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -235,24 +235,24 @@ internal fun LibrarySeatWaitlistPanel(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    OutlinedTextField(
+                    AppTextField(
                         value = minLabelText,
                         onValueChange = { value ->
                             minLabelText = value.filter(Char::isDigit).take(3)
                             hint = null
                         },
-                        label = { Text("最小座位号") },
+                        label = "最小座位号",
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f),
                     )
-                    OutlinedTextField(
+                    AppTextField(
                         value = maxLabelText,
                         onValueChange = { value ->
                             maxLabelText = value.filter(Char::isDigit).take(3)
                             hint = null
                         },
-                        label = { Text("最大座位号") },
+                        label = "最大座位号",
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.weight(1f),
@@ -324,7 +324,7 @@ internal fun LibrarySeatWaitlistPanel(
                     detail = "选好日期、时段与座位范围后点击上方按钮开启监听。",
                 )
                 else -> {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         state.waitlists.forEach { task ->
                             WaitlistTaskCard(
                                 task = task,

@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui.feature.auth
 
+import cn.pxyb.mycontrol.ui.theme.MotionTokens
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -9,8 +11,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.BorderStroke
@@ -57,7 +57,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -120,7 +119,7 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
         if (!cameraGranted) permissionLauncher.launch(Manifest.permission.CAMERA)
     }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize().background(Color(0xFF111827))) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().background(ColorTokens.ScannerBackground)) {
         val frameSize = minOf(
             if (LocalAdaptiveWindow.current.isTabletOrExpanded) 320.dp else 248.dp,
             maxWidth - 48.dp,
@@ -144,7 +143,7 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(Icons.Outlined.CenterFocusWeak, contentDescription = null, tint = Color.White, modifier = Modifier.size(42.dp))
-                Text("需要相机权限", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(top = 16.dp))
+                Text("需要相机权限", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 16.dp))
                 Text(
                     if (permissionRequested) "相机权限未开启，请重新授权或前往系统设置。" else "授权后即可扫描功能二维码",
                     color = Color.White.copy(alpha = 0.72f),
@@ -182,7 +181,7 @@ private fun QrScannerScreen(onCodeDetected: (String) -> Unit, onClose: () -> Uni
                     Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "返回", tint = Color.White)
                 }
             }
-            Text("扫描功能二维码", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp, modifier = Modifier.padding(start = 12.dp))
+            Text("扫描功能二维码", color = Color.White, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(start = 12.dp))
         }
 
         Surface(
@@ -227,7 +226,7 @@ private fun QrConfirmationScreen(
             Text(
                 target.verificationCode,
                 color = MaterialTheme.colorScheme.onBackground,
-                fontSize = 44.sp,
+                style = MaterialTheme.typography.displayMedium,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.sp,
                 modifier = Modifier.padding(top = 4.dp),
@@ -313,14 +312,14 @@ private fun QrApprovedScreen(target: QrLoginTarget, onClose: () -> Unit) {
             // 成功图标：外圈光环 + 渐变圆底白色对勾，带入场动画
             AnimatedVisibility(
                 visible = visible,
-                enter = fadeIn(animationSpec = tween(300)) +
-                    scaleIn(initialScale = 0.7f, animationSpec = tween(420, easing = FastOutSlowInEasing)),
+                enter = fadeIn(animationSpec = MotionTokens.fastTween()) +
+                    scaleIn(initialScale = 0.7f, animationSpec = MotionTokens.softSpring()),
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.size(124.dp)) {
                     Box(
                         modifier = Modifier
                             .size(124.dp)
-                            .border(1.5.dp, Color(0xFF10B981).copy(alpha = 0.30f), CircleShape),
+                            .border(1.5.dp, ColorTokens.Green.foreground.copy(alpha = 0.30f), CircleShape),
                     )
                     Surface(
                         shape = CircleShape,
@@ -329,14 +328,14 @@ private fun QrApprovedScreen(target: QrLoginTarget, onClose: () -> Unit) {
                     ) {
                         Box(
                             modifier = Modifier.background(
-                                Brush.linearGradient(listOf(Color(0xFF34D399), Color(0xFF059669))),
+                                ColorTokens.Green.container,
                             ),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
                                 Icons.Outlined.Check,
                                 contentDescription = null,
-                                tint = Color.White,
+                                tint = ColorTokens.Green.foreground,
                                 modifier = Modifier.size(44.dp),
                             )
                         }
@@ -346,16 +345,15 @@ private fun QrApprovedScreen(target: QrLoginTarget, onClose: () -> Unit) {
 
             Text(
                 "网页登录已批准",
-                style = MaterialTheme.typography.headlineMedium.copy(
+                style = MaterialTheme.typography.headlineLarge.copy(
                     fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp,
                 ),
                 color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier.padding(top = 26.dp),
             )
             Text(
                 "${target.browser.label} 将自动进入控制台",
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = 8.dp),

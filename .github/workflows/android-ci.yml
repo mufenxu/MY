@@ -7,6 +7,8 @@ on:
       - 'apps/android-app/**'
       - 'scripts/android-release.mjs'
       - 'scripts/android-release.test.mjs'
+      - 'scripts/check-android-design.mjs'
+      - 'scripts/check-android-design.test.mjs'
       - '.github/workflows/android-ci.yml'
       - '.github/workflows/android-release.yml'
   workflow_dispatch:
@@ -39,6 +41,9 @@ jobs:
       - name: Ensure Gradle wrapper is executable
         working-directory: apps/android-app
         run: chmod +x ./gradlew
+
+      - name: Check Android design conventions
+        run: npm run check:android-design
 
       - name: Run Android checks
         working-directory: apps/android-app

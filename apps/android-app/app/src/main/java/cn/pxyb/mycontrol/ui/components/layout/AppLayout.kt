@@ -1,8 +1,8 @@
 package cn.pxyb.mycontrol.ui.components.layout
 
+import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -188,7 +188,7 @@ fun AppHeaderIconButton(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
-            Crossfade(targetState = loading, animationSpec = tween(160), label = "header-action") { busy ->
+            Crossfade(targetState = loading, animationSpec = MotionTokens.fastTween(), label = "header-action") { busy ->
                 if (busy) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(16.dp),

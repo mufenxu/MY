@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.ui.feature.campus.library
 
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.itemsIndexed
+import cn.pxyb.mycontrol.ui.theme.AppCardShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -9,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Chair
@@ -74,7 +76,7 @@ private enum class SeatRecordTab(val label: String) {
 }
 
 @Composable
-internal fun MySeatReservationsPanel(
+internal fun rememberSeatReservationItems(
     reservations: List<LibrarySeatReservationRecord>,
     loading: Boolean,
     history: LibrarySeatReservationHistory,
@@ -99,7 +101,7 @@ internal fun MySeatReservationsPanel(
     onStopSeat: () -> Unit,
     onCancelReservation: (String) -> Unit,
     onGoToBookSeat: () -> Unit,
-) {
+): LazyListScope.() -> Unit {
     var selectedTab by rememberSaveable { mutableStateOf(SeatRecordTab.Today) }
     var expandedReservationId by rememberSaveable { mutableStateOf("") }
     var seatMapLabel by rememberSaveable { mutableStateOf(0) }
@@ -125,84 +127,67 @@ internal fun MySeatReservationsPanel(
             onShowSeatMap = showSeatMap,
         )
     }
-    AppPanel {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            AppSectionHeader(
-                title = "我的座位",
-                subtitle = "官方系统同步 · 使用中的座位、违约与门禁记录",
-            )
-            CurrentSeatUsageCard(
-                record = currentUse,
-                loading = currentUseLoading,
-                usageAction = usageAction,
-                onCheckIn = onCheckIn,
-                onLeaveSeat = onLeaveSeat,
-                onStopSeat = onStopSeat,
-                onCancelReservation = onCancelReservation,
-                onShowSeatMap = showSeatMap,
-            )
-            AppSegmentedControl(
-                options = SeatRecordTab.entries.toList(),
-                selected = selectedTab,
-                onSelect = { tab ->
-                    selectedTab = tab
-                    when (tab) {
-                        SeatRecordTab.Today -> onLoadReservations()
-                        SeatRecordTab.History -> onLoadHistory()
-                        SeatRecordTab.Breach -> onLoadBreaches()
-                        SeatRecordTab.DoorLog -> onLoadDoorLogs()
-                    }
-                },
-                label = { it.label },
-            )
-            when (selectedTab) {
-                SeatRecordTab.Today -> SeatReservationList(
-                    records = reservations.sortedWith(
-                        compareByDescending<LibrarySeatReservationRecord> { isActiveSeatReservation(it) }
-                            .thenBy { it.date }
-                            .thenBy { it.startTime },
-                    ),
-                    loading = loading,
-                    emptyTitle = "今日暂无预约记录",
-                    emptyDetail = "预约成功后会自动显示在这里",
-                    recordCard = recordCard,
-                )
-                SeatRecordTab.History -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (!historyLoading && history.total > history.records.size) {
-                        Text(
-                            text = "共 ${history.total} 条历史记录，仅显示最近 ${history.records.size} 条",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    SeatReservationList(
-                        records = history.records,
-                        loading = historyLoading,
-                        emptyTitle = "暂无历史预约记录",
-                        emptyDetail = "历史预约成功的座位会显示在这里",
-                        recordCard = recordCard,
-                    )
-                }
-                SeatRecordTab.Breach -> SeatBreachList(page = breaches, loading = breachesLoading)
-                SeatRecordTab.DoorLog -> SeatDoorLogList(logs = doorLogs, loading = doorLogsLoading)
-            }
-            AppSecondaryButton(
-                text = "返回查询座位",
-                icon = Icons.Outlined.Search,
-                onClick = onGoToBookSeat,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
+    val sortedReservations = remember(reservations) {
+        reservations.sortedWith(compareByDescending<LibrarySeatReservationRecord> { isActiveSeatReservation(it) }
+            .thenBy { it.date }.thenBy { it.startTime })
     }
     if (seatMapLabel > 0) {
-        SecondFloorSeatMapDialog(
-            seatLabel = seatMapLabel,
-            place = seatMapPlace,
-            onDismiss = { seatMapLabel = 0 },
-        )
+        SecondFloorSeatMapDialog(seatMapLabel, seatMapPlace, onDismiss = { seatMapLabel = 0 })
+    }
+    return {
+        item(key = "seat-record-header", contentType = "header") {
+            AppPanel {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AppSectionHeader(
+                        title = "我的座位",
+                        subtitle = "官方系统同步 · 使用中的座位、违约与门禁记录",
+                    )
+                    CurrentSeatUsageCard(
+                        record = currentUse,
+                        loading = currentUseLoading,
+                        usageAction = usageAction,
+                        onCheckIn = onCheckIn,
+                        onLeaveSeat = onLeaveSeat,
+                        onStopSeat = onStopSeat,
+                        onCancelReservation = onCancelReservation,
+                        onShowSeatMap = showSeatMap,
+                    )
+                    AppSegmentedControl(
+                        options = SeatRecordTab.entries.toList(),
+                        selected = selectedTab,
+                        onSelect = { tab ->
+                            selectedTab = tab
+                            when (tab) {
+                                SeatRecordTab.Today -> onLoadReservations()
+                                SeatRecordTab.History -> onLoadHistory()
+                                SeatRecordTab.Breach -> onLoadBreaches()
+                                SeatRecordTab.DoorLog -> onLoadDoorLogs()
+                            }
+                        },
+                        label = { it.label },
+                    )
+                }
+            }
+        }
+        when (selectedTab) {
+            SeatRecordTab.Today -> seatReservationItems(
+                sortedReservations, loading, "today", "今日暂无预约记录", "预约成功后会自动显示在这里", recordCard,
+            )
+            SeatRecordTab.History -> {
+                if (!historyLoading && history.total > history.records.size) item(key = "seat-history-total") {
+                    Text("共 ${history.total} 条历史记录，仅显示最近 ${history.records.size} 条",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                seatReservationItems(history.records, historyLoading, "history",
+                    "暂无历史预约记录", "历史预约与过去使用的座位会显示在这里", recordCard)
+            }
+            SeatRecordTab.Breach -> seatBreachItems(breaches, breachesLoading)
+            SeatRecordTab.DoorLog -> seatDoorLogItems(doorLogs, doorLogsLoading)
+        }
+        item(key = "seat-record-footer", contentType = "action") {
+            AppSecondaryButton(text = "返回查询座位", icon = Icons.Outlined.Search,
+                onClick = onGoToBookSeat, modifier = Modifier.fillMaxWidth())
+        }
     }
 }
 
@@ -216,7 +201,7 @@ private fun SeatReservationRecordCard(
     onShowSeatMap: (Int, String) -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = AppCardShape,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         modifier = Modifier.fillMaxWidth(),
@@ -349,24 +334,23 @@ private fun SeatReservationRecordCard(
     }
 }
 
-@Composable
-private fun SeatReservationList(
+private fun LazyListScope.seatReservationItems(
     records: List<LibrarySeatReservationRecord>,
     loading: Boolean,
+    prefix: String,
     emptyTitle: String,
     emptyDetail: String,
     recordCard: @Composable (LibrarySeatReservationRecord) -> Unit,
 ) {
     when {
-        loading -> AppSkeletonInlineRows(
-            rowCount = 3,
-            leadingSize = 30.dp,
-            lineWidths = listOf(0.32f, 0.58f),
-        )
-        records.isEmpty() -> AppEmptyState(emptyTitle, detail = emptyDetail)
-        else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            records.forEach { record -> recordCard(record) }
+        loading -> item(key = "$prefix-loading", contentType = "loading") {
+            AppSkeletonInlineRows(rowCount = 3, leadingSize = 30.dp, lineWidths = listOf(0.32f, 0.58f))
         }
+        records.isEmpty() -> item(key = "$prefix-empty", contentType = "empty") {
+            AppEmptyState(emptyTitle, detail = emptyDetail)
+        }
+        else -> itemsIndexed(records, key = { index, record -> "$prefix-${record.id}-$index" },
+            contentType = { _, _ -> "seat-record" }) { _, record -> recordCard(record) }
     }
 }
 
@@ -385,7 +369,7 @@ private fun CurrentSeatUsageCard(
     if (!loading && record == null) return
     val busy = usageAction != null
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = AppCardShape,
         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.32f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
         modifier = Modifier.fillMaxWidth(),
@@ -612,7 +596,7 @@ private fun SecondFloorSeatMapDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
                 text = "蓝色描边方块是你的 ${seatLabel} 号座位，其余为同区域座位位置。",
@@ -635,27 +619,21 @@ private fun SecondFloorSeatMapDialog(
     }
 }
 
-@Composable
-private fun SeatBreachList(page: LibrarySeatBreachPage, loading: Boolean) {
+private fun LazyListScope.seatBreachItems(page: LibrarySeatBreachPage, loading: Boolean) {
     when {
-        loading -> AppSkeletonInlineRows(
-            rowCount = 3,
-            leadingSize = 30.dp,
-            lineWidths = listOf(0.32f, 0.58f),
-        )
-        page.records.isEmpty() -> AppEmptyState(
-            "暂无违约记录",
-            detail = "按时签到、按时签退就不会产生违约记录",
-        )
-        else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (page.total > page.records.size) {
-                Text(
-                    text = "共 ${page.total} 条违约记录，仅显示最近 ${page.records.size} 条",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        loading -> item(key = "breach-loading", contentType = "loading") {
+            AppSkeletonInlineRows(rowCount = 3, leadingSize = 30.dp, lineWidths = listOf(0.32f, 0.58f))
+        }
+        page.records.isEmpty() -> item(key = "breach-empty", contentType = "empty") {
+            AppEmptyState("暂无违约记录", detail = "按时签到、按时签退就不会产生违约记录")
+        }
+        else -> {
+            if (page.total > page.records.size) item(key = "breach-total") {
+                Text("共 ${page.total} 条违约记录，仅显示最近 ${page.records.size} 条",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            page.records.forEach { record -> SeatBreachRecordCard(record) }
+            itemsIndexed(page.records, key = { index, _ -> "breach-$index" },
+                contentType = { _, _ -> "seat-breach" }) { _, record -> SeatBreachRecordCard(record) }
         }
     }
 }
@@ -663,7 +641,7 @@ private fun SeatBreachList(page: LibrarySeatBreachPage, loading: Boolean) {
 @Composable
 private fun SeatBreachRecordCard(record: LibrarySeatBreachRecord) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = AppCardShape,
         color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.28f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.28f)),
         modifier = Modifier.fillMaxWidth(),
@@ -718,28 +696,23 @@ private fun SeatBreachRecordCard(record: LibrarySeatBreachRecord) {
     }
 }
 
-@Composable
-private fun SeatDoorLogList(logs: List<LibrarySeatDoorLog>, loading: Boolean) {
+private fun LazyListScope.seatDoorLogItems(logs: List<LibrarySeatDoorLog>, loading: Boolean) {
     when {
-        loading -> AppSkeletonInlineRows(
-            rowCount = 3,
-            leadingSize = 30.dp,
-            lineWidths = listOf(0.42f, 0.3f),
-        )
-        logs.isEmpty() -> AppEmptyState(
-            "今日暂无门禁记录",
-            detail = "入馆或离馆刷卡后会自动同步到这里",
-        )
-        else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            logs.forEach { log -> SeatDoorLogRow(log) }
+        loading -> item(key = "door-loading", contentType = "loading") {
+            AppSkeletonInlineRows(rowCount = 3, leadingSize = 30.dp, lineWidths = listOf(0.42f, 0.3f))
         }
+        logs.isEmpty() -> item(key = "door-empty", contentType = "empty") {
+            AppEmptyState("今日暂无门禁记录", detail = "入馆或离馆刷卡后会自动同步到这里")
+        }
+        else -> itemsIndexed(logs, key = { index, _ -> "door-$index" },
+            contentType = { _, _ -> "seat-door" }) { _, log -> SeatDoorLogRow(log) }
     }
 }
 
 @Composable
 private fun SeatDoorLogRow(log: LibrarySeatDoorLog) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = AppCardShape,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
         modifier = Modifier.fillMaxWidth(),

@@ -55,7 +55,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.AcrImageCatalog
 import cn.pxyb.mycontrol.data.AcrImageGroup
 import cn.pxyb.mycontrol.data.AcrImageMutation
@@ -167,7 +166,7 @@ internal fun RegistryImagesScreen(
         }
         state.error?.let { error ->
             item(key = "registry-error", contentType = "banner") {
-                AppFeedbackBanner(message = error, error = true, onDismiss = onDismissFeedback)
+                AppFeedbackBanner(message = error, error = true, onRetry = onRefresh, onDismiss = onDismissFeedback)
             }
         }
 
@@ -311,7 +310,7 @@ private fun RegistrySummaryPanel(catalog: AcrImageCatalog, canManage: Boolean) {
                     Text("阿里云 ACR 镜像仓库", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
                         catalog.repository,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -409,7 +408,7 @@ private fun RegistrySelectionPanel(
                     )
                     Text(
                         if (overflow) "单次最多删除 $maxBatch 个，请分批选择" else "删除后需要重新构建才能找回",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                        style = MaterialTheme.typography.bodySmall,
                         color = if (overflow) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -458,11 +457,11 @@ private fun RegistryPrunePanel(
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         "每组保留最新",
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium, fontSize = 15.sp),
+                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
                     )
                     Text(
                         "超出的旧版本会进入清理计划",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                     )
                 }
@@ -630,7 +629,7 @@ private fun RegistryGroupHeader(
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 group.prefix,
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp),
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -640,7 +639,7 @@ private fun RegistryGroupHeader(
                 } else {
                     "${group.tags.size} 个候选版本"
                 },
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }

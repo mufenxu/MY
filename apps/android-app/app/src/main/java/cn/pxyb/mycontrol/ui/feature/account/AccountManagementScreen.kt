@@ -39,7 +39,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.data.PlatformPasskey
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
@@ -178,9 +177,8 @@ fun AccountManagementScreen(
                                 Spacer(Modifier.height(12.dp))
                                 Text(
                                     user.username,
-                                    style = MaterialTheme.typography.headlineSmall.copy(
+                                    style = MaterialTheme.typography.headlineMedium.copy(
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 22.sp,
                                     ),
                                 )
                                 Spacer(Modifier.height(6.dp))
@@ -192,7 +190,6 @@ fun AccountManagementScreen(
                                         text = roleLabel(user.role),
                                         style = MaterialTheme.typography.labelMedium.copy(
                                             fontWeight = FontWeight.SemiBold,
-                                            fontSize = 13.sp,
                                         ),
                                         color = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
@@ -229,7 +226,6 @@ fun AccountManagementScreen(
                                             text = "打开应用时验证身份",
                                             style = MaterialTheme.typography.titleMedium.copy(
                                                 fontWeight = FontWeight.SemiBold,
-                                                fontSize = 15.sp,
                                             ),
                                         )
                                         Text(
@@ -344,7 +340,6 @@ fun AccountManagementScreen(
                             user.username,
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp,
                             ),
                         )
                         Spacer(Modifier.height(3.dp))
@@ -356,7 +351,6 @@ fun AccountManagementScreen(
                                 text = roleLabel(user.role),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.SemiBold,
-                                    fontSize = 11.sp,
                                 ),
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
@@ -440,7 +434,6 @@ fun AccountManagementScreen(
                                     text = "打开应用时验证身份",
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.SemiBold,
-                                        fontSize = 15.sp,
                                     ),
                                 )
                                 Text(

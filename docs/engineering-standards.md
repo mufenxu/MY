@@ -206,7 +206,7 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 
 ## 10. Android 约定
 
-设计规范见 [apps/android-app/AGENTS.md](../apps/android-app/AGENTS.md)（唯一的设计事实来源，含脚手架、毛玻璃、按钮体系、动效、无障碍红线）。
+设计规范见 [apps/android-app/AGENTS.md](../apps/android-app/AGENTS.md)（唯一的设计事实来源，含脚手架、主题表面、按钮体系、动效、无障碍红线）。
 
 工程事实：
 
@@ -214,7 +214,7 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 - 版本只从 `gradle/libs.versions.toml` 取。新增依赖**必须**登记到版本目录，不得在 `build.gradle.kts` 里硬编码坐标与版本。
 - 单测在 `app/src/test/java/**`，命名 `*Test.kt`，JUnit 4。**没有** instrumented 测试；设备侧代码只有 baseline profile 模块。
 - CI 门禁（[android-ci.yml](../.github/workflows/android-ci.yml)）：
-  `./gradlew :app:testDebugUnitTest :app:compileDebugKotlin :app:lintDebug :app:assembleDebug`
+  先运行 `npm run check:android-design`，再运行 `./gradlew :app:testDebugUnitTest :app:compileDebugKotlin :app:lintDebug :app:assembleDebug`
 - **没有** detekt / ktlint / spotless。因此 Kotlin 风格靠 review 与 `lintDebug`，不要声称"格式化已自动校验"。
 
 ---
@@ -268,7 +268,7 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 6. **`services/iot-service` 的 `check` 不含 `test`**，由根 `check:iot` 在外部补跑。
 7. **小程序**：`smart-campus-miniapp` 的 `tsconfig.json` 排除了不存在的 `scratch` 目录；其 `preloadRule` 校验因 `app.json` 无 `preloadRule` 而暂为空转；`ROUTES` 缺 `SCAN` 与热泵设置项，导致 9 处硬编码路径。
 8. **前端**：`exam-admin` lint 实质无效（3 条规则、无 `eslint-plugin-vue`）；`official-website` 无 lint/test/check/`.gitignore`；`admin-console` 约 31 条 react-hooks 警告长期存在；无共享设计令牌包；`core-admin` 与 `exam-admin` 开发端口同为 5173；`exam-admin/src/assets/css/admin.css` 内重复打开 `:root` 三次导致同名令牌三重定义；`core-admin/README.md` 标题与依赖版本已过期。详见 §8。
-9. **Android**：`ui/feature` 中约 150 处 `spacedBy(8|10|14.dp)` 与"12.dp 标准"不符；`TextButton` 仍散落于 6 个文件（无对应胶囊化组件）；存在若干零引用组件（`AppAvatar`、`AppFilterBar`、`AppMetricDashboard`、`AppGroupedCard`、`ImmersiveHeader`、`ModernHeaderIconButton`）。
+9. **Android**：设计约束已接入 `npm run check:android-design` 与 Android CI，检查业务层原生按钮/字段/弹窗、硬编码颜色/字号和非标准垂直间距。`AppAvatar`、`AppFilterBar`、`AppMetricDashboard`、`AppGroupedCard` 均有业务调用。少量行内 `TextButton`、专用验证码输入和身份码弹窗保留；不得据此另建普通页面组件体系。具体边界与 Debug 预览见 Android `AGENTS.md`。
 10. **前端 Vite 大版本四分**：5 / 7 / 7 / 8。与第 1 条同理，升级需独立评估。
 11. **小程序 README 过期**：曾描述不存在的 `backend/`、`admin-web/`、`admin-server/` 等目录（已在本轮修正）。若再发现文档描述不存在的东西，按"文档服从代码"处理：改文档，不改代码。
 12. **CLI 惯用法不统一**（风格问题，无行为风险）：入口守卫在 `pathToFileURL(...).href === import.meta.url` 与 `path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)` 之间分裂；参数解析有手写三种风格；失败有 `process.exit(1)` 与 `process.exitCode = 1` 两种。新脚本按 §12 任选其一即可，不必回改存量。

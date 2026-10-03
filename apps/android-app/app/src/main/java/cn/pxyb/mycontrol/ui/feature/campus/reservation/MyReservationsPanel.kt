@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.campus.reservation
 
+import cn.pxyb.mycontrol.ui.theme.AppCardShape
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -41,7 +42,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.CampusMyReservation
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppDangerButton
@@ -87,7 +87,7 @@ internal fun MyReservationsPanel(
     AppPanel {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -102,12 +102,11 @@ internal fun MyReservationsPanel(
                         "我的已约空间",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
                         ),
                     )
                     Text(
                         "学校图书馆研讨间系统当前已生效的个人预约凭证",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -215,7 +214,7 @@ internal fun MyReservationsPanel(
                         }
                     }
                 } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         sortedReservations.forEach { reservation ->
                             ReservationCard(
                                 reservation = reservation,
@@ -255,14 +254,14 @@ private fun ReservationCard(
         (reservation.canCancel || reservation.canEndUse || reservation.canReschedule)
 
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = AppCardShape,
         color = glassCardColor(),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -300,7 +299,7 @@ private fun ReservationCard(
                         if (reservation.id.isNotBlank() && !reservation.id.startsWith("local_") && !reservation.id.startsWith("remote_")) {
                             Text(
                                 text = "单号：${reservation.id}",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
@@ -314,7 +313,7 @@ private fun ReservationCard(
                 ) {
                     Text(
                         text = reservation.statusText,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        style = MaterialTheme.typography.labelSmall,
                         color = ColorTokens.Green.foreground,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),

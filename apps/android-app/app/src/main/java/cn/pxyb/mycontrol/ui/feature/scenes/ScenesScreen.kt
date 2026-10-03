@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.scenes
 
+import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
 import cn.pxyb.mycontrol.ui.components.layout.adaptiveGridColumnCount
@@ -114,12 +115,12 @@ fun ScenesScreen(
     ) {
         if (state.offlineMode) {
             item(key = "scenes-offline", contentType = "banner") {
-                AppFeedbackBanner("离线时仅可查看场景，联网后才能执行或编辑。", error = false)
+                AppFeedbackBanner("离线时仅可查看场景，联网后才能执行或编辑。", type = AppFeedbackType.Info, showCloseButton = false)
             }
         }
         state.sectionError?.let { message ->
             item(key = "scenes-error", contentType = "banner") {
-                AppFeedbackBanner(message, error = true)
+                AppFeedbackBanner(message, error = true, onRetry = onRefresh)
             }
         }
 

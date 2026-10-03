@@ -281,7 +281,7 @@ internal fun QuickActionsDialog(
                 .fillMaxWidth()
                 .heightIn(max = 520.dp)
                 .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             localOrder.forEachIndexed { index, action ->
                 val isChecked = action !in localHidden
@@ -319,13 +319,12 @@ internal fun QuickActionsDialog(
                                 text = homeQuickActionLabel(action),
                                 style = MaterialTheme.typography.bodyMedium.copy(
                                     fontWeight = FontWeight.Medium,
-                                    fontSize = 14.5.sp,
                                 ),
                                 color = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
                                 text = if (isChecked) "已显示" else "已隐藏",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                style = MaterialTheme.typography.labelSmall,
                                 color = if (isChecked) MaterialTheme.colorScheme.onSurfaceVariant
                                         else MaterialTheme.colorScheme.outline,
                             )
@@ -458,7 +457,6 @@ internal fun QuickAction(
             text = label,
             style = MaterialTheme.typography.labelSmall.copy(
                 fontWeight = FontWeight.Medium,
-                fontSize = 11.sp,
                 letterSpacing = (-0.1).sp,
             ),
             color = MaterialTheme.colorScheme.onSurface,

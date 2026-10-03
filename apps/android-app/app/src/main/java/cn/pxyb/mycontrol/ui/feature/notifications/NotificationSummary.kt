@@ -20,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.ui.components.display.AppMetricCard
 import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
@@ -106,7 +105,7 @@ internal fun NotificationDayHeader(label: String, count: Int, modifier: Modifier
     ) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp, fontWeight = FontWeight.Bold),
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
         )
@@ -118,7 +117,7 @@ internal fun NotificationDayHeader(label: String, count: Int, modifier: Modifier
         )
         Text(
             text = "$count 条",
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             maxLines = 1,
         )

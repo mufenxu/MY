@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.overview
 
+import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.core.LinearEasing
@@ -41,7 +42,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.ExternalApplication
 import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.components.layout.glassShimmer
@@ -97,7 +97,7 @@ private fun ExternalApplicationLoadingCard(index: Int) {
         initialValue = 0.38f,
         targetValue = 0.88f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 900 + index * 110, easing = LinearEasing),
+            animation = tween(durationMillis = MotionTokens.DurationShimmer, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "external-application-loading-pulse",
@@ -166,7 +166,7 @@ internal fun ExternalApplicationRow(
         if (!application.canAccess) {
             Text(
                 text = "无访问权限",
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -186,7 +186,7 @@ internal fun ExternalApplicationRow(
                 val tagText = if (application.kind == "direct") "免密" else externalRoleLabel(application.requiredRole)
                 Text(
                     text = "$latencyText · $tagText",
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

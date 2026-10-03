@@ -58,41 +58,14 @@ fun <T> AppSelectField(
     val selectedOption = options.firstOrNull { it.value == value }
     val canExpand = enabled && options.isNotEmpty()
     Box(modifier = modifier) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 56.dp)
-                .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
-                .clickable(enabled = canExpand, role = Role.Button) {
-                    AppHaptics.tick(haptics)
-                    onExpandedChange(true)
-                },
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                if (icon != null) {
-                    Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-                }
-                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(
-                        text = selectedOption?.label ?: placeholder,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                        color = if (canExpand) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Icon(Icons.Outlined.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+        AppPickerField(
+            label = label,
+            value = selectedOption?.label.orEmpty(),
+            placeholder = placeholder,
+            enabled = canExpand,
+            icon = icon,
+            onClick = { onExpandedChange(true) },
+        )
         if (expanded && canExpand) {
             cn.pxyb.mycontrol.ui.components.dialog.AppDialog(
                 title = label, onDismissRequest = { onExpandedChange(false) },
@@ -127,6 +100,55 @@ fun <T> AppSelectField(
                     }
                 }
             }
+        }
+    }
+}
+
+/** 日期、时间与选项选择器共用字段表面和按钮语义。 */
+@Composable
+fun AppPickerField(
+    label: String,
+    value: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "请选择",
+    enabled: Boolean = true,
+    icon: ImageVector? = null,
+) {
+    val haptics = LocalHapticFeedback.current
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+            .clickable(enabled = enabled, role = Role.Button) {
+                AppHaptics.tick(haptics)
+                onClick()
+            },
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    text = value.ifBlank { placeholder },
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Medium,
+                    color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Icon(Icons.Outlined.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -1,7 +1,7 @@
 package cn.pxyb.mycontrol.ui.feature.campus.reservation
 
+import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,10 +21,8 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Phone
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import cn.pxyb.mycontrol.ui.components.input.AppPickerField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,7 +38,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.CampusAutoReservationCandidate
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusReservationSpace
@@ -250,12 +247,11 @@ internal fun AutoReservationEditDialog(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedTextField(
+            AppTextField(
                 value = name,
                 onValueChange = { name = it; validationError = null },
-                label = { Text("任务名称 *") },
-                placeholder = { Text("例如：周三研讨间自动抢占") },
-                shape = RoundedCornerShape(8.dp),
+                label = "任务名称 *",
+                placeholder = "例如：周三研讨间自动抢占",
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
@@ -306,7 +302,7 @@ internal fun AutoReservationEditDialog(
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = "$label($wk)",
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                style = MaterialTheme.typography.labelSmall,
                                 color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                 maxLines = 1,
@@ -316,121 +312,27 @@ internal fun AutoReservationEditDialog(
                 }
             }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { datePickerTarget = "reservation" }
-            ) {
-                OutlinedTextField(
-                    value = reservationDate,
-                    onValueChange = { reservationDate = it; validationError = null },
-                    readOnly = true,
-                    enabled = false,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                        disabledBorderColor = MaterialTheme.colorScheme.outline,
-                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    ),
-                    label = { Text(if (dateWeekday != null) "预约目标日期 ($dateWeekday)" else "预约目标日期") },
-                    placeholder = { Text("点击滑动选择日期") },
-                    trailingIcon = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            modifier = Modifier.padding(end = 6.dp),
-                        ) {
-                            dateWeekday?.let { wk ->
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                ) {
-                                    Text(
-                                        text = wk,
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 11.sp),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                    )
-                                }
-                            }
-                            Icon(
-                                Icons.Outlined.CalendarMonth,
-                                contentDescription = "滑动选择日期",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    },
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
+            AppPickerField(
+                label = "预约目标日期",
+                value = listOfNotNull(reservationDate, dateWeekday).joinToString(" · "),
+                onClick = { datePickerTarget = "reservation" },
+                icon = Icons.Outlined.CalendarMonth,
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppPickerField(
+                    label = "任务运行日期",
+                    value = listOfNotNull(executeDate, executeDateWeekday).joinToString(" · "),
+                    onClick = { datePickerTarget = "execute" },
+                    icon = Icons.Outlined.CalendarMonth,
+                    modifier = Modifier.weight(1.25f),
                 )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1.25f)
-                        .clickable { datePickerTarget = "execute" }
-                ) {
-                    OutlinedTextField(
-                        value = executeDate,
-                        onValueChange = { executeDate = it; validationError = null },
-                        readOnly = true,
-                        enabled = false,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                            disabledBorderColor = MaterialTheme.colorScheme.outline,
-                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                        label = { Text(if (executeDateWeekday != null) "任务运行日期 ($executeDateWeekday)" else "任务运行日期") },
-                        placeholder = { Text("点击选择") },
-                        trailingIcon = {
-                            Icon(
-                                Icons.Outlined.CalendarMonth,
-                                contentDescription = "滑动选择日期",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp).padding(end = 4.dp),
-                            )
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
-                }
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { timePickerOpen = true }
-                ) {
-                    OutlinedTextField(
-                        value = executeTime,
-                        onValueChange = { executeTime = it; validationError = null },
-                        readOnly = true,
-                        enabled = false,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                            disabledBorderColor = MaterialTheme.colorScheme.outline,
-                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        ),
-                        label = { Text("运行时间") },
-                        placeholder = { Text("07:00") },
-                        trailingIcon = {
-                            Icon(
-                                Icons.Outlined.AccessTime,
-                                contentDescription = "滑动选择时间",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp).padding(end = 4.dp),
-                            )
-                        },
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                    )
-                }
+                AppPickerField(
+                    label = "运行时间",
+                    value = executeTime,
+                    onClick = { timePickerOpen = true },
+                    icon = Icons.Outlined.AccessTime,
+                    modifier = Modifier.weight(1f),
+                )
             }
 
             Text(
@@ -513,34 +415,32 @@ internal fun AutoReservationEditDialog(
                 )
             }
 
-            OutlinedTextField(
+            AppTextField(
                 value = title,
                 onValueChange = { title = it; validationError = null },
-                label = { Text("申请主题 *") },
-                placeholder = { Text("例如：课程研究与研讨") },
-                shape = RoundedCornerShape(8.dp),
+                label = "申请主题 *",
+                placeholder = "例如：课程研究与研讨",
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
 
-            OutlinedTextField(
+            AppTextField(
                 value = mobile,
                 onValueChange = { mobile = it; validationError = null },
-                label = { Text("联系电话 *") },
-                placeholder = { Text("11 位手机号") },
-                shape = RoundedCornerShape(8.dp),
+                label = "联系电话 *",
+                placeholder = "11 位手机号",
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
             )
 
-            OutlinedTextField(
+            AppTextField(
                 value = content,
                 onValueChange = { content = it; validationError = null },
-                label = { Text("申请用途 *") },
-                placeholder = { Text("说明研讨间使用用途") },
-                shape = RoundedCornerShape(8.dp),
+                label = "申请用途 *",
+                placeholder = "说明研讨间使用用途",
                 modifier = Modifier.fillMaxWidth(),
+                singleLine = false,
                 minLines = 2,
                 maxLines = 4,
             )

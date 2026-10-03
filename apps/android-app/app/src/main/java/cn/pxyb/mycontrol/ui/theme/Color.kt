@@ -45,6 +45,30 @@ data class AccentColors(
 )
 
 object ColorTokens {
+    // 页面表面与品牌角色；下方成组状态色独立表达成功、警告等语义。
+    val PrimaryDark = Color(0xFF9FCBFF)
+    val ScannerBackground = Color(0xFF111827)
+    val BackgroundLight = Color(0xFFF2F4F8)
+    val BackgroundDark = Color(0xFF101419)
+    val AppSurfaceLight = Color(0xFFFFFFFF)
+    val AppSurfaceDark = Color(0xFF1B222B)
+    val TextLight = Color(0xFF20262D)
+    val TextDark = Color(0xFFE9EDF3)
+    val TextMutedLight = Color(0xFF606C79)
+    val TextMutedDark = Color(0xFFB5BFCB)
+    val PrimaryContainerLight = Color(0xFFE6EFF8)
+    val PrimaryContainerDark = Color(0xFF263C55)
+    val FieldSurfaceLight = Color(0xFFEDF0F6)
+    val FieldSurfaceDark = Color(0xFF293340)
+    val ContainerLowLight = Color(0xFFF5F6FA)
+    val ContainerLowDark = Color(0xFF161D26)
+    val ContainerHighLight = Color(0xFFEBEEF5)
+    val ContainerHighDark = Color(0xFF252F3D)
+    val ContainerHighestLight = Color(0xFFE4E8F0)
+    val ContainerHighestDark = Color(0xFF303C4C)
+    val AppOutlineLight = Color(0xFFE2E6EB)
+    val AppOutlineDark = Color(0xFF35404D)
+
     val SurfaceSubtle = Color(0xFFF1F5F9)
     val SurfaceDim = Color(0xFFE2E8F0)
     val SurfaceContainerLow = Color(0xFFF8FAFC)
@@ -105,21 +129,4 @@ object ColorTokens {
         @Composable @ReadOnlyComposable get() = if (isAppInDarkTheme()) PinkDark else PinkLight
     val Cyan: AccentColors
         @Composable @ReadOnlyComposable get() = if (isAppInDarkTheme()) CyanDark else CyanLight
-}
-
-internal fun appColors(base: androidx.compose.material3.ColorScheme, dark: Boolean): androidx.compose.material3.ColorScheme {
-    val background = if (dark) Color(0xFF101419) else Color(0xFFF2F4F8)
-    val surface = if (dark) Color(0xFF1B222B) else Color.White
-    val primary = if (dark) Color(0xFF9FCBFF) else HomeFocusBlue
-    return base.copy(background = background, surface = surface, primary = primary,
-        surfaceTint = primary, onSurface = if (dark) Color(0xFFE9EDF3) else Color(0xFF20262D),
-        onBackground = if (dark) Color(0xFFE9EDF3) else Color(0xFF20262D),
-        onSurfaceVariant = if (dark) Color(0xFFB5BFCB) else Color(0xFF606C79),
-        primaryContainer = if (dark) Color(0xFF263C55) else Color(0xFFE6EFF8),
-        surfaceVariant = if (dark) Color(0xFF293340) else Color(0xFFEDF0F6),
-        surfaceContainerLow = if (dark) Color(0xFF161D26) else Color(0xFFF5F6FA),
-        surfaceContainer = surface,
-        surfaceContainerHigh = if (dark) Color(0xFF252F3D) else Color(0xFFEBEEF5),
-        surfaceContainerHighest = if (dark) Color(0xFF303C4C) else Color(0xFFE4E8F0),
-        outlineVariant = if (dark) Color(0xFF35404D) else Color(0xFFE2E6EB))
 }

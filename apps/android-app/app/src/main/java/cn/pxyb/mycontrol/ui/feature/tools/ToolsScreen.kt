@@ -1,15 +1,14 @@
 package cn.pxyb.mycontrol.ui.feature.tools
 
+import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -66,7 +65,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.DeviceInfo
 import cn.pxyb.mycontrol.data.DeviceTelemetryInsight
 import cn.pxyb.mycontrol.data.IotScene
@@ -515,17 +513,15 @@ private fun LightBentoMetricCard(
             )
             Text(
                 value,
-                style = MaterialTheme.typography.headlineSmall.copy(
+                style = MaterialTheme.typography.headlineMedium.copy(
                     fontWeight = FontWeight.ExtraBold,
                     color = valueColor,
-                    fontSize = 22.sp,
                 ),
             )
             Text(
                 subText,
                 style = MaterialTheme.typography.labelSmall.copy(
                     color = valueColor.copy(alpha = 0.8f),
-                    fontSize = 10.sp,
                 ),
             )
         }
@@ -557,7 +553,7 @@ private fun ModernEnvironmentCard(device: DeviceInfo?) {
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -679,14 +675,14 @@ private fun ModernRelayCard(
     val targetBg = if (isOn) target.activeBgGradient.first.copy(alpha = 0.55f) else glassCardColor()
     val animatedBg by animateColorAsState(
         targetValue = targetBg,
-        animationSpec = tween(300, easing = FastOutSlowInEasing),
+        animationSpec = MotionTokens.standardTween(),
         label = "relay-bg",
     )
 
     val targetBorder = if (isOn) target.activeAccent.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
     val animatedBorder by animateColorAsState(
         targetValue = targetBorder,
-        animationSpec = tween(300, easing = FastOutSlowInEasing),
+        animationSpec = MotionTokens.standardTween(),
         label = "relay-border",
     )
 

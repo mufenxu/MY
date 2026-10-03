@@ -48,7 +48,6 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
 
@@ -103,7 +102,6 @@ internal fun LoginTextField(
             label,
             style = MaterialTheme.typography.bodyMedium.copy(
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp
             ),
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
             modifier = Modifier.padding(bottom = 7.dp, start = 2.dp)
@@ -142,7 +140,7 @@ internal fun LoginTextField(
                     if (value.isEmpty()) {
                         Text(
                             placeholder,
-                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp),
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
                         )
                     }
@@ -167,7 +165,6 @@ internal fun LoginTextField(
                         keyboardOptions = keyboardOptions,
                         keyboardActions = keyboardActions,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 15.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface
                         ),

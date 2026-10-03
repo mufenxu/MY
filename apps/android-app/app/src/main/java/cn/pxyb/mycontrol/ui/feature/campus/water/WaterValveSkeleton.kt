@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.campus.water
 
+import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -58,7 +59,7 @@ private fun WaterValveSkeletonCard(
         initialValue = 0.32f,
         targetValue = 0.72f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 950, easing = LinearEasing),
+            animation = tween(durationMillis = MotionTokens.DurationShimmer, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse,
         ),
         label = "skeletonPulseAlpha",
