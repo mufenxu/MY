@@ -265,13 +265,8 @@ fun ToolsScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    if (cn.pxyb.mycontrol.ui.theme.LocalDesignReview.current == cn.pxyb.mycontrol.ui.theme.DesignReview.Material) {
-                        Column(Modifier.weight(1f)) { environment() }
-                        Column(Modifier.weight(1f)) { controls() }
-                    } else {
-                        Column(Modifier.weight(1f)) { controls() }
-                        Column(Modifier.weight(1f)) { environment() }
-                    }
+                    Column(Modifier.weight(1f)) { environment() }
+                    Column(Modifier.weight(1f)) { controls() }
                 }
             }
         }

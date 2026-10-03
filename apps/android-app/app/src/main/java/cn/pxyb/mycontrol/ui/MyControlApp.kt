@@ -1,6 +1,5 @@
 package cn.pxyb.mycontrol.ui
 
-import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.ReportDrawnWhen
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -64,17 +63,6 @@ fun MyControlApp(
     var startupUpdateDialogVisible by rememberSaveable { mutableStateOf(false) }
     val state by viewModel.entryState.collectAsStateWithLifecycle()
     val profileState by viewModel.profileState.collectAsStateWithLifecycle()
-    val reviewIntent = LocalActivity.current?.intent
-    LaunchedEffect(state.booting) {
-        if (BuildConfig.DEBUG && !state.booting && reviewIntent?.getBooleanExtra("preview_mode", false) == true) {
-            val tab = cn.pxyb.mycontrol.ui.navigation.MainTab.entries.firstOrNull {
-                it.name.equals(reviewIntent.getStringExtra("target_tab"), true)
-            } ?: cn.pxyb.mycontrol.ui.navigation.MainTab.Overview
-            viewModel.enterUiReviewMode(tab)
-        }
-    }
-
-
     // 首帧后挂载主内容，让数据加载与开屏入场重叠。
     LaunchedEffect(Unit) {
         androidx.compose.runtime.withFrameNanos { }
@@ -158,7 +146,6 @@ fun MyControlApp(
                         onBotChallengeComplete = viewModel::completeBotChallenge,
                         onRecoverAccount = viewModel::recoverAccount,
                         onRecoveryCodesSaved = viewModel::acknowledgeLoginRecoveryCodes,
-                        onEnterReviewMode = if (BuildConfig.DEBUG) ({ viewModel.enterUiReviewMode() }) else null,
                     )
                     else -> CompositionLocalProvider(LocalAppNavigationHandlesBack provides true) {
                         AuthenticatedShell(

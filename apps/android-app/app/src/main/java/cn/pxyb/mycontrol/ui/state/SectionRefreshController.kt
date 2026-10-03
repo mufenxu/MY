@@ -32,7 +32,6 @@ internal class SectionRefreshController(
         block: suspend () -> Unit,
     ) {
         if (mutableState.value.user == null || refreshJobs[section]?.isActive == true) return
-        if (cn.pxyb.mycontrol.BuildConfig.DEBUG && mutableState.value.user?.id == "admin-demo") return
         val now = SystemClock.elapsedRealtime()
         val lastRefresh = lastRefreshElapsedMs[section]
         if (!force && lastRefresh != null && now - lastRefresh < REFRESH_CACHE_WINDOW_MS) return

@@ -28,10 +28,10 @@ import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 // ------------------------------------------------------------------------------------------------
 // 毛玻璃拟态（Glassmorphism）共享组件
-// 注意：玻璃面板一律不加深投影（会产生灰色晕边）；靠发丝描边与顶部高光区分层次。
+// 当前方案使用实色表面与发丝描边，不添加深色投影。
 // ------------------------------------------------------------------------------------------------
 
-/** 毛玻璃面板配色：半透明底色 + 顶部高光渐变 + 发丝描边 */
+/** 共享面板配色与形状。 */
 @Immutable
 data class GlassPalette(
     val base: Color,
@@ -41,14 +41,13 @@ data class GlassPalette(
 )
 
 @Composable
-fun rememberGlassPalette(radius: Dp = 20.dp, baseAlpha: Float? = null): GlassPalette {
-    val review = cn.pxyb.mycontrol.ui.theme.LocalDesignReview.current
+fun rememberGlassPalette(radius: Dp = 20.dp): GlassPalette {
     val dark = isAppInDarkTheme()
     val surface = MaterialTheme.colorScheme.surface
-    return remember(dark, surface, radius, baseAlpha, review) {
-        val highlightColor = if (review != cn.pxyb.mycontrol.ui.theme.DesignReview.Original) Color.Transparent else if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.2f)
+    return remember(dark, surface, radius) {
+        val highlightColor = Color.Transparent
         GlassPalette(
-            base = if (review != cn.pxyb.mycontrol.ui.theme.DesignReview.Original) surface else surface.copy(alpha = baseAlpha ?: if (dark) 0.76f else 0.72f),
+            base = surface,
             highlight = Brush.verticalGradient(
                 colorStops = arrayOf(
                     0.0f to highlightColor,
@@ -62,55 +61,21 @@ fun rememberGlassPalette(radius: Dp = 20.dp, baseAlpha: Float? = null): GlassPal
     }
 }
 
-/** 卡片底色：半透明磨砂白，让极光背景透出一层淡彩（与白色纯卡形成统一质感） */
+/** 卡片沿用主题表面色。 */
 @Composable
 fun glassCardColor(): Color {
-    if (cn.pxyb.mycontrol.ui.theme.LocalDesignReview.current != cn.pxyb.mycontrol.ui.theme.DesignReview.Original) return MaterialTheme.colorScheme.surface
-    val dark = isAppInDarkTheme()
-    return MaterialTheme.colorScheme.surface.copy(alpha = if (dark) 0.74f else 0.68f)
+    return MaterialTheme.colorScheme.surface
 }
 
-/** 将组件渲染为毛玻璃面板：半透明底色 + 顶部高光 + 发丝描边 */
+/** 应用共享面板配色与描边。 */
 fun Modifier.glassPanel(palette: GlassPalette, borderColor: Color = palette.border): Modifier = this
     .background(palette.base, palette.shape)
     .background(palette.highlight, palette.shape)
     .border(1.dp, borderColor, palette.shape)
 
-/** 页面底层极光光斑背景（固定不随内容滚动），为玻璃面板提供可透出的色彩。已采用 drawWithCache 缓存渐变着色器避免滚动掉帧 */
+/** 页面底色由主题统一提供；保留现有调用参数。 */
 fun Modifier.auroraBackdrop(dark: Boolean): Modifier = composed {
-    if (cn.pxyb.mycontrol.ui.theme.LocalDesignReview.current != cn.pxyb.mycontrol.ui.theme.DesignReview.Original) {
-        this.background(MaterialTheme.colorScheme.background)
-    } else this.originalAuroraBackdrop(dark)
-}
-
-private fun Modifier.originalAuroraBackdrop(dark: Boolean): Modifier = this.drawWithCache {
-    val blobAlpha = if (dark) 0.34f else 0.40f
-    val c1 = if (dark) Color(0xFF3B82F6) else Color(0xFF5B9BF8)
-    val c2 = if (dark) Color(0xFF8B5CF6) else Color(0xFF9B8DF7)
-    val c3 = if (dark) Color(0xFF14B8A6) else Color(0xFF4FD8C0)
-    val c4 = if (dark) Color(0xFF2563EB) else Color(0xFF93C5FD)
-
-    val r1 = 320.dp.toPx()
-    val r2 = 280.dp.toPx()
-    val r3 = 250.dp.toPx()
-    val r4 = 270.dp.toPx()
-
-    val center1 = Offset(size.width * 0.94f, size.height * 0.04f)
-    val center2 = Offset(size.width * 0.08f, size.height * 0.14f)
-    val center3 = Offset(size.width * 0.88f, size.height * 0.52f)
-    val center4 = Offset(size.width * 0.06f, size.height * 0.94f)
-
-    val brush1 = Brush.radialGradient(listOf(c1.copy(alpha = blobAlpha), Color.Transparent), center1, r1)
-    val brush2 = Brush.radialGradient(listOf(c2.copy(alpha = blobAlpha * 0.50f), Color.Transparent), center2, r2)
-    val brush3 = Brush.radialGradient(listOf(c3.copy(alpha = blobAlpha * 0.36f), Color.Transparent), center3, r3)
-    val brush4 = Brush.radialGradient(listOf(c4.copy(alpha = blobAlpha * 0.42f), Color.Transparent), center4, r4)
-
-    onDrawBehind {
-        drawCircle(brush = brush1, radius = r1, center = center1)
-        drawCircle(brush = brush2, radius = r2, center = center2)
-        drawCircle(brush = brush3, radius = r3, center = center3)
-        drawCircle(brush = brush4, radius = r4, center = center4)
-    }
+    this.background(MaterialTheme.colorScheme.background)
 }
 
 /**

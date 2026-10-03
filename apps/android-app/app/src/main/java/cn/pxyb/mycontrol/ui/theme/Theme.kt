@@ -105,12 +105,7 @@ fun MYControlTheme(
     content: @Composable () -> Unit,
 ) {
     val view = LocalView.current
-    val review = if (cn.pxyb.mycontrol.BuildConfig.DEBUG) {
-        DesignReview.entries.firstOrNull {
-            it.name.equals((view.context as? Activity)?.intent?.getStringExtra("design_scheme"), true)
-        } ?: DesignReview.Material
-    } else DesignReview.Material
-    val colors = reviewColors(if (darkTheme) DarkColors else LightColors, review, darkTheme)
+    val colors = appColors(if (darkTheme) DarkColors else LightColors, darkTheme)
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
@@ -128,13 +123,12 @@ fun MYControlTheme(
         }
     }
     CompositionLocalProvider(
-        LocalDesignReview provides review,
         LocalAppDarkTheme provides darkTheme,
         LocalContentColor provides colors.onBackground,
     ) {
         MaterialTheme(
             colorScheme = colors,
-            typography = reviewTypography(review),
+            typography = AppTypography,
             shapes = AppShapes,
             content = content,
         )

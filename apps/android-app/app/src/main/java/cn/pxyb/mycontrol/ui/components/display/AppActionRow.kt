@@ -60,12 +60,6 @@ fun AppActionRow(
         )
     },
 ) {
-    val review = cn.pxyb.mycontrol.ui.theme.LocalDesignReview.current
-    val rowPadding = when (review) {
-        cn.pxyb.mycontrol.ui.theme.DesignReview.Telegram -> 12.dp
-        cn.pxyb.mycontrol.ui.theme.DesignReview.Quiet -> 20.dp
-        else -> 12.dp
-    }
     val haptics = LocalHapticFeedback.current
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -81,12 +75,12 @@ fun AppActionRow(
                 AppHaptics.tick(haptics)
                 onClick()
             }
-            .padding(horizontal = 16.dp, vertical = rowPadding)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     } else {
         modifier
             .fillMaxWidth()
             .minimumInteractiveComponentSize()
-            .padding(horizontal = 16.dp, vertical = rowPadding)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     }
 
     Row(

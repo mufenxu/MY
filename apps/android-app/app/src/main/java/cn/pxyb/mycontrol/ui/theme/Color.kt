@@ -106,19 +106,10 @@ object ColorTokens {
         @Composable @ReadOnlyComposable get() = if (isAppInDarkTheme()) CyanDark else CyanLight
 }
 
-internal fun reviewColors(base: androidx.compose.material3.ColorScheme, review: DesignReview, dark: Boolean): androidx.compose.material3.ColorScheme {
-    if (review == DesignReview.Original) return base
-    val background = if (dark) Color(0xFF101419) else when (review) {
-        DesignReview.Telegram -> Color(0xFFF1F3F5)
-        DesignReview.Material -> Color(0xFFF2F2F5)
-        else -> Color(0xFFF6F5F2)
-    }
+internal fun appColors(base: androidx.compose.material3.ColorScheme, dark: Boolean): androidx.compose.material3.ColorScheme {
+    val background = if (dark) Color(0xFF101419) else Color(0xFFF2F2F5)
     val surface = if (dark) Color(0xFF1B222B) else Color.White
-    val primary = if (dark) Color(0xFF9FCBFF) else when (review) {
-        DesignReview.Telegram -> Color(0xFF247EAD)
-        DesignReview.Material -> Color(0xFF365DA8)
-        else -> Color(0xFF355A53)
-    }
+    val primary = if (dark) Color(0xFF9FCBFF) else Color(0xFF365DA8)
     return base.copy(background = background, surface = surface, primary = primary,
         surfaceTint = primary, onSurface = if (dark) Color(0xFFE9EDF3) else Color(0xFF20262D),
         onBackground = if (dark) Color(0xFFE9EDF3) else Color(0xFF20262D),

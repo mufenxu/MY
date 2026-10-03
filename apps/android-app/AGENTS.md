@@ -13,10 +13,10 @@
 
 ## 2. 视觉与材质约束
 
-- **毛玻璃拟态 (Glassmorphism)**：
-  - 核心质感见 `ui/components/layout/Glassmorphism.kt`：半透明磨砂表面 (`glassCardColor()`) + 顶部高光渐变 + 发丝描边 + **0 阴影投影**（严禁添加深色阴影，防止出现灰色脏晕边）。
-  - 真实描边取值（以代码为准，勿凭记忆写死）：`Glassmorphism.kt` 用 `1.dp` + `palette.border`（白色 `alpha = 0.16f` 深色 / `0.5f` 浅色）；`AppPanel.kt` 用 `BorderStroke(0.5.dp, colorScheme.outlineVariant)`，**不带 alpha 叠加**。新增面板直接复用 `AppPanel`，不要另写 border。
-  - 极光背景 (`auroraBackdrop`) 已采用 `drawWithCache` 缓存径向渐变着色器；严禁在滑动项内部私自构建高频重绘的渐变画笔。
+- **主题表面与背景**：
+  - 当前固定采用选定的 Material 分区方案，深浅色取自 `Theme.kt` / `Color.kt`；不保留候选方案切换或演示账号入口。
+  - 面板复用 `AppPanel`，使用主题实色表面、20.dp 圆角与 0 阴影；不要重新添加旧版顶部高光渐变。
+  - `Glassmorphism.kt` 保留共享接口：`glassCardColor()` 返回主题表面色，`auroraBackdrop()` 返回主题背景色；`glassPanel()` 保留细描边，加载微光仍由 `glassShimmer()` 提供。
 - **底部浮动胶囊导航**：
   使用统一的轻量胶囊底栏：清晰的未选中图标、浅色选中背景与克制的颜色过渡，不使用图标弹跳或高饱和度光晕。手机端助手入口与导航并列停靠，禁止覆盖内容区；系统手势区避让由外层处理。
 - **布局间距标准**：
