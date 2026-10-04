@@ -24,6 +24,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.Callback
+import okhttp3.Dispatcher
 import okhttp3.Request
 import okhttp3.Response
 
@@ -95,12 +96,23 @@ internal fun parseHlsSegments(text: String, playlistUrl: String): List<HlsSegmen
 }
 
 internal class HlsVideoDownload(private val headers: Map<String, String>) {
+  private companion object {
+    const val SEGMENT_CONCURRENCY = 6
+    // 下载独立排队，保留共享客户端的连接池、超时与证书配置。
+    val client by lazy {
+      HttpClientProvider.newBuilder().dispatcher(Dispatcher().apply {
+        maxRequests = SEGMENT_CONCURRENCY
+        maxRequestsPerHost = SEGMENT_CONCURRENCY
+      }).build()
+    }
+  }
+
   private suspend fun fetch(url: String, limit: Int): Pair<String, ByteArray> = suspendCancellableCoroutine { continuation ->
     val request = Request.Builder().url(url).apply {
       headers.filterKeys { it.lowercase() in setOf("referer", "user-agent", "origin") }
         .forEach { (name, value) -> header(name, value) }
     }.build()
-    val call = HttpClientProvider.client.newCall(request)
+    val call = client.newCall(request)
     continuation.invokeOnCancellation { call.cancel() }
     call.enqueue(object : Callback {
       override fun onFailure(call: Call, e: IOException) {
@@ -137,7 +149,7 @@ internal class HlsVideoDownload(private val headers: Map<String, String>) {
     val segments = parseHlsSegments(manifest.toString(Charsets.UTF_8), playlistUrl)
     var lastKeyUrl: String? = null
     var lastKey = ByteArray(0)
-    // 仅预取四个分片；按列表顺序消费，避免乱序合并或为整个视频积压内存。
+    // 仅预取六个分片；按列表顺序消费，避免乱序合并或为整个视频积压内存。
     val pending = ArrayDeque<Deferred<ByteArray>>()
     var nextSegment = 0
     fun prefetch() {
@@ -145,7 +157,7 @@ internal class HlsVideoDownload(private val headers: Map<String, String>) {
       val segment = segments[nextSegment++]
       pending.addLast(async { fetch(segment.url, 32 * 1024 * 1024).second })
     }
-    repeat(minOf(4, segments.size)) { prefetch() }
+    repeat(minOf(SEGMENT_CONCURRENCY, segments.size)) { prefetch() }
     destination.outputStream().buffered().use { output ->
       segments.forEachIndexed { index, segment ->
         currentCoroutineContext().ensureActive()
