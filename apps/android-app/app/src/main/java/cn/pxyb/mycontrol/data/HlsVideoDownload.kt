@@ -16,6 +16,9 @@ import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -129,15 +132,24 @@ internal class HlsVideoDownload(private val headers: Map<String, String>) {
     })
   }
 
-  suspend fun download(url: String, destination: File, onProgress: suspend (Int, Int) -> Unit) {
+  suspend fun download(url: String, destination: File, onProgress: suspend (Int, Int) -> Unit) = coroutineScope {
     val (playlistUrl, manifest) = fetch(url, 8 * 1024 * 1024)
     val segments = parseHlsSegments(manifest.toString(Charsets.UTF_8), playlistUrl)
     var lastKeyUrl: String? = null
     var lastKey = ByteArray(0)
+    // 仅预取四个分片；按列表顺序消费，避免乱序合并或为整个视频积压内存。
+    val pending = ArrayDeque<Deferred<ByteArray>>()
+    var nextSegment = 0
+    fun prefetch() {
+      if (nextSegment >= segments.size) return
+      val segment = segments[nextSegment++]
+      pending.addLast(async { fetch(segment.url, 32 * 1024 * 1024).second })
+    }
+    repeat(minOf(4, segments.size)) { prefetch() }
     destination.outputStream().buffered().use { output ->
       segments.forEachIndexed { index, segment ->
         currentCoroutineContext().ensureActive()
-        val bytes = fetch(segment.url, 32 * 1024 * 1024).second
+        val bytes = pending.removeFirst().await()
         val clear = if (segment.keyUrl != null) {
           if (lastKeyUrl != segment.keyUrl) {
             lastKey = fetch(segment.keyUrl, 16).second
@@ -153,6 +165,7 @@ internal class HlsVideoDownload(private val headers: Map<String, String>) {
           throw HlsDownloadException("视频分片内容无效，已停止保存，请重新解析。")
         }
         output.write(clear)
+        prefetch()
         onProgress(index + 1, segments.size)
       }
     }
