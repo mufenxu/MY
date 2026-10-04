@@ -33,6 +33,8 @@ import org.json.JSONObject
 class HlsDownloadWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
   private val notifications = context.getSystemService(NotificationManager::class.java)
   private val title get() = inputData.getString("title").orEmpty().ifBlank { "视频下载" }
+  private val tasks = MediaDownloadTasks(context)
+  private val account get() = inputData.getString("account")
 
   override suspend fun getForegroundInfo(): ForegroundInfo {
     notifications.createNotificationChannel(NotificationChannel(CHANNEL, "视频下载", NotificationManager.IMPORTANCE_LOW))
@@ -60,21 +62,24 @@ class HlsDownloadWorker(context: Context, parameters: WorkerParameters) : Corout
         }
       }
       failureMessage = "MP4 合并失败，设备可能不支持此视频编码，或存储空间不足。"
-      updateStatus("正在合并为 MP4")
+      updateStatus("正在合并为 MP4", stage = "merging")
       remuxHlsToMp4(transport, mp4)
       // 合并成功后再公开文件，下载目录不会显示半成品。
       transport.delete()
       failureMessage = "保存 MP4 失败，请检查下载目录权限和存储空间。"
-      updateStatus("正在保存 MP4")
+      updateStatus("正在保存 MP4", stage = "saving")
       saveToDownloads(mp4, inputData.getString("fileName") ?: "视频下载.mp4")
       val message = "MP4 已保存到下载目录"
+      tasks.update(account, id.toString(), "completed", message, 100)
       notifySafely(notification(message, ongoing = false))
       Result.success(workDataOf(STATUS to message))
     } catch (cancelled: CancellationException) {
+      tasks.update(account, id.toString(), "cancelled", "下载已取消")
       throw cancelled
     } catch (error: Exception) {
       // 网络与媒体异常可能带签名 URL，仅向界面返回受控的中文错误。
       val message = (error as? HlsDownloadException)?.message ?: failureMessage
+      tasks.update(account, id.toString(), "failed", message)
       notifySafely(notification(message, ongoing = false))
       Result.failure(workDataOf(STATUS to message))
     } finally {
@@ -83,7 +88,8 @@ class HlsDownloadWorker(context: Context, parameters: WorkerParameters) : Corout
     }
   }
 
-  private suspend fun updateStatus(message: String, percent: Int = -1) {
+  private suspend fun updateStatus(message: String, percent: Int = -1, stage: String = "downloading") {
+    tasks.update(account, id.toString(), stage, message, percent)
     setProgress(workDataOf(STATUS to message))
     notifySafely(notification(message, ongoing = true, percent = percent))
   }
@@ -167,11 +173,23 @@ class HlsDownloadWorker(context: Context, parameters: WorkerParameters) : Corout
     private const val CHANNEL = "media_download"
     private const val NOTIFICATION_ID = 7401
 
-    fun enqueue(context: Context, url: String, headers: Map<String, String>, title: String, fileName: String) {
+    fun enqueue(context: Context, url: String, headers: Map<String, String>, title: String, fileName: String,
+      account: String, source: String, cover: String, format: String) {
+      val manager = WorkManager.getInstance(context)
+      check(manager.getWorkInfosForUniqueWork(WORK_NAME).get().none { !it.state.isFinished }) {
+        "已有视频正在下载或合并，请完成或取消后再下载。"
+      }
       val request = OneTimeWorkRequestBuilder<HlsDownloadWorker>()
-        .setInputData(workDataOf("url" to url, "headers" to JSONObject(headers).toString(), "title" to title, "fileName" to fileName))
+        .setInputData(workDataOf("url" to url, "headers" to JSONObject(headers).toString(), "title" to title, "fileName" to fileName, "account" to account))
         .build()
-      WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.KEEP, request)
+      val tasks = MediaDownloadTasks(context)
+      tasks.record(account, MediaDownloadTask(request.id.toString(), true, title, cover, format, source))
+      try {
+        manager.enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.KEEP, request).result.get()
+      } catch (error: Exception) {
+        tasks.update(account, request.id.toString(), "failed", "无法创建下载任务，请重试")
+        throw error
+      }
     }
   }
 }

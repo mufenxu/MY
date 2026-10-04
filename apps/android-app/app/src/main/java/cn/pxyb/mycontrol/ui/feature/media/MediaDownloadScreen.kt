@@ -3,70 +3,65 @@ package cn.pxyb.mycontrol.ui.feature.media
 import android.Manifest
 import android.app.DownloadManager
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
-import android.os.Environment
 import android.os.Build
+import android.os.Environment
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.work.WorkInfo
-import androidx.work.WorkManager
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.ContentPaste
-import androidx.compose.material.icons.outlined.DeleteSweep
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.MusicNote
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import cn.pxyb.mycontrol.data.MediaDownloadAsset
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import cn.pxyb.mycontrol.data.HlsDownloadWorker
+import cn.pxyb.mycontrol.data.MediaDownloadAsset
 import cn.pxyb.mycontrol.data.MediaDownloadHistoryEntry
+import cn.pxyb.mycontrol.data.MediaDownloadQuality
 import cn.pxyb.mycontrol.data.MediaDownloadTarget
+import cn.pxyb.mycontrol.data.MediaDownloadTask
+import cn.pxyb.mycontrol.data.MediaDownloadTasks
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
+import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppDivider
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.display.AppSwitchRow
+import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
+import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
+import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
-import coil.compose.SubcomposeAsyncImage
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private data class MediaDownloadRequest(
     val url: String,
@@ -74,13 +69,15 @@ private data class MediaDownloadRequest(
     val fileName: String,
     val title: String,
     val mimeType: String,
-    val notify: Boolean,
+    val format: String,
     val protocol: String = "https",
 )
 
 private data class PendingMediaDownload(
     val trafficLabel: String,
     val requests: List<MediaDownloadRequest>,
+    val source: String,
+    val cover: String,
 )
 
 @Composable
@@ -102,449 +99,285 @@ fun MediaDownloadScreen(
 ) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val taskStore = remember(context) { MediaDownloadTasks(context.applicationContext) }
+    var tasks by remember(state.account) { mutableStateOf(emptyList<MediaDownloadTask>()) }
+    var tab by rememberSaveable { mutableStateOf("进行中") }
+    var showNew by rememberSaveable { mutableStateOf(false) }
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var clearHistory by remember { mutableStateOf(false) }
+    var queuing by remember { mutableStateOf(false) }
     var pendingDownload by remember { mutableStateOf<PendingMediaDownload?>(null) }
     var pendingPermission by remember { mutableStateOf<PendingMediaDownload?>(null) }
-    val workManager = remember(context) { WorkManager.getInstance(context) }
-    val downloadFlow = remember(workManager) { workManager.getWorkInfosForUniqueWorkFlow(HlsDownloadWorker.WORK_NAME) }
-    val downloads by downloadFlow.collectAsStateWithLifecycle(initialValue = emptyList())
-    val hlsWork = downloads.firstOrNull()
-    val hlsActive = hlsWork?.state?.isFinished == false
+    var selectedQuality by remember(state.target) { mutableIntStateOf(0) }
 
-    // 剪贴板只在页面前台可见时可读，读不到就静默跳过，不打断用户。
     fun readClipboard(): String = runCatching { clipboard.getText()?.text }.getOrNull().orEmpty()
-
-    LaunchedEffect(Unit) {
-        onClipboardScanned(readClipboard())
+    fun openNew(source: String? = null) {
+        if (source != null) onShareTextChange(source)
+        showNew = true
     }
-
+    fun openDownloads() {
+        runCatching { context.startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS)) }
+            .onFailure { onDownloadFailed("无法打开系统下载目录，请在文件管理器中查看 Download 文件夹。") }
+    }
+    LaunchedEffect(Unit) { onClipboardScanned(readClipboard()) }
+    LaunchedEffect(state.account, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) {
+                try {
+                    tasks = withContext(Dispatchers.IO) { taskStore.refresh(state.account) }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    onDownloadFailed("暂时无法刷新下载状态，请稍后重试。")
+                }
+                delay(1500)
+            }
+        }
+    }
     fun copyLink(label: String, url: String) {
         clipboard.setText(AnnotatedString(url))
         onLinkCopied(label)
     }
-
     fun queueDownload(pending: PendingMediaDownload) {
-        runCatching { pending.requests.forEach { request -> enqueueMediaDownload(context, request) } }
-            .onSuccess { onDownloadQueued(pending.requests.size) }
-            .onFailure { failure ->
-                onDownloadFailed(failure.message?.takeIf(String::isNotBlank) ?: "启动下载失败，请稍后重试。")
+        val account = state.account ?: return onDownloadFailed("登录状态尚未就绪，请稍后重试。")
+        if (queuing) return
+        queuing = true
+        scope.launch {
+            var queued = 0
+            try {
+                withContext(Dispatchers.IO) {
+                    pending.requests.forEach { request ->
+                        enqueueMediaDownload(context, request, pending, taskStore, account)
+                        queued++
+                    }
+                }
+                tasks = withContext(Dispatchers.IO) { taskStore.read(account) }
+                showNew = false
+                tab = "进行中"
+                onDownloadQueued(queued)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                val detail = if (error is IllegalStateException) error.message else null
+                onDownloadFailed((if (queued > 0) "已创建 $queued 个任务，其余未完成。" else "") +
+                    (detail ?: "启动下载失败，请检查网络和存储权限后重试。"))
+            } finally {
+                queuing = false
             }
+        }
     }
-
-    val downloadPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
         val pending = pendingPermission
         pendingPermission = null
         if (Build.VERSION.SDK_INT <= 28 && grants[Manifest.permission.WRITE_EXTERNAL_STORAGE] == false) {
-            onDownloadFailed("需要存储权限才能将 MP4 保存到下载目录。")
-        } else if (pending != null) {
-            queueDownload(pending)
-        }
+            onDownloadFailed("需要存储权限才能将文件保存到下载目录。")
+        } else if (pending != null) queueDownload(pending)
     }
-
     fun startDownload(pending: PendingMediaDownload) {
-        if (pending.requests.any { it.protocol == "hls" }) {
-            if (hlsActive) {
-                onDownloadFailed("已有视频正在下载或合并，请完成或取消后再下载。")
-                return
-            }
-            val permissions = buildList {
-                if (Build.VERSION.SDK_INT <= 28) add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-            }.filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
-            if (permissions.isNotEmpty()) {
-                pendingPermission = pending
-                downloadPermission.launch(permissions.toTypedArray())
-                return
-            }
+        val permissions = buildList {
+            if (Build.VERSION.SDK_INT <= 28) add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            if (Build.VERSION.SDK_INT >= 33 && pending.requests.any { it.protocol == "hls" }) add(Manifest.permission.POST_NOTIFICATIONS)
+        }.filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
+        if (permissions.isEmpty()) queueDownload(pending) else {
+            pendingPermission = pending
+            permissionLauncher.launch(permissions.toTypedArray())
         }
-        queueDownload(pending)
     }
-
-    fun beginDownload(result: MediaDownloadTarget, requests: List<MediaDownloadRequest>, trafficLabel: String) {
-        if (requests.isEmpty()) return
+    fun beginDownload(result: MediaDownloadTarget, requests: List<MediaDownloadRequest>, traffic: String) {
+        if (queuing || requests.isEmpty()) return
         if (mediaLinkExpired(result.expireAtSeconds)) {
             onDownloadFailed("下载链接已过期，请重新解析。")
             return
         }
-        val pending = PendingMediaDownload(trafficLabel, requests)
-        // 原片动辄几十 MB，移动网络下先让用户确认再走流量。
-        if (isMeteredConnection(context)) {
-            pendingDownload = pending
-        } else {
-            startDownload(pending)
+        val pending = PendingMediaDownload(traffic, requests, state.shareText, result.cover)
+        if (isMeteredConnection(context)) pendingDownload = pending else startDownload(pending)
+    }
+    fun assetRequest(result: MediaDownloadTarget, asset: MediaDownloadAsset, label: String) = MediaDownloadRequest(
+        asset.url, asset.headers, mediaFileName(result.title, label, ".${asset.ext}"),
+        result.title, asset.mimeType, "$label · ${asset.ext.uppercase()}",
+    )
+    fun downloadQuality(result: MediaDownloadTarget, quality: MediaDownloadQuality) {
+        beginDownload(result, listOf(MediaDownloadRequest(quality.url, quality.headers,
+            mediaFileName(result.title, quality.label, ".${quality.ext}"), result.title,
+            quality.mimeType, "${quality.label} · ${quality.ext.uppercase()}", quality.protocol)),
+            quality.sizeLabel.ifBlank { "视频下载流量" })
+    }
+    fun cancelTask(task: MediaDownloadTask) {
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) { taskStore.cancel(state.account, task) }
+                tasks = withContext(Dispatchers.IO) { taskStore.read(state.account) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) { onDownloadFailed("取消失败，请稍后重试。") }
         }
     }
-
-    fun downloadMaterial(
-        result: MediaDownloadTarget,
-        asset: MediaDownloadAsset,
-        suffix: String,
-        trafficLabel: String,
-    ) {
-        beginDownload(
-            result = result,
-            requests = listOf(
-                MediaDownloadRequest(
-                    url = asset.url,
-                    headers = asset.headers,
-                    fileName = mediaFileName(result.title, suffix, ".${asset.ext}"),
-                    title = result.title,
-                    mimeType = asset.mimeType,
-                    notify = true,
-                ),
-            ),
-            trafficLabel = trafficLabel,
-        )
-    }
-
-    AppSubPage(
-        title = "视频下载",
-        subtitle = "粘贴分享链接，选清晰度后保存无水印原片",
-        onBack = onBack,
-        contentPadding = contentPadding,
-    ) {
-        item {
-            AppPanel {
-                Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    AppTextField(
-                        value = state.shareText,
-                        onValueChange = onShareTextChange,
-                        label = "分享链接",
-                        placeholder = "整段分享文案直接粘进来也可以",
-                        leadingIcon = Icons.Outlined.Link,
-                        singleLine = false,
-                        maxLines = 3,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        AppSecondaryButton(
-                            text = "粘贴",
-                            onClick = { onPasteClipboard(readClipboard()) },
-                            icon = Icons.Outlined.ContentPaste,
-                            enabled = !state.parsing,
-                            modifier = Modifier.weight(1f),
-                        )
-                        AppButton(
-                            text = "解析",
-                            onClick = onParse,
-                            icon = Icons.Outlined.Download,
-                            enabled = !state.parsing,
-                            loading = state.parsing,
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
-            }
-        }
-
-        item {
-            AppPanel {
-                AppSwitchRow(
-                    title = "自动读取剪贴板",
-                    subtitle = "进入页面时提示粘贴刚复制的分享链接",
-                    icon = Icons.Outlined.ContentPaste,
-                    checked = state.autoPaste,
-                    onCheckedChange = onAutoPasteChange,
-                    modifier = Modifier.padding(vertical = 4.dp),
-                )
-            }
-        }
-
-        state.error?.let { text -> item { AppFeedbackBanner(message = text, type = AppFeedbackType.Error) } }
-        state.message?.let { text -> item { AppFeedbackBanner(message = text) } }
-        hlsWork?.let { work ->
+    val completed = tasks.filter { it.completed }
+    val pending = tasks.filterNot { it.completed }
+    Box(Modifier.fillMaxSize()) {
+        AppSubPage(title = "视频下载", onBack = onBack, contentPadding = contentPadding,
+            actions = { AppHeaderIconButton(icon = Icons.Outlined.Tune, contentDescription = "下载设置", onClick = { showSettings = true }) },
+        ) {
             item {
-                val status = when (work.state) {
-                    WorkInfo.State.SUCCEEDED -> work.outputData.getString(HlsDownloadWorker.STATUS) ?: "MP4 已保存到下载目录"
-                    WorkInfo.State.FAILED -> work.outputData.getString(HlsDownloadWorker.STATUS) ?: "视频下载失败，请重新下载。"
-                    WorkInfo.State.CANCELLED -> "视频下载已取消"
-                    else -> work.progress.getString(HlsDownloadWorker.STATUS) ?: "正在准备下载视频"
-                }
-                AppPanel {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(status, style = MaterialTheme.typography.bodyMedium)
-                        if (!work.state.isFinished) {
-                            AppSecondaryButton(text = "取消下载", onClick = { workManager.cancelWorkById(work.id) })
-                        }
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+                    Text("我的下载", style = MaterialTheme.typography.headlineSmall)
+                    Text("从一个链接，到你的本地收藏", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-        }
-
-        state.target?.let { result ->
             item {
-                AppPanel {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        if (result.cover.isNotBlank()) {
-                            SubcomposeAsyncImage(
-                                model = result.cover,
-                                contentDescription = "作品封面",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(RoundedCornerShape(12.dp)),
-                            )
-                        }
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Text(
-                                text = result.title.ifBlank { "解析结果" },
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = listOf(
-                                    mediaPlatformLabel(result.platform),
-                                    result.author,
-                                    formatMediaDuration(result.durationMillis),
-                                ).filter { it.isNotBlank() }.joinToString(" · "),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text = mediaExpireHint(result.expireAtSeconds),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
+                AppSegmentedControl(options = listOf("进行中", "已完成", "解析记录"), selected = tab,
+                    onSelect = { tab = it }, label = { it }, count = { if (it == "进行中") tasks.count { task -> task.active }.takeIf { it > 0 } else null })
             }
-
-            if (result.qualities.isNotEmpty()) {
+            if (!showNew) {
+                state.error?.let { item { AppFeedbackBanner(message = it, type = AppFeedbackType.Error) } }
+                state.message?.let { item { AppFeedbackBanner(message = it) } }
+            }
+            if (tab == "解析记录") {
                 item {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        AppSectionHeader(title = "选择清晰度", subtitle = "点击即开始下载")
-                        AppPanel {
-                            Column {
-                                result.qualities.forEachIndexed { index, quality ->
-                                    if (index > 0) AppDivider()
-                                    AppActionRow(
-                                        title = quality.label,
-                                        subtitle = if (quality.protocol == "hls") "下载并合并为 MP4" else quality.sizeLabel.ifBlank { "点击下载" },
-                                        icon = Icons.Outlined.Download,
-                                        onClick = {
-                                            beginDownload(
-                                                result = result,
-                                                requests = listOf(
-                                                    MediaDownloadRequest(
-                                                        url = quality.url,
-                                                        headers = quality.headers,
-                                                        fileName = mediaFileName(
-                                                            title = result.title,
-                                                            suffix = quality.label.substringBefore(' '),
-                                                            extension = ".${quality.ext}",
-                                                        ),
-                                                        title = result.title,
-                                                        mimeType = quality.mimeType,
-                                                        notify = true,
-                                                        protocol = quality.protocol,
-                                                    ),
-                                                ),
-                                                trafficLabel = quality.sizeLabel.takeIf { it.isNotBlank() }
-                                                    ?.let { "约 $it" }
-                                                    ?: "这次下载的流量",
-                                            )
-                                        },
-                                        trailingContent = {
-                                            AppHeaderIconButton(
-                                                icon = Icons.Outlined.ContentCopy,
-                                                contentDescription = "复制${quality.label}清晰度的下载直链",
-                                                onClick = { copyLink(quality.label, quality.url) },
-                                            )
-                                        },
-                                    )
-                                }
-                            }
-                        }
+                    AppSectionHeader(title = "最近解析", subtitle = "点击链接，重新选择画质下载",
+                        trailing = { if (state.history.isNotEmpty()) AppHeaderIconButton(icon = Icons.Outlined.DeleteSweep,
+                            contentDescription = "清空解析记录", onClick = { clearHistory = true }) })
+                }
+                if (state.history.isEmpty()) item { AppEmptyState(title = "还没有解析记录", detail = "从新建下载开始，粘贴你想保存的视频链接。", icon = Icons.Outlined.History) }
+                items(state.history, key = { it.shareText }) { entry ->
+                    AppPanel { AppActionRow(title = entry.title.ifBlank { "未命名作品" }, subtitle = mediaHistorySubtitle(entry),
+                        icon = Icons.Outlined.History, onClick = { openNew(entry.shareText) }) }
+                }
+            } else {
+                val visible = if (tab == "已完成") completed else pending
+                if (visible.isEmpty()) item {
+                    AppEmptyState(title = if (tab == "已完成") "还没有完成的下载" else "当前没有下载任务",
+                        detail = if (tab == "已完成") "下载完成后，文件会保存在系统下载目录。" else "点击右下角新建下载，粘贴分享链接。",
+                        icon = if (tab == "已完成") Icons.Outlined.FolderOpen else Icons.Outlined.Download)
+                }
+                items(visible, key = { it.id }) { task ->
+                    MediaTaskCard(task, onCancel = { cancelTask(task) }, onRetry = { openNew(task.source) }, onOpen = ::openDownloads)
+                }
+                if (tab == "进行中" && completed.isNotEmpty()) {
+                    item { AppSectionHeader(title = "最近保存", subtitle = "文件保存在系统下载目录") }
+                    items(completed.take(3), key = { "recent-${it.id}" }) { task ->
+                        MediaTaskCard(task, onCancel = {}, onRetry = { openNew(task.source) }, onOpen = ::openDownloads, compact = true)
                     }
                 }
             }
-
-            if (result.isImageGallery) {
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        AppSectionHeader(
-                            title = "图文作品 · ${result.images.size} 张",
-                            subtitle = "这是图文作品，没有视频流",
-                        )
-                        AppPanel {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                AppButton(
-                                    text = "下载全部图片",
-                                    onClick = {
-                                        beginDownload(
-                                            result = result,
-                                            requests = result.images.mapIndexed { index, image ->
-                                                MediaDownloadRequest(
-                                                    url = image.url,
-                                                    headers = image.headers,
-                                                    fileName = mediaFileName(
-                                                        title = result.title,
-                                                        suffix = (index + 1).toString(),
-                                                        extension = ".${image.ext}",
-                                                    ),
-                                                    title = result.title,
-                                                    mimeType = image.mimeType,
-                                                    // 图文作品动辄几十张，只让最后一张弹完成通知，避免刷屏。
-                                                    notify = index == result.images.lastIndex,
-                                                )
-                                            },
-                                            trafficLabel = "${result.images.size} 张图片",
-                                        )
-                                    },
-                                    icon = Icons.Outlined.Download,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            val coverAsset = result.coverAsset
-            val musicAsset = result.music
-            if (coverAsset != null || musicAsset != null) {
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        AppSectionHeader(title = "其他素材", subtitle = "封面与原声可以单独保存")
-                        AppPanel {
-                            Column {
-                                if (coverAsset != null) {
-                                    AppActionRow(
-                                        title = "下载封面",
-                                        subtitle = "${coverAsset.ext.uppercase()} 图片",
-                                        icon = Icons.Outlined.Image,
-                                        onClick = { downloadMaterial(result, coverAsset, "封面", "这张封面") },
-                                        trailingContent = {
-                                            AppHeaderIconButton(
-                                                icon = Icons.Outlined.ContentCopy,
-                                                contentDescription = "复制封面直链",
-                                                onClick = { copyLink("封面", coverAsset.url) },
-                                            )
-                                        },
-                                    )
-                                }
-                                if (coverAsset != null && musicAsset != null) AppDivider()
-                                if (musicAsset != null) {
-                                    AppActionRow(
-                                        title = "下载原声",
-                                        subtitle = "${musicAsset.ext.uppercase()} 音频",
-                                        icon = Icons.Outlined.MusicNote,
-                                        onClick = { downloadMaterial(result, musicAsset, "原声", "这段原声") },
-                                        trailingContent = {
-                                            AppHeaderIconButton(
-                                                icon = Icons.Outlined.ContentCopy,
-                                                contentDescription = "复制原声直链",
-                                                onClick = { copyLink("原声", musicAsset.url) },
-                                            )
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            item { Spacer(Modifier.height(80.dp)) }
         }
-
-        if (state.history.isNotEmpty()) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    AppSectionHeader(
-                        title = "最近解析",
-                        subtitle = "点击即可回填链接",
-                        trailing = {
-                            AppHeaderIconButton(
-                                icon = Icons.Outlined.DeleteSweep,
-                                contentDescription = "清空解析历史",
-                                onClick = onClearHistory,
-                            )
-                        },
-                    )
-                    AppPanel {
-                        Column {
-                            state.history.forEachIndexed { index, entry ->
-                                if (index > 0) AppDivider()
-                                AppActionRow(
-                                    title = entry.title.ifBlank { "未命名作品" },
-                                    subtitle = mediaHistorySubtitle(entry),
-                                    icon = Icons.Outlined.History,
-                                    onClick = { onShareTextChange(entry.shareText) },
-                                )
-                            }
-                        }
-                    }
+        AppButton(text = "新建下载", icon = Icons.Outlined.Add, onClick = { openNew() },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(end = AppPageHorizontalPadding,
+                bottom = contentPadding.calculateBottomPadding() + 16.dp))
+    }
+    if (showNew) {
+        val result = state.target
+        val quality = result?.qualities?.getOrNull(selectedQuality)
+        AppDialog(onDismissRequest = { showNew = false }, title = "新建下载", subtitle = "粘贴分享链接，选择画质后保存",
+            footer = {
+                if (result != null && quality != null) {
+                    AppButton(text = if (quality.protocol == "hls") "下载并合并为 MP4" else "下载${quality.label}视频",
+                        icon = Icons.Outlined.Download, loading = queuing, enabled = !state.parsing && !queuing,
+                        modifier = Modifier.fillMaxWidth(), onClick = { downloadQuality(result, quality) })
                 }
-            }
-        }
-    }
-
-    state.clipboardSuggestion?.let { suggestion ->
-        AppConfirmDialog(
-            title = "检测到剪贴板链接",
-            detail = suggestion.take(80),
-            confirmLabel = "粘贴",
-            onDismiss = onDismissClipboardLink,
-            onConfirm = onAcceptClipboardLink,
-            icon = Icons.Outlined.ContentPaste,
-        )
-    }
-
-    pendingDownload?.let { pending ->
-        AppConfirmDialog(
-            title = "正在使用移动网络",
-            detail = "当前网络可能按流量计费，继续下载将消耗${pending.trafficLabel}。",
-            confirmLabel = "继续下载",
-            onDismiss = { pendingDownload = null },
-            onConfirm = {
-                pendingDownload = null
-                startDownload(pending)
             },
-            icon = Icons.Outlined.Download,
-        )
+        ) {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppTextField(value = state.shareText, onValueChange = onShareTextChange, label = "分享链接",
+                    placeholder = "粘贴链接或整段分享文案", leadingIcon = Icons.Outlined.Link, singleLine = false, maxLines = 3)
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    AppSecondaryButton(text = "粘贴", icon = Icons.Outlined.ContentPaste, modifier = Modifier.weight(1f), enabled = !state.parsing && !queuing,
+                        onClick = { onPasteClipboard(readClipboard()) })
+                    AppButton(text = "解析视频", icon = Icons.Outlined.Search, loading = state.parsing,
+                        enabled = !state.parsing && !queuing, modifier = Modifier.weight(1f), onClick = onParse)
+                }
+                state.error?.let { AppFeedbackBanner(message = it, type = AppFeedbackType.Error) }
+                state.message?.let { AppFeedbackBanner(message = it) }
+                if (result != null) {
+                    MediaResultHeading(result)
+                    if (result.qualities.isNotEmpty()) {
+                        Text("选择画质", style = MaterialTheme.typography.titleSmall)
+                        AppPanel {
+                            Column {
+                                result.qualities.forEachIndexed { index, item ->
+                                    if (index > 0) AppDivider()
+                                    AppActionRow(title = item.label, subtitle = listOf(item.ext.uppercase(), item.sizeLabel).filter(String::isNotBlank).joinToString(" · "),
+                                        icon = if (selectedQuality == index) Icons.Outlined.RadioButtonChecked else Icons.Outlined.RadioButtonUnchecked,
+                                        onClick = { selectedQuality = index }, trailingContent = {
+                                            AppHeaderIconButton(icon = Icons.Outlined.ContentCopy, contentDescription = "复制${item.label}链接",
+                                                onClick = { copyLink(item.label, item.url) })
+                                        })
+                                }
+                            }
+                        }
+                    }
+                    if (result.isImageGallery) AppButton(text = "下载全部 ${result.images.size} 张图片", icon = Icons.Outlined.Image,
+                        enabled = !queuing, modifier = Modifier.fillMaxWidth(), onClick = {
+                            beginDownload(result, result.images.mapIndexed { index, asset -> assetRequest(result, asset, "图片${index + 1}") }, "${result.images.size} 张图片的流量")
+                        })
+                    if (result.coverAsset != null || result.music != null) {
+                        AppSectionHeader(title = "其他素材")
+                        AppPanel {
+                            Column {
+                                result.coverAsset?.let { asset ->
+                                    AppActionRow(title = "保存封面", subtitle = asset.ext.uppercase(), icon = Icons.Outlined.Image,
+                                        onClick = { beginDownload(result, listOf(assetRequest(result, asset, "封面")), "封面图片的流量") },
+                                        trailingContent = { AppHeaderIconButton(icon = Icons.Outlined.ContentCopy, contentDescription = "复制封面链接", onClick = { copyLink("封面", asset.url) }) })
+                                }
+                                if (result.coverAsset != null && result.music != null) AppDivider()
+                                result.music?.let { asset ->
+                                    AppActionRow(title = "下载原声", subtitle = asset.ext.uppercase(), icon = Icons.Outlined.MusicNote,
+                                        onClick = { beginDownload(result, listOf(assetRequest(result, asset, "原声")), "音频的流量") },
+                                        trailingContent = { AppHeaderIconButton(icon = Icons.Outlined.ContentCopy, contentDescription = "复制原声链接", onClick = { copyLink("原声", asset.url) }) })
+                                }
+                            }
+                        }
+                    }
+                    Text(mediaExpireHint(result.expireAtSeconds), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+    if (showSettings) AppDialog(onDismissRequest = { showSettings = false }, title = "下载设置") {
+        AppSwitchRow(title = "自动读取剪贴板", subtitle = "进入页面时提示粘贴分享链接", icon = Icons.Outlined.ContentPaste,
+            checked = state.autoPaste, onCheckedChange = onAutoPasteChange)
+        AppActionRow(title = "保存位置", subtitle = "系统下载目录", icon = Icons.Outlined.FolderOpen, onClick = ::openDownloads)
+        AppActionRow(title = "移动网络下载", subtitle = "下载前确认流量使用", icon = Icons.Outlined.NetworkCheck)
+        AppActionRow(title = "分片视频格式", subtitle = "自动合并为 MP4，保留原始画质", icon = Icons.Outlined.Movie)
+    }
+    if (clearHistory) AppConfirmDialog(title = "清空解析记录？", detail = "仅清空链接记录，已下载的文件会保留。",
+        confirmLabel = "清空", onDismiss = { clearHistory = false }, onConfirm = { onClearHistory(); clearHistory = false }, icon = Icons.Outlined.DeleteSweep)
+    state.clipboardSuggestion?.let {
+        AppConfirmDialog(title = "检测到剪贴板链接", detail = "是否粘贴到新建下载？", confirmLabel = "粘贴",
+            onDismiss = onDismissClipboardLink, onConfirm = { onAcceptClipboardLink(); showNew = true }, icon = Icons.Outlined.ContentPaste)
+    }
+    pendingDownload?.let { pending ->
+        AppConfirmDialog(title = "正在使用移动网络", detail = "继续下载将消耗${pending.trafficLabel}。", confirmLabel = "继续下载",
+            onDismiss = { pendingDownload = null }, onConfirm = { pendingDownload = null; startDownload(pending) }, icon = Icons.Outlined.Download)
     }
 }
 
 private fun isMeteredConnection(context: Context): Boolean {
-    val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
-    val activeNetwork = manager.activeNetwork ?: return false
-    val capabilities = manager.getNetworkCapabilities(activeNetwork) ?: return false
-    // 离线时 activeNetwork 为空，此时不打扰用户；只有真正联网且按流量计费才提示。
-    if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return false
-    return capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) || manager.isActiveNetworkMetered
+    val manager = context.getSystemService(ConnectivityManager::class.java) ?: return false
+    val network = manager.activeNetwork ?: return false
+    val capabilities = manager.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && manager.isActiveNetworkMetered
 }
 
-private fun enqueueMediaDownload(context: Context, request: MediaDownloadRequest) {
+private fun enqueueMediaDownload(context: Context, request: MediaDownloadRequest, pending: PendingMediaDownload, tasks: MediaDownloadTasks, account: String) {
     if (request.protocol == "hls") {
-        HlsDownloadWorker.enqueue(context, request.url, request.headers, request.title, request.fileName)
+        HlsDownloadWorker.enqueue(context, request.url, request.headers, request.title, request.fileName,
+            account, pending.source, pending.cover, request.format)
         return
     }
     val download = DownloadManager.Request(Uri.parse(request.url))
     request.headers.forEach { (name, value) -> download.addRequestHeader(name, value) }
     download.setTitle(request.title.ifBlank { "视频下载" })
     download.setMimeType(request.mimeType)
-    download.setNotificationVisibility(
-        if (request.notify) {
-            DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
-        } else {
-            DownloadManager.Request.VISIBILITY_HIDDEN
-        },
-    )
+    download.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
     download.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, request.fileName)
-    val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-    manager.enqueue(download)
+    val manager = context.getSystemService(DownloadManager::class.java)
+    val id = manager.enqueue(download)
+    tasks.record(account, MediaDownloadTask(id.toString(), false, request.title, pending.cover, request.format, pending.source))
 }
 
 internal fun mediaFileName(title: String, suffix: String, extension: String): String {

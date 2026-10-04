@@ -9,6 +9,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.update
 
 data class MediaDownloadUiState(
+    val account: String? = null,
     val shareText: String = "",
     val parsing: Boolean = false,
     val error: String? = null,
@@ -38,12 +39,12 @@ class MediaDownloadStateHolder(
 
     fun refreshHistory() {
         val history = preferences.history(account())
-        mutableState.update { it.copy(history = history) }
+        mutableState.update { it.copy(history = history, account = account()) }
     }
 
     fun updateShareText(value: String) {
         // 链接改了就丢弃上一次的解析结果提示，避免旧错误误导。
-        mutableState.update { it.copy(shareText = value, error = null, message = null) }
+        mutableState.update { it.copy(shareText = value, target = null, error = null, message = null) }
     }
 
     fun setAutoPaste(enabled: Boolean) {
@@ -63,7 +64,7 @@ class MediaDownloadStateHolder(
 
     fun acceptClipboardLink() {
         val suggestion = mutableState.value.clipboardSuggestion ?: return
-        mutableState.update { it.copy(shareText = suggestion, clipboardSuggestion = null, error = null, message = null) }
+        mutableState.update { it.copy(shareText = suggestion, target = null, clipboardSuggestion = null, error = null, message = null) }
     }
 
     fun dismissClipboardLink() {
@@ -80,7 +81,7 @@ class MediaDownloadStateHolder(
         }
         declinedClipboardText = ""
         mutableState.update {
-            it.copy(shareText = candidate, error = null, message = null, clipboardSuggestion = null)
+            it.copy(shareText = candidate, target = null, error = null, message = null, clipboardSuggestion = null)
         }
     }
 
