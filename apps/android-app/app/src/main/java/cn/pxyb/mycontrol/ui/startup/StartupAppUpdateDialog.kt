@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.SystemUpdate
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,6 +23,7 @@ import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.formatBytes
 import cn.pxyb.mycontrol.update.AppUpdatePhase
 import cn.pxyb.mycontrol.update.AppUpdateUiState
+import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
 
 @Composable
 internal fun StartupAppUpdateDialog(
@@ -52,9 +52,8 @@ internal fun StartupAppUpdateDialog(
                     AppUpdatePhase.Downloading -> {
                         Spacer(Modifier.height(14.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            CircularProgressIndicator(
+                            AppCircularProgressIndicator(
                                 modifier = Modifier.size(18.dp),
-                                strokeWidth = 2.dp,
                             )
                             Spacer(Modifier.width(10.dp))
                             Text(

@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Stop
 import androidx.compose.material.icons.outlined.WaterDrop
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -44,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
+import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
 
 @Composable
 internal fun WaterValveRingDialButton(
@@ -153,7 +153,7 @@ internal fun WaterValveRingDialButton(
             contentAlignment = Alignment.Center,
         ) {
             if (busy) {
-                CircularProgressIndicator(
+                AppCircularProgressIndicator(
                     modifier = Modifier.size(26.dp),
                     strokeWidth = 2.5.dp,
                     color = if (running) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,

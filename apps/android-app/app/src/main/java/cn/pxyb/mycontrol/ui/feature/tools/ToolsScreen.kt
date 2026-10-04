@@ -41,7 +41,6 @@ import androidx.compose.material.icons.outlined.Sensors
 import androidx.compose.material.icons.outlined.Thermostat
 import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material.icons.outlined.WifiOff
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -98,6 +97,7 @@ import cn.pxyb.mycontrol.ui.state.blocksAction
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import cn.pxyb.mycontrol.util.DateTimeUtils.formatPlatformTime
+import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
 
 private data class RelayTarget(
     val deviceId: String,
@@ -776,9 +776,8 @@ private fun ModernRelayCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        CircularProgressIndicator(
+                        AppCircularProgressIndicator(
                             modifier = Modifier.size(14.dp),
-                            strokeWidth = 2.dp,
                             color = target.activeAccent,
                         )
                         Text(

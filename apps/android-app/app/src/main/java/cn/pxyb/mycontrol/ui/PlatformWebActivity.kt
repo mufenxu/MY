@@ -39,7 +39,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -88,6 +87,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import cn.pxyb.mycontrol.ui.components.feedback.AppLinearProgressIndicator
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -683,13 +683,10 @@ private fun PlatformWebScreen(
                 exit = fadeOut(),
                 modifier = Modifier.align(Alignment.TopCenter),
             ) {
-                LinearProgressIndicator(
+                AppLinearProgressIndicator(
                     progress = { loadProgress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.5.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = Color.Transparent,
+                    modifier = Modifier.fillMaxWidth(),
+                    height = 6.dp,
                 )
             }
         }

@@ -30,7 +30,6 @@ import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -70,6 +69,7 @@ import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.util.DateTimeUtils.parseTimeMinutes
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -219,10 +219,9 @@ internal fun SingleReservationPanel(
                                 horizontalArrangement = Arrangement.spacedBy(3.dp),
                             ) {
                                 if (spacesLoading) {
-                                    CircularProgressIndicator(
+                                    AppCircularProgressIndicator(
                                         modifier = Modifier.size(12.dp),
                                         strokeWidth = 1.5.dp,
-                                        color = MaterialTheme.colorScheme.primary,
                                     )
                                 } else {
                                     Icon(
@@ -374,7 +373,7 @@ internal fun SingleReservationPanel(
                         horizontalArrangement = Arrangement.Center,
                     ) {
                         if (queryLoading) {
-                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                            AppCircularProgressIndicator(modifier = Modifier.size(14.dp))
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 "正在查询该空间空闲时段...",

@@ -23,7 +23,6 @@ import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.VolumeOff
 import androidx.compose.material.icons.outlined.Wifi
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -74,6 +73,7 @@ import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.launch
+import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
 
 @Composable
 fun OperationsScreen(
@@ -204,7 +204,7 @@ fun OperationsScreen(
                                 enabled = openingServiceId == null || openingServiceId == service.id,
                                 onClick = if (service.adminUrl.isNullOrBlank()) null else { { openService(service) } },
                                 trailingContent = {
-                                    if (openingServiceId == service.id) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                                    if (openingServiceId == service.id) AppCircularProgressIndicator(Modifier.size(18.dp))
                                     else AppStatusBadge(service.state)
                                 },
                             )
@@ -786,9 +786,8 @@ private fun OperationsStatusRow(
                 )
             }
             if (busy) {
-                androidx.compose.material3.CircularProgressIndicator(
+                AppCircularProgressIndicator(
                     modifier = Modifier.size(18.dp),
-                    strokeWidth = 2.dp,
                     color = iconTint,
                 )
             } else {

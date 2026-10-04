@@ -35,7 +35,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -51,7 +50,6 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -64,7 +62,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -90,6 +87,7 @@ import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.scanner.QrCameraPreview
 import java.util.UUID
 import kotlinx.coroutines.delay
+import cn.pxyb.mycontrol.ui.components.feedback.AppLinearProgressIndicator
 
 @Composable
 fun AuthenticatorScreen(
@@ -359,14 +357,11 @@ private fun AuthenticatorEntryCard(
                 modifier = Modifier.align(Alignment.CenterHorizontally),
             )
 
-            LinearProgressIndicator(
+            AppLinearProgressIndicator(
                 progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(50)),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+                height = 6.dp,
+                animateProgress = false,
             )
 
             Text(

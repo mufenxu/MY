@@ -24,10 +24,9 @@ fun AppLoadingState(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        androidx.compose.material3.LinearProgressIndicator(
+        AppLinearProgressIndicator(
             modifier = Modifier.fillMaxWidth(0.35f),
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            height = 6.dp,
         )
         Text(
             text = label,

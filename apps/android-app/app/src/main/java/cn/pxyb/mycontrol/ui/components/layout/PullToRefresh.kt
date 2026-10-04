@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowDownward
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -48,6 +47,7 @@ import cn.pxyb.mycontrol.ui.theme.AppHaptics
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
 
 /** 下拉刷新容器：列表位于顶部时下拉，带动指示器与内容位移动画。 */
 @Composable
@@ -205,10 +205,8 @@ fun PullToRefresh(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     if (isRefreshing) {
-                        CircularProgressIndicator(
+                        AppCircularProgressIndicator(
                             modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary,
                         )
                     } else {
                         Icon(

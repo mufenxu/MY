@@ -34,7 +34,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -83,6 +82,7 @@ import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
 import cn.pxyb.mycontrol.ui.isRefreshing
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
+import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
 
 internal val LocalAppNavigationHandlesBack = staticCompositionLocalOf { false }
 private val LocalTopBarProgress = staticCompositionLocalOf { 0f }
@@ -278,10 +278,8 @@ fun AppHeaderIconButton(
         ) {
             Crossfade(targetState = loading, animationSpec = MotionTokens.fastTween(), label = "header-action") { busy ->
                 if (busy) {
-                    CircularProgressIndicator(
+                    AppCircularProgressIndicator(
                         modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary,
                     )
                 } else {
                     Icon(

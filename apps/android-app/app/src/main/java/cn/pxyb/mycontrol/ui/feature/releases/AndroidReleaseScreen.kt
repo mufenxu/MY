@@ -33,7 +33,6 @@ import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.RocketLaunch
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.SystemUpdate
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -81,6 +80,7 @@ import java.time.OffsetDateTime
 import java.time.ZoneId
 import kotlin.math.log10
 import kotlin.math.pow
+import cn.pxyb.mycontrol.ui.components.feedback.AppLinearProgressIndicator
 
 @Composable
 internal fun AndroidReleaseScreen(
@@ -594,12 +594,9 @@ private fun AndroidReleaseCard(
             }
 
             if (isDownloading) {
-                LinearProgressIndicator(
+                AppLinearProgressIndicator(
                     progress = { progress.coerceIn(0, 100) / 100f },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .clip(RoundedCornerShape(50)),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }

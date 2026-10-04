@@ -15,7 +15,6 @@ import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +31,7 @@ import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import coil.compose.SubcomposeAsyncImage
+import cn.pxyb.mycontrol.ui.components.feedback.AppLinearProgressIndicator
 
 @Composable
 private fun MediaCover(url: String) {
@@ -85,8 +85,8 @@ internal fun MediaTaskCard(task: MediaDownloadTask, onCancel: () -> Unit, onRetr
       }
       if (!compact) {
         if (task.active) {
-          if (task.percent >= 0) LinearProgressIndicator(progress = { task.percent / 100f }, modifier = Modifier.fillMaxWidth())
-          else LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+          if (task.percent >= 0) AppLinearProgressIndicator(progress = { task.percent / 100f }, modifier = Modifier.fillMaxWidth(), height = 6.dp)
+          else AppLinearProgressIndicator(modifier = Modifier.fillMaxWidth(), height = 6.dp)
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
           Text(task.detail, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall,

@@ -20,7 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MeetingRoom
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -33,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
+import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
 
 @Composable
 internal fun ScrollableRuleText(text: String) {
@@ -79,7 +79,7 @@ internal fun AvailableSpacesByTimeBlock(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
             ) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                AppCircularProgressIndicator(modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(10.dp))
                 Text(
                     text = "正在查询该时段空闲学习间...",

@@ -23,7 +23,6 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.Checklist
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -55,6 +54,7 @@ import cn.pxyb.mycontrol.ui.navigation.WorkspaceDestination
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import java.util.Date
 import kotlinx.coroutines.delay
+import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
 
 @Composable
 internal fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (WorkspaceDestination) -> Unit) {
@@ -241,9 +241,8 @@ internal fun OverviewServiceCardShell(
             }
 
             if (opening) {
-                CircularProgressIndicator(
+                AppCircularProgressIndicator(
                     modifier = Modifier.size(14.dp),
-                    color = MaterialTheme.colorScheme.primary,
                     strokeWidth = 1.8.dp,
                 )
             }

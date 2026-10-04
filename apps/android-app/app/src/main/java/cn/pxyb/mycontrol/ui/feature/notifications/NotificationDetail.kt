@@ -35,7 +35,6 @@ import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -44,7 +43,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -69,6 +67,7 @@ import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.isRefreshing
 import cn.pxyb.mycontrol.ui.theme.AppCardShape
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
+import cn.pxyb.mycontrol.ui.components.feedback.AppLinearProgressIndicator
 
 /** 平板 / 大屏：左侧列表 + 右侧详情的经典双栏布局。 */
 @Composable
@@ -473,12 +472,9 @@ private fun NotificationBlockView(block: AppNotificationBlock) {
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
-            LinearProgressIndicator(
+            AppLinearProgressIndicator(
                 progress = { ((block.value ?: 0).coerceIn(0, 100)) / 100f },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         "image", "attachment" -> Surface(

@@ -38,9 +38,7 @@ import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SystemUpdate
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -85,6 +83,8 @@ import cn.pxyb.mycontrol.ui.sectionError
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import cn.pxyb.mycontrol.update.AppUpdatePhase
+import cn.pxyb.mycontrol.ui.components.feedback.AppLinearProgressIndicator
+import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -372,7 +372,7 @@ private fun AppUpdateStatusPanel(
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 if (loading) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = tint)
+                    AppCircularProgressIndicator(modifier = Modifier.size(20.dp), color = tint)
                 } else {
                     Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
                 }
@@ -393,11 +393,10 @@ private fun AppUpdateStatusPanel(
                 }
             }
             progress?.let {
-                LinearProgressIndicator(
+                AppLinearProgressIndicator(
                     progress = { it.coerceIn(0, 100) / 100f },
                     modifier = Modifier.fillMaxWidth(),
                     color = tint,
-                    trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
                 )
             }
         }

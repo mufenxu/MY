@@ -24,7 +24,6 @@ import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Stop
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -53,6 +52,7 @@ import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
 
 @Composable
 internal fun MyReservationsPanel(
@@ -119,7 +119,7 @@ internal fun MyReservationsPanel(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         if (loading) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            AppCircularProgressIndicator(modifier = Modifier.size(16.dp))
                         } else {
                             Icon(
                                 Icons.Outlined.Refresh,

@@ -7,14 +7,12 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +43,7 @@ import cn.pxyb.mycontrol.ui.theme.BrandBlue
 import cn.pxyb.mycontrol.ui.theme.BrandCyan
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
+import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
 
 /** 弹窗主操作按钮：对齐 BrandBlue 官方科技蓝与 48dp 最小高度。 */
 // 主操作、次要操作与危险操作共享触控尺寸和胶囊形状。
@@ -95,9 +94,8 @@ fun AppButton(
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
     ) {
         if (loading) {
-            CircularProgressIndicator(
+            AppCircularProgressIndicator(
                 modifier = Modifier.size(18.dp),
-                strokeWidth = 2.dp,
                 color = LocalContentColor.current,
             )
         } else {
@@ -164,9 +162,8 @@ fun AppSecondaryButton(
         contentPadding = PaddingValues(horizontal = if (compact) 12.dp else 20.dp, vertical = 4.dp),
     ) {
         if (loading) {
-            CircularProgressIndicator(
+            AppCircularProgressIndicator(
                 modifier = Modifier.size(18.dp),
-                strokeWidth = 2.dp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
@@ -238,9 +235,8 @@ fun AppDangerButton(
         contentPadding = PaddingValues(horizontal = if (compact) 12.dp else 20.dp, vertical = 4.dp),
     ) {
         if (loading) {
-            CircularProgressIndicator(
+            AppCircularProgressIndicator(
                 modifier = Modifier.size(18.dp),
-                strokeWidth = 2.dp,
                 color = LocalContentColor.current,
             )
         } else {
@@ -312,7 +308,7 @@ fun AppInlineDangerButton(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             if (loading) {
-                CircularProgressIndicator(
+                AppCircularProgressIndicator(
                     modifier = Modifier.size(12.dp),
                     strokeWidth = 1.5.dp,
                     color = contentColor,

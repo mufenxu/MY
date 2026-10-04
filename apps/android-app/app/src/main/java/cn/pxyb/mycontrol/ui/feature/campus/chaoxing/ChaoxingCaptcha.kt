@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -36,6 +35,7 @@ import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.delay
+import cn.pxyb.mycontrol.ui.components.feedback.AppLinearProgressIndicator
 
 private const val CAPTCHA_ORIGIN = "https://captcha.chaoxing.com/"
 
@@ -81,7 +81,7 @@ internal fun ChaoxingCaptchaDialog(onDismiss: () -> Unit, onVerified: (String) -
         footer = { AppDialogSecondaryButton("取消验证", dismiss, modifier = Modifier.fillMaxWidth()) },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (loading) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            if (loading) AppLinearProgressIndicator(modifier = Modifier.fillMaxWidth(), height = 6.dp)
             key(revision) {
                 AndroidView(
                     modifier = Modifier.fillMaxWidth().height(360.dp),
