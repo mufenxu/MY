@@ -1,11 +1,20 @@
 package cn.pxyb.mycontrol.ui.feature.media
 
+import android.Manifest
 import android.app.DownloadManager
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Environment
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -41,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.MediaDownloadAsset
+import cn.pxyb.mycontrol.data.HlsDownloadWorker
 import cn.pxyb.mycontrol.data.MediaDownloadHistoryEntry
 import cn.pxyb.mycontrol.data.MediaDownloadTarget
 import cn.pxyb.mycontrol.ui.components.button.AppButton
@@ -65,6 +75,7 @@ private data class MediaDownloadRequest(
     val title: String,
     val mimeType: String,
     val notify: Boolean,
+    val protocol: String = "https",
 )
 
 private data class PendingMediaDownload(
@@ -92,6 +103,12 @@ fun MediaDownloadScreen(
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     var pendingDownload by remember { mutableStateOf<PendingMediaDownload?>(null) }
+    var pendingPermission by remember { mutableStateOf<PendingMediaDownload?>(null) }
+    val workManager = remember(context) { WorkManager.getInstance(context) }
+    val downloadFlow = remember(workManager) { workManager.getWorkInfosForUniqueWorkFlow(HlsDownloadWorker.WORK_NAME) }
+    val downloads by downloadFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val hlsWork = downloads.firstOrNull()
+    val hlsActive = hlsWork?.state?.isFinished == false
 
     // 剪贴板只在页面前台可见时可读，读不到就静默跳过，不打断用户。
     fun readClipboard(): String = runCatching { clipboard.getText()?.text }.getOrNull().orEmpty()
@@ -105,12 +122,41 @@ fun MediaDownloadScreen(
         onLinkCopied(label)
     }
 
-    fun startDownload(pending: PendingMediaDownload) {
+    fun queueDownload(pending: PendingMediaDownload) {
         runCatching { pending.requests.forEach { request -> enqueueMediaDownload(context, request) } }
             .onSuccess { onDownloadQueued(pending.requests.size) }
             .onFailure { failure ->
                 onDownloadFailed(failure.message?.takeIf(String::isNotBlank) ?: "启动下载失败，请稍后重试。")
             }
+    }
+
+    val downloadPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        val pending = pendingPermission
+        pendingPermission = null
+        if (Build.VERSION.SDK_INT <= 28 && grants[Manifest.permission.WRITE_EXTERNAL_STORAGE] == false) {
+            onDownloadFailed("需要存储权限才能将 MP4 保存到下载目录。")
+        } else if (pending != null) {
+            queueDownload(pending)
+        }
+    }
+
+    fun startDownload(pending: PendingMediaDownload) {
+        if (pending.requests.any { it.protocol == "hls" }) {
+            if (hlsActive) {
+                onDownloadFailed("已有视频正在下载或合并，请完成或取消后再下载。")
+                return
+            }
+            val permissions = buildList {
+                if (Build.VERSION.SDK_INT <= 28) add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
+            }.filter { ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED }
+            if (permissions.isNotEmpty()) {
+                pendingPermission = pending
+                downloadPermission.launch(permissions.toTypedArray())
+                return
+            }
+        }
+        queueDownload(pending)
     }
 
     fun beginDownload(result: MediaDownloadTarget, requests: List<MediaDownloadRequest>, trafficLabel: String) {
@@ -207,6 +253,24 @@ fun MediaDownloadScreen(
 
         state.error?.let { text -> item { AppFeedbackBanner(message = text, type = AppFeedbackType.Error) } }
         state.message?.let { text -> item { AppFeedbackBanner(message = text) } }
+        hlsWork?.let { work ->
+            item {
+                val status = when (work.state) {
+                    WorkInfo.State.SUCCEEDED -> work.outputData.getString(HlsDownloadWorker.STATUS) ?: "MP4 已保存到下载目录"
+                    WorkInfo.State.FAILED -> work.outputData.getString(HlsDownloadWorker.STATUS) ?: "视频下载失败，请重新下载。"
+                    WorkInfo.State.CANCELLED -> "视频下载已取消"
+                    else -> work.progress.getString(HlsDownloadWorker.STATUS) ?: "正在准备下载视频"
+                }
+                AppPanel {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(status, style = MaterialTheme.typography.bodyMedium)
+                        if (!work.state.isFinished) {
+                            AppSecondaryButton(text = "取消下载", onClick = { workManager.cancelWorkById(work.id) })
+                        }
+                    }
+                }
+            }
+        }
 
         state.target?.let { result ->
             item {
@@ -265,7 +329,7 @@ fun MediaDownloadScreen(
                                     if (index > 0) AppDivider()
                                     AppActionRow(
                                         title = quality.label,
-                                        subtitle = quality.sizeLabel.ifBlank { "点击下载" },
+                                        subtitle = if (quality.protocol == "hls") "下载并合并为 MP4" else quality.sizeLabel.ifBlank { "点击下载" },
                                         icon = Icons.Outlined.Download,
                                         onClick = {
                                             beginDownload(
@@ -282,6 +346,7 @@ fun MediaDownloadScreen(
                                                         title = result.title,
                                                         mimeType = quality.mimeType,
                                                         notify = true,
+                                                        protocol = quality.protocol,
                                                     ),
                                                 ),
                                                 trafficLabel = quality.sizeLabel.takeIf { it.isNotBlank() }
@@ -462,6 +527,10 @@ private fun isMeteredConnection(context: Context): Boolean {
 }
 
 private fun enqueueMediaDownload(context: Context, request: MediaDownloadRequest) {
+    if (request.protocol == "hls") {
+        HlsDownloadWorker.enqueue(context, request.url, request.headers, request.title, request.fileName)
+        return
+    }
     val download = DownloadManager.Request(Uri.parse(request.url))
     request.headers.forEach { (name, value) -> download.addRequestHeader(name, value) }
     download.setTitle(request.title.ifBlank { "视频下载" })
@@ -492,6 +561,7 @@ internal fun mediaFileName(title: String, suffix: String, extension: String): St
 }
 
 internal fun mediaPlatformLabel(platform: String): String = when (platform.lowercase()) {
+    "haijiao" -> "海角"
     "douyin" -> "抖音"
     "tiktok" -> "TikTok"
     "bilibili" -> "哔哩哔哩"

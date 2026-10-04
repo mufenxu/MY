@@ -521,6 +521,7 @@ export function createPlatformRouter({
     try {
       const result = await resolveDownloadTarget({
         url: requestUrl.searchParams.get('url'),
+        allowHls: requestUrl.searchParams.get('hls') === '1',
         config: downloadConfig,
       });
       finishMetric({ outcome: 'success', statusClass: '2xx', target: result });

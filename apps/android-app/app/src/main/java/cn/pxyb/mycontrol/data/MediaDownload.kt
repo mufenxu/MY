@@ -20,6 +20,7 @@ data class MediaDownloadQuality(
     val headers: Map<String, String>,
     val ext: String = "mp4",
     val mimeType: String = "video/mp4",
+    val protocol: String = "https",
 )
 
 @Immutable
@@ -131,6 +132,7 @@ private fun parseDownloadQualities(array: JSONArray?): List<MediaDownloadQuality
             headers = parseDownloadHeaders(item.optJSONObject("headers")),
             ext = ext,
             mimeType = resolveDownloadMimeType(ext, item.optString("mimeType"), isImage = false),
+            protocol = item.optString("protocol", "https"),
         )
     }
 }

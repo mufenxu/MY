@@ -39,7 +39,7 @@ class PlatformApi(
 
     suspend fun parseMediaDownload(shareText: String): MediaDownloadTarget = withContext(Dispatchers.IO) {
         val query = URLEncoder.encode(shareText, "UTF-8")
-        parseMediaDownloadTarget(execute("$MEDIA_DOWNLOAD_PARSE_PATH?url=$query").json)
+        parseMediaDownloadTarget(execute("$MEDIA_DOWNLOAD_PARSE_PATH?url=$query&hls=1").json)
     }
 
     suspend fun launchExternalApplication(id: String): ExternalApplicationLaunch = withContext(Dispatchers.IO) {

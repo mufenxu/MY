@@ -542,13 +542,34 @@ async function resolveUncachedTarget(shareUrl, config, fetchImpl) {
   return buildGenericResult(await runYtDlp(shareUrl, config));
 }
 
-export async function resolveDownloadTarget({ url, config = readDownloadConfig(), fetchImpl = globalThis.fetch } = {}) {
+export async function resolveDownloadTarget({ url, allowHls = false, config = readDownloadConfig(), fetchImpl = globalThis.fetch } = {}) {
   const shareUrl = extractShareUrl(url);
   if (!shareUrl) {
     throw resolveError(400, '没有识别到有效的视频链接。', 'INVALID_URL');
   }
   if (isBlockedShareTarget(shareUrl)) {
     throw resolveError(400, '不支持解析内网或本地地址。', 'BLOCKED_TARGET');
+  }
+  const parsed = new URL(shareUrl);
+  if (/^haijiao-\d+\.suancaihu\.eu\.org$/i.test(parsed.hostname) && parsed.pathname === '/play') {
+    if (!allowHls) {
+      throw resolveError(422, '此视频需要分片下载，请更新安卓 App 后重试。', 'HLS_CLIENT_REQUIRED');
+    }
+    const playback = new URL('/api/pl', parsed.origin);
+    for (const name of ['aid', 'nonce', 'ts', 'sign']) {
+      const value = parsed.searchParams.get(name);
+      if (!value) throw resolveError(400, '播放链接不完整，请重新复制完整链接。', 'INVALID_URL');
+      playback.searchParams.set(name, value);
+    }
+    // 播放页用同一组签名请求 /api/pl；分片与密钥仅由手机获取，不经过网关。
+    return {
+      platform: 'haijiao', kind: 'video', title: `视频 ${parsed.searchParams.get('aid')}`,
+      author: '', cover: '', durationMs: 0, expireAt: 0, images: [],
+      qualities: [{
+        label: '原始画质', sizeLabel: '', protocol: 'hls', ext: 'mp4', mimeType: 'video/mp4',
+        url: playback.href, headers: { Referer: shareUrl, 'User-Agent': BROWSER_UA },
+      }],
+    };
   }
   // 同一个链接短时间内重复解析直接复用结果，避免反复触达平台接口。
   const cached = readParseCache(shareUrl);
