@@ -54,7 +54,7 @@ fun ReservationScreen(
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     onLoadSpaces: () -> Unit,
-    onLoadAutoCandidateSpaces: (String) -> Unit,
+    onLoadAutoCandidateSpaces: () -> Unit,
     onLoadMyReservations: () -> Unit,
     onOpenOfficialReservation: () -> Unit,
     onRefreshIdentityCode: () -> Unit,
@@ -263,9 +263,10 @@ fun ReservationScreen(
             ReservationTab.Auto -> {
                 item(key = "auto-reservation-panel", contentType = "auto") {
                     AutoReservationPanel(
-                        spaces = state.spaces,
+                        spaces = (state.spaces + state.autoCandidateSpaces).distinctBy { it.id },
                         candidateSpaces = state.autoCandidateSpaces,
-                        candidateSpacesDate = state.autoCandidateSpacesDate,
+                        candidateSpacesReferenceDate = state.autoCandidateSpacesReferenceDate,
+                        candidateSpacesCachedAt = state.autoCandidateSpacesCachedAt,
                         candidateSpacesLoading = state.autoCandidateSpacesLoading,
                         candidateSpacesError = state.autoCandidateSpacesError,
                         tasks = state.autoTasks,

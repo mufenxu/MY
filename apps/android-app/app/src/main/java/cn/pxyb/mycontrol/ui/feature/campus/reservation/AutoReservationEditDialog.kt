@@ -52,21 +52,23 @@ import cn.pxyb.mycontrol.ui.components.input.AppSwitch
 import cn.pxyb.mycontrol.ui.components.picker.AppDatePickerModal
 import cn.pxyb.mycontrol.ui.components.picker.AppTimePickerModal
 import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 @Composable
 internal fun AutoReservationEditDialog(
     spaces: List<CampusReservationSpace>,
-    spacesDate: String?,
+    spacesReferenceDate: String?,
+    spacesCachedAt: Long?,
     spacesLoading: Boolean,
     spacesError: String?,
-    onLoadSpaces: (String) -> Unit,
+    onLoadSpaces: () -> Unit,
     task: CampusAutoReservationTask?,
     saving: Boolean,
     onDismiss: () -> Unit,
     onSave: (CampusAutoReservationTask) -> Unit,
 ) {
-    val today = remember { LocalDate.now() }
+    val today = remember { LocalDate.now(ZoneId.of("Asia/Shanghai")) }
     var name by rememberSaveable { mutableStateOf(task?.name ?: "研讨间自动预约任务") }
     var enabled by rememberSaveable { mutableStateOf(task?.enabled ?: true) }
     var reservationDate by rememberSaveable {
@@ -81,12 +83,10 @@ internal fun AutoReservationEditDialog(
     var content by rememberSaveable { mutableStateOf(task?.content?.ifBlank { null } ?: "用于个人课程自主研读、文献查阅及学术研讨。") }
     var open by rememberSaveable { mutableStateOf(task?.open ?: false) }
 
-    LaunchedEffect(reservationDate) {
-        onLoadSpaces(reservationDate)
+    LaunchedEffect(Unit) {
+        onLoadSpaces()
     }
-    val loadingSpaces = spacesDate != reservationDate || spacesLoading
-    val currentSpacesError = spacesError.takeIf { spacesDate == reservationDate }
-    val candidateSpaces = if (!loadingSpaces && currentSpacesError == null) spaces else emptyList()
+    val candidateSpaces = spaces
 
     val candidates = remember {
         mutableStateListOf<CampusAutoReservationCandidate>().apply {
@@ -103,6 +103,8 @@ internal fun AutoReservationEditDialog(
             }
         }
     }
+    val needsRoom = candidates.isEmpty() || candidates.any { it.areaId <= 0 }
+    val saveAsDraft = needsRoom && (task == null || task.id.isBlank() || task.isLocalDraft)
 
     var validationError by remember { mutableStateOf<String?>(null) }
     var taskToConfirm by remember { mutableStateOf<CampusAutoReservationTask?>(null) }
@@ -163,8 +165,12 @@ internal fun AutoReservationEditDialog(
         icon = Icons.Outlined.AutoAwesome,
         iconTint = MaterialTheme.colorScheme.primary,
         iconBackground = MaterialTheme.colorScheme.primaryContainer,
-        title = if (task == null) "新建自动预约任务" else "编辑自动预约任务",
-        subtitle = "按候选顺序设置备选空间与时段，在指定时间自动尝试预约",
+        title = when {
+            task == null -> "新建自动预约任务"
+            task.isLocalDraft -> "编辑待选房草稿"
+            else -> "编辑自动预约任务"
+        },
+        subtitle = if (saveAsDraft) "暂时没有房间也可先保存草稿，补选后再创建任务" else "按候选顺序设置备选空间与时段，在指定时间自动尝试预约",
         footer = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -176,7 +182,7 @@ internal fun AutoReservationEditDialog(
                     modifier = Modifier.weight(1f),
                 )
                 AppDialogPrimaryButton(
-                    text = "保存任务",
+                    text = if (saveAsDraft) "保存草稿" else "保存任务",
                     onClick = {
                         if (name.isBlank()) {
                             validationError = "请填写任务名称"
@@ -194,34 +200,49 @@ internal fun AutoReservationEditDialog(
                             validationError = "请填写运行时间"
                             return@AppDialogPrimaryButton
                         }
+                        val targetDate = runCatching { LocalDate.parse(reservationDate.trim()) }.getOrNull()
+                        val runDate = runCatching { LocalDate.parse(executeDate.trim()) }.getOrNull()
+                        if (targetDate == null || runDate == null) {
+                            validationError = "请选择有效的预约目标日期和任务运行日期"
+                            return@AppDialogPrimaryButton
+                        }
+                        if (runDate.isBefore(targetDate.minusDays(3)) || runDate.isAfter(targetDate)) {
+                            validationError = "运行日期必须在预约目标日期前 3 天至预约当天内"
+                            return@AppDialogPrimaryButton
+                        }
+                        if (!saveAsDraft && enabled && runDate.isBefore(LocalDate.now(ZoneId.of("Asia/Shanghai")))) {
+                            validationError = "运行日期已过，请重新选择运行日期后启用任务"
+                            return@AppDialogPrimaryButton
+                        }
                         if (candidates.isEmpty()) {
                             validationError = "请至少添加一个候选时段"
                             return@AppDialogPrimaryButton
                         }
-                        if (!Regex("^\\d{11}$").matches(mobile.trim())) {
+                        if (!saveAsDraft && !Regex("^\\d{11}$").matches(mobile.trim())) {
                             validationError = "请输入正确的 11 位手机号码"
                             return@AppDialogPrimaryButton
                         }
-                        if (title.isBlank()) {
+                        if (!saveAsDraft && title.isBlank()) {
                             validationError = "申请主题不能为空"
                             return@AppDialogPrimaryButton
                         }
-                        if (content.isBlank()) {
+                        if (!saveAsDraft && content.isBlank()) {
                             validationError = "申请内容不能为空"
                             return@AppDialogPrimaryButton
                         }
                         val invalidCandidate = candidates.firstOrNull { candidate ->
-                            candidateSpaces.none { it.id == candidate.areaId } || !isReservationDurationValid(candidate.startTime, candidate.endTime)
+                            (!saveAsDraft && candidate.areaId <= 0) || !isReservationDurationValid(candidate.startTime, candidate.endTime)
                         }
                         if (invalidCandidate != null) {
-                            validationError = "候选空间需从空间列表中选择，且预约时长需为 1 至 4 小时"
+                            validationError = "请选择候选研讨间，且预约时长需为 1 至 4 小时"
                             return@AppDialogPrimaryButton
                         }
                         validationError = null
                         val newTask = CampusAutoReservationTask(
                             id = task?.id ?: "",
                             name = name.trim(),
-                            enabled = enabled,
+                            enabled = enabled && !saveAsDraft,
+                            isLocalDraft = saveAsDraft,
                             reservationDate = reservationDate.trim(),
                             executeDate = executeDate.trim(),
                             executeTime = executeTime.trim(),
@@ -231,10 +252,10 @@ internal fun AutoReservationEditDialog(
                             mobile = mobile.trim(),
                             open = open,
                         )
-                        taskToConfirm = newTask
+                        if (saveAsDraft) onSave(newTask) else taskToConfirm = newTask
                     },
                     modifier = Modifier.weight(1f),
-                    enabled = candidateSpaces.isNotEmpty(),
+                    enabled = saveAsDraft || !needsRoom,
                     busy = saving,
                 )
             }
@@ -269,7 +290,17 @@ internal fun AutoReservationEditDialog(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("启用此自动任务", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                    AppSwitch(checked = enabled, onCheckedChange = { enabled = it })
+                    AppSwitch(
+                        checked = enabled && !needsRoom,
+                        onCheckedChange = if (needsRoom) null else { value: Boolean -> enabled = value },
+                    )
+                }
+                if (needsRoom || task?.isLocalDraft == true) {
+                    Text(
+                        text = "草稿仅保存在当前账号的本机数据中，不会执行。补选房间并保存为正式任务后，才可启用自动预约。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
 
@@ -336,7 +367,7 @@ internal fun AutoReservationEditDialog(
             }
 
             Text(
-                text = "到达运行日期和运行时间后，系统会预约目标日期的候选空间。",
+                text = "可提前保存尚未开放日期的任务。运行日期和时间按北京时间填写，请设置为学校实际开放预约的时间；到点后系统会申请目标日期的候选空间。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -349,27 +380,38 @@ internal fun AutoReservationEditDialog(
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Text(
-                    text = "每次预约 1 至 4 小时；执行时会按顺序优先尝试未被占用的候选。",
+                    text = "${when {
+                        spacesCachedAt != null -> "历史房间目录，保存于 ${java.time.Instant.ofEpochMilli(spacesCachedAt).atZone(ZoneId.of("Asia/Shanghai")).format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))}"
+                        spacesReferenceDate != null -> "房间目录参考 $spacesReferenceDate 的查询结果"
+                        else -> "房间目录不按预约目标日期筛选"
+                    }}，仅用于选房，不代表目标日期已开放或有空位。每次预约 1 至 4 小时。",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
             when {
-                loadingSpaces -> Text(
-                    text = "正在加载 $reservationDate 的候选研讨间…",
+                spacesLoading -> Text(
+                    text = "正在刷新房间参考目录，已选候选会保留…",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                currentSpacesError != null -> AppFeedbackBanner(
-                    message = currentSpacesError,
+                spacesError != null -> AppFeedbackBanner(
+                    message = spacesError,
                     error = true,
-                    onRetry = { onLoadSpaces(reservationDate) },
+                    onRetry = onLoadSpaces,
                 )
                 candidateSpaces.isEmpty() -> AppFeedbackBanner(
-                    message = "$reservationDate 暂无候选研讨间，请切换预约日期或重试。",
+                    message = "暂无房间参考目录，可先保存待选房草稿，之后刷新补选；已有候选仍可保留。",
                     type = AppFeedbackType.Info,
-                    onRetry = { onLoadSpaces(reservationDate) },
+                    onRetry = onLoadSpaces,
+                )
+            }
+            if (candidateSpaces.isNotEmpty() && spacesError == null) {
+                AppSecondaryButton(
+                    text = "刷新房间目录",
+                    onClick = onLoadSpaces,
+                    enabled = !spacesLoading,
                 )
             }
 
@@ -378,7 +420,7 @@ internal fun AutoReservationEditDialog(
                     index = index,
                     candidate = candidate,
                     spaces = candidateSpaces,
-                    spacesLoading = loadingSpaces,
+                    spacesLoading = spacesLoading,
                     canMoveUp = index > 0,
                     canMoveDown = index < candidates.size - 1,
                     canDelete = candidates.size > 1,
@@ -405,7 +447,7 @@ internal fun AutoReservationEditDialog(
                         val lastCandidate = candidates.lastOrNull()
                         candidates.add(
                             CampusAutoReservationCandidate(
-                                areaId = candidateSpaces.firstOrNull()?.id ?: 0,
+                                areaId = lastCandidate?.areaId?.takeIf { it > 0 } ?: candidateSpaces.firstOrNull()?.id ?: 0,
                                 startTime = lastCandidate?.startTime ?: "09:00",
                                 endTime = lastCandidate?.endTime ?: "11:00",
                             )
@@ -475,11 +517,16 @@ internal fun AutoReservationEditDialog(
                 append("运行时间：${target.executeDate} ${target.executeTime}\n")
                 append("预约日期：${target.reservationDate}\n")
                 target.candidates.forEach { candidate ->
-                    val spaceName = candidateSpaces.firstOrNull { it.id == candidate.areaId }?.name ?: "${candidate.areaId}"
+                    val spaceName = candidateSpaces.firstOrNull { it.id == candidate.areaId }?.name ?: "研讨间 #${candidate.areaId}（已选候选）"
                     append("$spaceName ${candidate.startTime} - ${candidate.endTime}\n")
                 }
                 append(if (target.enabled) "到运行时间会自动向学校提交预约，无需再次确认。" else "保存后任务保持停用。")
-                if (task != null && task.id.isNotBlank()) append("本次保存会覆盖原任务配置。")
+                if (target.enabled) append("房间目录不保证目标日可约；若届时学校尚未开放或登录失效，任务会记录执行结果，请留意通知。")
+                if (task?.isLocalDraft == true) {
+                    append("创建成功后会移除本机草稿。")
+                } else if (task != null && task.id.isNotBlank()) {
+                    append("本次保存会覆盖原任务配置。")
+                }
             },
             confirmLabel = if (target.enabled) "确认保存并启用" else "确认保存",
             icon = Icons.Outlined.AutoAwesome,

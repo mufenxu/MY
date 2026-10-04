@@ -141,11 +141,21 @@ internal fun AutoTaskCard(
                     AppStatusBadge(label = task.statusText, semantic = semantic)
                 }
 
-                AppSwitch(
-                    checked = task.enabled,
-                    onCheckedChange = { checked: Boolean ->
-                        if (checked) confirmEnable = true else onToggle()
-                    }.takeIf { !terminalStatus },
+                if (!task.isLocalDraft) {
+                    AppSwitch(
+                        checked = task.enabled,
+                        onCheckedChange = { checked: Boolean ->
+                            if (checked) confirmEnable = true else onToggle()
+                        }.takeIf { !terminalStatus },
+                    )
+                }
+            }
+
+            if (task.isLocalDraft) {
+                Text(
+                    text = "仅保存在本机，不会自动预约。请补选房间后创建正式任务。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -230,7 +240,7 @@ internal fun AutoTaskCard(
 
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         task.candidates.forEachIndexed { index, candidate ->
-                            val sName = spaceMap[candidate.areaId] ?: "空间${candidate.areaId}"
+                            val sName = if (candidate.areaId <= 0) "待选研讨间" else spaceMap[candidate.areaId] ?: "空间${candidate.areaId}"
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -426,13 +436,13 @@ internal fun AutoTaskCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 AppButton(
-                    text = "编辑",
+                    text = if (task.isLocalDraft) "继续填写" else "编辑",
                     onClick = onEdit,
                     modifier = Modifier.weight(1f),
                     height = 40.dp,
                 )
                 AppSecondaryButton(
-                    text = "再次预约",
+                    text = if (task.isLocalDraft) "复制草稿" else "再次预约",
                     onClick = onCopy,
                     modifier = Modifier.weight(1f),
                     height = 40.dp,

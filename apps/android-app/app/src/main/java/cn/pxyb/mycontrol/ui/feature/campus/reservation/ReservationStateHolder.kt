@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol.ui.feature.campus.reservation
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusRepository
 import cn.pxyb.mycontrol.data.CampusReservationRequest
+import cn.pxyb.mycontrol.data.PersonalWorkspaceStore
 import cn.pxyb.mycontrol.ui.state.FeatureStateHolder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -12,10 +13,14 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.UUID
 
 class ReservationStateHolder(
     parentScope: CoroutineScope,
     private val campus: CampusRepository,
+    private val store: PersonalWorkspaceStore,
     onSessionExpired: (String) -> Unit,
 ) : FeatureStateHolder<ReservationUiState>(parentScope, ReservationUiState(), onSessionExpired) {
     private var autoCandidateSpacesJob: Job? = null
@@ -23,7 +28,8 @@ class ReservationStateHolder(
     override fun clearPendingState(current: ReservationUiState) = current.copy(
         spacesLoading = false,
         autoCandidateSpaces = emptyList(),
-        autoCandidateSpacesDate = null,
+        autoCandidateSpacesReferenceDate = null,
+        autoCandidateSpacesCachedAt = null,
         autoCandidateSpacesLoading = false,
         autoCandidateSpacesError = null,
         availableSpacesLoading = false,
@@ -54,30 +60,59 @@ class ReservationStateHolder(
     fun loadReservationSpaces(force: Boolean = false) = launchAction(
         isBusy = { spacesLoading },
         start = { copy(spacesLoading = true, error = null) },
-        action = { campus.campusReservationSpaces() },
+        action = {
+            campus.campusReservationSpaces().also {
+                currentCoroutineContext().ensureActive()
+                runCatching { store.writeReservationDirectory(it) }
+                    .onFailure { showError("房间目录已加载，但本机缓存保存失败，请重试。") }
+            }
+        },
         success = { spaces -> copy(spaces = spaces, spacesLoading = false) },
         failure = { error -> copy(spacesLoading = false, error = error.message ?: "空间加载失败，请重试。") },
     )
 
-    fun loadAutoCandidateSpaces(date: String) {
-        if (date.isBlank()) return
-        val current = mutableState.value
-        if (current.autoCandidateSpacesDate == date && current.autoCandidateSpacesLoading) return
+    fun loadAutoCandidateSpaces() {
+        if (mutableState.value.autoCandidateSpacesLoading) return
         autoCandidateSpacesJob?.cancel()
         mutableState.update {
             it.copy(
-                autoCandidateSpaces = emptyList(),
-                autoCandidateSpacesDate = date,
                 autoCandidateSpacesLoading = true,
                 autoCandidateSpacesError = null,
             )
         }
         autoCandidateSpacesJob = scope.launch {
             try {
-                val spaces = campus.campusReservationSpaces(date = date)
+                val cached = store.readReservationDirectory()
+                if (cached != null && cached.spaces.isNotEmpty()) {
+                    mutableState.update {
+                        it.copy(
+                            autoCandidateSpaces = cached.spaces,
+                            autoCandidateSpacesReferenceDate = null,
+                            autoCandidateSpacesCachedAt = cached.savedAtMillis,
+                        )
+                    }
+                }
+                // 选房目录不依赖目标日是否已开放；仅在无日期目录为空时查询当天作参考。
+                var spaces = campus.campusReservationSpaces()
+                var referenceDate: String? = null
+                if (spaces.isEmpty()) {
+                    referenceDate = LocalDate.now(ZoneId.of("Asia/Shanghai")).toString()
+                    spaces = campus.campusReservationSpaces(date = referenceDate)
+                }
                 currentCoroutineContext().ensureActive()
+                val cacheSaved = runCatching { store.writeReservationDirectory(spaces) }.isSuccess
                 mutableState.update {
-                    it.copy(autoCandidateSpaces = spaces, autoCandidateSpacesLoading = false)
+                    it.copy(
+                        autoCandidateSpaces = spaces.ifEmpty { it.autoCandidateSpaces },
+                        autoCandidateSpacesReferenceDate = if (spaces.isNotEmpty()) referenceDate else it.autoCandidateSpacesReferenceDate,
+                        autoCandidateSpacesCachedAt = if (spaces.isNotEmpty()) null else it.autoCandidateSpacesCachedAt,
+                        autoCandidateSpacesLoading = false,
+                        autoCandidateSpacesError = when {
+                            spaces.isEmpty() -> "暂未获取到房间目录，可使用历史房间或先保存待选房草稿。"
+                            !cacheSaved -> "目录已加载，但本机缓存保存失败，请重试。"
+                            else -> null
+                        },
+                    )
                 }
             } catch (error: Throwable) {
                 currentCoroutineContext().ensureActive()
@@ -302,9 +337,15 @@ class ReservationStateHolder(
 
     fun loadAutoReservationTasks(force: Boolean = false) = launchAction(
         isBusy = { autoTasksLoading },
-        start = { copy(autoTasksLoading = true, error = null) },
+        start = {
+            copy(
+                autoTasks = store.readReservationDrafts() + autoTasks.filterNot { it.isLocalDraft },
+                autoTasksLoading = true,
+                error = null,
+            )
+        },
         action = { campus.campusAutoReservations() },
-        success = { tasks -> copy(autoTasks = tasks, autoTasksLoading = false) },
+        success = { tasks -> copy(autoTasks = store.readReservationDrafts() + tasks, autoTasksLoading = false) },
         failure = { error ->
             copy(
                 autoTasksLoading = false,
@@ -317,26 +358,49 @@ class ReservationStateHolder(
         isBusy = { savingTask },
         start = { copy(savingTask = true, error = null, message = null) },
         action = {
-            if (task.id.isNotBlank()) {
-                campus.updateCampusAutoReservation(task)
+            val drafts = store.readReservationDrafts()
+            val existingDraft = drafts.firstOrNull { it.id == task.id }
+            if (task.isLocalDraft) {
+                require(task.id.isBlank() || existingDraft != null) { "已有正式任务不能改存为本机草稿。" }
+                val draft = task.copy(
+                    id = existingDraft?.id ?: "local-draft-${UUID.randomUUID()}",
+                    enabled = false,
+                    status = "draft",
+                    statusText = "待选房草稿",
+                )
+                store.writeReservationDrafts(listOf(draft) + drafts.filterNot { it.id == draft.id })
             } else {
-                campus.createCampusAutoReservation(task)
+                require(task.candidates.isNotEmpty() && task.candidates.all { it.areaId > 0 }) { "请先补选研讨间，再创建正式任务。" }
+                if (existingDraft != null || task.id.isBlank()) {
+                    campus.createCampusAutoReservation(task.copy(id = ""))
+                } else {
+                    campus.updateCampusAutoReservation(task)
+                }
+                currentCoroutineContext().ensureActive()
+                if (existingDraft != null) {
+                    store.writeReservationDrafts(store.readReservationDrafts().filterNot { it.id == task.id })
+                }
             }
         },
         success = {
             copy(
+                autoTasks = store.readReservationDrafts() + autoTasks.filterNot { it.isLocalDraft },
                 savingTask = false,
-                message = "自动预约任务已保存。",
+                message = if (task.isLocalDraft) "待选房草稿已保存在本机，不会自动预约；补选房间后再创建任务。" else "自动预约任务已保存。",
             )
         },
         failure = { error -> copy(savingTask = false, error = error.message ?: "自动预约任务保存失败。") },
         afterSuccess = {
-            loadAutoReservationTasks(force = true)
+            if (!task.isLocalDraft) loadAutoReservationTasks(force = true)
             onSuccess()
         },
     )
 
     fun toggleAutoReservationTask(task: CampusAutoReservationTask) {
+        if (task.isLocalDraft) {
+            showError("草稿不能直接启用，请编辑草稿并补选研讨间。")
+            return
+        }
         scope.launch {
             try {
                 campus.updateCampusAutoReservation(task.copy(enabled = !task.enabled))
@@ -355,14 +419,22 @@ class ReservationStateHolder(
         scope.launch {
             mutableState.update { it.copy(deletingTaskId = taskId, error = null, message = null) }
             try {
-                campus.deleteCampusAutoReservation(taskId)
+                val drafts = store.readReservationDrafts()
+                val isDraft = drafts.any { it.id == taskId }
+                if (isDraft) {
+                    store.writeReservationDrafts(drafts.filterNot { it.id == taskId })
+                } else {
+                    campus.deleteCampusAutoReservation(taskId)
+                }
+                currentCoroutineContext().ensureActive()
                 mutableState.update {
                     it.copy(
+                        autoTasks = it.autoTasks.filterNot { task -> task.id == taskId },
                         deletingTaskId = null,
-                        message = "自动预约任务已删除。",
+                        message = if (isDraft) "本机草稿已删除。" else "自动预约任务已删除。",
                     )
                 }
-                loadAutoReservationTasks(force = true)
+                if (!isDraft) loadAutoReservationTasks(force = true)
             } catch (error: Throwable) {
                 handleRequestFailure(error)
                 mutableState.update {

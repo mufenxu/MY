@@ -220,7 +220,7 @@ class AppViewModel(
     )
     val waterValveState = waterValves.state
     val freeClassroomState = deriveState(AppUiState::toFreeClassroomUiState)
-    val reservations = ReservationStateHolder(viewModelScope, api.campus, ::forceReauthentication)
+    val reservations = ReservationStateHolder(viewModelScope, api.campus, personalStore, ::forceReauthentication)
     val librarySeats = LibrarySeatStateHolder(viewModelScope, api.campus, ::forceReauthentication)
     val chaoxing = ChaoxingStateHolder(
         viewModelScope, api.campus.chaoxing,

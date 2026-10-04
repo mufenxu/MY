@@ -59,10 +59,15 @@ internal fun CandidateEditRow(
     var spaceMenuOpen by remember(spacesLoading) { mutableStateOf(false) }
     val selectedSpace = spaces.firstOrNull { it.id == candidate.areaId }
     val spaceName = selectedSpace?.name ?: when {
+        candidate.areaId > 0 -> "研讨间 #${candidate.areaId}（已选候选）"
         spacesLoading -> "正在加载研讨间…"
         spaces.isEmpty() -> "暂无候选研讨间"
-        candidate.areaId > 0 -> "原研讨间不在当前列表，请重新选择"
         else -> "请选择研讨间"
+    }
+    val spaceOptions = spaces.map { AppSelectOption(it.id, it.name) }.toMutableList().apply {
+        if (candidate.areaId > 0 && selectedSpace == null) {
+            add(0, AppSelectOption(candidate.areaId, spaceName, "保留此前选择；目标日是否可约以学校执行结果为准"))
+        }
     }
 
     Surface(
@@ -124,7 +129,7 @@ internal fun CandidateEditRow(
             AppSelectField(
                 label = "候选研讨间",
                 value = candidate.areaId,
-                options = spaces.map { AppSelectOption(it.id, it.name) },
+                options = spaceOptions,
                 onValueChange = { onUpdate(candidate.copy(areaId = it)) },
                 expanded = spaceMenuOpen,
                 onExpandedChange = { spaceMenuOpen = it },

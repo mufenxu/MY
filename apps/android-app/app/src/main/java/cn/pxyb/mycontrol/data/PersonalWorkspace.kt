@@ -236,6 +236,12 @@ data class CampusReservationSpace(
 )
 
 @Immutable
+data class CampusReservationDirectory(
+    val spaces: List<CampusReservationSpace>,
+    val savedAtMillis: Long,
+)
+
+@Immutable
 data class CampusReservationAvailability(
     val freeWindows: List<CampusReservationTimeWindow> = emptyList(),
     val busyWindows: List<CampusReservationTimeWindow> = emptyList(),
@@ -510,6 +516,7 @@ data class CampusAutoReservationTask(
     val lastReservation: CampusAutoReservationRecord? = null,
     val createdAt: String? = null,
     val updatedAt: String? = null,
+    val isLocalDraft: Boolean = false,
 )
 
 @Immutable
@@ -567,6 +574,51 @@ class PersonalWorkspaceStore(context: Context) {
 
     fun setAccount(username: String?) {
         accountScope = accountStorageScope(username)
+    }
+
+    fun readReservationDirectory(): CampusReservationDirectory? = scopedKey(KEY_RESERVATION_DIRECTORY)
+        ?.let(codec::read)
+        ?.let(::parseObject)
+        ?.let { json ->
+            CampusReservationDirectory(
+                spaces = json.optJSONArray("spaces").objects().mapNotNull { room ->
+                    val id = room.optInt("id")
+                    val name = room.optString("name")
+                    if (id > 0 && name.isNotBlank()) CampusReservationSpace(id, name) else null
+                },
+                savedAtMillis = json.optLong("savedAtMillis"),
+            )
+        }
+
+    fun writeReservationDirectory(spaces: List<CampusReservationSpace>) {
+        if (spaces.isEmpty()) return
+        val key = scopedKey(KEY_RESERVATION_DIRECTORY) ?: return
+        val json = JSONObject()
+            .put("savedAtMillis", System.currentTimeMillis())
+            .put("spaces", JSONArray().apply {
+                spaces.forEach { put(JSONObject().put("id", it.id).put("name", it.name)) }
+            })
+        codec.write(key, json.toString())
+    }
+
+    fun readReservationDrafts(): List<CampusAutoReservationTask> = scopedKey(KEY_RESERVATION_DRAFTS)
+        ?.let(codec::read)
+        ?.let(::parseArray)
+        .objects()
+        .map { json ->
+            json.toCampusAutoReservationTask().copy(
+                enabled = false,
+                isLocalDraft = true,
+                status = "draft",
+                statusText = "待选房草稿",
+            )
+        }
+
+    fun writeReservationDrafts(drafts: List<CampusAutoReservationTask>) {
+        val key = scopedKey(KEY_RESERVATION_DRAFTS) ?: return
+        codec.write(key, JSONArray().apply {
+            drafts.forEach { put(it.copy(enabled = false).toJson().put("id", it.id)) }
+        }.toString())
     }
 
     fun readTodoSnapshot(): TodoSnapshot = scopedKey(KEY_TODOS)?.let { key -> codec.read(key) }
@@ -710,9 +762,15 @@ class PersonalWorkspaceStore(context: Context) {
     fun clearAccountData(preservePendingTodos: Boolean = false) {
         val scope = accountScope ?: return
         val prefix = "account_${scope}_"
-        // 未同步的编辑仍属于原账号，重新登录前不能当作可丢弃缓存删除。
-        val retainedKeys = if (preservePendingTodos && readPendingTodoMutations().isNotEmpty()) {
-            setOf("$prefix$KEY_TODOS", "$prefix$KEY_TODO_QUEUE")
+        // 未同步的待办和预约草稿仍属于原账号，重新登录前不能当作可丢弃缓存删除。
+        val retainedKeys = if (preservePendingTodos) {
+            buildSet {
+                add("$prefix$KEY_RESERVATION_DRAFTS")
+                if (readPendingTodoMutations().isNotEmpty()) {
+                    add("$prefix$KEY_TODOS")
+                    add("$prefix$KEY_TODO_QUEUE")
+                }
+            }
         } else {
             emptySet()
         }
@@ -744,6 +802,8 @@ class PersonalWorkspaceStore(context: Context) {
         const val KEY_ASSISTANT_SNAPSHOT = "assistant_snapshot"
         const val KEY_NOTIFICATION_QUEUE = "notification_queue"
         const val KEY_QUICK_SCENE = "quick_scene"
+        const val KEY_RESERVATION_DIRECTORY = "reservation_directory"
+        const val KEY_RESERVATION_DRAFTS = "reservation_drafts"
         const val MAX_PENDING_MUTATIONS = 100
         const val MAX_ALERTS = 200
     }

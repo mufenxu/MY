@@ -46,14 +46,15 @@ import java.time.LocalDate
 internal fun AutoReservationPanel(
     spaces: List<CampusReservationSpace>,
     candidateSpaces: List<CampusReservationSpace>,
-    candidateSpacesDate: String?,
+    candidateSpacesReferenceDate: String?,
+    candidateSpacesCachedAt: Long?,
     candidateSpacesLoading: Boolean,
     candidateSpacesError: String?,
     tasks: List<CampusAutoReservationTask>,
     tasksLoading: Boolean,
     savingTask: Boolean,
     deletingTaskId: String?,
-    onLoadCandidateSpaces: (String) -> Unit,
+    onLoadCandidateSpaces: () -> Unit,
     onSaveTask: (CampusAutoReservationTask, () -> Unit) -> Unit,
     onToggleTask: (CampusAutoReservationTask) -> Unit,
     onDeleteTask: (String) -> Unit,
@@ -118,7 +119,8 @@ internal fun AutoReservationPanel(
     if (isEditing) {
         AutoReservationEditDialog(
             spaces = candidateSpaces,
-            spacesDate = candidateSpacesDate,
+            spacesReferenceDate = candidateSpacesReferenceDate,
+            spacesCachedAt = candidateSpacesCachedAt,
             spacesLoading = candidateSpacesLoading,
             spacesError = candidateSpacesError,
             onLoadSpaces = onLoadCandidateSpaces,
