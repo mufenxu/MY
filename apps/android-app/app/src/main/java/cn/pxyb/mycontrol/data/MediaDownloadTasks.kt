@@ -49,6 +49,12 @@ internal class MediaDownloadTasks(private val context: Context) {
     if (next != previous) write(account, next)
   }
 
+  fun removeFailed(account: String?, id: String) = synchronized(lock) {
+    val previous = read(account)
+    val next = previous.filterNot { it.id == id && it.state == "failed" }
+    if (next != previous) write(account, next)
+  }
+
   private fun write(account: String?, tasks: List<MediaDownloadTask>) {
     val key = scopedStorageKey(account, "tasks") ?: return
     val retained = tasks.filter { it.active } + tasks.filterNot { it.active }.take(100)

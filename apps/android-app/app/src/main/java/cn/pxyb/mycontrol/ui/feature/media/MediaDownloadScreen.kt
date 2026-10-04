@@ -107,6 +107,8 @@ fun MediaDownloadScreen(
     var showNew by rememberSaveable { mutableStateOf(false) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var clearHistory by remember { mutableStateOf(false) }
+    var pendingDelete by remember(state.account) { mutableStateOf<MediaDownloadTask?>(null) }
+    var deletingTask by remember(state.account) { mutableStateOf(false) }
     var queuing by remember { mutableStateOf(false) }
     var pendingDownload by remember { mutableStateOf<PendingMediaDownload?>(null) }
     var pendingPermission by remember { mutableStateOf<PendingMediaDownload?>(null) }
@@ -214,6 +216,27 @@ fun MediaDownloadScreen(
             } catch (_: Exception) { onDownloadFailed("取消失败，请稍后重试。") }
         }
     }
+    fun deleteFailedTask(task: MediaDownloadTask) {
+        val account = state.account ?: return onDownloadFailed("登录状态尚未就绪，请稍后重试。")
+        if (deletingTask) return
+        deletingTask = true
+        scope.launch {
+            try {
+                tasks = withContext(Dispatchers.IO) {
+                    taskStore.removeFailed(account, task.id)
+                    taskStore.read(account)
+                }
+                pendingDelete = null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                pendingDelete = null
+                onDownloadFailed("删除记录失败，请稍后重试。")
+            } finally {
+                deletingTask = false
+            }
+        }
+    }
     val completed = tasks.filter { it.completed }
     val pending = tasks.filterNot { it.completed }
     Box(Modifier.fillMaxSize()) {
@@ -254,12 +277,14 @@ fun MediaDownloadScreen(
                         icon = if (tab == "已完成") Icons.Outlined.FolderOpen else Icons.Outlined.Download)
                 }
                 items(visible, key = { it.id }) { task ->
-                    MediaTaskCard(task, onCancel = { cancelTask(task) }, onRetry = { openNew(task.source) }, onOpen = ::openDownloads)
+                    MediaTaskCard(task, onCancel = { cancelTask(task) }, onRetry = { openNew(task.source) },
+                        onOpen = ::openDownloads, onDelete = { pendingDelete = task })
                 }
                 if (tab == "进行中" && completed.isNotEmpty()) {
                     item { AppSectionHeader(title = "最近保存", subtitle = "文件保存在系统下载目录") }
                     items(completed.take(3), key = { "recent-${it.id}" }) { task ->
-                        MediaTaskCard(task, onCancel = {}, onRetry = { openNew(task.source) }, onOpen = ::openDownloads, compact = true)
+                        MediaTaskCard(task, onCancel = {}, onRetry = { openNew(task.source) },
+                            onOpen = ::openDownloads, onDelete = {}, compact = true)
                     }
                 }
             }
@@ -336,6 +361,11 @@ fun MediaDownloadScreen(
                 }
             }
         }
+    }
+    pendingDelete?.let { task ->
+        AppConfirmDialog(title = "删除失败记录", detail = "将从下载列表中移除「${task.title.ifBlank { "未命名作品" }}」的失败记录。",
+            confirmLabel = "删除记录", danger = true, busy = deletingTask, icon = Icons.Outlined.DeleteOutline,
+            onDismiss = { pendingDelete = null }, onConfirm = { deleteFailedTask(task) })
     }
     if (showSettings) AppDialog(onDismissRequest = { showSettings = false }, title = "下载设置") {
         AppSwitchRow(title = "自动读取剪贴板", subtitle = "进入页面时提示粘贴分享链接", icon = Icons.Outlined.ContentPaste,

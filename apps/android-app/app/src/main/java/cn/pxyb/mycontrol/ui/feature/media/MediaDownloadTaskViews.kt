@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.Smartphone
@@ -27,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.MediaDownloadTarget
 import cn.pxyb.mycontrol.data.MediaDownloadTask
+import cn.pxyb.mycontrol.ui.components.button.AppInlineDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
@@ -59,7 +61,7 @@ internal fun MediaResultHeading(result: MediaDownloadTarget) {
 
 @Composable
 internal fun MediaTaskCard(task: MediaDownloadTask, onCancel: () -> Unit, onRetry: () -> Unit,
-  onOpen: () -> Unit, compact: Boolean = false) {
+  onOpen: () -> Unit, onDelete: () -> Unit, compact: Boolean = false) {
   val status = when (task.state) {
     "completed" -> "已完成"
     "failed" -> "下载失败"
@@ -108,7 +110,9 @@ internal fun MediaTaskCard(task: MediaDownloadTask, onCancel: () -> Unit, onRetr
             Text("离开页面后，下载将在后台继续", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
           }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End),
+          verticalAlignment = Alignment.CenterVertically) {
+          if (task.state == "failed") AppInlineDangerButton(text = "删除记录", icon = Icons.Outlined.DeleteOutline, onClick = onDelete)
           if (task.active) AppSecondaryButton(text = "取消下载", onClick = onCancel)
           else if (task.completed) AppSecondaryButton(text = "查看文件", icon = Icons.Outlined.FolderOpen, onClick = onOpen)
           else if (task.source.isNotBlank()) AppSecondaryButton(text = "重新解析", onClick = onRetry)
