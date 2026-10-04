@@ -3,15 +3,18 @@ package cn.pxyb.mycontrol.ui.components.input
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Icon
@@ -25,16 +28,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
-/** 统一主题字段，提供清空、密码显隐和就地校验提示。 */
+/** 圆润胶囊字段，提供外置标签、清空、密码显隐和就地校验提示。 */
 @Composable
 fun AppTextField(
     value: String,
@@ -57,25 +65,56 @@ fun AppTextField(
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
     val isError = !errorMessage.isNullOrBlank()
+    val fieldLabel = label?.takeIf { it.isNotBlank() }
+    val isSingleLine = singleLine && minLines <= 1
+    val fieldShape = if (isSingleLine) RoundedCornerShape(50) else RoundedCornerShape(24.dp)
+    val labelColor = when {
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+        isError -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
+        if (fieldLabel != null) {
+            Row(
+                modifier = Modifier
+                    .padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+                    .clearAndSetSemantics {},
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (leadingIcon != null) {
+                    Icon(
+                        imageVector = leadingIcon,
+                        contentDescription = null,
+                        tint = labelColor,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                Text(
+                    text = fieldLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = labelColor,
+                )
+            }
+        }
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 58.dp)
+                .shadow(if (enabled) 2.dp else 0.dp, fieldShape)
+                .semantics {
+                    // 标签移到框外后，读屏名称仍需附着在可编辑节点上。
+                    if (fieldLabel != null) contentDescription = fieldLabel
+                },
             enabled = enabled,
             readOnly = readOnly,
-            singleLine = singleLine && minLines <= 1,
+            singleLine = isSingleLine,
             minLines = minLines,
             maxLines = maxLines.coerceAtLeast(minLines),
-            label = label?.let {
-                {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                    )
-                }
-            },
             placeholder = placeholder?.let {
                 {
                     Text(
@@ -85,7 +124,7 @@ fun AppTextField(
                     )
                 }
             },
-            leadingIcon = leadingIcon?.let {
+            leadingIcon = leadingIcon?.takeIf { fieldLabel == null }?.let {
                 {
                     Icon(
                         imageVector = it,
@@ -111,7 +150,7 @@ fun AppTextField(
                     clearable && value.isNotEmpty() && enabled && !readOnly -> {
                         IconButton(onClick = { onValueChange("") }) {
                             Icon(
-                                imageVector = Icons.Outlined.Cancel,
+                                imageVector = Icons.Outlined.Close,
                                 contentDescription = "清空输入",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 modifier = Modifier.size(18.dp),
@@ -129,18 +168,16 @@ fun AppTextField(
             keyboardActions = keyboardActions,
             isError = isError,
             textStyle = MaterialTheme.typography.bodyLarge,
-            shape = RoundedCornerShape(16.dp),
+            shape = fieldShape,
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                 disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                disabledBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                unfocusedBorderColor = Color.Transparent,
+                disabledBorderColor = Color.Transparent,
                 errorBorderColor = MaterialTheme.colorScheme.error,
-                errorContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                errorContainerColor = MaterialTheme.colorScheme.surface,
                 cursorColor = MaterialTheme.colorScheme.primary,
             ),
         )
@@ -154,7 +191,7 @@ fun AppTextField(
                 text = errorMessage.orEmpty(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
-                modifier = Modifier.padding(start = 12.dp, top = 4.dp),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
             )
         }
     }
