@@ -475,7 +475,7 @@ function officialReservationInUse(record) {
   return LIBROOM_IN_PROGRESS_STATUS_CODES.has(officialReservationStatusCode(record));
 }
 
-export function normalizeLibroomMyReservationRecord(record, { activeOnly = true } = {}) {
+export function normalizeLibroomMyReservationRecord(record, { activeOnly = true, spaces = [] } = {}) {
   if (!record || typeof record !== "object" || Array.isArray(record)) return null;
   const statusText = firstString(record, ["statusText", "status_text", "status_name", "statusName", "status"]);
   const statusCode = officialReservationStatusCode(record);
@@ -489,12 +489,21 @@ export function normalizeLibroomMyReservationRecord(record, { activeOnly = true 
   const begin = officialRecordDateTime(firstString(record, ["begin_time", "beginTime", "start_time", "startTime"]));
   const end = officialRecordDateTime(firstString(record, ["end_time", "endTime", "finish_time", "finishTime"]));
   const show = officialRecordShowTime(firstString(record, ["show_time", "showTime"]));
-  const spaceId = Number(record.area_id ?? record.areaId ?? record.space_id ?? record.spaceId ?? record.seminar_id ?? record.seminarId ?? 0);
+  const spaceName = firstString(record, ["spaceName", "nameMerge", "space_name", "areaName", "area_name", "room_name", "name"]);
+  let spaceId = Number(record.area_id ?? record.areaId ?? record.space_id ?? record.spaceId ?? record.seminar_id ?? record.seminarId ?? 0);
+  if ((!Number.isInteger(spaceId) || spaceId <= 0) && spaceName) {
+    // 官方预约记录缺少空间 ID；只用空间列表中唯一且完全一致的完整名称补齐。
+    const matchedIds = new Set(spaces
+      .filter((space) => firstString(space, ["nameMerge", "spaceName", "space_name", "areaName", "area_name", "room_name", "name"]) === spaceName)
+      .map((space) => Number(space.id ?? space.area_id ?? space.areaId))
+      .filter((id) => Number.isInteger(id) && id > 0));
+    spaceId = matchedIds.size === 1 ? [...matchedIds][0] : 0;
+  }
 
   return {
     id: firstString(record, ["id", "order_id", "orderId", "book_id", "bookId"]),
     spaceId: Number.isInteger(spaceId) && spaceId > 0 ? spaceId : 0,
-    spaceName: firstString(record, ["spaceName", "nameMerge", "space_name", "areaName", "area_name", "room_name", "name"], "研讨间"),
+    spaceName: spaceName || "研讨间",
     date: firstString(record, ["date", "order_date", "reserve_date"], begin.date || end.date || show.date),
     startTime: begin.time || show.startTime,
     endTime: end.time || show.endTime,

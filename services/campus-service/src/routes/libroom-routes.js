@@ -22,6 +22,16 @@ export async function handleLibroomRoutes(req, res, url, {
   summarizeLibroomAvailability,
   wakeLibroomAutoReservationScheduler
 }) {
+  async function getMyReservationRecords(client, query = {}, spaces = null) {
+    const records = await client.getMyReservations(query);
+    const normalized = records.map((record) => normalizeLibroomMyReservationRecord(record)).filter(Boolean);
+    if (!normalized.some((record) => record.spaceId === 0)) return normalized;
+    const candidates = spaces ?? await client.listSpaces({});
+    return records
+      .map((record) => normalizeLibroomMyReservationRecord(record, { spaces: candidates }))
+      .filter(Boolean);
+  }
+
   const autoReservationPath = url.pathname.match(/^\/api\/campus\/libroom\/auto-reservations(?:\/([^/]+))?$/);
   if (autoReservationPath) {
     const userId = currentUserId();
@@ -89,12 +99,13 @@ export async function handleLibroomRoutes(req, res, url, {
     if (date && startTime && endTime && Array.isArray(spaces) && spaces.length > 0) {
       let excludeRecord = null;
       if (excludeReservationId) {
-        try {
-          excludeRecord = (await client.getMyReservations({ limit: 50 }))
-            .map((record) => normalizeLibroomMyReservationRecord(record))
-            .find((record) => record && String(record.id) === excludeReservationId) || null;
-        } catch (err) {
-          logger.warn("libroom_reschedule_exclude_lookup_failed", { error: err?.message });
+        excludeRecord = (await getMyReservationRecords(client, { limit: 50 }, spaces))
+          .find((record) => String(record.id) === excludeReservationId) || null;
+        if (!excludeRecord) {
+          throw new HttpError(404, "未找到待改期的预约记录，请刷新「已约空间」后重试。", null, "LIBROOM_RESERVATION_NOT_FOUND");
+        }
+        if (!excludeRecord.spaceId) {
+          throw new HttpError(409, "无法确认原预约对应的研讨间，请刷新预约记录或使用学校官网。", null, "LIBROOM_RESERVATION_SPACE_UNKNOWN");
         }
       }
 
@@ -125,6 +136,15 @@ export async function handleLibroomRoutes(req, res, url, {
 
       const results = await Promise.all(spaces.map(checkAvailability));
       const availableSpaces = results.filter(Boolean);
+      logger.info("libroom_spaces_query_completed", {
+        date,
+        startTime,
+        endTime,
+        excludeReservationId: excludeReservationId || null,
+        excludedSpaceId: excludeRecord?.spaceId || null,
+        spaceCount: spaces.length,
+        availableSpaceIds: availableSpaces.map((space) => Number(space.id ?? space.area_id ?? space.areaId))
+      });
       json(res, 200, { ok: true, data: availableSpaces });
       return true;
     }
@@ -147,10 +167,7 @@ export async function handleLibroomRoutes(req, res, url, {
   }
   if (url.pathname === "/api/campus/libroom/reservations" && req.method === "GET") {
     const client = await libroomClient();
-    const records = await client.getMyReservations({});
-    const normalized = records
-      .map((record) => normalizeLibroomMyReservationRecord(record))
-      .filter(Boolean)
+    const normalized = (await getMyReservationRecords(client))
       .sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.startTime || "").localeCompare(a.startTime || ""));
     json(res, 200, { ok: true, data: normalized });
     return true;
@@ -198,9 +215,8 @@ export async function handleLibroomRoutes(req, res, url, {
     const normalized = normalizeReservationInput(body);
     const client = await libroomClient();
 
-    const previous = (await client.getMyReservations({ limit: 50 }))
-      .map((record) => normalizeLibroomMyReservationRecord(record))
-      .find((record) => record && String(record.id) === String(reservationId));
+    const previous = (await getMyReservationRecords(client, { limit: 50 }))
+      .find((record) => String(record.id) === String(reservationId));
     if (!previous) {
       throw new HttpError(404, "未找到可改期的预约记录，请先刷新「已约空间」后重试。", null, "LIBROOM_RESERVATION_NOT_FOUND");
     }
@@ -209,6 +225,9 @@ export async function handleLibroomRoutes(req, res, url, {
     }
     if (!previous.canCancel) {
       throw new HttpError(409, "该预约当前已不可取消，无法改期。", null, "LIBROOM_RESERVATION_NOT_CANCELLABLE");
+    }
+    if (!previous.spaceId) {
+      throw new HttpError(409, "无法确认原预约对应的研讨间，原预约未做改动，请刷新预约记录或使用学校官网。", null, "LIBROOM_RESERVATION_SPACE_UNKNOWN");
     }
 
     const targetAreaId = normalized.payload.area_id;
