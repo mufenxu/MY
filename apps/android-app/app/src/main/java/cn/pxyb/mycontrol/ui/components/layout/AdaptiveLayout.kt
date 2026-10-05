@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 
 /**
  * 窗口宽度尺寸类别（遵循 Android & Material 3 官方自适应规范）
@@ -124,15 +125,23 @@ internal fun AppSectionColumns(
     trailing: @Composable () -> Unit,
 ) {
     BoxWithConstraints(modifier.fillMaxWidth()) {
-        val twoPane = maxWidth >= 840.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+        val density = LocalDensity.current
+        val twoPane = maxWidth >= 840.dp * density.fontScale.coerceAtLeast(1f)
+        val spacing = 24.dp
+        val availableWidthPx = constraints.maxWidth - with(density) { spacing.roundToPx() }
+        val leadingWidthPx = if (twoPane) {
+            (availableWidthPx * leadingWeight / (leadingWeight + trailingWeight)).roundToInt()
+        } else constraints.maxWidth
+        val trailingWidthPx = if (twoPane) availableWidthPx - leadingWidthPx else constraints.maxWidth
         FlowRow(
             modifier = Modifier.fillMaxWidth(),
             maxItemsInEachRow = if (twoPane) 2 else 1,
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            ProvideAppContentLayout(Modifier.weight(if (twoPane) leadingWeight else 1f)) { leading() }
-            ProvideAppContentLayout(Modifier.weight(if (twoPane) trailingWeight else 1f)) { trailing() }
+            // FlowRow 的 weight 会查询 intrinsic 尺寸，而 BoxWithConstraints 不支持；使用确定的列宽。
+            ProvideAppContentLayout(Modifier.width(with(density) { leadingWidthPx.toDp() })) { leading() }
+            ProvideAppContentLayout(Modifier.width(with(density) { trailingWidthPx.toDp() })) { trailing() }
         }
     }
 }
