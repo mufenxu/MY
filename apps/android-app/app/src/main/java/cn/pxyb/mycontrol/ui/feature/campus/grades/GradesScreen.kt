@@ -63,10 +63,16 @@ fun GradesScreen(state: GradesUiState, official: CampusGpa?, contentPadding: Pad
     val summary = remember(state.records) { summarizeGrades(state.records) }
     val credit = credits.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 }
     val point = points.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }
+    val recordColumns = adaptiveGridColumnCount(
+        appContentWidth() - AppPageHorizontalPadding * 2,
+        androidx.compose.ui.platform.LocalDensity.current.fontScale, 360.dp, 2,
+    )
     AppSubPage("成绩与学分", onBack, contentPadding, subtitle = "个人成绩记录与目标规划") {
         item { AppFeedbackBanner("官方汇总 GPA：${official?.overall ?: "尚未同步"}。以下明细为个人录入或导入，仅保存在本机并按账号加密；尚未接通学校单科成绩接口。", type = AppFeedbackType.Info, showCloseButton = false) }
         (state.error ?: importError)?.let { item { AppFeedbackBanner(it, true, onRetry = onLoad) } }
-        item { AppPanel {
+        item {
+            AppSectionColumns(
+                leading = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { AppPanel {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("已获 ${"%.1f".format(summary.earnedCredits)} 学分", style = MaterialTheme.typography.titleLarge)
             Text("记录加权 GPA：${summary.gpa?.let { "%.3f".format(it) } ?: "暂无"}")
@@ -74,32 +80,8 @@ fun GradesScreen(state: GradesUiState, official: CampusGpa?, contentPadding: Pad
             AppTextField(requiredCredits, { requiredCredits = it }, label = "毕业所需学分（按本专业要求填写）")
             requiredCredits.toDoubleOrNull()?.takeIf { it.isFinite() && it > 0 }?.let { Text("还需 ${"%.1f".format((it - summary.earnedCredits).coerceAtLeast(0.0))} 学分；课程类别要求需另行核对。") }
         }
-        } }
-        item { AppPanel {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("新增或更新成绩", style = MaterialTheme.typography.titleMedium)
-            AppTextField(term, { term = it }, label = "学期")
-            AppTextField(course, { course = it }, label = "课程名称")
-            AppTextField(credits, { credits = it }, label = "学分")
-            AppTextField(score, { score = it }, label = "原始成绩（可填文字等级）")
-            AppTextField(points, { points = it }, label = "学校给出的绩点（可留空）")
-            AppSwitchRow("已获得该课程学分", earned, { earned = it })
-            AppButton(modifier = Modifier.fillMaxWidth(), text = "保存成绩", onClick = { credit?.let { onSave(listOf(GradeRecord(term.trim(), course.trim(), it, score.trim(), point, earned))) } },
-                enabled = state.loaded && term.isNotBlank() && course.isNotBlank() && credit != null && (points.isBlank() || point != null), loading = state.loading)
-            Text("同学期同名课程会更新原记录；重修请在课程名中区分。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            AppSecondaryButton(text = if (importing) "读取中…" else "导入 CSV 成绩单", onClick = { launcher.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel")) }, enabled = !importing && state.loaded)
-            Text("UTF-8 CSV 表头：学期,课程,学分,成绩,绩点,已获学分\n已获学分填“是”或“否”；导入后先预览，再确认保存。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        } }
-        if (preview.isNotEmpty()) item { AppPanel {
-            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("待导入 ${preview.size} 条成绩", style = MaterialTheme.typography.titleMedium)
-            preview.forEach { Text("${it.term} · ${it.course} · ${it.credits} 学分 · ${it.score}") }
-            AppButton(text = "确认合并导入", onClick = { previewSubmitted = true; onSave(preview) }, loading = state.loading)
-            AppSecondaryButton(text = "取消导入", onClick = { preview = emptyList() })
-        }
-        } }
-        item { AppPanel {
+        AppPanel {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("目标绩点计算", style = MaterialTheme.typography.titleMedium)
             AppTextField(target, { target = it }, label = "目标累计 GPA")
@@ -115,10 +97,37 @@ fun GradesScreen(state: GradesUiState, official: CampusGpa?, contentPadding: Pad
                 Text("仅按已填写绩点的记录计算。是否可达到以及对应分数，请按学校绩点满分与换算规则判断。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        }
+        } },
+                trailing = { AppPanel {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("新增或更新成绩", style = MaterialTheme.typography.titleMedium)
+            AppTextField(term, { term = it }, label = "学期")
+            AppTextField(course, { course = it }, label = "课程名称")
+            AppTextField(credits, { credits = it }, label = "学分")
+            AppTextField(score, { score = it }, label = "原始成绩（可填文字等级）")
+            AppTextField(points, { points = it }, label = "学校给出的绩点（可留空）")
+            AppSwitchRow("已获得该课程学分", earned, { earned = it })
+            AppButton(modifier = Modifier.fillMaxWidth(), text = "保存成绩", onClick = { credit?.let { onSave(listOf(GradeRecord(term.trim(), course.trim(), it, score.trim(), point, earned))) } },
+                enabled = state.loaded && term.isNotBlank() && course.isNotBlank() && credit != null && (points.isBlank() || point != null), loading = state.loading)
+            Text("同学期同名课程会更新原记录；重修请在课程名中区分。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AppSecondaryButton(text = if (importing) "读取中…" else "导入 CSV 成绩单", onClick = { launcher.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel")) }, enabled = !importing && state.loaded)
+            Text("UTF-8 CSV 表头：学期,课程,学分,成绩,绩点,已获学分\n已获学分填“是”或“否”；导入后先预览，再确认保存。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        } },
+            )
+        }
+        if (preview.isNotEmpty()) item { AppPanel {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("待导入 ${preview.size} 条成绩", style = MaterialTheme.typography.titleMedium)
+            preview.forEach { Text("${it.term} · ${it.course} · ${it.credits} 学分 · ${it.score}") }
+            AppButton(text = "确认合并导入", onClick = { previewSubmitted = true; onSave(preview) }, loading = state.loading)
+            AppSecondaryButton(text = "取消导入", onClick = { preview = emptyList() })
+        }
         } }
         state.records.groupBy { it.term }.toSortedMap().forEach { (termLabel, records) ->
             item { val stats = summarizeGrades(records); Text("$termLabel · GPA ${stats.gpa?.let { "%.3f".format(it) } ?: "暂无"} · 已获 ${stats.earnedCredits} 学分", style = MaterialTheme.typography.titleMedium) }
-            items(records, key = { it.key }) { row -> AppPanel {
+            appGridItems(records, recordColumns, { it.key }, "grade-record") { row -> AppPanel {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(row.course, style = MaterialTheme.typography.titleMedium)
                 Text("${row.credits} 学分 · 成绩 ${row.score.ifBlank { "未填" }} · 绩点 ${row.points ?: "未填"}")

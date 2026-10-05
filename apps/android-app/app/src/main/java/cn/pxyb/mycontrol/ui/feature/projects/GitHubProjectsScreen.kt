@@ -118,18 +118,8 @@ fun GitHubProjectsScreen(
         }
     }
 
-    AppAdaptivePanes(
-        showDetail = activeRepo != null,
-        twoPane = twoPane,
-        listPane = {
-            AppSubPage(
-                title = "GitHub 项目",
-                subtitle = "账号与仓库管理",
-                onBack = onBack,
-                contentPadding = contentPadding,
-                refreshing = busy,
-                onRefresh = onRefresh,
-                actions = {
+    val pageListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val pageActions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
                     AppHeaderIconButton(
                         icon = Icons.Outlined.Refresh,
                         contentDescription = "刷新",
@@ -137,7 +127,23 @@ fun GitHubProjectsScreen(
                         enabled = !busy,
                         loading = busy,
                     )
-                },
+                }
+    val panes: @Composable (androidx.compose.ui.unit.Dp) -> Unit = { topPadding ->
+        val panePadding = if (twoPane) PaddingValues(top = topPadding) else contentPadding
+    AppAdaptivePanes(
+        showDetail = activeRepo != null,
+        twoPane = twoPane,
+        listPane = {
+            AppSubPage(
+                showHeader = !twoPane,
+                listState = pageListState,
+                title = "GitHub 项目",
+                subtitle = "账号与仓库管理",
+                onBack = onBack,
+                contentPadding = panePadding,
+                refreshing = busy,
+                onRefresh = onRefresh,
+                actions = pageActions,
             ) {
                 when {
                     !profileLoaded && profile == null -> item(key = "github-account-loading") {
@@ -183,20 +189,22 @@ fun GitHubProjectsScreen(
                         releases = releases,
                         loaded = releasesLoaded && releasesRepoFullName == activeRepo.fullName,
                         busy = releasesBusy,
-                        contentPadding = contentPadding,
+                        contentPadding = panePadding,
                         onBack = { selectedRepoFullName = null },
                         showBack = !twoPane,
+                        showHeader = !twoPane,
                         onRefresh = { onLoadReleases(activeRepo.ownerName(), activeRepo.name) },
                         onCreateRelease = { createOpen = true },
                     )
                 }
             } else {
                 AppSubPage(
+                    showHeader = false,
                     title = "仓库发布",
                     subtitle = "选择仓库后查看版本与发布信息",
                     onBack = onBack,
                     showBack = false,
-                    contentPadding = contentPadding,
+                    contentPadding = panePadding,
                 ) {
                     item {
                         AppEmptyState(
@@ -209,6 +217,18 @@ fun GitHubProjectsScreen(
             }
         },
     )
+    }
+    if (twoPane) {
+        AppSubPage(
+            title = "GitHub 项目",
+            onBack = onBack,
+            contentPadding = contentPadding,
+            listState = pageListState,
+            actions = pageActions,
+            body = { topPadding -> panes(topPadding) },
+        )
+    } else panes(0.dp)
+
 
     val toggle = pendingToggle
     if (toggle != null) {
@@ -266,18 +286,11 @@ private fun GitHubReleasesPane(
     contentPadding: PaddingValues,
     onBack: () -> Unit,
     showBack: Boolean,
+    showHeader: Boolean,
     onRefresh: () -> Unit,
     onCreateRelease: () -> Unit,
 ) {
-    AppSubPage(
-        title = repo.fullName,
-        subtitle = "Releases 管理",
-        onBack = onBack,
-        contentPadding = contentPadding,
-        showBack = showBack,
-        refreshing = busy,
-        onRefresh = onRefresh,
-        actions = {
+    val releaseActions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
             AppHeaderIconButton(
                 icon = Icons.Outlined.Refresh,
                 contentDescription = "刷新",
@@ -291,8 +304,25 @@ private fun GitHubReleasesPane(
                 onClick = onCreateRelease,
                 enabled = !busy,
             )
-        },
+        }
+    AppSubPage(
+        title = repo.fullName,
+        subtitle = "Releases 管理",
+        onBack = onBack,
+        contentPadding = contentPadding,
+        showBack = showBack,
+        showHeader = showHeader,
+        refreshing = busy,
+        onRefresh = onRefresh,
+        actions = releaseActions,
     ) {
+        if (!showHeader) item(key = "github-release-actions") {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(repo.fullName, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                releaseActions()
+            }
+        }
+
         when {
             !loaded -> item(key = "github-releases-shimmer") {
                 GlassShimmerList(itemCount = 3, itemHeight = 84.dp)

@@ -40,9 +40,13 @@ fun StudyScreen(state: StudyUiState, courses: List<CampusCourse>, todos: List<To
     fun durationSince(start: Long, session: StudySession) = (session.start + session.duration - maxOf(session.start, start)).coerceIn(0, session.duration)
     val options = courses.distinctBy { it.courseName }.map { AppSelectOption("course:${it.id}", it.courseName) } +
         todos.filterNot { it.completed }.map { AppSelectOption("todo:${it.id}", it.title, it.courseRef?.name) }
+    val recordColumns = adaptiveGridColumnCount(
+        appContentWidth() - AppPageHorizontalPadding * 2,
+        androidx.compose.ui.platform.LocalDensity.current.fontScale, 360.dp, 2,
+    )
     AppSubPage("学习计时", onBack, contentPadding, subtitle = "记录课程与待办的实际学习时间") {
         state.error?.let { item { AppFeedbackBanner(it, error = true, onRetry = onLoad) } }
-        item { AppPanel {
+        item { AppSectionColumns(leading = { AppPanel {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 listOf("今日专注" to todayStart, "本周累计" to weekStart).forEach { (label, since) ->
@@ -68,8 +72,8 @@ fun StudyScreen(state: StudyUiState, courses: List<CampusCourse>, todos: List<To
                 AppButton(modifier = Modifier.fillMaxWidth(), text = "开始学习", onClick = { onStart(subject, taskId) }, enabled = state.loaded && subject.isNotBlank(), loading = state.loading)
             }
         }
-        } }
-        item { AppPanel {
+        } },
+                trailing = { AppPanel {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("本周科目投入", style = MaterialTheme.typography.titleMedium)
             val grouped = state.sessions.filter { it.start + it.duration > weekStart }.groupBy { it.subject }
@@ -78,8 +82,8 @@ fun StudyScreen(state: StudyUiState, courses: List<CampusCourse>, todos: List<To
                 Text("$subject · ${records.sumOf { durationSince(weekStart, it) } / 60_000} 分钟")
             }
         }
-        } }
-        items(state.sessions.sortedByDescending { it.start }, key = { it.id }) { row -> AppPanel {
+        } }) }
+        appGridItems(state.sessions.sortedByDescending { it.start }, recordColumns, { it.id }, "study-session") { row -> AppPanel {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(row.subject, style = MaterialTheme.typography.titleMedium)
             Text("${Instant.ofEpochMilli(row.start).atZone(zone).format(DateTimeFormatter.ofPattern("MM-dd HH:mm"))} · ${row.duration / 60_000} 分钟")

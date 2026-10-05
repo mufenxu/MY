@@ -54,6 +54,7 @@ import cn.pxyb.mycontrol.ui.components.layout.appPageContentPadding
 import cn.pxyb.mycontrol.ui.components.layout.auroraBackdrop
 import cn.pxyb.mycontrol.ui.components.layout.quickActionColumnCount
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
+import cn.pxyb.mycontrol.ui.components.layout.AppSectionColumns
 import cn.pxyb.mycontrol.ui.isRefreshing
 import cn.pxyb.mycontrol.ui.navigation.MainTab
 import cn.pxyb.mycontrol.ui.navigation.WorkspaceDestination
@@ -101,7 +102,7 @@ fun OverviewScreen(
     val needsAttention = activeIncidents.isNotEmpty() || monitored.any { it.state != "healthy" }
     val isTablet = useTwoPaneLayout()
     val width = appContentWidth()
-    val quickActionWidth = if (isTablet) (width - AppPageHorizontalPadding * 2 - 12.dp) * 0.42f else width
+    val quickActionWidth = if (isTablet) (width - AppPageHorizontalPadding * 2 - 24.dp) / 2.6f else width
     val quickActionColumns = quickActionColumnCount(quickActionWidth, LocalDensity.current.fontScale)
     val quickActionRows = remember(state.homeQuickActionOrder, state.hiddenHomeQuickActions, quickActionColumns) {
         state.homeQuickActionOrder.filterNot { it == HomeQuickAction.Today || it in state.hiddenHomeQuickActions }.chunked(quickActionColumns)
@@ -240,14 +241,11 @@ fun OverviewScreen(
                 item(key = "offline-notice") { OfflineSnapshotNotice(state.cachedAtMillis) }
             }
             item(key = "overview-workspace") {
-                FlowRow(
-                    maxItemsInEachRow = if (isTablet) 2 else 1,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Column(Modifier.weight(if (isTablet) 0.58f else 1f)) { HomeScheduleCard(state, onOpenWorkspace) }
-                    Column(Modifier.weight(if (isTablet) 0.42f else 1f)) { quickActions() }
-                }
+                AppSectionColumns(
+                    leadingWeight = 1.6f,
+                    leading = { HomeScheduleCard(state, onOpenWorkspace) },
+                    trailing = quickActions,
+                )
             }
             item(key = "status-summary") { statusSummary() }
             if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {

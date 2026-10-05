@@ -40,6 +40,7 @@ import cn.pxyb.mycontrol.ui.components.display.AppIconTile
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.display.QuickActionGlassTile
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
+import cn.pxyb.mycontrol.ui.components.layout.AppSectionColumns
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 
@@ -69,38 +70,40 @@ internal fun CampusOverviewSection(
         return
     }
 
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        SmartCardView(
-            balance = overview.cardBalance,
-            waterCode = overview.waterCode,
-        )
+    AppSectionColumns(
+        leading = {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SmartCardView(
+                    balance = overview.cardBalance,
+                    waterCode = overview.waterCode,
+                )
 
-        Row(
-            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            DormEnergyCard(
-                energyBalance = overview.energyBalance,
-                roomName = overview.energyRoom ?: overview.dormitory,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    DormEnergyCard(
+                        energyBalance = overview.energyBalance,
+                        roomName = overview.energyRoom ?: overview.dormitory,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    )
+                    AcademicGpaCard(
+                        gpa = overview.gpa,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    )
+                }
+            }
+        },
+        trailing = {
+            CampusQuickToolsGrid(
+                onOpenFreeClassrooms = onOpenFreeClassrooms,
+                onOpenReservation = onOpenReservation,
+                onOpenLibrarySeatReservation = onOpenLibrarySeatReservation,
+                onOpenWaterValve = onOpenWaterValve,
+                onOpenChaoxing = onOpenChaoxing,
             )
-            AcademicGpaCard(
-                gpa = overview.gpa,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-            )
-        }
-
-        CampusQuickToolsGrid(
-            onOpenFreeClassrooms = onOpenFreeClassrooms,
-            onOpenReservation = onOpenReservation,
-            onOpenLibrarySeatReservation = onOpenLibrarySeatReservation,
-            onOpenWaterValve = onOpenWaterValve,
-            onOpenChaoxing = onOpenChaoxing,
-        )
-    }
+        },
+    )
 }
 
 @Composable

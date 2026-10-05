@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
 import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
+import cn.pxyb.mycontrol.ui.components.layout.LocalAdaptiveWindow
 
 @Composable
 internal fun AppBottomNavigation(
@@ -33,8 +34,9 @@ internal fun AppBottomNavigation(
     modifier: Modifier = Modifier,
     assistant: (@Composable () -> Unit)? = null,
 ) {
+    val expanded = LocalAdaptiveWindow.current.isTabletOrExpanded
     Row(
-        modifier = modifier.widthIn(max = 480.dp).fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
+        modifier = modifier.widthIn(max = if (expanded) 600.dp else 480.dp).fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -57,7 +59,7 @@ internal fun AppBottomNavigation(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                 appNavigationTabs.forEach { item ->
-                    BottomNavigationItem(item, selected == item.tab) { onSelect(item.tab) }
+                    BottomNavigationItem(item, selected == item.tab, expanded) { onSelect(item.tab) }
                 }
                 }
             }
@@ -67,7 +69,7 @@ internal fun AppBottomNavigation(
 }
 
 @Composable
-private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onClick: () -> Unit) {
+private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, expanded: Boolean, onClick: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
     val colors = MaterialTheme.colorScheme
@@ -75,20 +77,28 @@ private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, onCl
         if (selected) colors.primary else colors.onSurface,
         tween(MotionTokens.DurationShort), label = "nav-foreground",
     )
-    Column(
-        modifier = Modifier.weight(1f).heightIn(min = 56.dp)
+    val itemModifier = Modifier.weight(1f).heightIn(min = 56.dp)
             .pressFeedback(interaction)
             .clip(RoundedCornerShape(28.dp))
             .selectable(selected = selected, role = Role.Tab,
                 interactionSource = interaction, indication = LocalIndication.current,
-                onClick = { if (!selected) { AppHaptics.tick(haptics); onClick() } })
-            .padding(vertical = 6.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
-    ) {
+                onClick = { if (!selected || expanded) { AppHaptics.tick(haptics); onClick() } })
+            .padding(vertical = 6.dp)
+    val content: @Composable () -> Unit = {
         Icon(item.icon, contentDescription = null, tint = foreground, modifier = Modifier.size(24.dp))
         Text(item.label, color = foreground, fontSize = 12.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+    if (expanded) Row(
+        modifier = itemModifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
+    ) { content() } else Column(
+        modifier = itemModifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+    ) {
+        content()
     }
 }

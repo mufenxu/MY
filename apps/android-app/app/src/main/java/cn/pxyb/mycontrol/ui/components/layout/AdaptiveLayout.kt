@@ -1,6 +1,10 @@
 package cn.pxyb.mycontrol.ui.components.layout
 
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -75,7 +79,7 @@ internal val LocalAppContentWidth = compositionLocalOf<Dp?> { null }
 internal val LocalAppContentHeight = compositionLocalOf<Dp?> { null }
 internal val LocalAppContentMaxWidth = compositionLocalOf { AppTabletContentMaxWidth }
 
-internal val AppWorkspaceContentMaxWidth = 1440.dp
+internal val AppWorkspaceContentMaxWidth = 1200.dp
 internal val AppReadingContentMaxWidth = 760.dp
 internal val AppFormContentMaxWidth = 720.dp
 internal val AppListDetailMinWidth = 760.dp
@@ -106,6 +110,29 @@ internal fun ProvideAppContentLayout(
             LocalAppContentMaxWidth provides contentMaxWidth,
         ) {
             content()
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun AppSectionColumns(
+    modifier: Modifier = Modifier,
+    leadingWeight: Float = 1f,
+    trailingWeight: Float = 1f,
+    leading: @Composable () -> Unit,
+    trailing: @Composable () -> Unit,
+) {
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        val twoPane = maxWidth >= 840.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            maxItemsInEachRow = if (twoPane) 2 else 1,
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            ProvideAppContentLayout(Modifier.weight(if (twoPane) leadingWeight else 1f)) { leading() }
+            ProvideAppContentLayout(Modifier.weight(if (twoPane) trailingWeight else 1f)) { trailing() }
         }
     }
 }

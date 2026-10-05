@@ -54,6 +54,9 @@ import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
+import cn.pxyb.mycontrol.ui.components.layout.adaptiveGridColumnCount
+import cn.pxyb.mycontrol.ui.components.layout.appContentWidth
+import cn.pxyb.mycontrol.ui.components.layout.appGridItems
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import kotlinx.coroutines.CancellationException
@@ -237,19 +240,16 @@ fun MediaDownloadScreen(
             }
         }
     }
+    val recordColumns = adaptiveGridColumnCount(
+        appContentWidth() - AppPageHorizontalPadding * 2,
+        androidx.compose.ui.platform.LocalDensity.current.fontScale, 360.dp, 2,
+    )
     val completed = tasks.filter { it.completed }
     val pending = tasks.filterNot { it.completed }
     Box(Modifier.fillMaxSize()) {
-        AppSubPage(title = "视频下载", onBack = onBack, contentPadding = contentPadding,
+        AppSubPage(title = "视频下载", subtitle = "从一个链接，到你的本地收藏", onBack = onBack, contentPadding = contentPadding,
             actions = { AppHeaderIconButton(icon = Icons.Outlined.Tune, contentDescription = "下载设置", onClick = { showSettings = true }) },
         ) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(vertical = 8.dp)) {
-                    Text("我的下载", style = MaterialTheme.typography.headlineSmall)
-                    Text("从一个链接，到你的本地收藏", style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
             item {
                 AppSegmentedControl(options = listOf("进行中", "已完成", "解析记录"), selected = tab,
                     onSelect = { tab = it }, label = { it }, count = { if (it == "进行中") tasks.count { task -> task.active }.takeIf { it > 0 } else null })
@@ -265,7 +265,7 @@ fun MediaDownloadScreen(
                             contentDescription = "清空解析记录", onClick = { clearHistory = true }) })
                 }
                 if (state.history.isEmpty()) item { AppEmptyState(title = "还没有解析记录", detail = "从新建下载开始，粘贴你想保存的视频链接。", icon = Icons.Outlined.History) }
-                items(state.history, key = { it.shareText }) { entry ->
+                appGridItems(state.history, recordColumns, { it.shareText }, "media-history") { entry ->
                     AppPanel { AppActionRow(title = entry.title.ifBlank { "未命名作品" }, subtitle = mediaHistorySubtitle(entry),
                         icon = Icons.Outlined.History, onClick = { openNew(entry.shareText) }) }
                 }
@@ -276,13 +276,13 @@ fun MediaDownloadScreen(
                         detail = if (tab == "已完成") "下载完成后，文件会保存在系统下载目录。" else "点击右下角新建下载，粘贴分享链接。",
                         icon = if (tab == "已完成") Icons.Outlined.FolderOpen else Icons.Outlined.Download)
                 }
-                items(visible, key = { it.id }) { task ->
+                appGridItems(visible, recordColumns, { it.id }, "media-task") { task ->
                     MediaTaskCard(task, onCancel = { cancelTask(task) }, onRetry = { openNew(task.source) },
                         onOpen = ::openDownloads, onDelete = { pendingDelete = task })
                 }
                 if (tab == "进行中" && completed.isNotEmpty()) {
                     item { AppSectionHeader(title = "最近保存", subtitle = "文件保存在系统下载目录") }
-                    items(completed.take(3), key = { "recent-${it.id}" }) { task ->
+                    appGridItems(completed.take(3), recordColumns, { it.id }, "media-recent") { task ->
                         MediaTaskCard(task, onCancel = {}, onRetry = { openNew(task.source) },
                             onOpen = ::openDownloads, onDelete = {}, compact = true)
                     }

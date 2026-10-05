@@ -90,6 +90,7 @@ import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.components.layout.glassPanel
 import cn.pxyb.mycontrol.ui.components.layout.rememberGlassPalette
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
+import cn.pxyb.mycontrol.ui.components.layout.AppSectionColumns
 import cn.pxyb.mycontrol.ui.isRefreshing
 import cn.pxyb.mycontrol.ui.navigation.MainTab
 import cn.pxyb.mycontrol.ui.sectionError
@@ -250,14 +251,11 @@ fun ToolsScreen(
                 item(key = "tools-error") { AppFeedbackBanner("设备数据暂不可用：$message", error = true, onRetry = onRefresh) }
             }
             item(key = "device-columns") {
-                FlowRow(
-                    maxItemsInEachRow = if (isTablet) 2 else 1,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Column(Modifier.weight(1f)) { environment() }
-                    Column(Modifier.weight(1f)) { controls() }
-                }
+                AppSectionColumns(
+                    leadingWeight = if (isTablet) 1.4f else 1f,
+                    leading = if (isTablet) controls else environment,
+                    trailing = if (isTablet) environment else controls,
+                )
             }
     }
     confirmation?.let { scene ->

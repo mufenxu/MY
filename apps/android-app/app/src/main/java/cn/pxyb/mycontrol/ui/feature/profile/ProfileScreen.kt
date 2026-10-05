@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -77,6 +78,7 @@ import cn.pxyb.mycontrol.ui.components.layout.auroraBackdrop
 import cn.pxyb.mycontrol.ui.components.layout.glassPanel
 import cn.pxyb.mycontrol.ui.components.layout.rememberGlassPalette
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
+import cn.pxyb.mycontrol.ui.components.layout.AppSectionColumns
 import cn.pxyb.mycontrol.ui.isRefreshing
 import cn.pxyb.mycontrol.ui.legal.PrivacyPolicyDialog
 import cn.pxyb.mycontrol.ui.sectionError
@@ -170,21 +172,22 @@ fun ProfileScreen(
         refreshing = state.refreshing, onRefresh = onRefresh,
         header = { ModernProfileHeader(onOpenQrLogin, state.unreadAlerts, onOpenNotifications, onOpenSettings) },
     ) {
-            item(key = "profile-account") {
+            if (!isTablet) item(key = "profile-account") {
                 ModernProfileCard(user.username, user.role, BuildConfig.VERSION_NAME)
             }
             state.sectionError?.let { message ->
                 item(key = "profile-error") { AppFeedbackBanner(message, error = true, onRetry = onRefresh) }
             }
             item(key = "profile-groups") {
-                FlowRow(
-                    maxItemsInEachRow = if (isTablet) 2 else 1,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Column(Modifier.weight(1f)) { accountSections() }
-                    Column(Modifier.weight(1f)) { preferenceSections() }
-                }
+                AppSectionColumns(
+                    leading = {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            if (isTablet) ModernProfileCard(user.username, user.role, BuildConfig.VERSION_NAME)
+                            accountSections()
+                        }
+                    },
+                    trailing = preferenceSections,
+                )
             }
             item(key = "profile-logout") {
                 AppDangerButton(
@@ -193,7 +196,7 @@ fun ProfileScreen(
                     loading = state.busyAction == "logout",
                     enabled = state.busyAction == null,
                     onClick = { confirmLogout = true },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth(),
                 )
             }
     }

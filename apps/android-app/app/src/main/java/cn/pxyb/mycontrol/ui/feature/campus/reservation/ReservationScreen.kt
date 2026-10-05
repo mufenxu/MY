@@ -38,6 +38,7 @@ import cn.pxyb.mycontrol.data.CampusMyReservation
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
+import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import kotlinx.coroutines.delay
 
@@ -136,66 +137,13 @@ fun ReservationScreen(
         },
     ) {
         item(key = "tab-selector", contentType = "tab") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ReservationTab.entries.forEach { tab ->
-                    val isSelected = selectedTab == tab
-                    val badgeCount = if (tab == ReservationTab.My) state.myReservations.size else 0
-                    Surface(
-                        onClick = { selectedTab = tab },
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        border = BorderStroke(
-                            1.dp,
-                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(40.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                        ) {
-                            Icon(
-                                imageVector = when (tab) {
-                                    ReservationTab.Single -> Icons.Outlined.MeetingRoom
-                                    ReservationTab.My -> Icons.Outlined.EventAvailable
-                                    ReservationTab.Auto -> Icons.Outlined.AutoAwesome
-                                },
-                                contentDescription = null,
-                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(Modifier.width(5.dp))
-                            Text(
-                                text = tab.label,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            )
-                            if (badgeCount > 0) {
-                                Spacer(Modifier.width(4.dp))
-                                Surface(
-                                    shape = RoundedCornerShape(999.dp),
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
-                                ) {
-                                    Text(
-                                        text = "$badgeCount",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            AppSegmentedControl(
+                options = ReservationTab.entries,
+                selected = selectedTab,
+                onSelect = { selectedTab = it },
+                label = { it.label },
+                count = { if (it == ReservationTab.My) state.myReservations.size.takeIf { size -> size > 0 } else null },
+            )
         }
 
         state.message?.let { message ->

@@ -164,18 +164,8 @@ fun GoogleAccountDeskScreen(
         )
     }
 
-    AppAdaptivePanes(
-        showDetail = false,
-        twoPane = isTablet,
-        listPane = {
-            AppSubPage(
-                title = if (isTablet) "邮箱台账" else "Google 邮箱台账",
-                subtitle = "记录主邮箱、别名和 OpenAI 使用状态",
-                onBack = onDismiss,
-                contentPadding = contentPadding,
-                refreshing = state.loading,
-                onRefresh = onRefresh,
-                actions = {
+    val pageListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val pageActions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {
                     AppHeaderIconButton(
                         icon = Icons.Outlined.Add,
                         contentDescription = "添加主邮箱",
@@ -239,7 +229,23 @@ fun GoogleAccountDeskScreen(
                             )
                         }
                     }
-                },
+                }
+    val panes: @Composable (androidx.compose.ui.unit.Dp) -> Unit = { topPadding ->
+        val panePadding = if (isTablet) PaddingValues(top = topPadding) else contentPadding
+    AppAdaptivePanes(
+        showDetail = false,
+        twoPane = isTablet,
+        listPane = {
+            AppSubPage(
+                showHeader = !isTablet,
+                listState = pageListState,
+                title = if (isTablet) "邮箱台账" else "Google 邮箱台账",
+                subtitle = "记录主邮箱、别名和 OpenAI 使用状态",
+                onBack = onDismiss,
+                contentPadding = panePadding,
+                refreshing = state.loading,
+                onRefresh = onRefresh,
+                actions = pageActions,
             ) {
 
                 state.error?.let { message ->
@@ -389,11 +395,12 @@ fun GoogleAccountDeskScreen(
         detailPane = {
             key(detailAccount?.id) {
                 AppSubPage(
+                    showHeader = false,
                     title = "邮箱详情",
                     subtitle = detailAccount?.primaryEmail ?: "选择主邮箱查看状态与别名",
                     onBack = onDismiss,
                     showBack = false,
-                    contentPadding = contentPadding,
+                    contentPadding = panePadding,
                 ) {
                     item {
                         val account = detailAccount
@@ -421,6 +428,18 @@ fun GoogleAccountDeskScreen(
             }
         },
     )
+    }
+    if (isTablet) {
+        AppSubPage(
+            title = "Google 邮箱台账",
+            onBack = onDismiss,
+            contentPadding = contentPadding,
+            listState = pageListState,
+            actions = pageActions,
+            body = { topPadding -> panes(topPadding) },
+        )
+    } else panes(0.dp)
+
 
     if (!isTablet) detailAccount?.let { account ->
         GoogleAccountDetailDialog(

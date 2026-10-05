@@ -70,6 +70,11 @@ import cn.pxyb.mycontrol.ui.components.input.AppSelectField
 import cn.pxyb.mycontrol.ui.components.input.AppSelectOption
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
+import cn.pxyb.mycontrol.ui.components.layout.AppSectionColumns
+import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
+import cn.pxyb.mycontrol.ui.components.layout.appContentWidth
+import cn.pxyb.mycontrol.ui.components.layout.appGridItems
+import cn.pxyb.mycontrol.ui.components.layout.adaptiveGridColumnCount
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.components.picker.AppTimePickerModal
@@ -170,6 +175,10 @@ fun ChaoxingScreen(
             .onFailure { onReport("无法打开学习通，请手动进入对应课程完成签到。") }
     }
 
+    val recordColumns = adaptiveGridColumnCount(
+        appContentWidth() - AppPageHorizontalPadding * 2,
+        androidx.compose.ui.platform.LocalDensity.current.fontScale, 360.dp, 2,
+    )
     AppSubPage(
         title = "学习通签到", subtitle = "课程活动与签到记录", onBack = onBack, contentPadding = contentPadding,
         refreshing = state.busy && state.operation == "refresh", onRefresh = onRefresh,
@@ -202,87 +211,91 @@ fun ChaoxingScreen(
             }
         } else {
             item {
-                AppSectionHeader(title = "账号", subtitle = "学习通会话与帮你签服务", accent = ColorTokens.Blue.foreground)
-            }
-            item {
-                AppPanel {
-                    Column(Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            AppIconTile(Icons.Outlined.School, ColorTokens.Blue.foreground, ColorTokens.Blue.container)
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(state.session.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                if (state.session.school.isNotBlank()) {
-                                    Text(state.session.school, style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                AppSectionColumns(
+                    leading = {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AppSectionHeader(title = "账号", subtitle = "学习通会话与帮你签服务", accent = ColorTokens.Blue.foreground)
+                        AppPanel {
+                            Column(Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                ) {
+                                    AppIconTile(Icons.Outlined.School, ColorTokens.Blue.foreground, ColorTokens.Blue.container)
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(state.session.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                            maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        if (state.session.school.isNotBlank()) {
+                                            Text(state.session.school, style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                        }
+                                    }
+                                    AppStatusBadge(
+                                        label = if (state.session.signProviderConnected) "帮你签已连接" else "帮你签未连接",
+                                        semantic = if (state.session.signProviderConnected) AppStatusSemantic.Success else AppStatusSemantic.Neutral,
+                                    )
+                                }
+                                AppDivider()
+                                if (state.session.signProviderConnected) {
+                                    AppActionRow(
+                                        title = "帮你签服务",
+                                        subtitle = "已连接 · 位置签到由帮你签提交",
+                                        icon = Icons.Outlined.CloudSync,
+                                        enabled = !state.busy,
+                                        onClick = null,
+                                        trailingContent = {
+                                            AppInlineDangerButton("断开帮你签", { confirmDisconnectProvider = true }, enabled = !state.busy)
+                                        },
+                                    )
+                                } else {
+                                    AppActionRow(
+                                        title = "帮你签服务",
+                                        subtitle = "未连接 · 连接后位置签到由帮你签提交",
+                                        icon = Icons.Outlined.CloudSync,
+                                        enabled = !state.busy,
+                                        onClick = ::openSignProvider,
+                                    )
+                                }
+                                AppDivider()
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    AppSecondaryButton("重新登录", { loginLauncher.launch(PlatformWebActivity.createChaoxingLoginIntent(context)) },
+                                        enabled = !state.busy, modifier = Modifier.weight(1f))
+                                    AppDangerButton("断开学习通", { confirmDisconnect = true },
+                                        enabled = !state.busy, modifier = Modifier.weight(1f))
                                 }
                             }
-                            AppStatusBadge(
-                                label = if (state.session.signProviderConnected) "帮你签已连接" else "帮你签未连接",
-                                semantic = if (state.session.signProviderConnected) AppStatusSemantic.Success else AppStatusSemantic.Neutral,
-                            )
-                        }
-                        AppDivider()
-                        if (state.session.signProviderConnected) {
-                            AppActionRow(
-                                title = "帮你签服务",
-                                subtitle = "已连接 · 位置签到由帮你签提交",
-                                icon = Icons.Outlined.CloudSync,
-                                enabled = !state.busy,
-                                onClick = null,
-                                trailingContent = {
-                                    AppInlineDangerButton("断开帮你签", { confirmDisconnectProvider = true }, enabled = !state.busy)
-                                },
-                            )
-                        } else {
-                            AppActionRow(
-                                title = "帮你签服务",
-                                subtitle = "未连接 · 连接后位置签到由帮你签提交",
-                                icon = Icons.Outlined.CloudSync,
-                                enabled = !state.busy,
-                                onClick = ::openSignProvider,
-                            )
-                        }
-                        AppDivider()
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            AppSecondaryButton("重新登录", { loginLauncher.launch(PlatformWebActivity.createChaoxingLoginIntent(context)) },
-                                enabled = !state.busy, modifier = Modifier.weight(1f))
-                            AppDangerButton("断开学习通", { confirmDisconnect = true },
-                                enabled = !state.busy, modifier = Modifier.weight(1f))
                         }
                     }
-                }
-            }
-            item {
-                AppSectionHeader(
-                    title = "定时签到",
-                    subtitle = listOfNotNull(
-                        if (state.autoSign.enabled) "已开启" else "未开启",
-                        state.autoSign.times.takeIf { it.isNotEmpty() }?.joinToString("、"),
-                    ).joinToString(" · "),
-                    accent = ColorTokens.Purple.foreground,
-                )
-            }
-            item {
-                ChaoxingAutoSignPanel(
-                    state = state,
-                    onToggleAutoSign = onToggleAutoSign,
-                    onRequestAddTime = { showAutoSignTimePicker = true },
-                    onRemoveAutoSignTime = onRemoveAutoSignTime,
-                    onSelectAutoSignCourse = onSelectAutoSignCourse,
-                    onRequestLocation = {
-                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) onSaveAutoSignLocation(context)
-                        else autoSignPermissions.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     },
-                    onRunAutoSign = onRunAutoSign,
+                    trailing = {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AppSectionHeader(
+                            title = "定时签到",
+                            subtitle = listOfNotNull(
+                                if (state.autoSign.enabled) "已开启" else "未开启",
+                                state.autoSign.times.takeIf { it.isNotEmpty() }?.joinToString("、"),
+                            ).joinToString(" · "),
+                            accent = ColorTokens.Purple.foreground,
+                        )
+                        ChaoxingAutoSignPanel(
+                            state = state,
+                            onToggleAutoSign = onToggleAutoSign,
+                            onRequestAddTime = { showAutoSignTimePicker = true },
+                            onRemoveAutoSignTime = onRemoveAutoSignTime,
+                            onSelectAutoSignCourse = onSelectAutoSignCourse,
+                            onRequestLocation = {
+                                if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) onSaveAutoSignLocation(context)
+                                else autoSignPermissions.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                            },
+                            onRunAutoSign = onRunAutoSign,
+                        )
+                    }
+                    },
                 )
             }
             if (state.courses.isEmpty()) {
@@ -309,7 +322,7 @@ fun ChaoxingScreen(
                 } else if (state.activities.isEmpty()) {
                     item { AppEmptyState("暂无签到活动", detail = "当前课程没有返回签到活动，请在老师发起后刷新。") }
                 } else {
-                    items(state.activities, key = { it.id }) { activity ->
+                    appGridItems(state.activities, recordColumns, { it.id }, "chaoxing-activity") { activity ->
                         val accent = if (activity.type == "4") ColorTokens.Sky else ColorTokens.Teal
                         AppListCard(
                             title = activity.name,

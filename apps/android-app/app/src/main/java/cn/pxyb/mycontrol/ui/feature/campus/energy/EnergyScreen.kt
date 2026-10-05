@@ -24,6 +24,10 @@ fun EnergyScreen(state: EnergyUiState, contentPadding: PaddingValues, onBack: ()
     var enabled by rememberSaveable(state.enabled) { mutableStateOf(state.enabled) }
     val parsedThreshold = threshold.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }
     LaunchedEffect(Unit) { onLoad(state.month) }
+    val recordColumns = adaptiveGridColumnCount(
+        appContentWidth() - AppPageHorizontalPadding * 2,
+        androidx.compose.ui.platform.LocalDensity.current.fontScale, 360.dp, 2,
+    )
     AppSubPage("电费账单与提醒", onBack, contentPadding, subtitle = "官方账单与本机积累的每日用量", refreshing = state.loading, onRefresh = { onLoad(state.month) }) {
         state.error?.let { item { AppFeedbackBanner(it, true, onRetry = { onLoad(state.month) }) } }
         item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -32,15 +36,17 @@ fun EnergyScreen(state: EnergyUiState, contentPadding: PaddingValues, onBack: ()
             AppSecondaryButton(text = "下月", onClick = { onLoad(YearMonth.parse(state.month).plusMonths(1).toString()) }, enabled = !state.loading && YearMonth.parse(state.month) < YearMonth.now())
         } }
         if (state.loading && !state.loaded) item { AppSkeletonList() }
-        item { AppPanel {
+        item {
+            AppSectionColumns(
+                leading = { AppPanel {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("当前余额", style = MaterialTheme.typography.titleMedium)
             Text(state.balance?.let { "%.2f 元".format(it) } ?: "暂无余额数据", style = MaterialTheme.typography.headlineMedium)
             state.rows.forEach { cn.pxyb.mycontrol.ui.components.display.AppDetailRow(label = it.label, value = it.value) }
             if (state.loaded && state.rows.isEmpty()) Text("学校未返回本月账单明细。")
         }
-        } }
-        item { AppPanel {
+        } },
+                trailing = { AppPanel {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("低余额提醒", style = MaterialTheme.typography.titleMedium)
             AppSwitchRow("提醒我充值", enabled, { enabled = it })
@@ -48,7 +54,9 @@ fun EnergyScreen(state: EnergyUiState, contentPadding: PaddingValues, onBack: ()
             AppButton(modifier = Modifier.fillMaxWidth(), text = "保存设置", onClick = { parsedThreshold?.let { onSave(enabled, it) } }, enabled = parsedThreshold != null, loading = state.loading)
             Text("每个账号每天最多提醒一次。刷新或允许后台同步时检查；后台受限、会话锁定时无法及时获取新余额。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        } }
+        } },
+            )
+        }
         val recent = state.history.filter { it.date.startsWith(YearMonth.now().toString()) && it.fee != null }.sortedBy { it.date }
         item { AppPanel {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -62,7 +70,7 @@ fun EnergyScreen(state: EnergyUiState, contentPadding: PaddingValues, onBack: ()
         }
         } }
         item { Text("每日记录与用量变化", style = MaterialTheme.typography.titleMedium) }
-        items(state.history.sortedByDescending { it.date }, key = { it.date }) { row ->
+        appGridItems(state.history.sortedByDescending { it.date }, recordColumns, { it.date }, "energy-history") { row ->
             val previous = state.history.firstOrNull { it.date == LocalDate.parse(row.date).minusDays(1).toString() && it.date.take(7) == row.date.take(7) }
             val delta = if (row.kwh != null && previous?.kwh != null) (row.kwh - previous.kwh).takeIf { it >= 0 } else null
             AppPanel {

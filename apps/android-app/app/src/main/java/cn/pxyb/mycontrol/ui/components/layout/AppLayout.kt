@@ -125,7 +125,7 @@ internal fun resolveAuthenticatedShellInsets(
     navigationTop = safeTop,
     navigationStart = safeStart,
     navigationEnd = safeEnd,
-    contentBottom = safeBottom + if (isTablet || isSubScreen) 16.dp else 90.dp,
+    contentBottom = safeBottom + if (isSubScreen && !isTablet) 16.dp else 90.dp,
 )
 
 internal fun appPageContentPadding(
@@ -307,6 +307,7 @@ fun AppSubPage(
     actions: (@Composable RowScope.() -> Unit)? = null,
     listState: LazyListState = rememberLazyListState(),
     showBack: Boolean = true,
+    showHeader: Boolean = true,
     body: (@Composable (topContentPadding: Dp) -> Unit)? = null,
     header: (@Composable () -> Unit)? = null,
     content: LazyListScope.() -> Unit = {},
@@ -337,7 +338,8 @@ fun AppSubPage(
         animationSpec = MotionTokens.followSpring(),
         label = "top-bar-follow-progress")
     var headerHeightPx by remember { mutableIntStateOf(0) }
-    val topContentPadding = if (headerHeightPx > 0) with(density) { headerHeightPx.toDp() } + 4.dp
+    val topContentPadding = if (!showHeader) contentPadding.calculateTopPadding()
+        else if (headerHeightPx > 0) with(density) { headerHeightPx.toDp() } + 4.dp
         else contentPadding.calculateTopPadding() + AppPageTopSpacing + 84.dp
     Box(
         modifier = modifier.fillMaxSize().auroraBackdrop(dark),
@@ -372,7 +374,7 @@ fun AppSubPage(
             }
         }
         // 最后绘制胶囊；外部留白透明，不占用下方列表的滚动视口。
-        Box(contentWidth.onSizeChanged { headerHeightPx = it.height }
+        if (showHeader) Box(Modifier.widthIn(max = 760.dp).fillMaxWidth().onSizeChanged { headerHeightPx = it.height }
             .padding(start = AppPageHorizontalPadding, end = AppPageHorizontalPadding,
                 top = contentPadding.calculateTopPadding() + AppPageTopSpacing, bottom = 4.dp)) {
             CompositionLocalProvider(LocalTopBarProgress provides followedProgress.coerceIn(0f, 1f)) {

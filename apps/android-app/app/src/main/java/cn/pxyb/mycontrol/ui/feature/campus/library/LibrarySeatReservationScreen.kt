@@ -61,6 +61,7 @@ import cn.pxyb.mycontrol.ui.components.input.AppSelectOption
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
+import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.components.layout.adaptiveGridColumnCount
 import cn.pxyb.mycontrol.ui.components.layout.appContentWidth
@@ -330,82 +331,31 @@ internal fun LibrarySeatReservationScreen(
         },
     ) {
         item(key = "seat-tabs", contentType = "tab") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                LibrarySeatTab.entries.forEach { tab ->
-                    val isSelected = selectedTab == tab
-                    val badgeCount = when (tab) {
+            AppSegmentedControl(
+                options = LibrarySeatTab.entries,
+                selected = selectedTab,
+                onSelect = { tab ->
+                    if (selectedTab != tab) {
+                        selectedTab = tab
+                        when (tab) {
+                            LibrarySeatTab.My -> {
+                                onLoadReservations()
+                                onLoadCurrentUse()
+                            }
+                            LibrarySeatTab.Waitlist -> onLoadWaitlists()
+                            LibrarySeatTab.Book -> Unit
+                        }
+                    }
+                },
+                label = { it.label },
+                count = { tab ->
+                    when (tab) {
                         LibrarySeatTab.My -> state.reservations.count(::isActiveSeatReservation)
                         LibrarySeatTab.Waitlist -> state.waitlists.count { it.enabled && it.status == "listening" }
                         LibrarySeatTab.Book -> 0
-                    }
-                    Surface(
-                        onClick = {
-                            if (selectedTab != tab) {
-                                selectedTab = tab
-                                when (tab) {
-                                    LibrarySeatTab.My -> {
-                                        onLoadReservations()
-                                        onLoadCurrentUse()
-                                    }
-                                    LibrarySeatTab.Waitlist -> onLoadWaitlists()
-                                    LibrarySeatTab.Book -> Unit
-                                }
-                            }
-                        },
-                        shape = RoundedCornerShape(10.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        border = BorderStroke(
-                            1.dp,
-                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(40.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center,
-                        ) {
-                            Icon(
-                                imageVector = when (tab) {
-                                    LibrarySeatTab.Book -> Icons.Outlined.Search
-                                    LibrarySeatTab.My -> Icons.Outlined.EventAvailable
-                                    LibrarySeatTab.Waitlist -> Icons.Outlined.NotificationsActive
-                                },
-                                contentDescription = null,
-                                tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Spacer(Modifier.width(5.dp))
-                            Text(
-                                text = tab.label,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            )
-                            if (badgeCount > 0) {
-                                Spacer(Modifier.width(4.dp))
-                                Surface(
-                                    shape = RoundedCornerShape(999.dp),
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
-                                ) {
-                                    Text(
-                                        text = "$badgeCount",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+                    }.takeIf { it > 0 }
+                },
+            )
         }
 
         state.message?.takeIf(String::isNotBlank)?.let { message ->

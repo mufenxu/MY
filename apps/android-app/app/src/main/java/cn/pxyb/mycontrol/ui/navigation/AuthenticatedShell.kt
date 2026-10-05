@@ -64,6 +64,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -342,6 +343,9 @@ internal fun AuthenticatedShell(
     val adaptive = LocalAdaptiveWindow.current
     val isTablet = adaptive.isTabletOrExpanded
     val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val bottomDockVisible = (isTablet || !isSubScreen) && !keyboardVisible
+    var bottomDockHeightPx by remember { mutableIntStateOf(0) }
+    val bottomDockHeight = with(LocalDensity.current) { bottomDockHeightPx.toDp() }
     val shellFocus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -392,37 +396,6 @@ internal fun AuthenticatedShell(
                     end = if (layoutDirection == LayoutDirection.Ltr) padding.calculateRightPadding(layoutDirection) else padding.calculateLeftPadding(layoutDirection),
                 ),
         ) {
-            if (isTablet) {
-                AppNavigationRail(
-                    modifier = Modifier.padding(
-                        top = padding.calculateTopPadding(),
-                        bottom = padding.calculateBottomPadding(),
-                    ),
-                    selectedTab = primaryTabForRoute(currentRoute) ?: state.selectedTab,
-                    onSelectTab = navigateToTab,
-                    unreadAlerts = settingsProfileState.unreadAlerts,
-                    onOpenNotifications = {
-                        viewModel.openWorkspace(WorkspaceDestination.Notifications)
-                        navigateToSubScreen(AppRoute.Notifications)
-                    },
-                    onOpenSearch = {
-                        viewModel.openGlobalSearch()
-                        navigateToSubScreen(AppRoute.Search)
-                    },
-                    onOpenQrLogin = viewModel::openQrScanner,
-                    onOpenSettings = { settingsOpen = true },
-                    themePreference = themePreference,
-                    onToggleTheme = {
-                        val next = when (themePreference) {
-                            AppThemePreference.System -> AppThemePreference.Dark
-                            AppThemePreference.Dark -> AppThemePreference.Light
-                            AppThemePreference.Light -> AppThemePreference.System
-                        }
-                        onThemePreferenceChange(next)
-                    },
-                )
-            }
-
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -445,7 +418,9 @@ internal fun AuthenticatedShell(
                     isTablet = isTablet,
                 )
                 val contentPadding = PaddingValues(
-                    bottom = if (keyboardVisible) AppPageBottomSpacing else shellInsets.contentBottom,
+                    bottom = if (keyboardVisible) AppPageBottomSpacing else if (bottomDockVisible) {
+                        maxOf(shellInsets.contentBottom, padding.calculateBottomPadding() + bottomDockHeight)
+                    } else shellInsets.contentBottom,
                 )
                 ProvideAppContentLayout(
                     contentMaxWidth = contentMaxWidthForRoute(currentRoute),
@@ -454,6 +429,7 @@ internal fun AuthenticatedShell(
                         .fillMaxSize()
                         .align(Alignment.TopCenter)
                         .padding(top = shellInsets.navigationTop)
+                        .padding(horizontal = if (isTablet) AppPageHorizontalPadding else 0.dp)
                         .consumeWindowInsets(PaddingValues(
                             start = shellInsets.navigationStart,
                             top = shellInsets.navigationTop,
@@ -1142,15 +1118,8 @@ internal fun AuthenticatedShell(
             }
                 }
 
-            if (isTablet && state.assistantButtonVisible && !state.assistantOpen && !settingsOpen && !keyboardVisible) {
-                AssistantDockButton(
-                    modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(16.dp),
-                    onOpen = viewModel::openAssistant,
-                )
-            }
-
             androidx.compose.animation.AnimatedVisibility(
-                visible = !isTablet && !isSubScreen && !keyboardVisible,
+                visible = bottomDockVisible,
                 enter = slideInVertically(animationSpec = tween(160, easing = FastOutSlowInEasing)) { fullHeight -> fullHeight } + fadeIn(animationSpec = tween(160)),
                 exit = slideOutVertically(animationSpec = tween(140, easing = FastOutSlowInEasing)) { fullHeight -> fullHeight } + fadeOut(animationSpec = tween(120)),
                 modifier = Modifier
@@ -1160,8 +1129,9 @@ internal fun AuthenticatedShell(
                 AppBottomNavigation(
                     selected = primaryTabForRoute(currentRoute) ?: state.selectedTab,
                     onSelect = navigateToTab,
-                    assistant = if (state.assistantButtonVisible && !settingsOpen) ({
-                        AssistantDockButton(onOpen = viewModel::openAssistant)
+                    modifier = Modifier.onSizeChanged { bottomDockHeightPx = it.height },
+                    assistant = if (state.assistantButtonVisible && !state.assistantOpen && !settingsOpen) ({
+                        AssistantDockButton(expanded = isTablet, onOpen = viewModel::openAssistant)
                     }) else null,
                 )
             }

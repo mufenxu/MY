@@ -59,7 +59,9 @@ fun ScreenshotTodoScreen(state: ScreenshotUiState, contentPadding: PaddingValues
         }
         } }
         if (state.text.isNotBlank()) {
-            item { AppPanel {
+        item {
+            AppSectionColumns(
+                leading = { AppPanel {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("请核对识别结果", style = MaterialTheme.typography.titleMedium)
                 AppTextField(title, { title = it }, label = "待办标题", singleLine = false)
@@ -75,15 +77,17 @@ fun ScreenshotTodoScreen(state: ScreenshotUiState, contentPadding: PaddingValues
                     onSave(TodoTask(id = taskId, title = title.trim(), dueAt = due, reminderAt = due?.minus(30 * 60_000)), location)
                 }, enabled = title.isNotBlank(), loading = state.loading)
             }
-        } }
-            item { AppPanel {
+        } },
+                trailing = { AppPanel {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("识别原文", style = MaterialTheme.typography.titleMedium)
                 Text(state.text)
                 AsyncImage(state.bytes, "待办来源截图", modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp))
                 Text("原图仅在本机加密保存，不上传、不随待办跨设备同步。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-        } }
+        } },
+            )
+        }
         }
     }
 }
