@@ -64,27 +64,21 @@ fun WaterValveScreen(
     var billMonth by remember { mutableStateOf(YearMonth.now()) }
     val listState = rememberLazyListState()
     var devices by remember { mutableStateOf(state.valve.devices) }
+    var syncedDevices by remember { mutableStateOf(state.valve.devices) }
     var draggingKey by remember { mutableStateOf<Any?>(null) }
     var draggingOffset by remember { mutableStateOf(0f) }
     val currentOnReorder by rememberUpdatedState(onReorder)
-    var hasInitialLoaded by remember { mutableStateOf(state.valve.devices.isNotEmpty()) }
+    // 同次组合同步服务端列表，避免加载结束后先用旧空列表渲染；拖动期间保留本地顺序。
+    if (draggingKey == null && syncedDevices != state.valve.devices) {
+        syncedDevices = state.valve.devices
+        devices = state.valve.devices
+    }
 
     LaunchedEffect(Unit) {
         onRefresh(true)
     }
     LaunchedEffect(billMonth) {
         onQueryBill(billMonth.toString(), true)
-    }
-    LaunchedEffect(state.valve.devices) {
-        if (draggingKey == null) devices = state.valve.devices
-        if (state.valve.devices.isNotEmpty()) {
-            hasInitialLoaded = true
-        }
-    }
-    LaunchedEffect(state.refreshing) {
-        if (!state.refreshing) {
-            hasInitialLoaded = true
-        }
     }
 
     // 官方系统没有“设备正在出水”的查询接口，设备端手动停水不会回传，
@@ -148,13 +142,14 @@ fun WaterValveScreen(
                 }
             }
 
-            val isInitialLoading = !hasInitialLoaded || (state.refreshing && devices.isEmpty())
+            val isInitialLoading = devices.isEmpty() &&
+                (state.refreshing || (!state.hasLoaded && state.error == null))
 
             if (isInitialLoading) {
                 item(key = "water-valve-loading", contentType = "loading") {
                     WaterValveSkeletonList(count = 2)
                 }
-            } else if (devices.isEmpty()) {
+            } else if (devices.isEmpty() && state.hasLoaded && state.error == null) {
                 item(key = "water-valve-empty", contentType = "empty") {
                     AppEmptyState(
                         title = "尚未绑定饮水机",

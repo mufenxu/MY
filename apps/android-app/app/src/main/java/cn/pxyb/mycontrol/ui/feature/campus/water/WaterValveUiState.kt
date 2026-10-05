@@ -7,6 +7,7 @@ import cn.pxyb.mycontrol.data.CampusWaterValve
 @Immutable
 data class WaterValveUiState(
     val refreshing: Boolean = false,
+    val hasLoaded: Boolean = false,
     val busy: Boolean = false,
     val valve: CampusWaterValve = CampusWaterValve(),
     val bill: CampusWaterBill? = null,

@@ -34,6 +34,7 @@ class WaterValveStateHolder(
                     mutableState.update {
                         it.copy(
                             valve = valve,
+                            hasLoaded = valve.error == null,
                             error = valve.error,
                         )
                     }
