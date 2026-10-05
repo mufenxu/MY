@@ -278,11 +278,14 @@ export function libroomAvailabilityCovers(availability, { startTime, endTime, ex
   const busy = toMinutes(normalizeTimeWindows(availability?.busyWindows || []));
   const self = toMinutes(normalizeTimeWindows(excludeWindow ? [excludeWindow] : []));
 
-  const selfBusy = self.length
-    ? busy.filter((window) => self.some((own) => own.start <= window.start && own.end >= window.end))
-    : [];
-  const blocking = busy.filter((window) => !selfBusy.includes(window) && window.start < end && window.end > start);
-  if (blocking.length) return false;
+  // 占用轴会合并相邻预约，按区间扣除自身部分，保留前后他人的占用。
+  const selfBusy = busy.flatMap((window) => self.map((own) => ({
+    start: Math.max(window.start, own.start),
+    end: Math.min(window.end, own.end)
+  }))).filter((window) => window.end > window.start);
+  const blocking = toMinutes(subtractBusyWindows(busy, self))
+    .some((window) => window.start < end && window.end > start);
+  if (blocking) return false;
 
   let covered = start;
   for (const window of [...free, ...selfBusy].sort((a, b) => a.start - b.start)) {

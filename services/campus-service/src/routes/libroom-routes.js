@@ -72,7 +72,8 @@ export async function handleLibroomRoutes(req, res, url, {
     const client = await libroomClient();
 
     let spaces = [];
-    if (date && startTime && endTime) {
+    // 改期查询由本地排除自身占用后筛选，避免学校按时段筛选时提前漏掉原研讨间。
+    if (date && startTime && endTime && !excludeReservationId) {
       try {
         spaces = await client.listSpaces({ date, start_time: startTime, end_time: endTime });
       } catch (err) {
