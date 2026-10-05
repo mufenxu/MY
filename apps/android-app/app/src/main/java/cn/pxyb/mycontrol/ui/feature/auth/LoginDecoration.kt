@@ -31,6 +31,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,13 +45,66 @@ import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.ui.legal.PrivacyPolicyDialog
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 @Composable
 internal fun LoginAmbientBackground() {
+    val dark = isAppInDarkTheme()
+    val background = if (dark) ColorTokens.LoginBackgroundDark else ColorTokens.LoginBackgroundLight
+    val geometry = if (dark) ColorTokens.LoginGeometryDark else ColorTokens.LoginGeometryLight
+    val corner = if (dark) ColorTokens.LoginCornerDark else ColorTokens.LoginCornerLight
+    val dot = if (dark) ColorTokens.LoginDotDark else ColorTokens.LoginDotLight
+    val outline = if (dark) ColorTokens.LoginOutlineDark else ColorTokens.LoginOutlineLight
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface)
+            .drawWithCache {
+                val band = Path().apply {
+                    moveTo(0f, size.height * 0.16f)
+                    lineTo(size.width * 0.72f, 0f)
+                    lineTo(size.width, 0f)
+                    lineTo(size.width, size.height * 0.12f)
+                    lineTo(0f, size.height * 0.42f)
+                    close()
+                }
+                val bottomCorner = Path().apply {
+                    moveTo(0f, size.height * 0.78f)
+                    lineTo(size.width, size.height)
+                    lineTo(0f, size.height)
+                    close()
+                }
+                val gridStep = 18.dp.toPx()
+                val dotRadius = 0.8.dp.toPx()
+                val gridHeight = size.height * 0.4f
+                val outlineSize = minOf(size.width * 0.77f, 360.dp.toPx())
+                val outlineOrigin = Offset(size.width - outlineSize * 0.62f, 60.dp.toPx())
+                val outlineStroke = Stroke(1.dp.toPx())
+                onDrawBehind {
+                    drawRect(background)
+                    drawPath(band, geometry)
+                    drawPath(bottomCorner, corner)
+                    var y = gridStep / 2
+                    while (y < gridHeight) {
+                        var x = gridStep / 2
+                        while (x < size.width) {
+                            val fade = (1f - x / size.width - y / gridHeight).coerceIn(0f, 1f)
+                            drawCircle(dot.copy(alpha = dot.alpha * fade), dotRadius, Offset(x, y))
+                            x += gridStep
+                        }
+                        y += gridStep
+                    }
+                    rotate(-28f, outlineOrigin + Offset(outlineSize / 2, outlineSize / 2)) {
+                        drawRoundRect(
+                            color = outline,
+                            topLeft = outlineOrigin,
+                            size = Size(outlineSize, outlineSize),
+                            cornerRadius = CornerRadius(64.dp.toPx()),
+                            style = outlineStroke,
+                        )
+                    }
+                }
+            }
     )
 }
 

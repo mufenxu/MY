@@ -69,6 +69,17 @@ object ColorTokens {
     val AppOutlineLight = Color(0xFFE2E6EB)
     val AppOutlineDark = Color(0xFF35404D)
 
+    val LoginBackgroundLight = Color(0xFFF7F9FC)
+    val LoginBackgroundDark = Color(0xFF111923)
+    val LoginGeometryLight = Color(0x4DE5EBF6)
+    val LoginGeometryDark = Color(0x40344052)
+    val LoginCornerLight = Color(0xFFE7EEF7)
+    val LoginCornerDark = Color(0xFF152331)
+    val LoginDotLight = Color(0x458B9DB4)
+    val LoginDotDark = Color(0x366C829E)
+    val LoginOutlineLight = Color(0x66B4C5DF)
+    val LoginOutlineDark = Color(0x664C6279)
+
     val SurfaceSubtle = Color(0xFFF1F5F9)
     val SurfaceDim = Color(0xFFE2E8F0)
     val SurfaceContainerLow = Color(0xFFF8FAFC)
