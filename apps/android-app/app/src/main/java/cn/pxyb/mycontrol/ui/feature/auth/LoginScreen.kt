@@ -322,7 +322,9 @@ internal fun LoginScreen(
                             shadowElevation = 0.dp,
                         ) {
                             Column(
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp)
                             ) {
                                 if (!state.message.isNullOrBlank()) {
                                     AppFeedbackBanner(state.message, type = AppFeedbackType.Info, modifier = Modifier.padding(bottom = 14.dp))
