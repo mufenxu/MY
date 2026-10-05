@@ -550,12 +550,15 @@ class AppViewModel(
                     it.copy(deviceLoginError = error.message ?: "跨设备登录失败，请稍后重试。")
                 }
             } finally {
-                deviceLoginJob = null
-                mutableState.update {
-                    it.copy(
-                        deviceLoginBusy = false,
-                        deviceLoginQrDataUrl = null,
-                    )
+                // 刷新会启动新请求，旧轮询的清理不能覆盖新二维码。
+                if (deviceLoginJob == coroutineContext[Job]) {
+                    deviceLoginJob = null
+                    mutableState.update {
+                        it.copy(
+                            deviceLoginBusy = false,
+                            deviceLoginQrDataUrl = null,
+                        )
+                    }
                 }
             }
         }

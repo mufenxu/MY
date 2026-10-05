@@ -2,6 +2,7 @@ package cn.pxyb.mycontrol.ui.components.display
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
@@ -31,7 +32,7 @@ fun AppQrCode(
     Surface(modifier = modifier.size(size), shape = AppCardShape, color = Color.White) {
         Box(modifier = Modifier.padding(12.dp), contentAlignment = Alignment.Center) {
             if (bitmap != null) {
-                Image(bitmap = bitmap, contentDescription = contentDescription)
+                Image(bitmap = bitmap, contentDescription = contentDescription, modifier = Modifier.fillMaxSize())
             } else {
                 Text(errorMessage, color = Color.Black, style = MaterialTheme.typography.bodySmall, textAlign = TextAlign.Center)
             }
