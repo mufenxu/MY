@@ -942,6 +942,29 @@ export function createApp({
     }
   });
 
+  app.get('/api/public/android/download', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    try {
+      const downloadBase = `${String(config.androidReleaseDownloadBaseUrl || 'https://7n.pxyb.cn').replace(/\/$/, '')}/android/`;
+      const response = await fetchImpl(`${downloadBase}latest.json`, {
+        signal: AbortSignal.timeout(10_000),
+        cache: 'no-store',
+      });
+      if (!response.ok) throw new Error('Android manifest unavailable');
+      const manifest = await response.json();
+      const apkUrl = new URL(manifest.apkUrl);
+      const allowedBase = new URL(downloadBase);
+      if (apkUrl.protocol !== 'https:' || apkUrl.origin !== allowedBase.origin
+        || !apkUrl.pathname.startsWith(allowedBase.pathname) || !apkUrl.pathname.endsWith('.apk')
+        || apkUrl.username || apkUrl.password) {
+        throw new Error('Invalid Android download URL');
+      }
+      return res.redirect(302, apkUrl.href);
+    } catch {
+      return res.status(503).type('text/plain').send('安卓安装包暂时无法下载，请稍后重试。');
+    }
+  });
+
   app.get('/api/public/status', async (req, res, next) => {
     try {
       const [status, activeIncidents, blackbox] = await Promise.all([
