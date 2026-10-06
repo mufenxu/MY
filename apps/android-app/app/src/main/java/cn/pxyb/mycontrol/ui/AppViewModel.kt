@@ -248,6 +248,9 @@ class AppViewModel(
     private var deviceLoginJob: Job? = null
     private val accountRequestScope = CoroutineScope(viewModelScope.coroutineContext + SupervisorJob(viewModelScope.coroutineContext[Job]))
     private var qrLoginJob: Job? = null
+    private var githubRepositoriesJob: Job? = null
+    private var githubProfileJob: Job? = null
+    private var githubReleasesJob: Job? = null
 
     private var appInForeground = false
     private val sectionRefresh = SectionRefreshController(viewModelScope, api, mutableState, ::forceReauthentication)
@@ -795,6 +798,17 @@ class AppViewModel(
             waterValves.reset()
             chaoxing.reset()
             mediaDownload.reset()
+            mutableState.update {
+                it.copy(
+                    githubRepositories = emptyList(),
+                    githubRepositoriesLoaded = false,
+                    githubProfile = null,
+                    githubProfileLoaded = false,
+                    githubReleases = emptyList(),
+                    githubReleasesLoaded = false,
+                    githubReleasesRepoFullName = null,
+                )
+            }
             featureAccountUsername = username
         }
         notifications.reset()
@@ -837,6 +851,9 @@ class AppViewModel(
         screenshot.cancelPending()
         accountRequestScope.coroutineContext.cancelChildren()
         qrLoginJob = null
+        githubRepositoriesJob = null
+        githubProfileJob = null
+        githubReleasesJob = null
         waterValves.cancelPending()
         chaoxing.cancelPending()
         mediaDownload.cancelPending()
@@ -1369,20 +1386,19 @@ class AppViewModel(
     }
 
     fun loadGitHubRepositories() {
-        if (mutableState.value.user == null) return
-        viewModelScope.launch {
+        if (mutableState.value.let { it.user == null || it.locked || it.busyAction == "logout" } || githubRepositoriesJob?.isActive == true) return
+        githubRepositoriesJob = accountRequestScope.launch {
             runCatching { api.githubRepositories() }
                 .onSuccess { repositories ->
                     mutableState.update {
                         it.copy(
                             githubRepositories = repositories,
                             githubRepositoriesLoaded = true,
-                            error = null,
                         )
                     }
                 }
                 .onFailure { error ->
-                    if (error is CancellationException) throw error
+                    handleFeatureRequestFailure(error, ::forceReauthentication)
                     mutableState.update {
                         it.copy(githubRepositoriesLoaded = true, error = error.message ?: "GitHub 仓库加载失败。")
                     }
@@ -1391,16 +1407,25 @@ class AppViewModel(
     }
 
     fun loadGitHubProfile() {
-        if (mutableState.value.user == null) return
-        viewModelScope.launch {
-            val profile = runCatching { api.githubProfile() }.getOrNull()
-            mutableState.update {
-                it.copy(githubProfile = profile, githubProfileLoaded = true)
-            }
+        if (mutableState.value.let { it.user == null || it.locked || it.busyAction == "logout" } || githubProfileJob?.isActive == true) return
+        githubProfileJob = accountRequestScope.launch {
+            runCatching { api.githubProfile() }
+                .onSuccess { profile ->
+                    mutableState.update {
+                        it.copy(githubProfile = profile, githubProfileLoaded = true)
+                    }
+                }
+                .onFailure { error ->
+                    handleFeatureRequestFailure(error, ::forceReauthentication)
+                    mutableState.update {
+                        it.copy(githubProfileLoaded = true, error = error.message ?: "GitHub 账号资料加载失败。")
+                    }
+                }
         }
     }
 
     fun refreshGitHubProjects() {
+        mutableState.update { it.copy(error = null) }
         loadGitHubProfile()
         loadGitHubRepositories()
     }
@@ -1416,11 +1441,17 @@ class AppViewModel(
     }
 
     fun loadGitHubReleases(owner: String, repo: String) {
-        if (mutableState.value.user == null) return
+        if (mutableState.value.let { it.user == null || it.locked || it.busyAction == "logout" }) return
         val fullName = "$owner/$repo"
-        viewModelScope.launch {
+        githubReleasesJob?.cancel()
+        githubReleasesJob = accountRequestScope.launch {
             mutableState.update {
-                it.copy(githubReleasesRepoFullName = fullName, githubReleasesLoaded = false)
+                it.copy(
+                    githubReleases = if (it.githubReleasesRepoFullName == fullName) it.githubReleases else emptyList(),
+                    githubReleasesRepoFullName = fullName,
+                    githubReleasesLoaded = false,
+                    error = null,
+                )
             }
             runCatching { api.githubReleases(owner, repo) }
                 .onSuccess { releases ->
@@ -1429,12 +1460,11 @@ class AppViewModel(
                             githubReleases = releases,
                             githubReleasesLoaded = true,
                             githubReleasesRepoFullName = fullName,
-                            error = null,
                         )
                     }
                 }
                 .onFailure { error ->
-                    if (error is CancellationException) throw error
+                    handleFeatureRequestFailure(error, ::forceReauthentication)
                     mutableState.update {
                         it.copy(githubReleasesLoaded = true, error = error.message ?: "GitHub Releases 加载失败。")
                     }
