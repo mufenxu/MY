@@ -2,6 +2,7 @@ package cn.pxyb.mycontrol.ui.feature.overview
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -47,7 +48,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -431,6 +434,17 @@ internal fun QuickAction(
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
+    val darkTheme = isAppInDarkTheme()
+    val plateShape = RoundedCornerShape(14.dp)
+    // 顶部高光收到下半部压暗，配合彩色投影做出"浮起一寸"的立体底座。
+    val gloss = if (darkTheme) listOf(
+        Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.02f), Color.Black.copy(alpha = 0.20f),
+    ) else listOf(
+        Color.White.copy(alpha = 0.85f), Color.White.copy(alpha = 0.25f), Color.Black.copy(alpha = 0.05f),
+    )
+    val topHighlight = Brush.verticalGradient(
+        listOf(Color.White.copy(alpha = if (darkTheme) 0.14f else 0.90f), Color.Transparent),
+    )
 
     Column(
         modifier = modifier
@@ -447,11 +461,20 @@ internal fun QuickAction(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         androidx.compose.foundation.layout.Box(
-            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
-                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)), contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(44.dp)
+                .shadow(
+                    elevation = 10.dp, shape = plateShape,
+                    ambientColor = accent.copy(alpha = 0.45f), spotColor = accent.copy(alpha = 0.32f),
+                )
+                .clip(plateShape)
+                .background(accentPale, plateShape)
+                .background(Brush.verticalGradient(gloss), plateShape)
+                .border(BorderStroke(1.dp, topHighlight), plateShape)
+                .border(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f), plateShape),
+            contentAlignment = Alignment.Center,
         ) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp),
-                tint = MaterialTheme.colorScheme.primary)
+            Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp), tint = accent)
         }
         Text(
             text = label,
