@@ -67,6 +67,8 @@ data class AppUiState(
     val botChallengeReady: Boolean = false,
     val reauthenticatedUntil: Long = 0,
     val androidPasskeySupported: Boolean = false,
+    val loginCapabilitiesLoading: Boolean = false,
+    val loginCapabilitiesError: String? = null,
     val suggestedUsername: String = "",
     val deviceLoginBusy: Boolean = false,
     val deviceLoginQrDataUrl: String? = null,

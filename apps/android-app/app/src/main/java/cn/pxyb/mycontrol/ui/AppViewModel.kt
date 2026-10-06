@@ -246,6 +246,7 @@ class AppViewModel(
     private var botChallengeExpiresAt = 0L
     private var pollJob: Job? = null
     private var deviceLoginJob: Job? = null
+    private var loginCapabilitiesJob: Job? = null
     private val accountRequestScope = CoroutineScope(viewModelScope.coroutineContext + SupervisorJob(viewModelScope.coroutineContext[Job]))
     private var qrLoginJob: Job? = null
     private var githubRepositoriesJob: Job? = null
@@ -276,11 +277,7 @@ class AppViewModel(
         viewModelScope.launch {
             appUpdates.state.collect { update -> mutableState.update { it.copy(appUpdate = update) } }
         }
-        viewModelScope.launch {
-            runCatching { api.auth.loginCapabilities() }.onSuccess { capabilities ->
-                mutableState.update { it.copy(androidPasskeySupported = capabilities.androidPasskeySupported) }
-            }
-        }
+        refreshLoginCapabilities()
         if (!hasSavedSession) {
             MyControlWidgetProvider.clear(getApplication())
             CourseWidgetProvider.clear(getApplication())
@@ -714,6 +711,32 @@ class AppViewModel(
         }
     }
 
+    fun refreshLoginCapabilities() {
+        if (loginCapabilitiesJob?.isActive == true) return
+        mutableState.update { it.copy(loginCapabilitiesLoading = true, loginCapabilitiesError = null) }
+        loginCapabilitiesJob = viewModelScope.launch {
+            try {
+                val capabilities = api.auth.loginCapabilities()
+                mutableState.update {
+                    it.copy(androidPasskeySupported = capabilities.androidPasskeySupported, loginCapabilitiesLoading = false)
+                }
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                mutableState.update {
+                    it.copy(loginCapabilitiesLoading = false, loginCapabilitiesError = "暂时无法获取快捷登录方式，请检查网络后重试。")
+                }
+            }
+        }
+    }
+
+    fun onNetworkAvailable() {
+        if (!appInForeground) return
+        if (mutableState.value.loginCapabilitiesError != null) refreshLoginCapabilities()
+        if (mutableState.value.let { it.user == null || it.locked || it.busyAction == "logout" }) return
+        todos.retryPending()
+        syncRemoteNotifications(force = true)
+    }
+
     fun setAppLockEnabled(enabled: Boolean) {
         runCatching { sessionStore.setLockEnabled(enabled) }
             .onSuccess { mutableState.update { it.copy(appLockEnabled = enabled) } }
@@ -908,6 +931,8 @@ class AppViewModel(
                     AppUiState(
                         booting = false,
                         androidPasskeySupported = it.androidPasskeySupported,
+                        loginCapabilitiesLoading = it.loginCapabilitiesLoading,
+                        loginCapabilitiesError = it.loginCapabilitiesError,
                         suggestedUsername = sessionStore.readLastUsername(),
                         appLockEnabled = it.appLockEnabled,
                         homeQuickActionOrder = it.homeQuickActionOrder,
@@ -2225,6 +2250,7 @@ class AppViewModel(
                 }
                 refreshIncidents()
                 refreshTasks()
+                todos.retryPending()
                 syncRemoteNotifications()
             }
         }
@@ -2253,6 +2279,8 @@ class AppViewModel(
         mutableState.value = AppUiState(
             booting = false,
             androidPasskeySupported = current.androidPasskeySupported,
+            loginCapabilitiesLoading = current.loginCapabilitiesLoading,
+            loginCapabilitiesError = current.loginCapabilitiesError,
             suggestedUsername = sessionStore.readLastUsername(),
             message = message,
             appLockEnabled = current.appLockEnabled,
@@ -2401,6 +2429,8 @@ class AppViewModel(
     fun downloadAndInstallAppUpdate() = appUpdates.downloadAndInstall()
 
     fun installDownloadedAppUpdate() = appUpdates.installDownloaded()
+
+    fun resumeAppUpdate() = appUpdates.onReturnedToApp()
 
     fun openAppReleasesPage(url: String? = null) = appUpdates.openReleasesPage(url)
 

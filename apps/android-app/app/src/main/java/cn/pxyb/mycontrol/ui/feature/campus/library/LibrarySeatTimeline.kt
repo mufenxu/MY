@@ -20,14 +20,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.LibrarySeatTimeline
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
+import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 
 /** 座位当日可用时段条：绿色区间为可预约时段，红色为已占用，竖线为时段分界，下方为官方返回的时刻刻度。 */
 @Composable
 internal fun SeatAvailabilityTimeline(
     timeline: LibrarySeatTimeline,
     loading: Boolean,
+    error: String? = null,
+    onRetry: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
+    if (error != null) {
+        AppFeedbackBanner(error, error = true, onRetry = onRetry, modifier = modifier)
+        return
+    }
     Column(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -37,7 +44,7 @@ internal fun SeatAvailabilityTimeline(
                 .fillMaxWidth()
                 .height(14.dp)
                 .clip(RoundedCornerShape(7.dp))
-                .background(ColorTokens.Red.foreground.copy(alpha = 0.55f)),
+                .background(if (loading || timeline.isEmpty) MaterialTheme.colorScheme.surfaceVariant else ColorTokens.Red.foreground.copy(alpha = 0.55f)),
         ) {
             val barWidth = maxWidth
             timeline.free.forEach { slice ->

@@ -142,6 +142,7 @@ fun MyControlApp(
                             viewModel.startDeviceQrLogin(onSessionProtection)
                         },
                         onCancelDeviceLogin = viewModel::cancelDeviceQrLogin,
+                        onRetryLoginCapabilities = viewModel::refreshLoginCapabilities,
                         onBackFromSecondFactor = viewModel::resetSecondFactor,
                         onBotChallengeComplete = viewModel::completeBotChallenge,
                         onRecoverAccount = viewModel::recoverAccount,

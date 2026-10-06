@@ -17,7 +17,7 @@
     "check:console": "npm --prefix apps/admin-console run check",
     "check:website": "npm --prefix apps/official-website run check && node scripts/check-official-website-build.mjs",
     "check:conventions": "node scripts/check-workspace-conventions.mjs && node --test scripts/workspace-conventions.test.mjs",
-    "check:android-design": "node --test scripts/check-android-design.test.mjs && node scripts/check-android-design.mjs",
+    "check:android-design": "node --check scripts/check-android-performance.mjs && node --test scripts/check-android-design.test.mjs && node scripts/check-android-design.mjs",
     "check:workspace-scripts": "node --check scripts/audit-workspace.mjs && node --check scripts/install-workspace.mjs && node --check scripts/create-ci-env.mjs && node --check scripts/validate-deployment-env.mjs && node --check scripts/platform-blackbox-probe.mjs && node scripts/check-ci-env-contract.mjs && node --test scripts/npm-command.test.mjs scripts/check-ci-env-contract.test.mjs scripts/platform-blackbox-probe.test.mjs",
     "check:packages": "node --check packages/platform-auth/index.cjs && node --check packages/platform-auth/esm/index.mjs && node --check packages/platform-browser-runtime/index.js && node --test packages/platform-auth/test/service-request.test.cjs packages/platform-browser-runtime/test/runtime.test.mjs",
     "check:release": "node --check scripts/release-workflow-callback.mjs && node --check scripts/buildx-metadata.mjs && node --check scripts/resolve-image-targets.mjs && node --check scripts/android-release.mjs && node --check scripts/acr-image-probe.mjs && node --test scripts/release-workflow-callback.test.mjs scripts/buildx-metadata.test.mjs scripts/resolve-image-targets.test.mjs scripts/android-release.test.mjs",

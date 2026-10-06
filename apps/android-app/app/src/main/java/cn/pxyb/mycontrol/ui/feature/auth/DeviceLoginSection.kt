@@ -161,6 +161,7 @@ internal fun LoginAlternativeMethods(
     onRecoverAccount: () -> Unit,
     onStartDeviceLogin: (String) -> Unit,
     onCancelDeviceLogin: () -> Unit,
+    onRetryLoginCapabilities: () -> Unit,
 ) {
     var showDeviceLogin by rememberSaveable {
         mutableStateOf(state.deviceLoginBusy || !state.deviceLoginQrDataUrl.isNullOrBlank())
@@ -181,6 +182,14 @@ internal fun LoginAlternativeMethods(
         )
     }
     Column(modifier = Modifier.fillMaxWidth()) {
+        if (state.loginCapabilitiesLoading) {
+            Text("正在检查快捷登录方式…", style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(12.dp))
+        }
+        state.loginCapabilitiesError?.let { message ->
+            AppFeedbackBanner(message, error = true, onRetry = onRetryLoginCapabilities)
+            Spacer(Modifier.height(12.dp))
+        }
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f).height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
             Text(

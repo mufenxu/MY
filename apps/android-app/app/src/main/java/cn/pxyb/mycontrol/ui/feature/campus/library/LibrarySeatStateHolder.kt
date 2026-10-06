@@ -22,6 +22,8 @@ class LibrarySeatStateHolder(
     onSessionExpired: (String) -> Unit,
 ) : FeatureStateHolder<LibrarySeatUiState>(parentScope, LibrarySeatUiState(), onSessionExpired) {
     private var queryJob: Job? = null
+    private var makeLifeJob: Job? = null
+    private var timelineJob: Job? = null
 
     override fun clearPendingState(current: LibrarySeatUiState) = current.copy(
         overviewLoading = false,
@@ -39,6 +41,7 @@ class LibrarySeatStateHolder(
         usageAction = null,
         timeline = LibrarySeatTimeline(),
         timelineLoading = false,
+        timelineError = null,
         timelineSeatId = "",
         timelineDate = "",
         waitlistsLoading = false,
@@ -338,23 +341,27 @@ class LibrarySeatStateHolder(
         },
     )
 
-    fun loadLibrarySeatReservationHistory(force: Boolean = false) = launchAction(
-        isBusy = { historyReservationsLoading && !force },
-        start = { copy(historyReservationsLoading = true) },
-        action = { campus.librarySeatReservationHistory(page = 0, size = 20) },
-        success = { history ->
-            copy(
-                historyReservations = history,
-                historyReservationsLoading = false,
-            )
-        },
-        failure = { error ->
-            copy(
-                historyReservationsLoading = false,
-                error = error.message ?: "历史预约记录加载失败，请重试。",
-            )
-        },
-    )
+    fun loadLibrarySeatReservationHistory(force: Boolean = false, loadMore: Boolean = false) {
+        val current = mutableState.value
+        if (current.historyReservationsLoading || (loadMore && !current.historyReservationsHasMore)) return
+        val nextPage = if (loadMore && !force) current.historyReservationsPage + 1 else 0
+        launchAction(
+            isBusy = { historyReservationsLoading },
+            start = { copy(historyReservationsLoading = true, error = null) },
+            action = { campus.librarySeatReservationHistory(page = nextPage, size = 20) },
+            success = { history ->
+                val records = if (nextPage == 0) history.records else
+                    (historyReservations.records + history.records).distinctBy { it.id }
+                copy(
+                    historyReservations = history.copy(records = records),
+                    historyReservationsLoading = false,
+                    historyReservationsPage = nextPage,
+                    historyReservationsHasMore = history.records.isNotEmpty() && records.size < history.total,
+                )
+            },
+            failure = { error -> copy(historyReservationsLoading = false, error = error.message ?: "历史预约记录加载失败，请重试。") },
+        )
+    }
 
     fun loadLibrarySeatCurrentUse(force: Boolean = false) = launchAction(
         isBusy = { currentUseLoading && !force },
@@ -419,18 +426,25 @@ class LibrarySeatStateHolder(
         loadLibrarySeatReservations(force = true)
     }
 
-    fun loadLibrarySeatBreaches(force: Boolean = false) = launchAction(
-        isBusy = { breachesLoading && !force },
-        start = { copy(breachesLoading = true) },
-        action = { campus.librarySeatBreaches(page = 0, size = 20) },
-        success = { page -> copy(breaches = page, breachesLoading = false) },
-        failure = { error ->
-            copy(
-                breachesLoading = false,
-                error = error.message ?: "违约记录加载失败，请重试。",
-            )
-        },
-    )
+    fun loadLibrarySeatBreaches(force: Boolean = false, loadMore: Boolean = false) {
+        val current = mutableState.value
+        if (current.breachesLoading || (loadMore && !current.breachesHasMore)) return
+        val nextPage = if (loadMore && !force) current.breachesPage + 1 else 0
+        launchAction(
+            isBusy = { breachesLoading },
+            start = { copy(breachesLoading = true, error = null) },
+            action = { campus.librarySeatBreaches(page = nextPage, size = 20) },
+            success = { page ->
+                val records = if (nextPage == 0) page.records else
+                    (breaches.records + page.records).distinctBy { it.id.ifBlank { "${it.date}:${it.seatLabel}:${it.startTime}:${it.status}" } }
+                copy(
+                    breaches = page.copy(records = records), breachesLoading = false, breachesPage = nextPage,
+                    breachesHasMore = page.records.isNotEmpty() && records.size < page.total,
+                )
+            },
+            failure = { error -> copy(breachesLoading = false, error = error.message ?: "违约记录加载失败，请重试。") },
+        )
+    }
 
     fun loadLibrarySeatDoorLogs(date: String = LocalDate.now().toString(), force: Boolean = false) = launchAction(
         isBusy = { doorLogsLoading && !force },
@@ -445,41 +459,42 @@ class LibrarySeatStateHolder(
         },
     )
 
-    fun loadLibrarySeatMakeLife(reservationId: String, force: Boolean = false) = launchAction(
-        isBusy = { makeLifeLoading && makeLifeReservationId == reservationId && !force },
-        start = {
-            copy(
-                makeLifeLoading = true,
-                makeLifeReservationId = reservationId,
-                makeLife = emptyList(),
-            )
-        },
-        action = { campus.librarySeatMakeLife(reservationId) },
-        success = { rows -> copy(makeLife = rows, makeLifeLoading = false) },
-        failure = { error ->
-            copy(
-                makeLifeLoading = false,
-                error = error.message ?: "变更记录加载失败，请重试。",
-            )
-        },
-    )
+    fun loadLibrarySeatMakeLife(reservationId: String, force: Boolean = false) {
+        if (!force && makeLifeJob?.isActive == true && mutableState.value.makeLifeReservationId == reservationId) return
+        makeLifeJob?.cancel()
+        mutableState.update { it.copy(makeLifeLoading = true, makeLifeReservationId = reservationId, makeLife = emptyList(), error = null) }
+        makeLifeJob = scope.launch {
+            try {
+                val rows = campus.librarySeatMakeLife(reservationId)
+                if (!isActive || mutableState.value.makeLifeReservationId != reservationId) return@launch
+                mutableState.update { it.copy(makeLife = rows, makeLifeLoading = false) }
+            } catch (error: Throwable) {
+                if (!isActive || mutableState.value.makeLifeReservationId != reservationId) return@launch
+                handleRequestFailure(error)
+                mutableState.update { it.copy(makeLifeLoading = false, error = error.message ?: "变更记录加载失败，请重试。") }
+            }
+        }
+    }
 
-    fun loadLibrarySeatTimeline(seatId: String, date: String, force: Boolean = false) = launchAction(
-        isBusy = {
-            timelineLoading && timelineSeatId == seatId && timelineDate == date && !force
-        },
-        start = {
-            copy(
-                timelineLoading = true,
-                timelineSeatId = seatId,
-                timelineDate = date,
-                timeline = LibrarySeatTimeline(),
-            )
-        },
-        action = { campus.librarySeatTimeline(seatId, date) },
-        success = { timeline -> copy(timeline = timeline, timelineLoading = false) },
-        failure = { copy(timelineLoading = false, timeline = LibrarySeatTimeline()) },
-    )
+    fun loadLibrarySeatTimeline(seatId: String, date: String, force: Boolean = false) {
+        val current = mutableState.value
+        if (!force && timelineJob?.isActive == true && current.timelineSeatId == seatId && current.timelineDate == date) return
+        timelineJob?.cancel()
+        mutableState.update {
+            it.copy(timelineLoading = true, timelineSeatId = seatId, timelineDate = date, timeline = LibrarySeatTimeline(), timelineError = null)
+        }
+        timelineJob = scope.launch {
+            try {
+                val timeline = campus.librarySeatTimeline(seatId, date)
+                if (!isActive || mutableState.value.let { it.timelineSeatId != seatId || it.timelineDate != date }) return@launch
+                mutableState.update { it.copy(timeline = timeline, timelineLoading = false) }
+            } catch (error: Throwable) {
+                if (!isActive || mutableState.value.let { it.timelineSeatId != seatId || it.timelineDate != date }) return@launch
+                handleRequestFailure(error)
+                mutableState.update { it.copy(timelineLoading = false, timelineError = error.message ?: "座位时段加载失败，请重试。") }
+            }
+        }
+    }
 
     fun loadLibrarySeatWaitlists(force: Boolean = false) = launchAction(
         isBusy = { waitlistsLoading && !force },

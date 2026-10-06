@@ -52,6 +52,8 @@ data class AppEntryUiState(
     val pendingChaoxingOpen: Boolean,
     val error: String?,
     val message: String?,
+    val loginCapabilitiesLoading: Boolean = false,
+    val loginCapabilitiesError: String? = null,
 )
 
 @Immutable
@@ -75,6 +77,8 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
     botChallengeRequired = botChallengeRequired,
     botChallengeReady = botChallengeReady,
     androidPasskeySupported = androidPasskeySupported,
+    loginCapabilitiesLoading = loginCapabilitiesLoading,
+    loginCapabilitiesError = loginCapabilitiesError,
     suggestedUsername = suggestedUsername,
     deviceLoginBusy = deviceLoginBusy,
     deviceLoginQrDataUrl = deviceLoginQrDataUrl,

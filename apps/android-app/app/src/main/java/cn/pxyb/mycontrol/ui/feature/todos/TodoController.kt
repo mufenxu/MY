@@ -24,6 +24,7 @@ class TodoController(
 ) {
     private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
     private val mutationMutex = Mutex()
+    private var retryJob: Job? = null
 
     init {
         parentScope.launch {
@@ -41,6 +42,25 @@ class TodoController(
     suspend fun load() = repository.load()
 
     suspend fun refresh() = repository.sync(refresh = true)
+
+    fun retryPending() {
+        val current = appState.value
+        if (current.user == null || current.locked || current.busyAction == "logout" ||
+            current.pendingTodoMutations == 0 || retryJob?.isActive == true) return
+        retryJob = scope.launch {
+            try {
+                repository.syncPending()
+                appState.update {
+                    if (it.message == "已离线保存，联网后自动同步。") it.copy(message = "离线待办已同步。") else it
+                }
+            } catch (error: Throwable) {
+                handleFeatureRequestFailure(error, onSessionExpired)
+                if (error !is IOException) appState.update {
+                    it.copy(error = error.message ?: "待办暂未同步，请稍后重试。")
+                }
+            }
+        }
+    }
 
     fun save(task: TodoTask) {
         if (task.title.isBlank()) return

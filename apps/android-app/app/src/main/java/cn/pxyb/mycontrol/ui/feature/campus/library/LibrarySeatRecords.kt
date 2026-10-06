@@ -81,10 +81,12 @@ internal fun rememberSeatReservationItems(
     loading: Boolean,
     history: LibrarySeatReservationHistory,
     historyLoading: Boolean,
+    historyHasMore: Boolean,
     currentUse: LibrarySeatReservationRecord?,
     currentUseLoading: Boolean,
     breaches: LibrarySeatBreachPage,
     breachesLoading: Boolean,
+    breachesHasMore: Boolean,
     doorLogs: List<LibrarySeatDoorLog>,
     doorLogsLoading: Boolean,
     makeLife: List<LibrarySeatMakeLife>,
@@ -93,7 +95,9 @@ internal fun rememberSeatReservationItems(
     usageAction: LibrarySeatUsageAction?,
     onLoadReservations: () -> Unit,
     onLoadHistory: () -> Unit,
+    onLoadMoreHistory: () -> Unit,
     onLoadBreaches: () -> Unit,
+    onLoadMoreBreaches: () -> Unit,
     onLoadDoorLogs: () -> Unit,
     onLoadMakeLife: (String) -> Unit,
     onCheckIn: () -> Unit,
@@ -114,7 +118,7 @@ internal fun rememberSeatReservationItems(
         SeatReservationRecordCard(
             record = record,
             expanded = expandedReservationId == record.id,
-            makeLife = if (expandedReservationId == record.id) makeLife else emptyList(),
+            makeLife = if (expandedReservationId == record.id && makeLifeReservationId == record.id) makeLife else emptyList(),
             makeLifeLoading = makeLifeLoading && makeLifeReservationId == record.id,
             onToggleMakeLife = {
                 if (expandedReservationId == record.id) {
@@ -175,13 +179,23 @@ internal fun rememberSeatReservationItems(
             )
             SeatRecordTab.History -> {
                 if (!historyLoading && history.total > history.records.size) item(key = "seat-history-total") {
-                    Text("共 ${history.total} 条历史记录，仅显示最近 ${history.records.size} 条",
+                    Text("共 ${history.total} 条历史记录，已加载 ${history.records.size} 条",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                seatReservationItems(history.records, historyLoading, "history",
+                seatReservationItems(history.records, historyLoading && history.records.isEmpty(), "history",
                     "暂无历史预约记录", "历史预约与过去使用的座位会显示在这里", recordCard)
+                if (historyHasMore) item(key = "seat-history-more", contentType = "action") {
+                    AppSecondaryButton("加载更多历史预约", onClick = onLoadMoreHistory,
+                        loading = historyLoading, enabled = !historyLoading, modifier = Modifier.fillMaxWidth())
+                }
             }
-            SeatRecordTab.Breach -> seatBreachItems(breaches, breachesLoading)
+            SeatRecordTab.Breach -> {
+                seatBreachItems(breaches, breachesLoading && breaches.records.isEmpty())
+                if (breachesHasMore) item(key = "seat-breach-more", contentType = "action") {
+                    AppSecondaryButton("加载更多违约记录", onClick = onLoadMoreBreaches,
+                        loading = breachesLoading, enabled = !breachesLoading, modifier = Modifier.fillMaxWidth())
+                }
+            }
             SeatRecordTab.DoorLog -> seatDoorLogItems(doorLogs, doorLogsLoading)
         }
         item(key = "seat-record-footer", contentType = "action") {
@@ -629,7 +643,7 @@ private fun LazyListScope.seatBreachItems(page: LibrarySeatBreachPage, loading: 
         }
         else -> {
             if (page.total > page.records.size) item(key = "breach-total") {
-                Text("共 ${page.total} 条违约记录，仅显示最近 ${page.records.size} 条",
+                Text("共 ${page.total} 条违约记录，已加载 ${page.records.size} 条",
                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             itemsIndexed(page.records, key = { index, _ -> "breach-$index" },

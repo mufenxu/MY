@@ -1049,9 +1049,11 @@ internal fun AuthenticatedShell(
                             }
                         },
                         onLoadReservations = viewModel.librarySeats::loadLibrarySeatReservations,
-                        onLoadReservationHistory = viewModel.librarySeats::loadLibrarySeatReservationHistory,
+                        onLoadReservationHistory = { viewModel.librarySeats.loadLibrarySeatReservationHistory() },
+                        onLoadMoreHistory = { viewModel.librarySeats.loadLibrarySeatReservationHistory(loadMore = true) },
                         onLoadCurrentUse = { viewModel.librarySeats.loadLibrarySeatCurrentUse() },
                         onLoadBreaches = { viewModel.librarySeats.loadLibrarySeatBreaches() },
+                        onLoadMoreBreaches = { viewModel.librarySeats.loadLibrarySeatBreaches(loadMore = true) },
                         onLoadDoorLogs = { viewModel.librarySeats.loadLibrarySeatDoorLogs() },
                         onLoadMakeLife = { reservationId ->
                             viewModel.librarySeats.loadLibrarySeatMakeLife(reservationId)

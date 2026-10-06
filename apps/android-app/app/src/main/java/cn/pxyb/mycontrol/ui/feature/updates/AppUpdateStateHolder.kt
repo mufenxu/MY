@@ -98,6 +98,18 @@ class AppUpdateStateHolder(
 
     fun openReleasesPage(url: String? = null) = manager.openReleasesPage(url)
 
+    fun onReturnedToApp() {
+        mutableState.update { current ->
+            if (current.phase !in setOf(AppUpdatePhase.Installing, AppUpdatePhase.InstallPermissionRequired)) current
+            else if (current.info?.isNewerThan(BuildConfig.VERSION_CODE) == false) AppUpdateUiState(phase = AppUpdatePhase.Current)
+            else if (current.downloadedApkPath?.let { File(it).isFile } == true) {
+                current.copy(phase = AppUpdatePhase.ReadyToInstall, error = null)
+            } else {
+                current.copy(phase = AppUpdatePhase.Available, downloadedApkPath = null, progress = 0)
+            }
+        }
+    }
+
     private companion object {
         const val DEBUG_RELEASE_UPDATE_MESSAGE =
             "当前安装的是 Debug 版本，不能直接更新为正式 Release 版本。请先卸载 Debug 版后安装正式版，或使用正式版设备测试。"

@@ -75,6 +75,7 @@ import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
+import cn.pxyb.mycontrol.ui.components.feedback.AppErrorState
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import cn.pxyb.mycontrol.util.authenticateDevice
@@ -514,6 +515,8 @@ private fun PlatformWebScreen(
     var loadProgress by remember { mutableFloatStateOf(0f) }
     var canGoBack by remember { mutableStateOf(false) }
     var restoredInitialHash by remember { mutableStateOf(false) }
+    var pageError by remember { mutableStateOf<String?>(null) }
+    var retryUrl by remember { mutableStateOf<String?>(null) }
     val dark = isAppInDarkTheme()
     val webBackground = MaterialTheme.colorScheme.background.toArgb()
     val webTextZoom = (LocalDensity.current.fontScale * 100).roundToInt()
@@ -603,11 +606,19 @@ private fun PlatformWebScreen(
                                 webDownloadSupport.closeMessagePort()
                                 super.onPageStarted(view, url, favicon)
                                 pageLoading = true
+                                loadProgress = 0f
+                                pageError = null
+                                retryUrl = null
                                 canGoBack = view?.canGoBack() == true
                             }
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 super.onPageFinished(view, url)
+                                if (pageError != null) {
+                                    pageLoading = false
+                                    canGoBack = view?.canGoBack() == true
+                                    return
+                                }
                                 view?.let(webDownloadSupport::connectImageDownloadPort)
                                 if (shouldRestoreInitialHash(initialUrl, url, restoredInitialHash)) {
                                     restoredInitialHash = true
@@ -634,6 +645,22 @@ private fun PlatformWebScreen(
                                     context.startActivity(Intent(Intent.ACTION_VIEW, uri))
                                     true
                                 }.getOrDefault(false)
+                            }
+
+                            override fun onReceivedError(view: WebView, request: WebResourceRequest, failure: android.webkit.WebResourceError) {
+                                if (!request.isForMainFrame) return
+                                pageLoading = false
+                                retryUrl = request.url.toString().takeIf { request.method.equals("GET", ignoreCase = true) }
+                                pageError = if (retryUrl == null) "网页操作未完成，请返回应用确认结果，避免重复提交。"
+                                    else "网页暂时无法打开，请检查网络后重新加载。"
+                            }
+
+                            override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: android.webkit.WebResourceResponse) {
+                                if (!request.isForMainFrame) return
+                                pageLoading = false
+                                retryUrl = request.url.toString().takeIf { request.method.equals("GET", ignoreCase = true) }
+                                pageError = if (retryUrl == null) "网页操作返回异常，请返回应用确认结果，避免重复提交。"
+                                    else "网页服务暂不可用（HTTP ${response.statusCode}），请稍后重试。"
                             }
                         }
 
@@ -671,14 +698,33 @@ private fun PlatformWebScreen(
                 ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("请在上方完成学习通登录，然后连接到 MY。", style = MaterialTheme.typography.bodySmall)
-                        AppButton("已登录，连接账号", onClick = onConfirmLogin, modifier = Modifier.fillMaxWidth(), enabled = !pageLoading)
+                        AppButton("已登录，连接账号", onClick = onConfirmLogin, modifier = Modifier.fillMaxWidth(), enabled = !pageLoading && pageError == null)
                     }
                 }
             }
 
             // 2. 极简悬浮微加载条（仅在页面加载时显示，0 高度占用）
+            pageError?.let { message ->
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        AppErrorState(
+                            title = "网页加载失败", message = message,
+                            retryText = if (retryUrl != null) "重新加载" else "返回应用",
+                            onRetry = {
+                                val target = retryUrl
+                                if (target == null) onFinish() else webView?.loadUrl(target)
+                            },
+                        )
+                        if (retryUrl != null) AppSecondaryButton("返回应用", onClick = onFinish)
+                    }
+                }
+            }
             AnimatedVisibility(
-                visible = pageLoading && loadProgress < 1f,
+                visible = pageError == null && pageLoading && loadProgress < 1f,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier.align(Alignment.TopCenter),

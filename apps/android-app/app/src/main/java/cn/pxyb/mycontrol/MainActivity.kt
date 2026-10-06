@@ -5,6 +5,9 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.nfc.NdefMessage
 import android.nfc.NdefRecord
 import android.nfc.NfcAdapter
@@ -62,6 +65,8 @@ class MainActivity : ComponentActivity() {
     private var pendingNfcScene: Pair<String, String>? = null
     private var notificationsEnabled = mutableStateOf(false)
     private val permissionPreferences by lazy { getSharedPreferences("permission_requests", MODE_PRIVATE) }
+    private val connectivityManager by lazy { getSystemService(ConnectivityManager::class.java) }
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -131,6 +136,28 @@ class MainActivity : ComponentActivity() {
         if (sessionStore.isLocked()) appViewModel.lockSession()
         appViewModel.setAppInForeground(true)
         notificationsEnabled.value = hasNotificationPermission()
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            private var validatedNetwork: Network? = null
+
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
+                    if (validatedNetwork == network) return
+                    validatedNetwork = network
+                    val source = this
+                    lifecycleScope.launch {
+                        if (networkCallback === source) appViewModel.onNetworkAvailable()
+                    }
+                } else if (validatedNetwork == network) {
+                    validatedNetwork = null
+                }
+            }
+
+            override fun onLost(network: Network) {
+                if (validatedNetwork == network) validatedNetwork = null
+            }
+        }
+        networkCallback = callback
+        connectivityManager.registerDefaultNetworkCallback(callback)
     }
 
     override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
@@ -140,6 +167,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         appViewModel.setAppInForeground(false)
+        networkCallback?.let(connectivityManager::unregisterNetworkCallback)
+        networkCallback = null
         super.onStop()
     }
 
@@ -244,6 +273,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        appViewModel.resumeAppUpdate()
         notificationsEnabled.value = hasNotificationPermission()
         // 前台活跃时清除安全遮蔽，保证用户正常截屏与使用
         window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)

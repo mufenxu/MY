@@ -76,6 +76,7 @@ internal fun LoginScreen(
     onPasskeyLogin: (String) -> Unit,
     onStartDeviceLogin: (String) -> Unit,
     onCancelDeviceLogin: () -> Unit,
+    onRetryLoginCapabilities: () -> Unit,
     onBackFromSecondFactor: () -> Unit,
     onBotChallengeComplete: (String) -> Unit,
     onRecoverAccount: (String, String) -> Unit,
@@ -237,6 +238,7 @@ internal fun LoginScreen(
                                         onRecoverAccount = { showRecovery = true },
                                         onStartDeviceLogin = onStartDeviceLogin,
                                         onCancelDeviceLogin = onCancelDeviceLogin,
+                                        onRetryLoginCapabilities = onRetryLoginCapabilities,
                                     )
                                 } else {
                                     state.loginEnrollment?.let { LoginTotpEnrollment(it) }
@@ -401,6 +403,7 @@ internal fun LoginScreen(
                                         onRecoverAccount = { showRecovery = true },
                                         onStartDeviceLogin = onStartDeviceLogin,
                                         onCancelDeviceLogin = onCancelDeviceLogin,
+                                        onRetryLoginCapabilities = onRetryLoginCapabilities,
                                     )
                                 } else {
                                     state.loginEnrollment?.let { LoginTotpEnrollment(it) }
