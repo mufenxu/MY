@@ -14,6 +14,7 @@ import androidx.benchmark.macro.junit4.MacrobenchmarkRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.BySelector
 import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
@@ -52,9 +53,7 @@ class BaselineProfileGenerator {
         device.findObject(By.text("我的")).click()
         check(device.wait(Until.hasObject(By.text("账号与安全")), 10_000)) { "我的页面未就绪" }
         // 验证器入口位于“我的”账号工具区，小屏上可能需要滚动才能显示。
-        val profileList = device.wait(Until.findObject(By.scrollable(true)), 5_000) ?: error("未找到我的页面列表")
-        profileList.setGestureMargin(device.displayWidth / 5)
-        check(profileList.scrollUntil(Direction.DOWN, Until.hasObject(By.text("本地验证器")))) { "未找到本地验证器入口" }
+        scrollToVisible(By.text("本地验证器"), "本地验证器入口")
         device.findObject(By.text("本地验证器")).click()
         check(device.wait(Until.hasObject(By.text("离线生成 TOTP 动态验证码")), 10_000)) { "验证器页未就绪" }
         device.pressBack()
@@ -105,9 +104,7 @@ class InteractionBenchmark {
         iterations = 5,
         setupBlock = {
             openHome()
-            val list = device.wait(Until.findObject(By.scrollable(true)), 5_000) ?: error("未找到首页列表")
-            list.setGestureMargin(device.displayWidth / 5)
-            check(list.scrollUntil(Direction.DOWN, Until.hasObject(By.text("示例应用 1")))) { "首页应用数据未加载" }
+            scrollToVisible(By.text("示例应用 1"), "首页应用数据")
         },
         measureBlock = { scrollList() },
     )
@@ -166,6 +163,22 @@ private fun MacrobenchmarkScope.scrollList() {
         list.setGestureMargin(device.displayWidth / 5)
         list.scroll(direction, 0.8f)
         device.waitForIdle()
+    }
+}
+
+private fun MacrobenchmarkScope.scrollToVisible(selector: BySelector, description: String) {
+    // 页面切换和 Compose 重组可能替换列表节点；每次滚动后从当前窗口重新查找。
+    repeat(12) {
+        device.waitForIdle()
+        if (device.hasObject(selector)) return
+        val list = device.wait(Until.findObject(By.scrollable(true)), 5_000) ?: error("未找到可滚动列表：$description")
+        list.setGestureMargin(device.displayWidth / 5)
+        list.scroll(Direction.DOWN, 0.3f)
+    }
+    check(device.wait(Until.hasObject(selector), 5_000)) {
+        val hierarchy = java.io.ByteArrayOutputStream()
+        device.dumpWindowHierarchy(hierarchy)
+        "未找到$description；当前界面：${hierarchy.toString("UTF-8")}"
     }
 }
 

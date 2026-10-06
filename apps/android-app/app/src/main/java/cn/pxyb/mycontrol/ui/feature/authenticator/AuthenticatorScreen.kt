@@ -418,14 +418,14 @@ private fun AuthenticatorEntryCard(
     }
 }
 
-private fun copyAuthenticatorCode(context: Context, code: String, lifetimeMillis: Long) {
+internal fun copyAuthenticatorCode(context: Context, code: String, lifetimeMillis: Long, label: String = "动态验证码") {
     val clipboard = context.getSystemService(ClipboardManager::class.java)
     val clipId = UUID.randomUUID().toString()
     val idKey = "cn.pxyb.mycontrol.clip_id"
     val sensitiveKey = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         ClipDescription.EXTRA_IS_SENSITIVE
     } else "android.content.extra.IS_SENSITIVE"
-    val clip = ClipData.newPlainText("动态验证码", code).apply {
+    val clip = ClipData.newPlainText(label, code).apply {
         description.extras = PersistableBundle().apply {
             putBoolean(sensitiveKey, true)
             putString(idKey, clipId)

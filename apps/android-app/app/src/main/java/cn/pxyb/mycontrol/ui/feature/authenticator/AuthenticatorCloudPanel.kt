@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.components.button.AppButton
@@ -40,6 +41,8 @@ fun AuthenticatorCloudPanel(
 ) {
   var dialog by remember { mutableStateOf<String?>(null) }
   var recovery by remember { mutableStateOf("") }
+  var recoveryCopied by remember(recovery) { mutableStateOf(false) }
+  val context = LocalContext.current
   var confirmation by remember { mutableStateOf("") }
   var acknowledged by remember { mutableStateOf(false) }
   var historySelection by remember { mutableStateOf<VaultHistory?>(null) }
@@ -120,7 +123,19 @@ fun AuthenticatorCloudPanel(
         else { val code = recovery; dismiss(); if (rotating) onRotate(code) else onEnable(code) }
       },
     ) {
-      if (!acknowledged) Text(recovery, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyLarge)
+      if (!acknowledged) AppPanel(onClick = {
+        copyAuthenticatorCode(context, recovery, 60_000L, label = "验证器恢复密钥")
+        recoveryCopied = true
+      }) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Text(recovery, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyLarge)
+          Text(
+            if (recoveryCopied) "已复制 · 60 秒后自动清理本次复制" else "点击复制恢复密钥",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+          )
+        }
+      }
       else AppTextField(value = confirmation, onValueChange = { confirmation = it.take(100) }, label = "完整恢复密钥", isPassword = true)
       Text("恢复密钥与所有授权设备同时丢失后，平台无法找回数据。请将平台登录恢复码另行保存，或在另一设备配置可用的 Passkey，避免丢手机后无法登录。",
         style = MaterialTheme.typography.bodySmall)
