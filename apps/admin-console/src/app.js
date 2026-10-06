@@ -1,3 +1,5 @@
+import { createMemoryAuthenticatorVaultStore } from './authenticator-vault-store.js';
+import { registerAuthenticatorVaultRoutes } from './routes/authenticator-vault-routes.js';
 import { renderAppLoginTransitionHtml, renderAppLoginErrorHtml } from './app-login-pages.js';
 import { registerExternalAppRoutes } from './routes/external-app-routes.js';
 import { registerNotificationRoutes } from './routes/notification-routes.js';
@@ -252,6 +254,7 @@ export function createApp({
   authRiskStore = null,
   qrLoginStore = null,
   webLoginTicketStore = null,
+  authenticatorVaultStore = null,
   googleAccountStore = null,
   externalApplicationStore = null,
   configurationStore = null,
@@ -1725,6 +1728,8 @@ export function createApp({
       next(error);
     }
   });
+
+  registerAuthenticatorVaultRoutes(app, { vaults: authenticatorVaultStore || createMemoryAuthenticatorVaultStore(), requireConsoleRequest, recordAudit });
 
   registerNotificationRoutes(app, {
     notificationManagement,

@@ -102,7 +102,16 @@ fun AuthenticatorScreen(
     onLock: () -> Unit,
     onLeave: () -> Unit,
     onPendingQrUriConsumed: () -> Unit,
+    cloudPanel: @Composable () -> Unit,
 ) {
+    val screenContext = LocalContext.current
+    DisposableEffect(screenContext) {
+        var context: Context = screenContext
+        while (context is android.content.ContextWrapper && context !is cn.pxyb.mycontrol.MainActivity) context = context.baseContext
+        val activity = context as? cn.pxyb.mycontrol.MainActivity
+        activity?.protectAuthenticatorScreen(true)
+        onDispose { activity?.protectAuthenticatorScreen(false) }
+    }
     var scannerOpen by remember { mutableStateOf(false) }
     var manualOpen by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<AuthenticatorEntry?>(null) }
@@ -148,7 +157,7 @@ fun AuthenticatorScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         AppSubPage(
-            title = "本地验证器",
+            title = "验证器",
             subtitle = "离线生成 TOTP 动态验证码",
             onBack = onBack,
             contentPadding = contentPadding,
@@ -182,13 +191,15 @@ fun AuthenticatorScreen(
                             modifier = Modifier.size(22.dp),
                         )
                         Text(
-                            text = "密钥仅保存在本机 Android Keystore 加密存储中，不上传服务器，也不会参与云备份。卸载或清除应用数据后无法恢复。",
+                            text = "本地密钥由 Android Keystore 保护。云端备份需主动启用，上传前在本机加密；请独立保管恢复密钥。",
                             style = MaterialTheme.typography.bodySmall.copy(lineHeight = 19.sp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
             }
+
+            item(key = "cloud-backup", contentType = "cloud") { cloudPanel() }
 
             if (state.error != null) {
                 item(key = "authenticator-error", contentType = "banner") {
@@ -265,7 +276,7 @@ fun AuthenticatorScreen(
     pendingDelete?.let { entry ->
         AppConfirmDialog(
             title = "删除验证器",
-            detail = "将删除 ${entry.issuer}（${entry.account}）的本地密钥。删除后需要重新扫码绑定，且无法恢复。",
+            detail = "将删除 ${entry.issuer}（${entry.account}）的密钥。启用云端备份后，删除会同步到其他设备；可在保留期内从历史备份补回。",
             confirmLabel = "删除",
             dismissLabel = "取消",
             icon = Icons.Outlined.Delete,

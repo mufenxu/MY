@@ -83,6 +83,7 @@ const {
   configurationStore,
   qrLoginStore,
   webLoginTicketStore,
+  authenticatorVaultStore,
   googleAccountStore,
   externalApplicationStore,
 } = portalStores;
@@ -107,6 +108,7 @@ const portalApp = createPortalApp({
   configurationStore,
   qrLoginStore,
   webLoginTicketStore,
+  authenticatorVaultStore,
   googleAccountStore,
   externalApplicationStore,
   readinessCheck,

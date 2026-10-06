@@ -49,6 +49,7 @@ test('persistent portal store lifecycle wires every store and survives app resta
     createMongoConfigurationStore: factory('configurationStore'),
     createMongoQrLoginStore: factory('qrLoginStore'),
     createMongoWebLoginTicketStore: factory('webLoginTicketStore'),
+    createMongoAuthenticatorVaultStore: factory('authenticatorVaultStore'),
     createMongoGoogleAccountStore: factory('googleAccountStore'),
     createMongoExternalApplicationStore: factory('externalApplicationStore'),
   };
@@ -62,7 +63,8 @@ test('persistent portal store lifecycle wires every store and survives app resta
   const second = await createPersistentPortalStores({ config: testConfig(), factories, clientFactory });
   assert.deepEqual(await second.releaseStore.get('release-1'), { status: 'succeeded' });
   assert.equal(await second.configurationStore.get('version'), 4);
-  assert.deepEqual(calls.slice(0, 10).map(([name]) => name), [
+  assert.deepEqual(calls.slice(0, 11).map(([name]) => name), [
+    'authenticatorVaultStore',
     'authStore',
     'authRiskStore',
     'sessionRegistry',
@@ -75,8 +77,8 @@ test('persistent portal store lifecycle wires every store and survives app resta
     'externalApplicationStore',
   ]);
   assert.equal(calls.find(([name]) => name === 'releaseStore')[1].uri, testConfig().mongoUri);
-  assert.equal(calls.slice(0, 10).every(([, options]) => options.client === first.mongoClient), true);
-  assert.equal(closed.length, 11);
+  assert.equal(calls.slice(0, 11).every(([, options]) => options.client === first.mongoClient), true);
+  assert.equal(closed.length, 12);
   await closePortalStores(second);
 });
 
@@ -99,6 +101,7 @@ test('partial initialization failure closes stores that were already connected',
     createMongoConfigurationStore: ok('configurationStore'),
     createMongoQrLoginStore: ok('qrLoginStore'),
     createMongoWebLoginTicketStore: ok('webLoginTicketStore'),
+    createMongoAuthenticatorVaultStore: ok('authenticatorVaultStore'),
     createMongoGoogleAccountStore: ok('googleAccountStore'),
     createMongoExternalApplicationStore: ok('externalApplicationStore'),
   };
@@ -107,5 +110,5 @@ test('partial initialization failure closes stores that were already connected',
     createPersistentPortalStores({ config: testConfig(), factories, clientFactory }),
     /mongo unavailable/,
   );
-  assert.deepEqual(closed, ['authStore', 'authRiskStore', 'client']);
+  assert.deepEqual(closed, ['authenticatorVaultStore', 'authStore', 'authRiskStore', 'client']);
 });

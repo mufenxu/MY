@@ -1,3 +1,4 @@
+import { createMongoAuthenticatorVaultStore } from './authenticator-vault-store.js';
 import { MongoClient } from 'mongodb';
 import { createMongoAuthStore } from './auth-store.js';
 import { createMongoAuthRiskStore } from './auth-risk-store.js';
@@ -11,6 +12,7 @@ import { createMongoGoogleAccountStore } from './google-account-store.js';
 import { createMongoExternalApplicationStore } from './external-application-store.js';
 
 const DEFAULT_FACTORIES = {
+  createMongoAuthenticatorVaultStore,
   createMongoAuthStore,
   createMongoAuthRiskStore,
   createMongoSessionRegistry,
@@ -24,6 +26,7 @@ const DEFAULT_FACTORIES = {
 };
 
 const STORE_NAMES = [
+  'authenticatorVaultStore',
   'authStore',
   'authRiskStore',
   'sessionRegistry',
@@ -69,6 +72,7 @@ export async function createPersistentPortalStores({
   if (!config?.mongoUri) return stores;
 
   const definitions = [
+    ['authenticatorVaultStore', factories.createMongoAuthenticatorVaultStore, { uri: config.mongoUri }],
     ['authStore', factories.createMongoAuthStore, {
       uri: config.mongoUri,
       encryptionKey: config.authEncryptionKey,

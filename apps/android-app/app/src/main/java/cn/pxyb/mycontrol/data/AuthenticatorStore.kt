@@ -14,7 +14,9 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
-class AuthenticatorStore(context: Context) {
+class AuthenticatorStore(context: Context, private val owner: String = "", private val sessionGuard: (() -> Unit) -> Unit = { it() }) {
+    private val scope = accountStorageScope(owner) ?: "local"
+    private val payloadKey = "authenticated_payload_$scope"
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
 
     fun prepareProtection() { getOrCreateKey() }
@@ -22,17 +24,20 @@ class AuthenticatorStore(context: Context) {
     fun read(): List<AuthenticatorEntry> {
         // The hardware authentication gate also applies to an empty store and to legacy-key migration.
         Cipher.getInstance(TRANSFORMATION).init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-        val protectedPayload = preferences.getString(KEY_PROTECTED_PAYLOAD, null)
+        val scopedPayload = preferences.getString(payloadKey, null)
+        val canMigrate = !preferences.contains("migration_owner")
+        val protectedPayload = scopedPayload ?: if (canMigrate) preferences.getString(KEY_PROTECTED_PAYLOAD, null) else null
         val legacy = protectedPayload == null
-        val payload = protectedPayload ?: preferences.getString(KEY_PAYLOAD, null) ?: return emptyList()
-        val root = JSONObject(decrypt(payload, if (legacy) LEGACY_KEY_ALIAS else KEY_ALIAS))
+        val payload = protectedPayload ?: if (canMigrate) preferences.getString(KEY_PAYLOAD, null) else null
+        if (payload == null) return emptyList()
+        val root = JSONObject(decrypt(payload, if (legacy) LEGACY_KEY_ALIAS else KEY_ALIAS, scopedPayload != null))
         if (root.optInt(KEY_VERSION, 0) != if (legacy) 1 else STORAGE_VERSION) {
             throw StorageException()
         }
-        val entries = root.optJSONArray(KEY_ENTRIES) ?: return emptyList()
+        val entries = root.getJSONArray(KEY_ENTRIES)
         val result = buildList {
             for (index in 0 until entries.length()) {
-                entries.optJSONObject(index)?.let { entry ->
+                entries.getJSONObject(index).let { entry ->
                     add(
                         AuthenticatorEntry(
                             id = entry.getString("id"),
@@ -47,13 +52,19 @@ class AuthenticatorStore(context: Context) {
                 }
             }
         }
-        if (legacy) write(result)
+        if (scopedPayload == null) write(result, null)
         return result
     }
 
-    fun write(entries: List<AuthenticatorEntry>) {
+    fun readCloud(): JSONObject? {
+        val payload = preferences.getString(payloadKey, null) ?: return null
+        return JSONObject(decrypt(payload, KEY_ALIAS)).optJSONObject("cloud")
+    }
+
+    fun write(entries: List<AuthenticatorEntry>, cloud: JSONObject? = readCloud()) {
         val root = JSONObject().apply {
             put(KEY_VERSION, STORAGE_VERSION)
+            put("cloud", cloud ?: JSONObject.NULL)
             put(
                 KEY_ENTRIES,
                 JSONArray().apply {
@@ -73,10 +84,15 @@ class AuthenticatorStore(context: Context) {
                 },
             )
         }
-        val committed = preferences.edit()
-            .putString(KEY_PROTECTED_PAYLOAD, encrypt(root.toString()))
-            .remove(KEY_PAYLOAD)
-            .commit()
+        var committed = false
+        sessionGuard {
+            committed = preferences.edit()
+                .putString(payloadKey, encrypt(root.toString()))
+                .putString("migration_owner", preferences.getString("migration_owner", owner))
+                .remove(KEY_PROTECTED_PAYLOAD)
+                .remove(KEY_PAYLOAD)
+                .commit()
+        }
         if (!committed) throw StorageException()
         // Never delete the old key before the authenticated replacement has been durably stored.
         runCatching { KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.deleteEntry(LEGACY_KEY_ALIAS) }
@@ -84,18 +100,18 @@ class AuthenticatorStore(context: Context) {
 
     fun clear() {
         Cipher.getInstance(TRANSFORMATION).init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-        if (!preferences.edit().remove(KEY_PAYLOAD).remove(KEY_PROTECTED_PAYLOAD).commit()) throw StorageException()
+        if (!preferences.edit().remove(payloadKey).commit()) throw StorageException()
     }
 
     private fun encrypt(value: String): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
-        cipher.updateAAD(KEY_ALIAS.toByteArray(StandardCharsets.UTF_8))
+        cipher.updateAAD("$KEY_ALIAS/$scope".toByteArray(StandardCharsets.UTF_8))
         val encrypted = cipher.doFinal(value.toByteArray(StandardCharsets.UTF_8))
         return Base64.encodeToString(cipher.iv + encrypted, Base64.NO_WRAP)
     }
 
-    private fun decrypt(payload: String, alias: String): String {
+    private fun decrypt(payload: String, alias: String, scoped: Boolean = true): String {
         val bytes = Base64.decode(payload, Base64.NO_WRAP)
         require(bytes.size > IV_SIZE)
         val iv = bytes.copyOfRange(0, IV_SIZE)
@@ -103,7 +119,7 @@ class AuthenticatorStore(context: Context) {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         val key = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }.getKey(alias, null) as SecretKey
         cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
-        if (alias == KEY_ALIAS) cipher.updateAAD(KEY_ALIAS.toByteArray(StandardCharsets.UTF_8))
+        if (alias == KEY_ALIAS) cipher.updateAAD((if (scoped) "$alias/$scope" else alias).toByteArray(StandardCharsets.UTF_8))
         return String(cipher.doFinal(encrypted), StandardCharsets.UTF_8)
     }
 

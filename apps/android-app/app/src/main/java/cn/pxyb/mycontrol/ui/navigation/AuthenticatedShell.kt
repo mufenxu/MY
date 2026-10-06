@@ -103,6 +103,7 @@ import cn.pxyb.mycontrol.ui.feature.assistant.AssistantScreen
 import cn.pxyb.mycontrol.ui.feature.assistant.AssistantDockButton
 import cn.pxyb.mycontrol.ui.feature.auth.AppEntryUiState
 import cn.pxyb.mycontrol.ui.feature.auth.QrLoginScreen
+import cn.pxyb.mycontrol.ui.feature.authenticator.AuthenticatorCloudPanel
 import cn.pxyb.mycontrol.ui.feature.authenticator.AuthenticatorScreen
 import cn.pxyb.mycontrol.ui.feature.authenticator.AuthenticatorViewModel
 import cn.pxyb.mycontrol.ui.feature.campus.FreeClassroomScreen
@@ -568,6 +569,21 @@ internal fun AuthenticatedShell(
                         onLock = authenticatorViewModel::lock,
                         onLeave = authenticatorViewModel::leave,
                         onPendingQrUriConsumed = viewModel::consumePendingAuthenticatorUri,
+                        cloudPanel = {
+                            AuthenticatorCloudPanel(
+                                state = authenticatorState,
+                                newRecoveryCode = authenticatorViewModel::newRecoveryCode,
+                                onEnable = { authenticatorViewModel.enable(it, onSensitiveActionConfirmation, onPasskeyRequest) },
+                                onRestore = { authenticatorViewModel.restore(it, onSensitiveActionConfirmation, onPasskeyRequest) },
+                                onSync = { authenticatorViewModel.synchronize(onSensitiveActionConfirmation, onPasskeyRequest) },
+                                onRotate = { authenticatorViewModel.rotate(it, onSensitiveActionConfirmation, onPasskeyRequest) },
+                                onDeleteCloud = { authenticatorViewModel.deleteCloud(onSensitiveActionConfirmation, onPasskeyRequest) },
+                                onRestoreHistory = { authenticatorViewModel.restoreHistory(it, onSensitiveActionConfirmation) },
+                                onOpenSecurity = { navigateToSubScreen(AppRoute.Account) },
+                                onExport = { authenticatorViewModel.exportFile(it, onSensitiveActionConfirmation) },
+                                onImport = { uri, code -> authenticatorViewModel.importFile(uri, code, onSensitiveActionConfirmation) },
+                            )
+                        },
                     )
                 }
                 composable(AppRoute.Profile) {

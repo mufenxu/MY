@@ -271,12 +271,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var authenticatorSecure = false
+
+    fun protectAuthenticatorScreen(enabled: Boolean) {
+        authenticatorSecure = enabled
+        if (enabled) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        else if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         appViewModel.resumeAppUpdate()
         notificationsEnabled.value = hasNotificationPermission()
-        // 前台活跃时清除安全遮蔽，保证用户正常截屏与使用
-        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        if (authenticatorSecure) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         if (pendingNfcScene != null) enableNfcForegroundDispatch()
     }
 

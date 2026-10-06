@@ -491,6 +491,13 @@ class PlatformApi(
         execute("/api/google-accounts", "PUT", body).json.toGoogleAccountSnapshot()
     }
 
+    suspend fun authenticatorVault(path: String = "", method: String = "GET", body: JSONObject? = null): JSONObject =
+        withContext(Dispatchers.IO) {
+            http.withRequestMetadata(allowCache = false) {
+                http.execute("/api/authenticator-vault$path", method, body).json
+            }.value
+        }
+
     private suspend fun execute(
         path: String,
         method: String = "GET",
