@@ -7,9 +7,6 @@ import androidx.lifecycle.lifecycleScope
 import cn.pxyb.mycontrol.data.AppAlertRecord
 import cn.pxyb.mycontrol.data.AppPreferences
 import cn.pxyb.mycontrol.data.AppThemePreference
-import cn.pxyb.mycontrol.data.Authenticator
-import cn.pxyb.mycontrol.data.AuthenticatorEntry
-import cn.pxyb.mycontrol.data.AuthenticatorStore
 import cn.pxyb.mycontrol.data.CAMPUS_TIMETABLE_PATH
 import cn.pxyb.mycontrol.data.DeviceProof
 import cn.pxyb.mycontrol.data.LoginResult
@@ -65,10 +62,6 @@ class BenchmarkFixtureActivity : ComponentActivity() {
             completeInitialSetup()
             setThemePreference(AppThemePreference.Light)
         }
-        AuthenticatorStore(this).write(List(8) { index ->
-            AuthenticatorEntry("fixture-otp-$index", "示例验证器 ${index + 1}", "benchmark@example.invalid",
-                ByteArray(20) { it.toByte() }, Authenticator.ALGORITHM_SHA1, 6, 30)
-        })
         val snapshots = ResponseSnapshotStore(this).apply { setAccount(username) }
         fun snapshot(path: String, json: Any) = snapshots.write(path, json.toString())
         snapshot("/api/auth/status", JSONObject().put("authenticated", true).put("user",

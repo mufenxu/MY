@@ -54,6 +54,9 @@ const { createMongoWebLoginTicketStore } = await import(
 const { createMongoGoogleAccountStore } = await import(
   pathToFileURL(paths.portalGoogleAccountStore).href
 );
+const { createMongoAuthenticatorVaultStore } = await import(
+  pathToFileURL(paths.portalAuthenticatorVaultStore).href
+);
 const { createMongoExternalApplicationStore } = await import(
   pathToFileURL(paths.portalExternalApplicationStore).href
 );
@@ -71,6 +74,7 @@ const portalStores = await createPersistentPortalStores({
     createMongoQrLoginStore,
     createMongoWebLoginTicketStore,
     createMongoGoogleAccountStore,
+    createMongoAuthenticatorVaultStore,
     createMongoExternalApplicationStore,
   },
 });
