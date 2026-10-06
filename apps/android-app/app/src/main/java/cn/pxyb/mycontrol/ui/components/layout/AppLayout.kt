@@ -200,15 +200,19 @@ fun AppSecondaryHeader(
 @Composable
 private fun AppTopBarActions(progress: Float, actions: @Composable RowScope.() -> Unit) {
     var moreOpen by remember { mutableStateOf(false) }
-    val useMore = progress >= 0.5f
+    // 展开层先退场、更多层后落位：两层可见窗口不重叠，避免叠在同一条右边缘上互相穿透。
+    val expandedAlpha = 1f - smoothstep(0.02f, 0.22f, progress)
+    val moreAlpha = smoothstep(0.24f, 0.44f, progress)
+    // 交互与无障碍跟随可见性，而不是收拢进度的中点。
+    val expandedInteractive = expandedAlpha >= 0.5f
+    val useMore = moreAlpha >= 0.5f
     LaunchedEffect(useMore) { if (!useMore) moreOpen = false }
-    val fade = progress * progress * (3f - 2f * progress)
     Layout(modifier = Modifier.clipToBounds(), content = {
         Row(
             modifier = Modifier
-                .then(if (useMore) Modifier.clearAndSetSemantics {} else Modifier)
-                .pointerInput(useMore) {
-                    if (useMore) awaitPointerEventScope {
+                .then(if (expandedInteractive) Modifier else Modifier.clearAndSetSemantics {})
+                .pointerInput(expandedInteractive) {
+                    if (!expandedInteractive) awaitPointerEventScope {
                         while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
                     }
                 },
@@ -227,12 +231,18 @@ private fun AppTopBarActions(progress: Float, actions: @Composable RowScope.() -
         val width = constraints.constrainWidth((expanded.width + (more.width - expanded.width) * progress).roundToInt())
         val height = constraints.constrainHeight(maxOf(expanded.height, more.height))
         layout(width, height) {
-            // 当前可交互的一层最后放置，避免渐变中的禁用按钮拦截下面的点击。
-            if (!useMore && progress > 0f) more.placeRelativeWithLayer(width - more.width, (height - more.height) / 2) { alpha = fade }
-            expanded.placeRelativeWithLayer(width - expanded.width, (height - expanded.height) / 2) { alpha = 1f - fade }
-            if (useMore) more.placeRelativeWithLayer(width - more.width, (height - more.height) / 2) { alpha = fade }
+            // 当前可交互的一层最后放置，避免淡出中的按钮拦截点击。
+            if (!useMore && progress > 0f) more.placeRelativeWithLayer(width - more.width, (height - more.height) / 2) { alpha = moreAlpha }
+            expanded.placeRelativeWithLayer(width - expanded.width, (height - expanded.height) / 2) { alpha = expandedAlpha }
+            if (useMore) more.placeRelativeWithLayer(width - more.width, (height - more.height) / 2) { alpha = moreAlpha }
         }
     }
+}
+
+/** 0..1 平滑过渡；展开层与更多层共用同一收拢进度，但各自拥有不重叠的可见窗口。 */
+private fun smoothstep(edge0: Float, edge1: Float, x: Float): Float {
+    val t = ((x - edge0) / (edge1 - edge0)).coerceIn(0f, 1f)
+    return t * t * (3f - 2f * t)
 }
 
 @Composable
