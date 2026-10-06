@@ -2,6 +2,7 @@ package cn.pxyb.mycontrol.ui.feature.authenticator
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -71,14 +72,24 @@ fun AuthenticatorCloudPanel(
           else -> "尚未启用 · 手机丢失或卸载后，本地数据可能无法恢复。"
         }, style = MaterialTheme.typography.bodyMedium,
       )
-      Text("端到端加密，服务器只保存密文。换机需要独立保存的恢复密钥。",
-        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
       if (!state.locked) {
         if (state.lastSyncedAt > 0) Text("最近确认同步：${formatter.format(Date(state.lastSyncedAt))}", style = MaterialTheme.typography.labelMedium)
         if (state.cloudEnabled) {
-          AppButton(if (state.needsReauthentication) "重新验证并同步" else "立即同步", onSync, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
-          AppSecondaryButton(if (managementOpen) "收起备份管理" else "备份与设备管理", { managementOpen = !managementOpen }, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
-          if (managementOpen) {
+          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            AppButton(if (state.needsReauthentication) "验证并同步" else "立即同步", onSync, enabled = !state.busy, modifier = Modifier.weight(1f))
+            AppSecondaryButton(if (managementOpen) "收起管理" else "备份管理", { managementOpen = !managementOpen }, enabled = !state.busy, modifier = Modifier.weight(1f))
+          }
+        } else {
+          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (!state.cloudExists) AppButton("启用备份", { begin("enable") }, enabled = !state.busy, modifier = Modifier.weight(1f))
+            AppSecondaryButton("从云端恢复", { dialog = "restore" }, enabled = !state.busy, modifier = Modifier.weight(1f))
+          }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+          AppSecondaryButton("文件恢复", { importLauncher.launch(arrayOf("application/json", "application/octet-stream")) }, enabled = !state.busy, modifier = Modifier.weight(1f))
+          AppSecondaryButton("账号安全", onOpenSecurity, enabled = !state.busy, modifier = Modifier.weight(1f))
+        }
+        if (state.cloudEnabled && managementOpen) {
             AppSecondaryButton("导出加密文件", { exportLauncher.launch("MY-authenticator-backup.json") }, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
             AppSecondaryButton("历史备份", { historyOpen = !historyOpen }, enabled = !state.busy && state.history.isNotEmpty(), modifier = Modifier.fillMaxWidth())
             if (historyOpen) {
@@ -90,14 +101,10 @@ fun AuthenticatorCloudPanel(
             AppSecondaryButton("更换恢复密钥并撤销其他设备", { begin("rotate") }, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
             AppSecondaryButton("使用恢复密钥重新授权", { dialog = "restore" }, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
             AppDangerButton("删除云端备份", { dialog = "delete" }, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
-          }
-        } else {
-          if (!state.cloudExists) AppButton("启用加密备份", { begin("enable") }, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
-          AppSecondaryButton("从云端恢复", { dialog = "restore" }, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
         }
-        AppSecondaryButton("从加密文件恢复", { importLauncher.launch(arrayOf("application/json", "application/octet-stream")) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
-        AppSecondaryButton("账号安全与登录设备", onOpenSecurity, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
       }
+      Text("端到端加密 · 服务器只保存密文。请独立保管恢复密钥，以便换机恢复。",
+        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
   }
   if (dialog == "enable" || dialog == "rotate") {

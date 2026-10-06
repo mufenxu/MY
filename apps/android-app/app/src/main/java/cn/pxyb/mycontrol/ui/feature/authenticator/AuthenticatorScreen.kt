@@ -42,6 +42,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CenterFocusWeak
+import androidx.compose.material.icons.outlined.Check
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Key
 import androidx.compose.material.icons.outlined.LockClock
@@ -176,30 +178,23 @@ fun AuthenticatorScreen(
             },
         ) {
             item(key = "security-notice", contentType = "notice") {
-                AppPanel {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                    ) {
-                        Icon(
-                            Icons.Outlined.Security,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(22.dp),
-                        )
-                        Text(
-                            text = "本地密钥由 Android Keystore 保护。云端备份需主动启用，上传前在本机加密；请独立保管恢复密钥。",
-                            style = MaterialTheme.typography.bodySmall.copy(lineHeight = 19.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = if (state.loading || state.locked) "本地加密保护" else "${state.entries.size} 个账号 · 离线可用",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = if (state.locked) "等待身份验证" else if (state.loading) "正在读取" else "设备已验证",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
                 }
             }
-
-            item(key = "cloud-backup", contentType = "cloud") { cloudPanel() }
 
             if (state.error != null) {
                 item(key = "authenticator-error", contentType = "banner") {
@@ -249,6 +244,7 @@ fun AuthenticatorScreen(
                     )
                 }
             }
+            item(key = "cloud-backup", contentType = "cloud") { cloudPanel() }
         }
 
         if (scannerOpen) {
@@ -315,13 +311,13 @@ private fun AuthenticatorEntryCard(
         }
     }
 
-    AppPanel(
-        onClick = {
-            val now = System.currentTimeMillis()
-            copyAuthenticatorCode(context, Authenticator.generate(entry, now), Authenticator.remainingSeconds(entry, now) * 1000L)
-            copied = true
-        },
-    ) {
+    val copyCode = {
+        val now = System.currentTimeMillis()
+        copyAuthenticatorCode(context, Authenticator.generate(entry, now), Authenticator.remainingSeconds(entry, now) * 1000L)
+        copied = true
+    }
+    val largeFont = LocalDensity.current.fontScale > 1.3f
+    AppPanel(onClick = copyCode) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -333,6 +329,16 @@ private fun AuthenticatorEntryCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                Box(
+                    modifier = Modifier.size(40.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = entry.issuer.take(1).uppercase(),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -358,29 +364,56 @@ private fun AuthenticatorEntryCard(
                 )
             }
 
-            Text(
-                text = formatTotpCode(code),
-                style = MaterialTheme.typography.displaySmall.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 2.sp,
-                ),
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            )
-
-            AppLinearProgressIndicator(
-                progress = { progress },
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = formatTotpCode(code),
+                    style = (if (code.length == 6 && !largeFont) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displaySmall).copy(
+                        fontWeight = FontWeight.Bold,
+                        fontFeatureSettings = "tnum",
+                    ),
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f),
+                )
+                if (!largeFont) AppHeaderIconButton(
+                    icon = if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
+                    contentDescription = if (copied) "已复制验证码" else "复制 ${entry.issuer} 验证码",
+                    onClick = copyCode,
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                )
+            }
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                height = 6.dp,
-                animateProgress = false,
-            )
-
-            Text(
-                text = if (copied) "已复制验证码" else "$remainingSeconds 秒后刷新",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            )
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (largeFont) AppHeaderIconButton(
+                    icon = if (copied) Icons.Outlined.Check else Icons.Outlined.ContentCopy,
+                    contentDescription = "复制 ${entry.issuer} 验证码",
+                    onClick = copyCode,
+                    iconTint = MaterialTheme.colorScheme.primary,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                )
+                Text(
+                    text = if (copied) "已复制验证码" else "轻点复制",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "$remainingSeconds 秒后刷新",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AppLinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.width(72.dp),
+                        height = 4.dp,
+                        animateProgress = false,
+                    )
+                }
+            }
         }
     }
 }
