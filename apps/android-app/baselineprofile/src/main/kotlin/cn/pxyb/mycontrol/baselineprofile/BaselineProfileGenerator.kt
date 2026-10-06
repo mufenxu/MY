@@ -48,13 +48,17 @@ class BaselineProfileGenerator {
         openHome()
         scrollList()
         device.findObject(By.text("设备")).click()
-        check(device.wait(Until.hasObject(By.text("本地验证器")), 10_000)) { "设备页未就绪" }
+        check(device.wait(Until.hasObject(By.text("设备控制已连接")), 10_000)) { "设备页未就绪" }
+        device.findObject(By.text("我的")).click()
+        check(device.wait(Until.hasObject(By.text("账号与安全")), 10_000)) { "我的页面未就绪" }
+        // 验证器入口位于“我的”账号工具区，小屏上可能需要滚动才能显示。
+        val profileList = device.wait(Until.findObject(By.scrollable(true)), 5_000) ?: error("未找到我的页面列表")
+        profileList.setGestureMargin(device.displayWidth / 5)
+        check(profileList.scrollUntil(Direction.DOWN, Until.hasObject(By.text("本地验证器")))) { "未找到本地验证器入口" }
         device.findObject(By.text("本地验证器")).click()
         check(device.wait(Until.hasObject(By.text("离线生成 TOTP 动态验证码")), 10_000)) { "验证器页未就绪" }
         device.pressBack()
-        check(device.wait(Until.hasObject(By.text("我的")), 10_000)) { "返回设备页失败" }
-        device.findObject(By.text("我的")).click()
-        check(device.wait(Until.hasObject(By.text("账号与安全")), 10_000)) { "我的页面未就绪" }
+        check(device.wait(Until.hasObject(By.text("本地验证器")), 10_000)) { "返回我的页面失败" }
         scrollList()
         startActivityAndWait(Intent(Intent.ACTION_VIEW, Uri.parse("mycontrol://open?tab=notifications"))
             .setComponent(ComponentName(PACKAGE, MAIN_ACTIVITY)))
@@ -132,7 +136,7 @@ class InteractionBenchmark {
         setupBlock = { openHome() },
         measureBlock = {
             device.findObject(By.text("设备")).click()
-            check(device.wait(Until.hasObject(By.text("本地验证器")), 10_000)) { "设备页未就绪" }
+            check(device.wait(Until.hasObject(By.text("设备控制已连接")), 10_000)) { "设备页未就绪" }
             device.waitForIdle()
             device.findObject(By.text("我的")).click()
             check(device.wait(Until.hasObject(By.text("账号与安全")), 10_000)) { "我的页面未就绪" }
