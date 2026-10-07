@@ -78,6 +78,9 @@ enum class AppFeedbackType {
     Info,
 }
 
+/** 提示刚出现的时间窗口：超出该窗口说明是列表回收后的重建，不再重复触发触觉反馈。 */
+private const val HAPTIC_FRESH_WINDOW_MS = 250L
+
 /** 主题反馈横幅：成功短暂显示，持续状态保留；重试与关闭由调用方决定。 */
 @Composable
 fun AppFeedbackBanner(
@@ -91,6 +94,7 @@ fun AppFeedbackBanner(
     showCloseButton: Boolean = true,
     autoDismissDurationMillis: Long? = if (type == AppFeedbackType.Success) 4000L else null,
     onDismiss: (() -> Unit)? = null,
+    shownAtMillis: Long? = null,
 ) {
     val dark = isAppInDarkTheme()
     val haptics = LocalHapticFeedback.current
@@ -111,17 +115,42 @@ fun AppFeedbackBanner(
         AppFeedbackType.Info -> ColorTokens.Blue.foreground
     }
 
-    // 内部自主控制显示与隐藏
-    var isVisible by remember(message, type) { mutableStateOf(true) }
-
-    // 倒计时动画（1f -> 0f）
-    val progressAnim = remember(message, type) { Animatable(1f) }
-    val isAutoDismissable = dismissTimeout != null &&
-        dismissTimeout > 0L &&
+    // 提示通常位于 LazyColumn 的 item 中，滚动时会被回收重建。调用方给出本次提示的生成时间后，
+    // 倒计时按固定截止时间推进，重建时接着走完剩余时间，不会重新计时或一直不消失。
+    val dismissDeadline = remember(message, type, dismissTimeout, shownAtMillis) {
+        if (dismissTimeout != null && dismissTimeout > 0L) {
+            (shownAtMillis ?: System.currentTimeMillis()) + dismissTimeout
+        } else {
+            Long.MAX_VALUE
+        }
+    }
+    val isAutoDismissable = dismissDeadline != Long.MAX_VALUE &&
         type != AppFeedbackType.Error
 
-    // 触觉反馈联动（当提示刷新出现时给用户细腻触感）
-    LaunchedEffect(message, type) {
+    // 内部自主控制显示与隐藏
+    var isVisible by remember(message, type, dismissDeadline) { mutableStateOf(true) }
+
+    // 倒计时动画（1f -> 0f）：重建时从剩余时间对应的进度继续
+    val progressAnim = remember(message, type, dismissDeadline) {
+        val initial = if (isAutoDismissable) {
+            val remaining = (dismissDeadline - System.currentTimeMillis()).coerceAtLeast(0L)
+            (remaining.toFloat() / dismissTimeout!!.toFloat()).coerceIn(0f, 1f)
+        } else {
+            1f
+        }
+        Animatable(initial)
+    }
+
+    // 截止时间已过（提示被滚出屏幕很久后才重新出现）时不再展示
+    val expired = isAutoDismissable && dismissDeadline <= System.currentTimeMillis()
+
+    // 触觉反馈联动：同一条提示被回收重建时不重复震动
+    val hapticDue = remember(message, type, dismissDeadline) {
+        !isAutoDismissable ||
+            System.currentTimeMillis() - (dismissDeadline - dismissTimeout!!) < HAPTIC_FRESH_WINDOW_MS
+    }
+    LaunchedEffect(message, type, hapticDue) {
+        if (!hapticDue) return@LaunchedEffect
         if (type == AppFeedbackType.Error) {
             AppHaptics.heavy(haptics)
         } else {
@@ -129,22 +158,22 @@ fun AppFeedbackBanner(
         }
     }
 
-    // 4 秒自动倒计时平滑收起
-    LaunchedEffect(message, type, isVisible, dismissTimeout) {
-        if (!isVisible) return@LaunchedEffect
-        if (isAutoDismissable) {
-            progressAnim.snapTo(1f)
+    // 自动倒计时：走完剩余时间后平滑收起
+    LaunchedEffect(message, type, isVisible, dismissDeadline) {
+        if (!isVisible || !isAutoDismissable) return@LaunchedEffect
+        val remaining = (dismissDeadline - System.currentTimeMillis()).coerceAtLeast(0L)
+        if (remaining > 0L) {
             progressAnim.animateTo(
                 targetValue = 0f,
                 animationSpec = tween(
-                    durationMillis = dismissTimeout!!.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                    durationMillis = remaining.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
                     easing = LinearEasing,
                 ),
             )
-            // 倒计时结束，触发平滑关闭与回调
-            isVisible = false
-            onDismiss?.invoke()
         }
+        // 倒计时结束，触发平滑关闭与回调
+        isVisible = false
+        onDismiss?.invoke()
     }
 
     val handleDismiss: () -> Unit = {
@@ -172,7 +201,7 @@ fun AppFeedbackBanner(
     val finalIcon = icon ?: defaultIcon
 
     AnimatedVisibility(
-        visible = isVisible,
+        visible = isVisible && !expired,
         enter = expandVertically(
             animationSpec = cn.pxyb.mycontrol.ui.theme.MotionTokens.standardTween(),
         ) + fadeIn(cn.pxyb.mycontrol.ui.theme.MotionTokens.fastTween()),
@@ -356,6 +385,7 @@ fun AppFeedbackBanner(
     showCloseButton: Boolean = true,
     autoDismissDurationMillis: Long? = 4000L,
     onDismiss: (() -> Unit)? = null,
+    shownAtMillis: Long? = null,
 ) {
     AppFeedbackBanner(
         message = message,
@@ -368,5 +398,6 @@ fun AppFeedbackBanner(
         showCloseButton = showCloseButton,
         autoDismissDurationMillis = autoDismissDurationMillis,
         onDismiss = onDismiss,
+        shownAtMillis = shownAtMillis,
     )
 }

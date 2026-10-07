@@ -138,7 +138,11 @@ fun WaterValveScreen(
             }
             if (state.message != null) {
                 item(key = "water-valve-message", contentType = "banner") {
-                    AppFeedbackBanner(message = state.message, error = false)
+                    AppFeedbackBanner(
+                        message = state.message,
+                        error = false,
+                        shownAtMillis = state.messageShownAt,
+                    )
                 }
             }
 
