@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol.ui.feature.overview
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +39,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -75,6 +78,22 @@ internal fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (Workspac
     val colors = MaterialTheme.colorScheme
     val accent = if (isAppInDarkTheme()) colors.primary else cn.pxyb.mycontrol.ui.theme.HomeFocusBlue
     val onAccent = if (isAppInDarkTheme()) colors.onPrimary else colors.surface
+    val cardShape = RoundedCornerShape(24.dp)
+    // 顶部高光收到下半部压暗，配合彩色投影做出"浮起一寸"的立体感。
+    val gloss = if (isAppInDarkTheme()) arrayOf(
+        0.00f to Color.White.copy(alpha = 0.14f),
+        0.20f to Color.White.copy(alpha = 0.03f),
+        0.62f to Color.Transparent,
+        1.00f to Color.Black.copy(alpha = 0.20f),
+    ) else arrayOf(
+        0.00f to Color.White.copy(alpha = 0.34f),
+        0.20f to Color.White.copy(alpha = 0.10f),
+        0.62f to Color.Transparent,
+        1.00f to Color.Black.copy(alpha = 0.14f),
+    )
+    val topHighlight = Brush.verticalGradient(
+        listOf(Color.White.copy(alpha = if (isAppInDarkTheme()) 0.16f else 0.42f), Color.Transparent),
+    )
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         AppPanel {
             Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -96,10 +115,18 @@ internal fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (Workspac
         }
         Surface(
             onClick = { onOpenWorkspace(WorkspaceDestination.Today) },
-            shape = RoundedCornerShape(24.dp), color = accent, contentColor = onAccent,
-            modifier = Modifier.fillMaxWidth(),
+            shape = cardShape, color = Color.Transparent, contentColor = onAccent,
+            modifier = Modifier.fillMaxWidth().shadow(
+                elevation = 22.dp, shape = cardShape,
+                ambientColor = accent.copy(alpha = if (isAppInDarkTheme()) 0.35f else 0.55f),
+                spotColor = accent.copy(alpha = if (isAppInDarkTheme()) 0.26f else 0.42f),
+            ),
         ) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                Modifier.background(accent).background(Brush.verticalGradient(colorStops = gloss))
+                    .border(1.dp, topHighlight, cardShape).padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 Text(
                     if (course == null) "今日课程" else if (snapshot.classFocusUntilMillis != null) "正在上课" else "下一节课",
                     modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(onAccent.copy(alpha = 0.14f))

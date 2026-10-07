@@ -91,6 +91,8 @@ import cn.pxyb.mycontrol.data.AppThemePreference
 import cn.pxyb.mycontrol.ui.AppViewModel
 import cn.pxyb.mycontrol.ui.QrScanDestination
 import cn.pxyb.mycontrol.ui.components.feedback.AppToast
+import cn.pxyb.mycontrol.ui.components.glass.glassBackdropSource
+import cn.pxyb.mycontrol.ui.components.glass.rememberGlassBackdrop
 import cn.pxyb.mycontrol.ui.components.layout.AppPageBottomSpacing
 import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
 import cn.pxyb.mycontrol.ui.components.layout.AppTabletContentMaxWidth
@@ -347,6 +349,8 @@ internal fun AuthenticatedShell(
     val bottomDockVisible = (isTablet || !isSubScreen) && !keyboardVisible
     var bottomDockHeightPx by remember { mutableIntStateOf(0) }
     val bottomDockHeight = with(LocalDensity.current) { bottomDockHeightPx.toDp() }
+    // 底栏液态玻璃取样：内容照常绘制，同时录进图形层供底栏模糊取样。
+    val glassBackdrop = rememberGlassBackdrop()
     val shellFocus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -436,7 +440,8 @@ internal fun AuthenticatedShell(
                             top = shellInsets.navigationTop,
                             end = shellInsets.navigationEnd,
                         ))
-                        .imePadding(),
+                        .imePadding()
+                        .glassBackdropSource(glassBackdrop),
                 ) {
                 NavHost(
                     navController = navController,
@@ -1148,6 +1153,7 @@ internal fun AuthenticatedShell(
                     selected = primaryTabForRoute(currentRoute) ?: state.selectedTab,
                     onSelect = navigateToTab,
                     modifier = Modifier.onSizeChanged { bottomDockHeightPx = it.height },
+                    glassBackdrop = glassBackdrop,
                     assistant = if (state.assistantButtonVisible && !state.assistantOpen && !settingsOpen) ({
                         AssistantDockButton(expanded = isTablet, onOpen = viewModel::openAssistant)
                     }) else null,
