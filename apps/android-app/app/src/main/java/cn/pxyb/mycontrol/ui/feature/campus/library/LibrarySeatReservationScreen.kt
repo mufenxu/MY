@@ -56,6 +56,7 @@ import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonInlineRows
 import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonMetricRow
 import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonSeatGrid
+import cn.pxyb.mycontrol.ui.components.feedback.rememberFeedbackShownAt
 import cn.pxyb.mycontrol.ui.components.input.AppSelectField
 import cn.pxyb.mycontrol.ui.components.input.AppSelectOption
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
@@ -127,6 +128,8 @@ internal fun LibrarySeatReservationScreen(
     var queryMode by rememberSaveable { mutableStateOf("areas") }
     var seatListExpanded by rememberSaveable { mutableStateOf(false) }
     var selectedTab by rememberSaveable { mutableStateOf(initialTab) }
+    // 提示挂在列表项上，页面级记住出现时间，滚动回收重建后按同一时间点继续倒计时。
+    val messageShownAt = rememberFeedbackShownAt(state.message)
 
     fun clearQuerySelection() {
         onInvalidateQuery()
@@ -366,7 +369,7 @@ internal fun LibrarySeatReservationScreen(
 
         state.message?.takeIf(String::isNotBlank)?.let { message ->
             item(key = "seat-message", contentType = "banner") {
-                AppFeedbackBanner(message, error = false)
+                AppFeedbackBanner(message, error = false, shownAtMillis = messageShownAt)
             }
         }
         state.error?.takeIf(String::isNotBlank)?.let { message ->

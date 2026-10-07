@@ -36,6 +36,7 @@ import cn.pxyb.mycontrol.data.CampusWaterValveDevice
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
+import cn.pxyb.mycontrol.ui.components.feedback.rememberFeedbackShownAt
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import java.time.YearMonth
@@ -63,6 +64,8 @@ fun WaterValveScreen(
     var pendingDelete by remember { mutableStateOf<CampusWaterValveDevice?>(null) }
     var billMonth by remember { mutableStateOf(YearMonth.now()) }
     val listState = rememberLazyListState()
+    // 提示挂在列表项上，页面级记住出现时间，滚动回收重建后按同一时间点继续倒计时。
+    val messageShownAt = rememberFeedbackShownAt(state.message)
     var devices by remember { mutableStateOf(state.valve.devices) }
     var syncedDevices by remember { mutableStateOf(state.valve.devices) }
     var draggingKey by remember { mutableStateOf<Any?>(null) }
@@ -141,7 +144,7 @@ fun WaterValveScreen(
                     AppFeedbackBanner(
                         message = state.message,
                         error = false,
-                        shownAtMillis = state.messageShownAt,
+                        shownAtMillis = messageShownAt,
                     )
                 }
             }

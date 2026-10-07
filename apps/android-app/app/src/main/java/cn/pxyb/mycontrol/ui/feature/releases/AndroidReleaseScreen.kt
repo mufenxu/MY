@@ -66,6 +66,7 @@ import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppErrorState
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
+import cn.pxyb.mycontrol.ui.components.feedback.rememberFeedbackShownAt
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.components.layout.AppFormContentMaxWidth
@@ -105,6 +106,8 @@ internal fun AndroidReleaseScreen(
         minCellWidth = 440.dp,
         maxColumns = 3,
     )
+    // 提示挂在列表项上，页面级记住出现时间，滚动回收重建后按同一时间点继续倒计时。
+    val messageShownAt = rememberFeedbackShownAt(state.message)
 
     AppSubPage(
         title = "Android 发布管理",
@@ -152,6 +155,7 @@ internal fun AndroidReleaseScreen(
                 AppFeedbackBanner(
                     message = state.error ?: state.message.orEmpty(),
                     error = state.error != null,
+                    shownAtMillis = messageShownAt,
                 )
             }
         }

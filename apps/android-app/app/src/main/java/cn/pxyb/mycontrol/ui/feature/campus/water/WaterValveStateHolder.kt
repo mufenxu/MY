@@ -129,7 +129,6 @@ class WaterValveStateHolder(
                         it.copy(
                             valve = valve,
                             message = successMessage,
-                            messageShownAt = System.currentTimeMillis(),
                         )
                     }
                 }

@@ -50,6 +50,7 @@ import cn.pxyb.mycontrol.ui.components.display.AppSwitchRow
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
+import cn.pxyb.mycontrol.ui.components.feedback.rememberFeedbackShownAt
 import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
@@ -116,6 +117,8 @@ fun MediaDownloadScreen(
     var pendingDownload by remember { mutableStateOf<PendingMediaDownload?>(null) }
     var pendingPermission by remember { mutableStateOf<PendingMediaDownload?>(null) }
     var selectedQuality by remember(state.target) { mutableIntStateOf(0) }
+    // 提示挂在列表项上，页面级记住出现时间，滚动回收重建后按同一时间点继续倒计时。
+    val messageShownAt = rememberFeedbackShownAt(state.message)
 
     fun readClipboard(): String = runCatching { clipboard.getText()?.text }.getOrNull().orEmpty()
     fun openNew(source: String? = null) {
@@ -256,7 +259,7 @@ fun MediaDownloadScreen(
             }
             if (!showNew) {
                 state.error?.let { item { AppFeedbackBanner(message = it, type = AppFeedbackType.Error) } }
-                state.message?.let { item { AppFeedbackBanner(message = it) } }
+                state.message?.let { item { AppFeedbackBanner(message = it, shownAtMillis = messageShownAt) } }
             }
             if (tab == "解析记录") {
                 item {
@@ -316,7 +319,7 @@ fun MediaDownloadScreen(
                         enabled = !state.parsing && !queuing, modifier = Modifier.weight(1f), onClick = onParse)
                 }
                 state.error?.let { AppFeedbackBanner(message = it, type = AppFeedbackType.Error) }
-                state.message?.let { AppFeedbackBanner(message = it) }
+                state.message?.let { AppFeedbackBanner(message = it, shownAtMillis = messageShownAt) }
                 if (result != null) {
                     MediaResultHeading(result)
                     if (result.qualities.isNotEmpty()) {

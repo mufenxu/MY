@@ -37,6 +37,7 @@ import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusMyReservation
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
+import cn.pxyb.mycontrol.ui.components.feedback.rememberFeedbackShownAt
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
@@ -74,6 +75,8 @@ fun ReservationScreen(
     var selectedTab by rememberSaveable { mutableStateOf(ReservationTab.Single) }
     var showIdentityCodeDialog by rememberSaveable { mutableStateOf(false) }
     var rescheduleTarget by remember { mutableStateOf<CampusMyReservation?>(null) }
+    // 提示挂在列表项上，页面级记住出现时间，滚动回收重建后按同一时间点继续倒计时。
+    val messageShownAt = rememberFeedbackShownAt(state.message)
 
     LaunchedEffect(Unit) {
         onLoadSpaces()
@@ -148,7 +151,7 @@ fun ReservationScreen(
 
         state.message?.let { message ->
             item(key = "reservation-success-msg", contentType = "banner") {
-                AppFeedbackBanner(message = message, error = false)
+                AppFeedbackBanner(message = message, error = false, shownAtMillis = messageShownAt)
             }
         }
 

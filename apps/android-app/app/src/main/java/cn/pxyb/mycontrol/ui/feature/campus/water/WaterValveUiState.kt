@@ -15,6 +15,4 @@ data class WaterValveUiState(
     val billError: String? = null,
     val error: String? = null,
     val message: String? = null,
-    /** 当前提示的生成时间，列表项被回收重建后据此继续倒计时。 */
-    val messageShownAt: Long = 0L,
 )

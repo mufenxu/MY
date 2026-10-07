@@ -73,6 +73,7 @@ import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppErrorState
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppLoadingState
+import cn.pxyb.mycontrol.ui.components.feedback.rememberFeedbackShownAt
 import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
@@ -134,6 +135,8 @@ internal fun RegistryImagesScreen(
 
     val expanded = remember { mutableStateMapOf<String, Boolean>() }
     var confirmDelete by remember { mutableStateOf(false) }
+    // 提示挂在列表项上，页面级记住出现时间，滚动回收重建后按同一时间点继续倒计时。
+    val messageShownAt = rememberFeedbackShownAt(state.message)
     val catalog = state.catalog
     val deletable = canManage && catalog?.canDelete == true
     val selectedCount = state.selected.size
@@ -161,7 +164,11 @@ internal fun RegistryImagesScreen(
 
         state.message?.let { message ->
             item(key = "registry-message", contentType = "banner") {
-                AppFeedbackBanner(message = message, onDismiss = onDismissFeedback)
+                AppFeedbackBanner(
+                    message = message,
+                    onDismiss = onDismissFeedback,
+                    shownAtMillis = messageShownAt,
+                )
             }
         }
         state.error?.let { error ->

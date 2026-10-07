@@ -44,6 +44,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -144,6 +145,10 @@ fun AppFeedbackBanner(
     // 截止时间已过（提示被滚出屏幕很久后才重新出现）时不再展示
     val expired = isAutoDismissable && dismissDeadline <= System.currentTimeMillis()
 
+    // 手动关闭按“本次提示”记忆：同一次提示滚动重建后保持关闭，出现新提示（时间点变化）时照常展示。
+    val dismissedShownAt = rememberSaveable(message, type) { mutableStateOf(0L) }
+    val dismissed = shownAtMillis != null && dismissedShownAt.value == shownAtMillis
+
     // 触觉反馈联动：同一条提示被回收重建时不重复震动
     val hapticDue = remember(message, type, dismissDeadline) {
         !isAutoDismissable ||
@@ -179,6 +184,7 @@ fun AppFeedbackBanner(
     val handleDismiss: () -> Unit = {
         AppHaptics.tick(haptics)
         isVisible = false
+        if (shownAtMillis != null) dismissedShownAt.value = shownAtMillis
         onDismiss?.invoke()
     }
 
@@ -201,7 +207,7 @@ fun AppFeedbackBanner(
     val finalIcon = icon ?: defaultIcon
 
     AnimatedVisibility(
-        visible = isVisible && !expired,
+        visible = isVisible && !expired && !dismissed,
         enter = expandVertically(
             animationSpec = cn.pxyb.mycontrol.ui.theme.MotionTokens.standardTween(),
         ) + fadeIn(cn.pxyb.mycontrol.ui.theme.MotionTokens.fastTween()),
@@ -401,3 +407,14 @@ fun AppFeedbackBanner(
         shownAtMillis = shownAtMillis,
     )
 }
+
+/**
+ * 记住页面提示的出现时间，配合 [AppFeedbackBanner] 的 `shownAtMillis` 使用。
+ *
+ * 提示一般渲染在 LazyColumn 的 item 中，滚动时列表项会被回收重建；在页面级记住时间点后，
+ * 同一条提示重建时倒计时接着走，不会重新计时、不会一直不消失，也不会因重建而重新出现。
+ */
+@Composable
+fun rememberFeedbackShownAt(message: String?): Long? =
+    remember(message) { if (message.isNullOrEmpty()) 0L else System.currentTimeMillis() }
+        .takeIf { it > 0L }

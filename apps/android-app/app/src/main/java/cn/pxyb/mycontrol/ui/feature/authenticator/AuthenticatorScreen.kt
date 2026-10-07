@@ -82,6 +82,7 @@ import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
+import cn.pxyb.mycontrol.ui.components.feedback.rememberFeedbackShownAt
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
@@ -117,6 +118,8 @@ fun AuthenticatorScreen(
     var scannerOpen by remember { mutableStateOf(false) }
     var manualOpen by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<AuthenticatorEntry?>(null) }
+    // 提示挂在列表项上，页面级记住出现时间，滚动回收重建后按同一时间点继续倒计时。
+    val messageShownAt = rememberFeedbackShownAt(state.message)
     val columns = adaptiveGridColumnCount(
         appContentWidth() - AppPageHorizontalPadding * 2,
         LocalDensity.current.fontScale,
@@ -203,7 +206,7 @@ fun AuthenticatorScreen(
             }
             if (state.message != null) {
                 item(key = "authenticator-message", contentType = "banner") {
-                    AppFeedbackBanner(state.message, error = false)
+                    AppFeedbackBanner(state.message, error = false, shownAtMillis = messageShownAt)
                 }
             }
 
