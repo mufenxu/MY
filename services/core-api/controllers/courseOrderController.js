@@ -525,10 +525,10 @@ exports.publicSearch = async (req, res) => {
             isHidden: { $ne: true }
         };
 
+        // 精确匹配订单号或账号，命中范围天然有界，这里返回全部记录供自查
         const orders = await CourseOrder.find(match)
             .select('tradeNo account courseName statusText progress remarks updateTime createTime') // 明确排除平台等敏感字段
             .sort({ createTime: -1 })
-            .limit(10)
             .lean();
 
         if (orders.length === 0) {

@@ -226,6 +226,10 @@ const PublicQuery = () => {
           </div>
         ) : results.length > 0 ? (
           <div className="record-list">
+            <div className="record-list-head">
+              <span className="record-list-title">查询结果</span>
+              <span className="record-list-count">共 {results.length} 条记录</span>
+            </div>
             {results.map((order, index) => {
               const isCompleted = order.statusText?.includes('完成');
               const isRefreshing = refreshingId === order.tradeNo;

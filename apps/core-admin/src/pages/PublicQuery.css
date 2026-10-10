@@ -340,6 +340,26 @@
   gap: 14px;
 }
 
+.record-list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 2px;
+}
+
+.record-list-title {
+  color: #334155;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.record-list-count {
+  color: var(--rq-muted);
+  font-size: 13px;
+  font-weight: 650;
+}
+
 .record-result-card {
   overflow: hidden;
   box-shadow: none !important;
@@ -495,7 +515,7 @@
 
 .refresh-record-button {
   min-width: 132px;
-  min-height: 42px;
+  min-height: 46px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -651,6 +671,37 @@
 
   .record-support-list {
     gap: 7px;
+  }
+}
+
+@media (min-width: 981px) {
+  .record-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+
+  .record-list-head {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 680px) {
+  .record-query-panel {
+    order: -1;
+  }
+
+  .record-list-head {
+    padding: 0;
+  }
+
+  .record-result-card .ant-card-body {
+    padding: 14px !important;
+  }
+
+  .progress-copy strong {
+    font-size: 18px;
   }
 }
 
