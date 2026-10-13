@@ -171,6 +171,24 @@ function createApp({
   const wxPusher = wxPusherClient || (config.wxpusher?.enabled
     ? createWxPusherClient({ appToken: config.wxpusher.appToken, uids: config.wxpusher.uids })
     : null);
+  const disabledChannels = new Set(config.disabledChannels || []);
+
+  function isChannelDisabled(channel) {
+    return disabledChannels.has(channel);
+  }
+
+  function requireChannelEnabled(channel, label) {
+    if (isChannelDisabled(channel)) {
+      throw httpError(503, 'CHANNEL_DISABLED', `${label}渠道已被 NOTIFY_DISABLED_CHANNELS 停用。`);
+    }
+  }
+
+  // 渠道状态：未请求 → not-requested；被全局停用 → disabled；否则用实际发送结果覆盖。
+  function plannedChannelStatus(channels, channel, activeStatus) {
+    if (!channels.includes(channel)) return 'not-requested';
+    return isChannelDisabled(channel) ? 'disabled' : activeStatus;
+  }
+
   const guardAgainstReplay = createReplayGuard();
   const apiRateWindows = new Map();
 
@@ -336,6 +354,7 @@ function createApp({
   }
 
   async function deliverCmcc(content, { caller, actor = '', requestId, apiClient = null } = {}) {
+    requireChannelEnabled('cmcc', '中国移动新消息');
     const channel = requireCmccChannel();
     const to = config.cmcc.recipient;
     const text = toCmccText(content);
@@ -381,6 +400,7 @@ function createApp({
   }
 
   async function deliverCmccMedia(input, { caller, actor = '', requestId, apiClient = null } = {}) {
+    requireChannelEnabled('cmcc', '中国移动新消息');
     const channel = requireCmccChannel();
     const to = cmccTargetPhone();
     const startedAt = Date.now();
@@ -504,6 +524,7 @@ function createApp({
   }
 
   async function deliver(body, { caller, actor = '', requestId, parentDeliveryId = null, apiClient = null } = {}) {
+    requireChannelEnabled('wecom', '企业微信');
     const parsed = notificationSchema.parse(body);
     const target = targetMetadata(parsed);
     const startedAt = Date.now();
@@ -598,6 +619,7 @@ function createApp({
   // WxPusher 是 App 通道的第三方投递方式：只按固定 UID 发送，安静时段等偏好沿用本通道判定。
   async function deliverWxPusher({ content, actions, recipients }) {
     if (!wxPusher?.enabled) return 'not-requested';
+    if (isChannelDisabled('wxpusher')) return 'disabled';
     for (const recipientId of [...new Set(recipients || [])]) {
       const preference = typeof store.getRecipientPreference === 'function'
         ? await store.getRecipientPreference(recipientId)
@@ -642,15 +664,15 @@ function createApp({
       ? 'deduplicated'
       : await deliverWxPusher({ content: parsed.content, actions: parsed.actions, recipients: parsed.audience.users });
     let wecomDeliveryId = null;
-    let wecomStatus = parsed.channels.includes('wecom') ? 'deduplicated' : 'not-requested';
-    if (parsed.channels.includes('wecom') && !created.deduplicated) {
+    let wecomStatus = plannedChannelStatus(parsed.channels, 'wecom', 'deduplicated');
+    if (parsed.channels.includes('wecom') && !created.deduplicated && !isChannelDisabled('wecom')) {
       const delivered = await deliver(toWeComMessage(parsed), { caller, requestId, apiClient });
       wecomDeliveryId = delivered.delivery?.id || null;
       wecomStatus = 'sent';
     }
     let cmccDeliveryId = null;
-    let cmccStatus = parsed.channels.includes('cmcc') ? 'deduplicated' : 'not-requested';
-    if (parsed.channels.includes('cmcc') && !created.deduplicated) {
+    let cmccStatus = plannedChannelStatus(parsed.channels, 'cmcc', 'deduplicated');
+    if (parsed.channels.includes('cmcc') && !created.deduplicated && !isChannelDisabled('cmcc')) {
       const delivered = await deliverCmcc(parsed.content, { caller, requestId, apiClient });
       cmccDeliveryId = delivered.delivery?.id || null;
       // 网关没有投递回执，只记录已提交。
@@ -732,13 +754,22 @@ function createApp({
   async (req, res, next) => {
     try {
       const appNotificationId = await createLegacyAppNotification(req);
-      const { result, delivery } = await deliver(req.body, {
+      // 企业微信渠道被停用时明示 disabled 且不发送，但不阻断请求：App 收件箱那条照常写入。
+      const wecomDisabled = isChannelDisabled('wecom');
+      const delivered = wecomDisabled ? null : await deliver(req.body, {
         caller: req.serviceCaller,
         requestId: req.id,
         apiClient: req.apiClient,
       });
-      await recordManagedApiRequest(req, { endpoint: '/notify', httpStatus: 200, deliveryId: delivery?.id || null, body: req.body });
-      return res.json({ errcode: 0, errmsg: 'ok', detail: result, deliveryId: delivery?.id || null, appNotificationId });
+      await recordManagedApiRequest(req, { endpoint: '/notify', httpStatus: 200, deliveryId: delivered?.delivery?.id || null, body: req.body });
+      return res.json({
+        errcode: 0,
+        errmsg: 'ok',
+        detail: delivered?.result || null,
+        wecom: wecomDisabled ? 'disabled' : 'sent',
+        deliveryId: delivered?.delivery?.id || null,
+        appNotificationId,
+      });
     } catch (error) {
       await recordManagedApiRequest(req, {
         endpoint: '/notify',
@@ -793,8 +824,8 @@ function createApp({
           deduplicated: queued.deduplicated,
           channels: {
             app: 'scheduled',
-            wecom: parsed.channels.includes('wecom') ? 'scheduled' : 'not-requested',
-            cmcc: parsed.channels.includes('cmcc') ? 'scheduled' : 'not-requested',
+            wecom: plannedChannelStatus(parsed.channels, 'wecom', 'scheduled'),
+            cmcc: plannedChannelStatus(parsed.channels, 'cmcc', 'scheduled'),
           },
           push: { attempted: 0, sent: 0, deferred: 0, failed: 0, suppressed: 0 },
           wecomDeliveryId: null,

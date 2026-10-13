@@ -110,6 +110,19 @@ function parseWxPusherConfig() {
   return { enabled: true, appToken, uids: [...new Set(uids)] };
 }
 
+const DISABLEABLE_CHANNELS = ['wecom', 'cmcc', 'wxpusher'];
+
+// 全局停用投递渠道：只拦发送，不影响入队与 App 收件箱；app 通道不可停用（通知必须留在收件箱）。
+function parseDisabledChannels(value) {
+  const channels = String(value || '')
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  const unknown = channels.filter((item) => !DISABLEABLE_CHANNELS.includes(item));
+  if (unknown.length > 0) throw new Error(`NOTIFY_DISABLED_CHANNELS 只支持 ${DISABLEABLE_CHANNELS.join('、')}，收到：${unknown.join('、')}`);
+  return [...new Set(channels)];
+}
+
 const config = {
   port: parseInt(process.env.PORT || "3000", 10),
   apiKey: ensureStrongSecret("NOTIFY_API_KEY"),
@@ -130,6 +143,7 @@ const config = {
   },
   cmcc: parseCmccConfig(),
   wxpusher: parseWxPusherConfig(),
+  disabledChannels: parseDisabledChannels(process.env.NOTIFY_DISABLED_CHANNELS),
   tokenCacheMargin: parseInteger(
     process.env.TOKEN_CACHE_MARGIN || "120",
     "TOKEN_CACHE_MARGIN"
