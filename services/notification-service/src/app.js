@@ -8,11 +8,12 @@ const { z } = require('zod');
 
 const WeComClient = require('./wecom-client');
 const { CmccClient } = require('./cmcc-client');
+const { createWxPusherClient } = require('./wxpusher-client');
 const { resolveCmccAutoReply } = require('./cmcc-commands');
 const { notificationSchema, buildWeComPayload } = require('./notification-schema');
 const { createNotificationOrchestrator } = require('./notification-orchestrator');
 const { createMemoryNotificationStore } = require('./notification-store');
-const { createAppPushDispatcher } = require('./app-push');
+const { createAppPushDispatcher, isPushSuppressed } = require('./app-push');
 const {
   appDeviceSchema,
   appNotificationSchema,
@@ -145,6 +146,7 @@ function createApp({
   notificationStore = null,
   appPushDispatcher = null,
   cmccClient = null,
+  wxPusherClient = null,
 } = {}) {
   if (!config) throw new Error('Notification service config is required.');
   const app = express();
@@ -165,6 +167,9 @@ function createApp({
       uploadUrl: config.cmcc.uploadUrl,
       defaultTo: config.cmcc.recipient,
     })
+    : null);
+  const wxPusher = wxPusherClient || (config.wxpusher?.enabled
+    ? createWxPusherClient({ appToken: config.wxpusher.appToken, uids: config.wxpusher.uids })
     : null);
   const guardAgainstReplay = createReplayGuard();
   const apiRateWindows = new Map();
@@ -546,6 +551,12 @@ function createApp({
       ].filter((value) => typeof value === 'string' && value.trim()).join('\n').trim();
       const title = contentText.split(/\r?\n/, 1)[0].slice(0, 160) || '系统通知';
       const contentKind = legacy.msg_type === 'markdown' ? 'markdown' : 'text';
+      const content = {
+        kind: contentKind,
+        title,
+        summary: contentText.slice(0, 280),
+        blocks: [{ type: contentKind, [contentKind]: contentText }],
+      };
       const created = await store.createAppNotification({
         caller: req.serviceCaller || 'legacy-wecom',
         idempotencyKey: `legacy:${req.id}`,
@@ -555,12 +566,7 @@ function createApp({
           priority: 'normal',
           title,
           summary: contentText.slice(0, 280),
-          content: {
-            kind: contentKind,
-            title,
-            summary: contentText.slice(0, 280),
-            blocks: [{ type: contentKind, [contentKind]: contentText }],
-          },
+          content,
           source: { service: req.serviceCaller || 'legacy-wecom', entityType: 'notification', entityId: req.id },
           actions: [],
         },
@@ -571,6 +577,7 @@ function createApp({
           notification: { id: created.notification.id, category: 'system', priority: 'normal' },
           recipients: appRecipients,
         });
+        await deliverWxPusher({ content, actions: [], recipients: appRecipients });
       }
       return created.notification?.id || null;
     } catch (error) {
@@ -586,6 +593,25 @@ function createApp({
       console.error(`[${requestId}] app push dispatch failed`, error);
       return { attempted: 0, sent: 0, deferred: 0, failed: 1, suppressed: 0, results: [] };
     }
+  }
+
+  // WxPusher 是 App 通道的第三方投递方式：只按固定 UID 发送，安静时段等偏好沿用本通道判定。
+  async function deliverWxPusher({ content, actions, recipients }) {
+    if (!wxPusher?.enabled) return 'not-requested';
+    for (const recipientId of [...new Set(recipients || [])]) {
+      const preference = typeof store.getRecipientPreference === 'function'
+        ? await store.getRecipientPreference(recipientId)
+        : null;
+      if (isPushSuppressed(preference)) continue;
+      try {
+        await wxPusher.send({ title: content?.title, summary: content?.summary, content, actions });
+        return 'accepted';
+      } catch (error) {
+        console.error(`[wxpusher] app push failed: ${error?.code || error?.message || error}`);
+        return 'failed';
+      }
+    }
+    return 'suppressed';
   }
 
   async function deliverAppNotification(rawInput, { caller, requestId, apiClient = null } = {}) {
@@ -612,6 +638,9 @@ function createApp({
         notification: { id: created.notification.id, category: parsed.category, priority: parsed.priority },
         recipients: parsed.audience.users,
       });
+    const wxPusherStatus = created.deduplicated
+      ? 'deduplicated'
+      : await deliverWxPusher({ content: parsed.content, actions: parsed.actions, recipients: parsed.audience.users });
     let wecomDeliveryId = null;
     let wecomStatus = parsed.channels.includes('wecom') ? 'deduplicated' : 'not-requested';
     if (parsed.channels.includes('wecom') && !created.deduplicated) {
@@ -644,6 +673,7 @@ function createApp({
       },
       wecomDeliveryId,
       cmccDeliveryId,
+      wxPusherStatus,
     };
   }
 

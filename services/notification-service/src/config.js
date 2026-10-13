@@ -97,6 +97,19 @@ function parseCmccConfig() {
   };
 }
 
+// WxPusher 通道只为自用场景服务：固定投递给 WXPUSHER_UIDS 列出的 UID，两者留空即停用该通道。
+function parseWxPusherConfig() {
+  const appToken = String(process.env.WXPUSHER_APP_TOKEN || '').trim();
+  const uids = String(process.env.WXPUSHER_UIDS || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item) => /^UID_[A-Za-z0-9]{8,64}$/.test(item));
+  if (!appToken && uids.length === 0) return { enabled: false, appToken: '', uids: [] };
+  if (!appToken || uids.length === 0) throw new Error('WXPUSHER_APP_TOKEN 与 WXPUSHER_UIDS 必须同时配置');
+  if (!/^AT_[A-Za-z0-9]{8,64}$/.test(appToken)) throw new Error('WXPUSHER_APP_TOKEN 必须以 AT_ 开头');
+  return { enabled: true, appToken, uids: [...new Set(uids)] };
+}
+
 const config = {
   port: parseInt(process.env.PORT || "3000", 10),
   apiKey: ensureStrongSecret("NOTIFY_API_KEY"),
@@ -116,6 +129,7 @@ const config = {
     secret: ensureEnv("WECOM_SECRET"),
   },
   cmcc: parseCmccConfig(),
+  wxpusher: parseWxPusherConfig(),
   tokenCacheMargin: parseInteger(
     process.env.TOKEN_CACHE_MARGIN || "120",
     "TOKEN_CACHE_MARGIN"

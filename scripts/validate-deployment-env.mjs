@@ -59,6 +59,7 @@ const optionalPolicies = new Map([
   ['MQTT_API_KEY', 16],
   ['MQTT_PASSWORD', 16],
   ['SUB2API_API_KEY', 16],
+  ['WXPUSHER_APP_TOKEN', 16],
   ['EXAM_DEFAULT_ADMIN_PASSWORD', 10],
 ]);
 const placeholderPattern = /(?:replace|change)_with_|example\.com|x{6,}/i;
