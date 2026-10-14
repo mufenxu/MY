@@ -7,9 +7,13 @@
     </base-config>
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="false">pxyb.cn</domain>
-        <pin-set>
-            <pin digest="SHA-256">nWN7PSep5XDQdge5zK24CnCRXHr3KvzhKEGxsdqCX9E=</pin>
-            <pin digest="SHA-256">fk6IOKit1ild5647BH06ujSIq5XbCgqlbYl6ANhhi88=</pin>
+        <!-- 只固定中间/根 CA，叶子证书不参与固定（约 90 天轮换）。
+             pxyb.cn 已由 Let's Encrypt 换成 TrustAsia LiteSSL，旧的 CA 级固定值随之全部失配，
+             导致所有请求在 TLS 阶段被拒。expiration 是安全阀：到期后 pin 失配不再拦截。
+             同一组 CA 也固定在 core/network 的 HttpClientProvider，换 CA 时必须同步两处。 -->
+        <pin-set expiration="2027-04-01">
+            <pin digest="SHA-256">Wt2ZC+IE3Cpf6hRflokHnxyZR+ZD82TqFkj1/fmYndc=</pin>
+            <pin digest="SHA-256">ViiHLiRf5mFIuAut6snED2JS5kL6lZWuzks+ili4/UY=</pin>
         </pin-set>
     </domain-config>
     <domain-config cleartextTrafficPermitted="false">
