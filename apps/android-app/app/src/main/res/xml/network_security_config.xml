@@ -24,8 +24,8 @@
         </pin-set>
     </domain-config>
     <domain-config cleartextTrafficPermitted="true">
-        <!-- 蜜雪后台(mxwk.shop)仅支持 HTTP，HTTPS 不可用，必须保留明文豁免。 -->
-        <domain includeSubdomains="true">mxwk.shop</domain>
+        <!-- 蜜雪后台(mxwk.online)仅支持 HTTP，HTTPS 不可用，必须保留明文豁免。 -->
+        <domain includeSubdomains="true">mxwk.online</domain>
         <!-- 重要：qlogo.cn 为 QQ/微信头像 CDN。蜜雪后台等外部页面写死 http://qlogo.cn 头像地址，
              移除本豁免会导致后台用户头像加载失败。除非这些站点全部改用 HTTPS，否则不要移除。 -->
         <domain includeSubdomains="true">qlogo.cn</domain>
