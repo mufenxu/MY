@@ -63,7 +63,7 @@ internal fun WaterValveRingDialButton(
     val pressed by interactionSource.collectIsPressedAsState()
     val pressDepth = animateFloatAsState(
         targetValue = if (pressed) 1f else 0f,
-        animationSpec = if (pressed) MotionTokens.pressTween() else MotionTokens.releaseSpring(),
+        animationSpec = if (pressed) MotionTokens.pressTween() else MotionTokens.releaseTween(),
         label = "water-press-depth",
     )
     val fill = animateFloatAsState(

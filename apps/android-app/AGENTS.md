@@ -44,7 +44,7 @@
   - 微交互（图标缩放、指示器、高亮切换）：`MotionTokens.DurationShort` (160ms)；
   - 组件与卡片过渡展开：`MotionTokens.DurationMedium` (240ms)；
   - 页面级转场与弹窗展开：`MotionTokens.DurationLong` (320ms)；加载微光、设备状态旋转和呼吸分别使用 `DurationShimmer`、`DurationStatusRotation`、`DurationStatusPulse`。验证码倒计时等业务时钟保留真实时间，不套用装饰动效时长；
-  - 已选定“柔韧跟手”：按下使用 `MotionTokens.pressTween()`，松开使用 `releaseSpring()`，按压缩放幅度不超过 3%；导航指示器、开关位移、展开和页面进入使用 `softSpring()`，弹层进入使用 `sheetSpring()`。颜色、透明度和退出仍使用短缓动，不循环弹跳。
+  - 已选定“轻抬入场”：按下使用 `MotionTokens.pressTween()`（75ms），松开使用 `releaseTween()`（140ms）；共享按压最多缩小 0.5% 并下压 1dp，不回弹。主标签使用 `tabTween()`（180ms）交叠淡化，导航指示器使用 `navigationTween()`（200ms）；二级页面进入使用 `standardTween()`（240ms）轻抬 14dp，退出使用 `exitTween()`（150ms）轻移 6dp，返回时方向相反，不缩放整页。开关位移使用 `exitTween()`，展开与弹层仍使用无过冲的 `softSpring()` / `sheetSpring()`。
 - **触觉微反馈 (`AppHaptics`)**：
   - 底部导航 Tab 切换、`AppSwitch` 开关切换、分段选择：触发 `AppHaptics.tick(haptics)`；
   - `PullToRefresh` 下拉刷新超过临界刻度：触发 `AppHaptics.refreshSnap(haptics)`；
@@ -68,7 +68,7 @@
      - **实色表面**：使用 `colorScheme.primary` 实色；浅色为蓝底白字，深色为浅蓝底深字，文字取 `onPrimary`；
      - **层次**：不添加阴影、高光或渐变描边；
      - **纯净原则（坚决不泛白）**：**绝对禁止在按钮表面叠加半透明白色高光雾蒙层**，蓝白文字对比必须锋利纯正；
-     - **交互触觉**：内置 `pressFeedback` 物理弹性微缩放（按下最多 0.97 缩放）+ `AppHaptics.tick` 细腻物理微震动；
+     - **交互触觉**：内置 `pressFeedback` 轻微下压（最多 0.995 缩放 + 1dp 下移），松开平滑恢复，保留 `AppHaptics.tick` 微震动；
      - **状态集成**：直接支持 `loading = true` 平滑加载转圈动画与 `icon` 矢量图标，无需外层手写 `CircularProgressIndicator` 样板代码。
   2. **次要行动按钮 (`AppSecondaryButton`)**：
      - 采用全圆角胶囊、中性 `surfaceContainerHigh` 实色底色，不加阴影或彩色渐变边框，用于“取消”、“查看说明”、“返回查询”、“写入 NFC”等次要操作，清爽通透，绝不发灰泛白。
@@ -106,8 +106,8 @@
 
 - **多任务后台防窥屏 (FLAG_SECURE)**：
   - `MainActivity` 在 `onPause` 时自动追加 `FLAG_SECURE`，在用户切入 Recent Apps 多任务界面或分屏预览时遮蔽缩略图，防止临时录屏或系统截屏泄露凭据密码；`onResume` 前台恢复时自动解除，保障用户正常截屏与使用。
-- **预测性手势物理转场**：
-  - 路由栈切换采用 `slideInHorizontally` / `slideOutHorizontally` 水平推拉结合微缩放与淡入淡出，动效时长严格对齐 `MotionTokens`，呼应 Android 14/15 边缘手势的自然惯性。
+- **路由与返回转场**：
+  - 主标签切换仅交叠淡化；二级路由采用 `slideInVertically` / `slideOutVertically` 短距离轻抬与淡入淡出，返回使用相反方向，时长统一取自 `MotionTokens`。保留导航栈与系统返回行为，不缩放整页。
 
 ## 9. 架构与设计红线
 

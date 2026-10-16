@@ -15,9 +15,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -443,35 +441,59 @@ internal fun AuthenticatedShell(
                         .imePadding()
                         .glassBackdropSource(glassBackdrop),
                 ) {
+                val pageLiftOffset = with(LocalDensity.current) { 14.dp.roundToPx() }
+                val pageExitOffset = with(LocalDensity.current) { 6.dp.roundToPx() }
                 NavHost(
                     navController = navController,
                     startDestination = initialRoute,
                     modifier = Modifier.fillMaxSize(),
                 enterTransition = {
-                    slideInHorizontally(
-                        initialOffsetX = { fullWidth -> (fullWidth * 0.08f).toInt() },
-                        animationSpec = MotionTokens.softSpring(),
-                    ) + fadeIn(animationSpec = MotionTokens.standardTween()) +
-                    scaleIn(initialScale = 0.98f, animationSpec = MotionTokens.softSpring())
+                    if (parentTabForSubScreen(initialState.destination.route, null) == null &&
+                        parentTabForSubScreen(targetState.destination.route, null) == null
+                    ) {
+                        fadeIn(animationSpec = MotionTokens.tabTween())
+                    } else {
+                        slideInVertically(
+                            initialOffsetY = { pageLiftOffset },
+                            animationSpec = MotionTokens.standardTween(),
+                        ) + fadeIn(animationSpec = MotionTokens.standardTween())
+                    }
                 },
                 exitTransition = {
-                    slideOutHorizontally(
-                        targetOffsetX = { fullWidth -> (-fullWidth * 0.04f).toInt() },
-                        animationSpec = MotionTokens.fastTween(),
-                    ) + fadeOut(animationSpec = MotionTokens.fastTween())
+                    if (parentTabForSubScreen(initialState.destination.route, null) == null &&
+                        parentTabForSubScreen(targetState.destination.route, null) == null
+                    ) {
+                        fadeOut(animationSpec = MotionTokens.tabTween())
+                    } else {
+                        slideOutVertically(
+                            targetOffsetY = { -pageExitOffset },
+                            animationSpec = MotionTokens.exitTween(),
+                        ) + fadeOut(animationSpec = MotionTokens.exitTween())
+                    }
                 },
                 popEnterTransition = {
-                    slideInHorizontally(
-                        initialOffsetX = { fullWidth -> (-fullWidth * 0.04f).toInt() },
-                        animationSpec = MotionTokens.softSpring(),
-                    ) + fadeIn(animationSpec = MotionTokens.standardTween()) +
-                    scaleIn(initialScale = 0.98f, animationSpec = MotionTokens.softSpring())
+                    if (parentTabForSubScreen(initialState.destination.route, null) == null &&
+                        parentTabForSubScreen(targetState.destination.route, null) == null
+                    ) {
+                        fadeIn(animationSpec = MotionTokens.tabTween())
+                    } else {
+                        slideInVertically(
+                            initialOffsetY = { -pageLiftOffset },
+                            animationSpec = MotionTokens.standardTween(),
+                        ) + fadeIn(animationSpec = MotionTokens.standardTween())
+                    }
                 },
                 popExitTransition = {
-                    slideOutHorizontally(
-                        targetOffsetX = { fullWidth -> (fullWidth * 0.10f).toInt() },
-                        animationSpec = MotionTokens.fastTween(),
-                    ) + fadeOut(animationSpec = MotionTokens.fastTween())
+                    if (parentTabForSubScreen(initialState.destination.route, null) == null &&
+                        parentTabForSubScreen(targetState.destination.route, null) == null
+                    ) {
+                        fadeOut(animationSpec = MotionTokens.tabTween())
+                    } else {
+                        slideOutVertically(
+                            targetOffsetY = { pageExitOffset },
+                            animationSpec = MotionTokens.exitTween(),
+                        ) + fadeOut(animationSpec = MotionTokens.exitTween())
+                    }
                 },
             ) {
                 composable(AppRoute.Overview) {

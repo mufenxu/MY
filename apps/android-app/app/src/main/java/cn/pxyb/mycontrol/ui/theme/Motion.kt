@@ -24,6 +24,13 @@ object MotionTokens {
     /** 页面级大转场/全屏弹窗时长：320ms */
     const val DurationLong = 320
 
+    const val DurationTabTransition = 180
+    const val DurationNavigation = 200
+    const val DurationPress = 75
+    const val DurationRelease = 140
+    const val DurationExit = 150
+    const val PressedScale = 0.995f
+
     const val DurationShimmer = 1100
     const val DurationStatusRotation = 4000
     const val DurationStatusPulse = 1400
@@ -33,6 +40,9 @@ object MotionTokens {
 
     /** 强调型标准缓动曲线（Material 3 Emphasized Decelerate） */
     val EmphasizedDecelerate: Easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
+
+    /** 轻抬入场：平滑减速，不产生过冲。 */
+    val SmoothEasing: Easing = CubicBezierEasing(0.2f, 0.75f, 0.2f, 1f)
 
     /** 标准平滑弹簧规范 */
     val StandardSpring: SpringSpec<Float> = spring(
@@ -47,18 +57,21 @@ object MotionTokens {
     )
 
     fun <T> fastTween() = tween<T>(DurationShort, easing = FastEasing)
-    fun <T> standardTween() = tween<T>(DurationMedium, easing = EmphasizedDecelerate)
+    fun <T> standardTween() = tween<T>(DurationMedium, easing = SmoothEasing)
     fun <T> pageTween() = tween<T>(DurationLong, easing = EmphasizedDecelerate)
+    fun <T> tabTween() = tween<T>(DurationTabTransition, easing = SmoothEasing)
+    fun <T> navigationTween() = tween<T>(DurationNavigation, easing = SmoothEasing)
+    fun <T> exitTween() = tween<T>(DurationExit, easing = SmoothEasing)
 
-    /** 柔韧跟手：位移轻微回弹，连续操作时保留弹簧速度。 */
-    fun <T> softSpring() = spring<T>(dampingRatio = 0.78f, stiffness = 420f)
+    /** 展开与手势保持速度连续，但不再回弹。 */
+    fun <T> softSpring() = spring<T>(dampingRatio = 1f, stiffness = 420f)
 
-    /** 按下迅速响应，松开轻弹；不用于透明度与颜色。 */
-    fun <T> pressTween() = tween<T>(90, easing = FastEasing)
-    fun <T> releaseSpring() = spring<T>(dampingRatio = 0.62f, stiffness = 650f)
+    /** 按下轻压，松开平滑恢复。 */
+    fun <T> pressTween() = tween<T>(DurationPress, easing = SmoothEasing)
+    fun <T> releaseTween() = tween<T>(DurationRelease, easing = SmoothEasing)
 
-    /** 弹层更重一些，减少长距离进入时的过冲。 */
-    fun <T> sheetSpring() = spring<T>(dampingRatio = 0.88f, stiffness = 380f)
+    /** 弹层保留自然减速，长距离进入时不过冲。 */
+    fun <T> sheetSpring() = spring<T>(dampingRatio = 1f, stiffness = 380f)
 
     /** 滚动进度柔性追随，不过冲；宽高与淡入淡出共用一个进度。 */
     fun followSpring() = spring(dampingRatio = 1f, stiffness = 1100f, visibilityThreshold = 0.001f)

@@ -2,9 +2,7 @@ package cn.pxyb.mycontrol.ui.navigation
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -62,6 +60,7 @@ import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.components.layout.unreadBadgeLabel
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
+import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 /**
@@ -249,15 +248,8 @@ private fun NavigationRailItem(
     )
 
     val iconScale by animateFloatAsState(
-        targetValue = when {
-            isPressed -> 0.90f
-            selected -> 1.08f
-            else -> 1.0f
-        },
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium,
-        ),
+        targetValue = if (isPressed) MotionTokens.PressedScale else 1f,
+        animationSpec = if (isPressed) MotionTokens.pressTween() else MotionTokens.releaseTween(),
         label = "rail-scale",
     )
 

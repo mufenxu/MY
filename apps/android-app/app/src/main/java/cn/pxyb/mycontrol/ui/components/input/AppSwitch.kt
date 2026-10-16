@@ -2,10 +2,8 @@ package cn.pxyb.mycontrol.ui.components.input
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -47,7 +45,7 @@ import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 /**
- * 现代化开关：胶囊轨道 + 圆形拇指 + 选中对勾图标，带按压反馈与弹性动画。
+ * 现代化开关：胶囊轨道 + 圆形拇指 + 选中对勾图标，带轻压反馈与平滑切换。
  * 配色跟随主题（默认 primary，可传 tint 覆盖）；关闭态使用半透明轨道，暗色/亮色均适配。
  * 与玻璃卡片规范一致：不添加投影。
  */
@@ -73,12 +71,12 @@ fun AppSwitch(
 
     val thumbOffset by animateDpAsState(
         targetValue = if (checked) thumbTravel else 0.dp,
-        animationSpec = MotionTokens.softSpring(),
+        animationSpec = MotionTokens.exitTween(),
         label = "appSwitchThumb",
     )
     val thumbScale by animateFloatAsState(
-        targetValue = if (pressed) 1.06f else 1f,
-        animationSpec = if (pressed) MotionTokens.pressTween() else MotionTokens.releaseSpring(),
+        targetValue = if (pressed) MotionTokens.PressedScale else 1f,
+        animationSpec = if (pressed) MotionTokens.pressTween() else MotionTokens.releaseTween(),
         label = "appSwitchThumbScale",
     )
     val trackColor by animateColorAsState(

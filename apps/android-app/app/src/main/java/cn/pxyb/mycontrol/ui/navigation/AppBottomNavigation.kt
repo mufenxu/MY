@@ -137,7 +137,7 @@ private fun GlassNavigationBar(
             val itemWidth = maxWidth / appNavigationTabs.size
             val indicatorOffset by animateDpAsState(
                 targetValue = itemWidth * appNavigationTabs.indexOfFirst { it.tab == selected }.coerceAtLeast(0),
-                animationSpec = MotionTokens.softSpring(), label = "nav-indicator-offset",
+                animationSpec = MotionTokens.navigationTween(), label = "nav-indicator-offset",
             )
             Box(Modifier.matchParentSize()) {
                 Box(
