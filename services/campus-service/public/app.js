@@ -2562,13 +2562,10 @@ function authSessionChip(entry) {
 
 function schoolAuthProblem(auth = {}) {
   const casStatus = auth.sessions?.cas?.status;
-  const portalStatus = auth.sessions?.portal?.status;
-  const portalNeedsLogin = portalStatus === "expired" || portalStatus === "error";
   const hasSchoolAccount = Boolean(auth.schoolAccount);
   const expired = auth.needsLogin
     || casStatus === "expired"
-    || casStatus === "error"
-    || portalNeedsLogin;
+    || casStatus === "error";
   if (!auth.hasCookie) {
     return {
       type: "missing",
@@ -2615,14 +2612,11 @@ function renderAuth(error) {
   const auth = state.auth || {};
   const authProblem = schoolAuthProblem(auth);
   const casStatus = auth.sessions?.cas?.status;
-  const portalStatus = auth.sessions?.portal?.status;
-  const portalNeedsLogin = portalStatus === "expired" || portalStatus === "error";
   const shouldShowLogin = !auth.hasCookie
     || Boolean(authProblem)
     || auth.needsLogin
     || casStatus === "expired"
-    || casStatus === "error"
-    || portalNeedsLogin;
+    || casStatus === "error";
   const formWasHidden = nodes.loginForm.hidden;
   nodes.authPanel.dataset.connected = auth.hasCookie ? (shouldShowLogin ? "relogin" : "true") : "false";
   nodes.loginForm.hidden = !shouldShowLogin;
@@ -2655,11 +2649,10 @@ function renderAuth(error) {
 
   const source = auth.source === "env" ? "环境变量" : "已保存会话";
   const name = auth.schoolAccount ? `学号/工号 ${auth.schoolAccount}` : "学号未确认";
-  const loginMessage = authProblem?.message || (auth.needsLogin
-    ? (auth.loginRequiredMessage || "统一身份认证会话已过期，请在本页面重新登录学校账号。")
-    : (portalNeedsLogin ? (auth.sessions?.portal?.lastError || "用户中心会话未连接，请在本系统重新登录学校账号后同步身份卡。") : ""));
+  const loginMessage = authProblem?.message
+    || (auth.needsLogin ? (auth.loginRequiredMessage || "统一身份认证会话已过期，请在本页面重新登录学校账号。") : "");
   const loginHint = loginMessage
-    ? `<span class="auth-login-hint">${escapeHtml(loginMessage)} 请在本系统重新登录，学校网页里的登录状态不会自动同步到这里。</span>`
+    ? `<span class="auth-login-hint">${escapeHtml(loginMessage)} 本系统会在学校统一认证有效期内保留会话，各服务通过独立票据自动续签。</span>`
     : "";
   nodes.authStatusText.innerHTML = `
     <span class="auth-status-lede ${authProblem ? "needs-login" : ""}">${escapeHtml(authProblem ? "需要处理" : source)}，${escapeHtml(name)}</span>
@@ -2668,8 +2661,8 @@ function renderAuth(error) {
   `;
   const nextLoginAt = formatSessionDate(auth.autoRelogin?.nextLoginAt);
   nodes.authNote.textContent = auth.autoRelogin?.enabled
-    ? `已开启每6天自动重登，会话提前过期时也会自动恢复。${nextLoginAt ? `下次计划：${nextLoginAt}。` : ""}学校密码加密保存在本系统。`
-    : "未开启自动重登，密码仅用于本次学校登录；勾选自动重登并重新登录后生效。";
+    ? `已开启自动续期；学校统一认证有效期内各服务自动换票，无需重复登录。${nextLoginAt ? `下次计划：${nextLoginAt}。` : ""}学校密码加密保存在本系统。`
+    : "学校统一认证有效期内各服务自动换票，只有统一认证本身失效后才需要重新登录。";
   renderOverview();
 }
 

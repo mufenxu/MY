@@ -1558,8 +1558,9 @@ function storedSessionSummary(jar) {
   const schoolAccount = normalizeSchoolLoginAccount(jar.meta?.schoolAccount || jar.meta?.loginUsername);
   const primaryRefreshableSessions = [energy, campus, academic];
   const globalLoginSessions = [energy, academic, libroom, librarySeat];
-  const needsLogin = hasStoredSession && (
-    (refreshBlockedByCas(cas) && primaryRefreshableSessions.some(sessionNeedsRefresh))
+  // 单项服务失败不能推翻仍有效的 CAS 票据；各功能可以继续用 TGC 换取新票据。
+  const needsLogin = hasStoredSession && refreshBlockedByCas(cas) && (
+    primaryRefreshableSessions.some(sessionNeedsRefresh)
     || globalLoginSessions.some(sessionHasLoginRequiredError)
   );
   const loginRequiredMessage = needsLogin ? "统一身份认证会话已过期，请重新登录学校账号。" : null;
