@@ -26,6 +26,15 @@ export function isCasLoginRedirect(redirectUrl, casOrigin) {
   }
 }
 
+export function isCasLogoutRedirect(redirectUrl, casOrigin = "https://cas.hgu.edu.cn") {
+  try {
+    const parsed = new URL(redirectUrl, casOrigin);
+    return parsed.origin === new URL(casOrigin).origin && parsed.pathname === "/cas/logout";
+  } catch {
+    return false;
+  }
+}
+
 export function casServiceFromTicketRedirect(redirectUrl) {
   const parsed = new URL(redirectUrl);
   const ticket = parsed.searchParams.get("ticket");

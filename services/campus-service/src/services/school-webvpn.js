@@ -11,6 +11,7 @@ import { mergeSessionJars } from "../lib/session-jar.js";
 import { normalizeHtmlText } from "../lib/academic-parsers.js";
 import { randomBytes } from "node:crypto";
 import { webvpnVerifyUrlFromRedirect } from "../lib/school-url.js";
+import { isCasLogoutRedirect } from "../lib/uias-cas.js";
 
 export function createSchoolWebvpnService({
   currentUserId,
@@ -285,6 +286,9 @@ export function createSchoolWebvpnService({
       page = await requestAcademicHtml(jar, currentUrl, { referer: currentReferer });
       const redirectUrl = extractSimpleLocationRedirectUrl(page.html, page.finalUrl);
       if (!redirectUrl) return page;
+      if (isCasLogoutRedirect(redirectUrl)) {
+        throw new HttpError(401, "学校服务返回了统一认证注销跳转，已保留现有登录会话。", null, "CAS_LOGOUT_REDIRECT_BLOCKED");
+      }
       currentReferer = page.finalUrl;
       currentUrl = redirectUrl;
     }

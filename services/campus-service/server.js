@@ -52,7 +52,7 @@ import { handleLibrarySeatRoutes } from "./src/routes/library-seat-routes.js";
 import { handleAcademicRoutes } from "./src/routes/academic-routes.js";
 import { handleSystemAdminRoutes } from "./src/routes/system-admin-routes.js";
 import { renderAcademicCalendar } from "./src/lib/academic-calendar.js";
-import { casLoginUrlWithService, isCasLoginRedirect } from "./src/lib/uias-cas.js";
+import { casLoginUrlWithService, isCasLoginRedirect, isCasLogoutRedirect } from "./src/lib/uias-cas.js";
 import {
   cookieHeaderFor,
   emptySessionJar as emptyJar,
@@ -1797,6 +1797,9 @@ async function fetchWithJar(url, {
 }
 
 async function followRedirectsWithJar(startUrl, jar, options = {}) {
+  if (isCasLogoutRedirect(startUrl, CAS_ORIGIN)) {
+    throw new HttpError(401, "学校服务返回了统一认证注销跳转，已保留现有登录会话。", null, "CAS_LOGOUT_REDIRECT_BLOCKED");
+  }
   let currentUrl = startUrl;
   let response = null;
   for (let i = 0; i < 8; i += 1) {
@@ -1805,7 +1808,11 @@ async function followRedirectsWithJar(startUrl, jar, options = {}) {
     const location = response.headers.get("location");
     if (!location) return { response, url: currentUrl };
     await discardUpstreamResponse(response);
-    currentUrl = assertAllowedSchoolUrl(new URL(location, currentUrl).href);
+    const nextUrl = assertAllowedSchoolUrl(new URL(location, currentUrl).href);
+    if (isCasLogoutRedirect(nextUrl, CAS_ORIGIN)) {
+      throw new HttpError(401, "学校服务返回了统一认证注销跳转，已保留现有登录会话。", null, "CAS_LOGOUT_REDIRECT_BLOCKED");
+    }
+    currentUrl = nextUrl;
     options = { method: "GET", headers: options.headers || {} };
   }
   throw new HttpError(502, "登录跳转次数过多。");

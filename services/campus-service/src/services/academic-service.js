@@ -104,8 +104,9 @@ export function createAcademicService({
 
   async function activateAcademicSessionUnlocked(jar, { username, password, rememberMe = true } = {}) {
     await ensureWebvpnSession(jar, { username, password, rememberMe });
-    await ensureAcademicWebvpnAccess(jar);
+    // 学校门户的教务入口是 /sigin；先从 CAS 换票建立教务会话，再访问受保护页面。
     await loginAcademicCasSession(jar, { username, password, rememberMe });
+    await ensureAcademicWebvpnAccess(jar);
     jar.meta.academic ||= {};
     jar.meta.academic.lastError = null;
   }

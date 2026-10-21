@@ -5,6 +5,7 @@ import {
   casServiceFromTicketRedirect,
   casLoginUrlWithService,
   isCasLoginRedirect,
+  isCasLogoutRedirect,
   uiasCasServiceUrl
 } from "../src/lib/uias-cas.js";
 
@@ -53,6 +54,12 @@ test("CAS login normalization redirect is not a service ticket result", () => {
 
   assert.equal(isCasLoginRedirect(redirectUrl, CAS_ORIGIN), true);
   assert.equal(isCasLoginRedirect("https://libroom.hgu.edu.cn/v4/login/cas?ticket=ST-1", CAS_ORIGIN), false);
+});
+
+test("CAS logout redirects are recognized so automatic flows do not clear the TGT", () => {
+  assert.equal(isCasLogoutRedirect(`${CAS_ORIGIN}/cas/logout?service=${encodeURIComponent("https://newjwxs.hgu.edu.cn/login")}`), true);
+  assert.equal(isCasLogoutRedirect(`${CAS_ORIGIN}/cas/login`), false);
+  assert.equal(isCasLogoutRedirect("https://example.com/cas/logout"), false);
 });
 
 test("a bare CAS ticket redirect preserves the exact service", () => {
