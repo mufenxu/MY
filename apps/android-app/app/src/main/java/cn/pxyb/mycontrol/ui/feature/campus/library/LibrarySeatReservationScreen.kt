@@ -2,6 +2,7 @@ package cn.pxyb.mycontrol.ui.feature.campus.library
 
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -38,6 +41,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -49,7 +53,6 @@ import cn.pxyb.mycontrol.data.LibrarySeatWaitlistRequest
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
-import cn.pxyb.mycontrol.ui.components.display.AppMetricCell
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
@@ -68,6 +71,7 @@ import cn.pxyb.mycontrol.ui.components.layout.adaptiveGridColumnCount
 import cn.pxyb.mycontrol.ui.components.layout.appContentWidth
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
 import cn.pxyb.mycontrol.ui.components.picker.AppTimeRangePicker
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.util.DateTimeUtils.parseTimeMinutes
 
 internal enum class LibrarySeatTab(val label: String) {
@@ -169,11 +173,13 @@ internal fun LibrarySeatReservationScreen(
         (selectedVenue?.id.isNullOrBlank() || area.venueId.isBlank() || area.venueId == selectedVenue?.id) &&
             (selectedFloor?.id.isNullOrBlank() || area.floorId.isBlank() || area.floorId == selectedFloor?.id)
     }
-    val selectedArea = selectedAreas.firstOrNull { it.id == selectedAreaId || it.id == state.selectedAreaId }
-    val selectedSeats = state.seats.takeIf { state.query == areaQuery && state.selectedAreaId == selectedAreaId }.orEmpty()
-    val floorSeats = state.floorSeats.takeIf {
-        state.query == areaQuery.copy(floorId = secondFloor?.id, power = false, window = false)
+    val activeAreaId = librarySeatSelectedAreaId(selectedAreaId, selectedAreas.map { it.id })
+    val selectedArea = selectedAreas.firstOrNull { it.id == activeAreaId }
+    val selectedSeats = state.seats.takeIf {
+        state.query == areaQuery && activeAreaId != null && state.selectedAreaId == activeAreaId
     }.orEmpty()
+    val secondFloorQuery = areaQuery.copy(floorId = secondFloor?.id, power = false, window = false)
+    val floorSeats = state.floorSeats.takeIf { state.query == secondFloorQuery }.orEmpty()
     val canQuery = selectedVenue != null && selectedDate.isNotBlank() && startMinute != null && endMinute != null && endMinute > startMinute
 
     val queryAreasButton: @Composable (Modifier) -> Unit = { buttonModifier ->
@@ -324,6 +330,69 @@ internal fun LibrarySeatReservationScreen(
             onGoToBookSeat = { selectedTab = LibrarySeatTab.Book },
         )
     } else null
+    val hasCurrentAreaQuery = queryMode == "areas" && state.query == areaQuery
+    val hasCurrentFloorQuery = queryMode == "floor" && state.query == secondFloorQuery
+    val areaQueryFinished = librarySeatQueryFinishedSuccessfully(
+        queryMatches = hasCurrentAreaQuery,
+        loading = state.areasLoading,
+        error = state.error,
+    )
+    val floorQueryFinished = librarySeatQueryFinishedSuccessfully(
+        queryMatches = hasCurrentFloorQuery,
+        loading = state.floorSeatsLoading,
+        error = state.error,
+    )
+    val seatOverviewFailed =
+        hasCurrentAreaQuery && !state.areasLoading && selectedAreas.isEmpty() && !areaQueryFinished ||
+            hasCurrentFloorQuery && !state.floorSeatsLoading && floorSeats.isEmpty() && !floorQueryFinished
+    val seatOverviewCounts = when {
+        floorQueryFinished -> {
+            floorSeats.size to floorSeats.count { it.seat.isFree }
+        }
+        hasCurrentAreaQuery && selectedSeats.isNotEmpty() && !state.seatsLoading -> {
+            selectedSeats.size to selectedSeats.count { it.isFree }
+        }
+        hasCurrentAreaQuery && selectedArea != null -> {
+            selectedArea.seatTotal to selectedArea.seatFree
+        }
+        hasCurrentAreaQuery && selectedAreas.isNotEmpty() -> {
+            selectedAreas.sumOf { it.seatTotal } to selectedAreas.sumOf { it.seatFree }
+        }
+        areaQueryFinished && !state.seatsLoading -> 0 to 0
+        else -> null
+    }
+    val totalSeatCount = seatOverviewCounts?.first?.coerceAtLeast(0)
+    val freeSeatCount = seatOverviewCounts?.second?.coerceIn(0, totalSeatCount ?: 0)
+    val unavailableSeatCount = totalSeatCount?.let { total -> total - (freeSeatCount ?: 0) }
+    val seatAvailabilityPercent = if (totalSeatCount != null && freeSeatCount != null) {
+        librarySeatAvailabilityPercent(totalSeatCount, freeSeatCount)
+    } else {
+        null
+    }
+    val areaResultCount = when {
+        floorQueryFinished -> floorSeats.distinctBy { it.areaId }.size
+        hasCurrentAreaQuery && !state.areasLoading && selectedArea != null -> 1
+        areaQueryFinished -> selectedAreas.size
+        else -> null
+    }
+    val seatOverviewLoading = when (queryMode) {
+        "floor" -> state.floorSeatsLoading
+        else -> state.areasLoading || state.seatsLoading
+    }
+    val seatOverviewScope = when (queryMode) {
+        "floor" -> listOfNotNull(
+            selectedVenue?.name?.takeIf(String::isNotBlank),
+            secondFloor?.name?.takeIf(String::isNotBlank),
+        )
+        else -> listOfNotNull(
+            selectedVenue?.name?.takeIf(String::isNotBlank),
+            (selectedArea?.name ?: selectedFloor?.name)?.takeIf(String::isNotBlank),
+        )
+    }.distinct().joinToString(" · ").ifBlank { "请选择场馆" }
+    val seatOverviewTime = listOfNotNull(
+        selectedDate.takeIf(String::isNotBlank)?.let(::formatSeatDateLabel),
+        timeRangeLabel(startTime, endTime),
+    ).joinToString(" · ")
     AppSubPage(
         title = "座位预约",
         subtitle = "图书馆座位预约 · 官方系统同步",
@@ -394,12 +463,11 @@ internal fun LibrarySeatReservationScreen(
         item(key = "seat-overview", contentType = "summary") {
             AppPanel {
                 Column(
-                    modifier = Modifier.padding(14.dp),
+                    modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    AppSectionHeader(title = "座位总览", subtitle = "先选场馆和时间，再查阅览区与座位")
                     if (state.overviewLoading && state.venues.isEmpty()) {
-                        AppSkeletonMetricRow(count = 4)
+                        AppSkeletonMetricRow(count = 3)
                         AppSkeletonInlineRows(
                             rowCount = 2,
                             leadingSize = 26.dp,
@@ -408,30 +476,178 @@ internal fun LibrarySeatReservationScreen(
                     } else {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                Text(
+                                    text = "座位总览",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    text = when {
+                                        seatOverviewLoading -> "正在读取当前座位查询结果"
+                                        seatOverviewFailed -> "当前查询失败，请重试"
+                                        seatOverviewCounts != null -> "当前座位查询结果"
+                                        else -> "选择场馆与时段后查看可预约余量"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+
+                        val green = ColorTokens.Green
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.Bottom,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = freeSeatCount?.toString() ?: "—",
+                                    style = MaterialTheme.typography.displayMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (freeSeatCount != null) green.foreground else MaterialTheme.colorScheme.onSurface,
+                                )
+                                Text(
+                                    text = when {
+                                        seatOverviewFailed -> "查询失败，请重试"
+                                        seatOverviewCounts != null -> "个座位可预约"
+                                        else -> "等待座位查询"
+                                    },
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            Column(
+                                horizontalAlignment = Alignment.End,
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    text = seatAvailabilityPercent?.let { "$it%" } ?: "—",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    text = "当前可用率",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(10.dp)
+                                .clip(RoundedCornerShape(50))
+                                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                        ) {
+                            if (totalSeatCount != null && totalSeatCount > 0 && freeSeatCount != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .fillMaxWidth(freeSeatCount.toFloat() / totalSeatCount.toFloat())
+                                        .clip(RoundedCornerShape(50))
+                                        .background(green.foreground),
+                                )
+                            }
+                        }
+
+                        val metricTile: @Composable (String, String, Modifier) -> Unit = { value, label, modifier ->
+                            Surface(
+                                modifier = modifier,
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Text(
+                                        text = value,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            AppMetricCell("场馆", state.venues.size.toString(), Modifier.weight(1f))
-                            AppMetricCell("日期", state.dates.size.toString(), Modifier.weight(1f))
-                            AppMetricCell("阅览区", state.areas.size.toString(), Modifier.weight(1f))
-                            AppMetricCell("座位", state.seats.size.toString(), Modifier.weight(1f))
+                            metricTile(totalSeatCount?.toString() ?: "—", "总座位", Modifier.weight(1f))
+                            metricTile(unavailableSeatCount?.toString() ?: "—", "占用或不可用", Modifier.weight(1f))
+                            metricTile(areaResultCount?.toString() ?: "—", "阅览区", Modifier.weight(1f))
                         }
-                        Text(
-                            text = selectedVenue?.name?.takeIf(String::isNotBlank) ?: "请选择场馆",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = listOfNotNull(
-                                selectedDate.takeIf(String::isNotBlank)?.let(::formatSeatDateLabel),
-                                timeRangeLabel(startTime, endTime),
-                                selectedFloor?.name?.takeIf(String::isNotBlank),
-                            ).joinToString(" · "),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Chair,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = seatOverviewScope,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = seatOverviewTime,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = when {
+                                    seatOverviewFailed -> MaterialTheme.colorScheme.errorContainer
+                                    seatOverviewCounts != null && !seatOverviewLoading -> MaterialTheme.colorScheme.primaryContainer
+                                    else -> MaterialTheme.colorScheme.surfaceContainerHigh
+                                },
+                            ) {
+                                Text(
+                                    text = when {
+                                        seatOverviewLoading -> "查询中"
+                                        seatOverviewFailed -> "查询失败"
+                                        seatOverviewCounts != null -> "已查询"
+                                        else -> "待查询"
+                                    },
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = when {
+                                        seatOverviewFailed -> MaterialTheme.colorScheme.error
+                                        seatOverviewCounts != null && !seatOverviewLoading -> MaterialTheme.colorScheme.primary
+                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -800,3 +1016,18 @@ internal fun LibrarySeatReservationScreen(
         )
     }
 }
+
+private fun librarySeatAvailabilityPercent(totalSeats: Int, freeSeats: Int): Int? {
+    if (totalSeats <= 0) return null
+    val normalizedFreeSeats = freeSeats.coerceIn(0, totalSeats)
+    return normalizedFreeSeats * 100 / totalSeats
+}
+
+private fun librarySeatQueryFinishedSuccessfully(
+    queryMatches: Boolean,
+    loading: Boolean,
+    error: String?,
+): Boolean = queryMatches && !loading && error == null
+
+private fun librarySeatSelectedAreaId(selectedAreaId: String, availableAreaIds: List<String>): String? =
+    selectedAreaId.takeIf { it.isNotBlank() && it in availableAreaIds }
