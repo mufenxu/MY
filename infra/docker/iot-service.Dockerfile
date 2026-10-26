@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d AS deps
+FROM node:26-bookworm-slim@sha256:28147155d47dc31abe0a46e0d12b59b2fb3d0a2dcc5dc65fce76a074180b16fe AS deps
 
 WORKDIR /app
 COPY packages/platform-auth/ ./packages/platform-auth/
@@ -7,7 +7,7 @@ COPY services/iot-service/package*.json ./
 RUN npm ci --omit=dev --no-audit --no-fund \
   && npm cache clean --force
 
-FROM node:24-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d
+FROM node:26-bookworm-slim@sha256:28147155d47dc31abe0a46e0d12b59b2fb3d0a2dcc5dc65fce76a074180b16fe
 
 ENV NODE_ENV=production \
     API_PORT=22102
