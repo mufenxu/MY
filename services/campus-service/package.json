@@ -36,6 +36,6 @@
     "globals": "^16.5.0"
   },
   "overrides": {
-    "undici": "^7.29.1"
+    "undici": "^7.30.1"
   }
 }
