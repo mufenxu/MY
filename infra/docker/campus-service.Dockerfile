@@ -2,7 +2,8 @@ FROM node:24-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9
 
 ENV NODE_ENV=production \
     PORT=22101 \
-    HGU_HOST=0.0.0.0
+    HGU_HOST=0.0.0.0 \
+    NODE_EXTRA_CA_CERTS=/etc/ssl/certs/digicert-basic-ov-g2-tls-cn-rsa4096-sha256-2022-ca1.pem
 
 WORKDIR /app
 COPY packages/platform-auth/ ./packages/platform-auth/
@@ -15,6 +16,7 @@ COPY --chown=node:node services/campus-service/server.js ./
 COPY --chown=node:node services/campus-service/src ./src
 COPY --chown=node:node services/campus-service/scripts ./scripts
 COPY --chown=node:node services/campus-service/public ./public
+COPY infra/docker/certs/digicert-basic-ov-g2-tls-cn-rsa4096-sha256-2022-ca1.pem /etc/ssl/certs/digicert-basic-ov-g2-tls-cn-rsa4096-sha256-2022-ca1.pem
 
 USER node
 EXPOSE 22101
