@@ -42,7 +42,6 @@ jobs:
     timeout-minutes: 90
     env:
       ANDROID_SERIAL: emulator-5554
-      ANDROID_AVD_HOME: ${{ runner.temp }}/android-performance-avd
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -89,6 +88,8 @@ jobs:
         uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
 
       - name: Start a dedicated emulator without snapshots
+        env:
+          ANDROID_AVD_HOME: ${{ runner.temp }}/android-performance-avd
         run: |
           set -euo pipefail
           export PATH="$ANDROID_HOME/platform-tools:$PATH"
