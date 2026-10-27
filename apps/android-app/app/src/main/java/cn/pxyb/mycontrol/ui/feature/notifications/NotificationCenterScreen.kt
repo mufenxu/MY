@@ -63,6 +63,8 @@ fun NotificationCenterScreen(
     onSnooze: (String, Long) -> Unit,
     onOpenSettings: () -> Unit,
     onBack: () -> Unit,
+    searchTarget: cn.pxyb.mycontrol.ui.feature.search.GlobalSearchItem? = null,
+    onSearchTargetConsumed: () -> Unit = {},
 ) {
     var filterTab by rememberSaveable { mutableStateOf(NotificationFilter.All.id) }
     var query by rememberSaveable { mutableStateOf("") }
@@ -72,6 +74,21 @@ fun NotificationCenterScreen(
     var archiveTarget by remember { mutableStateOf<AppAlertRecord?>(null) }
     var bulkConfirmation by remember { mutableStateOf<String?>(null) }
     val listState = rememberLazyListState()
+    LaunchedEffect(searchTarget, state.alerts) {
+        val target = searchTarget ?: return@LaunchedEffect
+        val alert = state.alerts.firstOrNull {
+            when {
+                target.id.startsWith("notification:") -> it.id == target.focusId
+                target.id.startsWith("incident:") -> it.type == "incident" && it.sourceId == target.focusId
+                target.id.startsWith("platform-task:") -> it.type == "task" && it.sourceId == target.focusId
+                else -> false
+            }
+        } ?: return@LaunchedEffect
+        filterTab = NotificationFilter.All.id
+        query = ""
+        selectedAlertId = alert.id
+        onSearchTargetConsumed()
+    }
 
     val now = System.currentTimeMillis()
     val selectedAlert = state.alerts.firstOrNull { it.id == selectedAlertId && it.id != pendingArchiveId }
@@ -306,6 +323,16 @@ fun NotificationCenterScreen(
         )
     }
 
+    searchTarget?.let { target ->
+        cn.pxyb.mycontrol.ui.components.dialog.AppDialog(
+            title = target.title,
+            subtitle = target.category,
+            onDismissRequest = onSearchTargetConsumed,
+            footer = { cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton(text = "关闭", onClick = onSearchTargetConsumed) },
+        ) {
+            androidx.compose.material3.Text(target.detail, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+        }
+    }
     if (!isTablet) {
         selectedAlert?.let { alert ->
             NotificationDetailDialog(

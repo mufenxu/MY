@@ -39,7 +39,7 @@ import cn.pxyb.mycontrol.ui.navigation.WorkspaceDestination
 import cn.pxyb.mycontrol.ui.state.ActionUiState
 import cn.pxyb.mycontrol.update.AppUpdateUiState
 
-enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Releases, Backup, Iot, IotInsights, Ct8, Security, Todos, Campus, FreeClassrooms, Resources, Notifications, Reservation, DailyNews }
+enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Releases, Backup, Iot, IotInsights, Ct8, Security, Todos, Campus, CampusGpa, CampusLife, CampusEnergy, CampusFreeClassrooms, FreeClassrooms, Resources, Notifications, Reservation, DailyNews }
 
 @Immutable
 data class SectionLoadState(

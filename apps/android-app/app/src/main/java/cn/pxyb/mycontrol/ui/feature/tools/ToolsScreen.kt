@@ -143,6 +143,8 @@ fun ToolsScreen(
     onRefresh: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenScenes: () -> Unit,
+    focusedId: String? = null,
+    onFocusConsumed: () -> Unit = {},
 ) {
     var confirmation by remember { mutableStateOf<IotScene?>(null) }
     var showConnectionDetails by rememberSaveable { mutableStateOf(false) }
@@ -154,6 +156,23 @@ fun ToolsScreen(
         iot?.devices.orEmpty().filter { it.temperature != null || it.humidity != null }
     }
     var selectedSensorId by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(focusedId) {
+        if (focusedId != null) selectedSensorId = focusedId
+    }
+    iot?.devices?.firstOrNull { it.id == focusedId }?.let { device ->
+        cn.pxyb.mycontrol.ui.components.dialog.AppDialog(
+            title = device.name,
+            subtitle = "搜索定位 · 设备状态",
+            onDismissRequest = onFocusConsumed,
+            footer = { cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton(text = "关闭", onClick = onFocusConsumed) },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(if (device.online) "设备在线" else "设备离线", style = MaterialTheme.typography.bodyMedium)
+                device.temperature?.let { Text("温度：$it ℃", style = MaterialTheme.typography.bodyMedium) }
+                device.humidity?.let { Text("湿度：$it %", style = MaterialTheme.typography.bodyMedium) }
+            }
+        }
+    }
     val sensorDevice = sensorDevices.firstOrNull { it.id == selectedSensorId } ?: sensorDevices.firstOrNull()
     val telemetryInsight = iot?.insights?.firstOrNull { it.deviceId == sensorDevice?.id }
     val isTablet = useTwoPaneLayout()
@@ -237,6 +256,15 @@ fun ToolsScreen(
         refreshing = state.refreshing, onRefresh = onRefresh,
         header = { LightweightHeaderBanner(state.unreadAlerts, onOpenNotifications) },
     ) {
+            state.cachedAtMillis?.let { cachedAt ->
+                item(key = "tools-cache") {
+                    cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner(
+                        message = "设备数据更新于 ${cn.pxyb.mycontrol.util.DateTimeUtils.formatStandardTime(cachedAt)}，当前显示缓存。",
+                        type = cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType.Info,
+                        showCloseButton = false,
+                    )
+                }
+            }
             item(key = "connection-summary") {
                 AppPanel {
                     AppActionRow(

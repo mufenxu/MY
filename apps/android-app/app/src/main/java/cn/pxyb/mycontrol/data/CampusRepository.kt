@@ -96,13 +96,13 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         }
     }
 
-    private suspend fun campusGpa(): CampusGpa {
+    internal suspend fun campusGpa(): CampusGpa = withContext(Dispatchers.IO) {
         val data = campusData(CAMPUS_GPA_PATH)
         val rows = data.optJSONArray("rows").platformObjects()
         fun value(type: String): String? = rows.firstOrNull { it.optString("type") == type }
             ?.displayString("value")
 
-        return CampusGpa(
+        CampusGpa(
             overall = data.optJSONObject("main")?.displayString("value") ?: value("GPA"),
             core = value("核心课GPA"),
             required = value("必修课GPA"),
@@ -458,7 +458,7 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         http.execute(path, method = "DELETE")
     }
 
-    private suspend fun campusLife(): CampusLife {
+    internal suspend fun campusLife(): CampusLife {
         val data = campusData(CAMPUS_SUMMARY_PATH)
         return CampusLife(
             cardBalance = data.optJSONObject("card")?.displayString("totalBalance"),
@@ -581,7 +581,7 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         error = nullableString("error"),
     )
 
-    private suspend fun campusEnergy(): CampusEnergy {
+    internal suspend fun campusEnergy(): CampusEnergy {
         val data = campusData("$CAMPUS_ENERGY_SUMMARY_PATH?time=${YearMonth.now()}")
         val wallet = data.optJSONObject("wallet")
         return CampusEnergy(
@@ -605,13 +605,13 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         null
     }
 
-    private data class CampusLife(
+    internal data class CampusLife(
         val cardBalance: String?,
         val waterCode: String?,
         val dormitory: String?,
     )
 
-    private data class CampusEnergy(val balance: String?, val room: String?)
+    internal data class CampusEnergy(val balance: String?, val room: String?)
 
 }
 

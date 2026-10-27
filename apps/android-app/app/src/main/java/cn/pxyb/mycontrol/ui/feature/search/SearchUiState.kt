@@ -107,6 +107,7 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                     detail = "${service.category} · ${service.state}",
                     category = "服务",
                     destination = SearchDestination.Operations,
+                    focusId = service.id,
                 ),
             )
         }
@@ -118,6 +119,7 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                     detail = listOf(incident.source, incident.description).filter(String::isNotBlank).joinToString(" · "),
                     category = "系统通知",
                     destination = SearchDestination.Notifications,
+                    focusId = incident.id,
                 ),
             )
         }
@@ -177,6 +179,7 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                     detail = listOf(course.dayName, course.sectionText, course.location).filter(String::isNotBlank).joinToString(" · "),
                     category = "课程",
                     destination = SearchDestination.Timetable,
+                    focusId = course.id,
                 ),
             )
         }
@@ -188,6 +191,7 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                     detail = if (device.online) "设备在线" else "设备离线",
                     category = "设备",
                     destination = SearchDestination.Tools,
+                    focusId = device.id,
                 ),
             )
         }
@@ -199,6 +203,7 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                     detail = "${scene.actionCount} 个设备动作",
                     category = "智能场景",
                     destination = SearchDestination.Scenes,
+                    focusId = scene.id,
                 ),
             )
         }
@@ -210,6 +215,7 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                     detail = listOf(account.displayName, account.tags.joinToString(" · ")).filter(String::isNotBlank).joinToString(" · "),
                     category = "邮箱",
                     destination = SearchDestination.GoogleAccounts,
+                    focusId = account.id,
                 ),
             )
         }

@@ -89,6 +89,8 @@ fun OperationsScreen(
     onIncidentMute: (String) -> Unit,
     onIncidentResolve: (String, String) -> Unit,
     onRefresh: () -> Unit,
+    focusedId: String? = null,
+    onFocusConsumed: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -135,6 +137,23 @@ fun OperationsScreen(
         }.sortedBy { it.second }
     }
     val listState = rememberLazyListState()
+    services.firstOrNull { it.id == focusedId }?.let { service ->
+        cn.pxyb.mycontrol.ui.components.dialog.AppDialog(
+            title = service.name,
+            subtitle = "搜索定位 · ${service.category}",
+            onDismissRequest = onFocusConsumed,
+            footer = { cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton(text = "关闭", onClick = onFocusConsumed) },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppStatusBadge(service.state)
+                Text("响应耗时：${service.latencyMs?.let { "$it ms" } ?: "暂无数据"}", style = MaterialTheme.typography.bodyMedium)
+                Text("HTTP 状态：${service.httpStatus ?: "暂无数据"}", style = MaterialTheme.typography.bodyMedium)
+                if (!service.adminUrl.isNullOrBlank()) {
+                    cn.pxyb.mycontrol.ui.components.button.AppButton(text = "打开服务", onClick = { onFocusConsumed(); openService(service) })
+                }
+            }
+        }
+    }
     val dark = isAppInDarkTheme()
 
     val isTablet = useTwoPaneLayout()

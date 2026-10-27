@@ -96,6 +96,9 @@ fun TodayScreen(
     onConsumeSharedDraft: () -> Unit,
     onOpenFeature: (String) -> Unit = {},
     initialSection: WorkspaceDestination = WorkspaceDestination.Today,
+    onSectionChange: (WorkspaceDestination) -> Unit = {},
+    searchTarget: cn.pxyb.mycontrol.ui.feature.search.GlobalSearchItem? = null,
+    onSearchTargetConsumed: () -> Unit = {},
 ) {
     var editingTodoId by rememberSaveable { mutableStateOf<String?>(null) }
     val editingTodo = state.todoSnapshot.tasks.firstOrNull { it.id == editingTodoId }
@@ -110,8 +113,32 @@ fun TodayScreen(
         })
     }
     var selectedDate by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
+    val visibleDestination = when (campusSection) {
+        CampusWorkspaceSection.Today -> WorkspaceDestination.Today
+        CampusWorkspaceSection.Timetable -> WorkspaceDestination.Timetable
+        CampusWorkspaceSection.Campus -> WorkspaceDestination.Campus
+        CampusWorkspaceSection.Todos -> WorkspaceDestination.Todos
+    }
+    val sections = when (campusSection) {
+        CampusWorkspaceSection.Timetable -> listOf(cn.pxyb.mycontrol.ui.DataSection.Campus)
+        CampusWorkspaceSection.Todos -> listOf(cn.pxyb.mycontrol.ui.DataSection.Todos)
+        CampusWorkspaceSection.Campus -> listOf(cn.pxyb.mycontrol.ui.DataSection.CampusGpa, cn.pxyb.mycontrol.ui.DataSection.CampusLife, cn.pxyb.mycontrol.ui.DataSection.CampusEnergy, cn.pxyb.mycontrol.ui.DataSection.CampusFreeClassrooms)
+        CampusWorkspaceSection.Today -> listOf(cn.pxyb.mycontrol.ui.DataSection.Campus, cn.pxyb.mycontrol.ui.DataSection.Todos, cn.pxyb.mycontrol.ui.DataSection.Resources)
+    }.mapNotNull { state.sectionLoadStates[it] }
+    val refreshing = sections.any { it.refreshing }
+    val sectionError = sections.mapNotNull { it.error }.firstOrNull()
+    val cachedAtMillis = sections.filter { it.fromCache }.mapNotNull { it.cachedAtMillis }.minOrNull()
     LaunchedEffect(campusSection) {
+        onSectionChange(visibleDestination)
         if (campusSection == CampusWorkspaceSection.Today) onRefreshAgenda()
+    }
+    LaunchedEffect(searchTarget, state.todoSnapshot.tasks) {
+        if (searchTarget?.destination == cn.pxyb.mycontrol.ui.feature.search.SearchDestination.Todos) {
+            val task = state.todoSnapshot.tasks.firstOrNull { it.id == searchTarget.focusId } ?: return@LaunchedEffect
+            campusSection = CampusWorkspaceSection.Todos
+            editingTodoId = task.id
+            onSearchTargetConsumed()
+        }
     }
     val refreshWorkspace = {
         onRefresh()
@@ -163,9 +190,27 @@ fun TodayScreen(
             (resource to days).takeIf { days <= maxOf(60, resource.advanceNoticeDays) }
         }.sortedBy { it.second }
     }
+    if (searchTarget?.id?.startsWith("resource:") == true) {
+        state.resourceExpiries.firstOrNull { it.id == searchTarget.focusId }?.let { resource ->
+            cn.pxyb.mycontrol.ui.components.dialog.AppDialog(
+                title = resource.name,
+                subtitle = "搜索定位 · 资源到期",
+                onDismissRequest = onSearchTargetConsumed,
+                footer = { cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton(text = "关闭", onClick = onSearchTargetConsumed) },
+            ) {
+                Text("${resource.type} · 到期时间：${resource.expiresAt}", style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
     val isTablet = useTwoPaneLayout()
     val pageListState = rememberLazyListState()
     val attentionListState = rememberLazyListState()
+    LaunchedEffect(searchTarget) {
+        if (searchTarget?.destination == cn.pxyb.mycontrol.ui.feature.search.SearchDestination.Timetable) {
+            campusSection = CampusWorkspaceSection.Timetable
+            pageListState.scrollToItem(0)
+        }
+    }
     val recordColumns = adaptiveGridColumnCount(
         appContentWidth() - AppPageHorizontalPadding * 2,
         androidx.compose.ui.platform.LocalDensity.current.fontScale, 360.dp, 2,
@@ -194,6 +239,8 @@ fun TodayScreen(
                 schoolCalendar = state.timetable?.schoolCalendar,
                 modifier = modifier,
                 bounded = bounded,
+                focusedCourseId = searchTarget?.takeIf { it.destination == cn.pxyb.mycontrol.ui.feature.search.SearchDestination.Timetable }?.focusId,
+                onFocusConsumed = onSearchTargetConsumed,
             )
         }
     }
@@ -252,20 +299,20 @@ fun TodayScreen(
         ).joinToString(" · ")
 
     val workspaceHeaderContent: LazyListScope.() -> Unit = {
-        if (state.offlineMode || state.pendingTodoMutations > 0) {
+        if (cachedAtMillis != null || state.pendingTodoMutations > 0) {
             item(key = "today-offline", contentType = "banner") {
                 AppFeedbackBanner(
                     message = if (state.pendingTodoMutations > 0) {
                         "${state.pendingTodoMutations} 项更改已保存在本机，联网后自动同步。"
                     } else {
-                        "当前展示离线快照，个人待办仍可编辑。"
+                        "当前展示缓存，更新于 ${cn.pxyb.mycontrol.util.DateTimeUtils.formatStandardTime(cachedAtMillis)}。${if (refreshing) "正在获取最新数据。" else "联网后将自动更新。"}"
                     },
                     type = AppFeedbackType.Info,
                     showCloseButton = false,
                 )
             }
         }
-        state.sectionError?.let { message ->
+        sectionError?.let { message ->
             item(key = "today-error", contentType = "banner") {
                 AppFeedbackBanner("部分今日数据暂不可用：$message", error = true, onRetry = refreshWorkspace)
             }
@@ -400,7 +447,7 @@ fun TodayScreen(
                         showHeader = false, showBack = false,
                         contentPadding = PaddingValues(top = topPadding),
                         subtitle = workspaceSubtitle, listState = pageListState,
-                        refreshing = state.refreshing || agendaState.loading,
+                        refreshing = refreshing || agendaState.loading,
                         onRefresh = refreshWorkspace,
                     ) {
                         workspaceHeaderContent()
@@ -420,7 +467,7 @@ fun TodayScreen(
         }) else null,
         contentPadding = contentPadding,
         onBack = onBack,
-        refreshing = state.refreshing || (campusSection == CampusWorkspaceSection.Today && agendaState.loading),
+        refreshing = refreshing || (campusSection == CampusWorkspaceSection.Today && agendaState.loading),
         onRefresh = refreshWorkspace,
         actions = {
             if (wideTimetable) {
@@ -428,7 +475,7 @@ fun TodayScreen(
                     icon = Icons.Outlined.Refresh,
                     contentDescription = "刷新课表",
                     onClick = onRefresh,
-                    loading = state.refreshing,
+                    loading = refreshing,
                 )
             }
             AppHeaderIconButton(

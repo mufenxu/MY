@@ -91,6 +91,8 @@ fun GoogleAccountDeskScreen(
     onDeleteAlias: (String, String) -> Unit,
     onUploadLocalAccounts: () -> Unit,
     onDiscardLocalAccounts: () -> Unit,
+    focusedId: String? = null,
+    onFocusConsumed: () -> Unit = {},
 ) {
     BackHandler(enabled = !LocalAppNavigationHandlesBack.current, onBack = onDismiss)
     var query by rememberSaveable { mutableStateOf("") }
@@ -107,6 +109,16 @@ fun GoogleAccountDeskScreen(
     var migrationAction by remember { mutableStateOf<String?>(null) }
     var selectedAccountId by rememberSaveable { mutableStateOf<String?>(null) }
     var detailAccountId by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(focusedId, state.googleAccounts) {
+        val account = state.googleAccounts.firstOrNull { it.id == focusedId } ?: return@LaunchedEffect
+        query = ""
+        filter = FILTER_ALL
+        showArchived = account.archived
+        selectionMode = false
+        selectedAccountId = account.id
+        detailAccountId = account.id
+        onFocusConsumed()
+    }
     var showAddAccount by rememberSaveable { mutableStateOf(false) }
     var showImportAccounts by rememberSaveable { mutableStateOf(false) }
     var editingAccount by remember { mutableStateOf<GoogleAccountRecord?>(null) }

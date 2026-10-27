@@ -79,6 +79,8 @@ internal fun TermTimetable(
     schoolCalendar: CampusAcademicCalendar? = null,
     modifier: Modifier = Modifier,
     bounded: Boolean = false,
+    focusedCourseId: String? = null,
+    onFocusConsumed: () -> Unit = {},
 ) {
     val orderedCourses = remember(courses) {
         courses.sortedWith(compareBy(CampusCourse::day).thenBy(CampusCourse::startSection).thenBy(CampusCourse::courseName))
@@ -92,6 +94,12 @@ internal fun TermTimetable(
     var displayMode by rememberSaveable { mutableStateOf(TimetableDisplayMode.Grid) }
     var selectedCourseId by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedCourse = orderedCourses.firstOrNull { it.id == selectedCourseId }
+    LaunchedEffect(focusedCourseId, orderedCourses) {
+        val course = orderedCourses.firstOrNull { it.id == focusedCourseId } ?: return@LaunchedEffect
+        selectedCourseId = course.id
+        if (course.weeks.isNotEmpty() && selectedWeek !in course.weeks) selectedWeek = course.weeks.first()
+        onFocusConsumed()
+    }
     val showDetails = bounded && useTwoPaneLayout(1100.dp)
     val timetableScroll = rememberScrollState()
     val detailScroll = rememberScrollState()

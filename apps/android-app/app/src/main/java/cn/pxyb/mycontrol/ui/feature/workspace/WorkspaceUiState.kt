@@ -24,6 +24,7 @@ data class TodayUiState(
     val unreadAlerts: Int,
     val resourceExpiries: List<ResourceExpiry>,
     val sharedTodoDraft: String?,
+    val sectionLoadStates: Map<DataSection, cn.pxyb.mycontrol.ui.SectionLoadState> = emptyMap(),
 )
 
 internal fun AppUiState.toTodayUiState() = TodayUiState(
@@ -38,4 +39,5 @@ internal fun AppUiState.toTodayUiState() = TodayUiState(
     unreadAlerts = alerts.activeUnreadCount(),
     resourceExpiries = resourceExpiries,
     sharedTodoDraft = sharedTodoDraft,
+    sectionLoadStates = sectionLoadStates,
 )

@@ -10,6 +10,7 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -125,6 +126,16 @@ internal class PlatformHttpClient(
         }
     }
 
+    suspend fun <T> withCachedResponses(block: suspend () -> T): PlatformResult<T> {
+        val batch = RequestBatch(sessionStore.captureRequestSession(), allowCache = true, cacheOnly = true)
+        return withContext(Dispatchers.IO + batch) {
+            val value = block()
+            sessionStore.withRequestSession(batch.session) {
+                PlatformResult(value, batch.cachedAtMillis != null, batch.cachedAtMillis)
+            }
+        }
+    }
+
     suspend fun execute(
         path: String,
         method: String = "GET",
@@ -140,6 +151,19 @@ internal class PlatformHttpClient(
             throw error
         }
         val batch = currentCoroutineContext()[RequestBatch]
+        if (batch?.cacheOnly == true) {
+            // 预览只读展示数据；不得触发令牌刷新、鉴权判断或任何写请求。
+            return sessionStore.withRequestSession(batch.session) {
+                if (!authenticated || method != "GET" || path !in CACHEABLE_PATHS || path == "/api/auth/status") {
+                    throw IOException("此数据不支持缓存预览。")
+                }
+                val snapshot = snapshotStore.read(path, scope = batch.session.accountScope)
+                    ?: throw IOException("暂无有效缓存。")
+                val (json, array) = decodePlatformJson(snapshot.body)
+                batch.recordCache(snapshot.savedAtMillis)
+                PlatformResponse(json, array, null)
+            }
+        }
         val session = if (authenticated) {
             freshSession(currentSession()).takeIf { !it.cookie.isNullOrBlank() }
                 ?: throw ApiException("登录会话已失效，请重新登录。", 401, "UNAUTHORIZED")
@@ -263,7 +287,7 @@ internal class PlatformHttpClient(
         }
     }
 
-    private class RequestBatch(val session: SessionRequest, val allowCache: Boolean) :
+    private class RequestBatch(val session: SessionRequest, val allowCache: Boolean, val cacheOnly: Boolean = false) :
         AbstractCoroutineContextElement(Key) {
         @Volatile var endedGeneration: Long? = null
         @Volatile var cachedAtMillis: Long? = null

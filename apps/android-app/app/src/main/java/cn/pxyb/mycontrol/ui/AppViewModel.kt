@@ -200,6 +200,8 @@ class AppViewModel(
     val googleAccountDeskState = deriveState(AppUiState::toGoogleAccountDeskUiState)
     val qrLoginState = deriveState(AppUiState::toQrLoginUiState)
     val globalSearchState = deriveState(AppUiState::toGlobalSearchUiState)
+    private val searchTargetMutable = MutableStateFlow<GlobalSearchItem?>(null)
+    val searchTarget = searchTargetMutable.asStateFlow()
     private val assistantChatMutable = MutableStateFlow(AssistantChatUiState())
     val assistantChatState: StateFlow<AssistantChatUiState> = assistantChatMutable.asStateFlow()
     val todayState = deriveState(AppUiState::toTodayUiState)
@@ -254,6 +256,8 @@ class AppViewModel(
     private var githubReleasesJob: Job? = null
 
     private var appInForeground = false
+    private var activeWorkspaceSection: WorkspaceDestination? = null
+    private var networkRecoveryJob: Job? = null
     private val sectionRefresh = SectionRefreshController(viewModelScope, api, mutableState, ::forceReauthentication)
     private var alertsSeeded = false
     private var initialIncidentsLoaded = false
@@ -705,6 +709,7 @@ class AppViewModel(
         appInForeground = inForeground
         if (!inForeground) {
             stopOperationalPolling()
+            networkRecoveryJob?.cancel()
         } else if (mutableState.value.user != null && !mutableState.value.locked) {
             startOperationalPolling()
             refreshCurrentDestination(force = false)
@@ -735,6 +740,16 @@ class AppViewModel(
         if (mutableState.value.let { it.user == null || it.locked || it.busyAction == "logout" }) return
         todos.retryPending()
         syncRemoteNotifications(force = true)
+        sectionRefresh.retryUnavailableSections()
+        refreshCurrentDestination(force = false)
+        networkRecoveryJob?.cancel()
+        networkRecoveryJob = accountRequestScope.launch {
+            // 联网事件可能落在旧请求结束前；等待其落盘后再补刷失败或缓存结果。
+            sectionRefresh.awaitCurrentRefreshes()
+            if (!appInForeground) return@launch
+            sectionRefresh.retryUnavailableSections()
+            refreshCurrentDestination(force = false)
+        }
     }
 
     fun setAppLockEnabled(enabled: Boolean) {
@@ -867,6 +882,10 @@ class AppViewModel(
     }
 
     private fun cancelAccountRequests() {
+        searchTargetMutable.value = null
+        activeWorkspaceSection = null
+        networkRecoveryJob?.cancel()
+        networkRecoveryJob = null
         agenda.cancelPending()
         study.cancelPending()
         energy.cancelPending()
@@ -966,6 +985,8 @@ class AppViewModel(
             mutableState.value.globalSearchOpen != globalSearchOpen ||
             mutableState.value.assistantOpen != assistantOpen ||
             mutableState.value.workspaceDestination != workspaceDestination
+
+        if (destinationChanged) activeWorkspaceSection = workspaceDestination
 
         mutableState.update { current ->
             if (!destinationChanged) {
@@ -1140,6 +1161,7 @@ class AppViewModel(
     }
 
     fun openWorkspace(destination: WorkspaceDestination) {
+        activeWorkspaceSection = destination
         mutableState.update {
             it.copy(
                 selectedTab = when (destination) {
@@ -1161,7 +1183,7 @@ class AppViewModel(
         persistNavigationState()
         when (destination) {
             WorkspaceDestination.Today, WorkspaceDestination.Timetable,
-            WorkspaceDestination.Campus, WorkspaceDestination.Todos -> refreshToday()
+            WorkspaceDestination.Campus, WorkspaceDestination.Todos -> refreshWorkspaceSection(destination)
             WorkspaceDestination.Notifications -> reloadPersonalState()
             WorkspaceDestination.Scenes -> refreshIot()
             WorkspaceDestination.Projects -> refreshCt8(true)
@@ -1187,7 +1209,7 @@ class AppViewModel(
                 googleAccountDeskOpen = false,
             )
         }
-        refreshGlobalSearch(force = true)
+        refreshGlobalSearch(force = false)
     }
 
     fun closeGlobalSearch() {
@@ -1342,6 +1364,7 @@ class AppViewModel(
     }
 
     fun openGlobalSearchResult(item: GlobalSearchItem) {
+        searchTargetMutable.value = item
         mutableState.update { it.copy(globalSearchOpen = false) }
         when (item.destination) {
             SearchDestination.Overview -> openOperationalTarget(MainTab.Overview)
@@ -1354,6 +1377,10 @@ class AppViewModel(
             SearchDestination.Todos -> openWorkspace(WorkspaceDestination.Todos)
             SearchDestination.Scenes -> openWorkspace(WorkspaceDestination.Scenes)
         }
+    }
+
+    fun consumeSearchTarget() {
+        searchTargetMutable.value = null
     }
 
     fun openAccountManagement() {
@@ -1766,7 +1793,8 @@ class AppViewModel(
             assistantOpen -> {
                 // AI 助手使用现有工作台状态作为上下文，无需额外拉取。
             }
-            workspaceDestination in setOf(WorkspaceDestination.Today, WorkspaceDestination.Timetable, WorkspaceDestination.Campus, WorkspaceDestination.Todos) -> refreshToday(force)
+            workspaceDestination in setOf(WorkspaceDestination.Today, WorkspaceDestination.Timetable, WorkspaceDestination.Campus, WorkspaceDestination.Todos) ->
+                refreshWorkspaceSection(activeWorkspaceSection ?: workspaceDestination!!, force)
             workspaceDestination == WorkspaceDestination.Scenes -> refreshIot(force)
             workspaceDestination == WorkspaceDestination.Projects -> refreshCt8(force)
             workspaceDestination == WorkspaceDestination.Notifications -> {
@@ -1799,20 +1827,20 @@ class AppViewModel(
         refreshIncidents(force)
         refreshTasks(force)
         refreshTodos(force)
-        refreshCampus(force)
+        refreshCampusTimetable(force)
     }
 
-    private fun refreshGlobalSearch(force: Boolean = false) {
+    fun refreshGlobalSearch(force: Boolean = false) {
         refreshOverview(force)
         refreshExternalApplications(force)
         refreshIncidents(force)
         refreshTasks(force)
         refreshTodos(force)
-        refreshCampus(force)
+        refreshCampusTimetable(force)
         refreshResourceExpiries(force)
         refreshIot(force)
         syncRemoteNotifications(force)
-        googleAccounts.loadGoogleAccounts()
+        googleAccounts.loadGoogleAccounts(force)
     }
 
     private fun refreshForTab(tab: MainTab, force: Boolean = false) {
@@ -1840,18 +1868,27 @@ class AppViewModel(
         }
     }
 
-    private fun refreshOverview(force: Boolean) = launchRefresh(DataSection.Overview, force) {
+    private fun refreshOverview(force: Boolean) = launchRefresh(DataSection.Overview, force, preloadCache = {
+        val overview = api.overview()
+        mutableState.update { it.copy(overview = overview) }
+    }) {
         val overview = api.overview(force)
         mutableState.update { it.copy(overview = overview) }
         publishWidget()
     }
 
     private fun refreshExternalApplications(force: Boolean = false) =
-        launchRefresh(DataSection.ExternalApplications, force) {
+        launchRefresh(DataSection.ExternalApplications, force, preloadCache = {
+            val applications = api.externalApplications()
+            mutableState.update { it.copy(externalApplications = applications) }
+        }) {
             mutableState.update { it.copy(externalApplications = api.externalApplications()) }
         }
 
-    private fun refreshIncidents(force: Boolean = false) = launchRefresh(DataSection.Incidents, force) {
+    private fun refreshIncidents(force: Boolean = false) = launchRefresh(DataSection.Incidents, force, preloadCache = {
+        val incidents = api.incidents()
+        mutableState.update { it.copy(incidents = incidents) }
+    }) {
         val incidents = api.incidents()
         mutableState.update { it.copy(incidents = incidents) }
         initialIncidentsLoaded = true
@@ -1859,7 +1896,10 @@ class AppViewModel(
         evaluateAlerts()
     }
 
-    private fun refreshTasks(force: Boolean = false) = launchRefresh(DataSection.Tasks, force) {
+    private fun refreshTasks(force: Boolean = false) = launchRefresh(DataSection.Tasks, force, preloadCache = {
+        val tasks = api.tasks().tasks
+        mutableState.update { it.copy(tasks = tasks) }
+    }) {
         val tasks = api.tasks().tasks
         mutableState.update { it.copy(tasks = tasks) }
         initialTasksLoaded = true
@@ -1881,7 +1921,10 @@ class AppViewModel(
         mutableState.update { it.copy(dailyNews = dailyNews) }
     }
 
-    private fun refreshIot(force: Boolean = false) = launchRefresh(DataSection.Iot, force) {
+    private fun refreshIot(force: Boolean = false) = launchRefresh(DataSection.Iot, force, preloadCache = {
+        val iot = api.iot.dashboard()
+        mutableState.update { it.copy(iot = iot) }
+    }) {
         val iot = api.iot.dashboard { devices ->
             mutableState.update { current ->
                 current.copy(iot = devices.copy(
@@ -1901,12 +1944,25 @@ class AppViewModel(
         }
     }
 
+    fun selectWorkspaceSection(destination: WorkspaceDestination) {
+        activeWorkspaceSection = destination
+        refreshWorkspaceSection(destination)
+    }
+
+    fun refreshWorkspaceSection(destination: WorkspaceDestination, force: Boolean = false) {
+        when (destination) {
+            WorkspaceDestination.Timetable -> refreshCampusTimetable(force)
+            WorkspaceDestination.Todos -> refreshTodos(force)
+            WorkspaceDestination.Campus -> refreshCampusOverview(force)
+            WorkspaceDestination.Today -> refreshToday(force)
+            else -> Unit
+        }
+    }
+
     private fun refreshToday(force: Boolean = false) {
         refreshTodos(force)
-        refreshCampus(force)
+        refreshCampusTimetable(force)
         refreshResourceExpiries(force)
-        refreshIncidents(force)
-        refreshTasks(force)
     }
 
     private fun refreshTodos(force: Boolean = false) = launchRefresh(DataSection.Todos, force) {
@@ -1914,17 +1970,42 @@ class AppViewModel(
         evaluatePersonalReminders()
     }
 
-    private fun refreshCampus(force: Boolean = false) = launchRefresh(DataSection.Campus, force) {
-        val campus = api.campus.campusDashboard()
-        mutableState.update {
-            it.copy(
-                campusTimetable = campus.timetable,
-                campusOverview = campus.overview,
-                freeClassroomResult = it.freeClassroomResult ?: campus.overview.freeClassrooms,
-            )
-        }
+    private fun refreshCampusTimetable(force: Boolean = false) = launchRefresh(DataSection.Campus, force, preloadCache = {
+        val timetable = api.campus.campusTimetable()
+        mutableState.update { it.copy(campusTimetable = timetable) }
+    }) {
+        val timetable = api.campus.campusTimetable()
+        mutableState.update { it.copy(campusTimetable = timetable) }
         publishWidget()
         evaluatePersonalReminders()
+    }
+
+    fun refreshCampusGpa(force: Boolean = false) = launchRefresh(DataSection.CampusGpa, force) {
+        val gpa = api.campus.campusGpa()
+        mutableState.update { it.copy(campusOverview = (it.campusOverview ?: cn.pxyb.mycontrol.data.CampusOverview()).copy(gpa = gpa)) }
+    }
+
+    private fun refreshCampusOverview(force: Boolean = false) {
+        refreshCampusGpa(force)
+        launchRefresh(DataSection.CampusFreeClassrooms, force) {
+            val classrooms = api.campus.campusFreeClassrooms()
+            mutableState.update { it.copy(
+                campusOverview = (it.campusOverview ?: cn.pxyb.mycontrol.data.CampusOverview()).copy(freeClassrooms = classrooms),
+                freeClassroomResult = it.freeClassroomResult ?: classrooms,
+            ) }
+        }
+        launchRefresh(DataSection.CampusLife, force) {
+            val campus = api.campus.campusLife()
+            mutableState.update { it.copy(campusOverview = (it.campusOverview ?: cn.pxyb.mycontrol.data.CampusOverview()).copy(
+                cardBalance = campus.cardBalance, waterCode = campus.waterCode, dormitory = campus.dormitory,
+            )) }
+        }
+        launchRefresh(DataSection.CampusEnergy, force) {
+            val energy = api.campus.campusEnergy()
+            mutableState.update { it.copy(campusOverview = (it.campusOverview ?: cn.pxyb.mycontrol.data.CampusOverview()).copy(
+                energyBalance = energy.balance, energyRoom = energy.room,
+            )) }
+        }
     }
 
     fun refreshWaterValve(force: Boolean = false) = waterValves.refreshWaterValve(force)
@@ -1949,7 +2030,10 @@ class AppViewModel(
             mutableState.update { it.copy(freeClassroomResult = result) }
         }
 
-    private fun refreshResourceExpiries(force: Boolean = false) = launchRefresh(DataSection.Resources, force) {
+    private fun refreshResourceExpiries(force: Boolean = false) = launchRefresh(DataSection.Resources, force, preloadCache = {
+        val resources = api.resourceExpiries()
+        mutableState.update { it.copy(resourceExpiries = resources) }
+    }) {
         val resources = api.resourceExpiries()
         mutableState.update { it.copy(resourceExpiries = resources) }
         withContext(Dispatchers.IO) { alertNotifier.evaluateResourceExpiries(resources) }
@@ -1971,8 +2055,9 @@ class AppViewModel(
         section: DataSection,
         force: Boolean = false,
         publishError: Boolean = force,
+        preloadCache: (suspend () -> Unit)? = null,
         block: suspend () -> Unit,
-    ) = sectionRefresh.launchRefresh(section, force, publishError, block)
+    ) = sectionRefresh.launchRefresh(section, force, publishError, preloadCache, block)
 
     private fun cancelRefreshes() = sectionRefresh.cancelRefreshes()
 

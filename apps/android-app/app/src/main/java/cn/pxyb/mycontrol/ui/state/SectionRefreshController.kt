@@ -15,6 +15,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.joinAll
 
 internal class SectionRefreshController(
     private val scope: CoroutineScope,
@@ -29,9 +30,10 @@ internal class SectionRefreshController(
         section: DataSection,
         force: Boolean = false,
         publishError: Boolean = force,
+        preloadCache: (suspend () -> Unit)? = null,
         block: suspend () -> Unit,
     ) {
-        if (mutableState.value.user == null || refreshJobs[section]?.isActive == true) return
+        if (mutableState.value.let { it.user == null || it.locked || it.busyAction == "logout" } || refreshJobs[section]?.isActive == true) return
         val now = SystemClock.elapsedRealtime()
         val lastRefresh = lastRefreshElapsedMs[section]
         if (!force && lastRefresh != null && now - lastRefresh < REFRESH_CACHE_WINDOW_MS) return
@@ -40,9 +42,20 @@ internal class SectionRefreshController(
             val refreshJob = currentCoroutineContext()[Job]
             api.withRequestMetadata {
                 try {
+                    if (preloadCache != null && mutableState.value.sectionLoadStates[section]?.updatedAtMillis == null) {
+                        try {
+                            val cached = api.withCachedResponses { preloadCache() }
+                            updateSectionLoadState(section) {
+                                it.copy(fromCache = cached.fromCache, cachedAtMillis = cached.cachedAtMillis)
+                            }
+                        } catch (error: Exception) {
+                            if (error is CancellationException) throw error
+                            // 缺失或失效的缓存交给正常网络请求处理。
+                        }
+                    }
                     block()
-                    lastRefreshElapsedMs[section] = SystemClock.elapsedRealtime()
                     val fromCache = api.isOffline()
+                    if (!fromCache) lastRefreshElapsedMs[section] = SystemClock.elapsedRealtime()
                     val cachedAt = api.cachedAtMillis()
                     updateSectionLoadState(section) {
                         it.copy(error = null, updatedAtMillis = System.currentTimeMillis(), fromCache = fromCache, cachedAtMillis = cachedAt)
@@ -89,6 +102,16 @@ internal class SectionRefreshController(
 
     fun clearRefreshCache() {
         lastRefreshElapsedMs.clear()
+    }
+
+    fun retryUnavailableSections() {
+        mutableState.value.sectionLoadStates.forEach { (section, state) ->
+            if (state.fromCache || state.error != null) lastRefreshElapsedMs.remove(section)
+        }
+    }
+
+    suspend fun awaitCurrentRefreshes() {
+        refreshJobs.values.toList().joinAll()
     }
 
     private fun updateRefreshingState() {

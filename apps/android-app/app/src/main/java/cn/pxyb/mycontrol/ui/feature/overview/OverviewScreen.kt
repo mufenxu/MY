@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.StarOutline
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -88,6 +89,8 @@ fun OverviewScreen(
     onOpenMediaDownload: () -> Unit = {},
     onUpdateQuickActions: (List<HomeQuickAction>, Set<HomeQuickAction>) -> Unit,
     requestExternalApplicationLaunch: suspend (String) -> ExternalApplicationLaunch,
+    focusedApplicationId: String? = null,
+    onFocusConsumed: () -> Unit = {},
 ) {
     var showAllQuickActions by rememberSaveable { mutableStateOf(false) }
     var customizingQuickActions by remember { mutableStateOf(false) }
@@ -270,6 +273,12 @@ fun OverviewScreen(
                     }
                 }
             }
+    }
+    LaunchedEffect(focusedApplicationId, state.externalApplications) {
+        val application = state.externalApplications.firstOrNull { it.id == focusedApplicationId } ?: return@LaunchedEffect
+        onFocusConsumed()
+        if (application.canAccess) openExternalApplication(application)
+        else externalApplicationOpenError = "当前账号没有访问此应用的权限。"
     }
     if (confirmBackup) {
         AppConfirmDialog(

@@ -58,6 +58,8 @@ fun ScenesScreen(
     onWriteNfc: (String, String) -> Unit,
     onSetQuickScene: (String, String) -> Unit,
     onConsumePendingScene: () -> Unit,
+    focusedId: String? = null,
+    onFocusConsumed: () -> Unit = {},
 ) {
     var editingId by rememberSaveable { mutableStateOf<String?>(null) }
     var adding by rememberSaveable { mutableStateOf(false) }
@@ -74,6 +76,22 @@ fun ScenesScreen(
     )
     val rules = state.iot?.rules.orEmpty()
     val editing = scenes.firstOrNull { it.id == editingId }
+    LaunchedEffect(focusedId, scenes, state.offlineMode) {
+        val scene = scenes.firstOrNull { it.id == focusedId } ?: return@LaunchedEffect
+        if (state.offlineMode) return@LaunchedEffect
+        editingId = scene.id
+        onFocusConsumed()
+    }
+    if (state.offlineMode) scenes.firstOrNull { it.id == focusedId }?.let { scene ->
+        cn.pxyb.mycontrol.ui.components.dialog.AppDialog(
+            title = scene.name,
+            subtitle = "搜索定位 · 场景缓存",
+            onDismissRequest = onFocusConsumed,
+            footer = { cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton(text = "关闭", onClick = onFocusConsumed) },
+        ) {
+            Text("包含 ${scene.actionCount} 个设备动作。联网后可以编辑或执行。", style = MaterialTheme.typography.bodyMedium)
+        }
+    }
     val editingRule = rules.firstOrNull { it.id == editingRuleId }
     LaunchedEffect(state.sceneSaveCount) {
         if (pendingSceneSave?.let { state.sceneSaveCount > it } == true) {

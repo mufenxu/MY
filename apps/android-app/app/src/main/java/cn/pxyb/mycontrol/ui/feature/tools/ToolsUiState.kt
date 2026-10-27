@@ -20,6 +20,7 @@ data class ToolsUiState(
     val overview: OverviewData?,
     val iot: IotData?,
     val unreadAlerts: Int,
+    val cachedAtMillis: Long? = null,
 )
 
 internal fun AppUiState.toToolsUiState() = ToolsUiState(
@@ -30,4 +31,5 @@ internal fun AppUiState.toToolsUiState() = ToolsUiState(
     overview = overview,
     iot = iot,
     unreadAlerts = alerts.activeUnreadCount(),
+    cachedAtMillis = sectionLoadStates[DataSection.Iot]?.takeIf { it.fromCache }?.cachedAtMillis,
 )

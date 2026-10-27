@@ -218,6 +218,7 @@ internal fun AuthenticatedShell(
     }
 
     val sharedImage by viewModel.sharedImage.collectAsStateWithLifecycle()
+    val searchTarget by viewModel.searchTarget.collectAsStateWithLifecycle()
     LaunchedEffect(sharedImage) {
         sharedImage?.let { uri ->
             navigateToSubScreen(AppRoute.Screenshot)
@@ -499,6 +500,8 @@ internal fun AuthenticatedShell(
                 composable(AppRoute.Overview) {
                     val overviewState by viewModel.overviewState.collectAsStateWithLifecycle()
                     OverviewScreen(
+                        focusedApplicationId = searchTarget?.takeIf { currentRoute == AppRoute.Overview && it.destination == cn.pxyb.mycontrol.ui.feature.search.SearchDestination.Overview }?.focusId,
+                        onFocusConsumed = viewModel::consumeSearchTarget,
                         state = overviewState,
                         contentPadding = contentPadding,
                         onSelectTab = navigateToTab,
@@ -532,6 +535,8 @@ internal fun AuthenticatedShell(
                 composable(AppRoute.Operations) {
                     val operationsState by viewModel.operationsState.collectAsStateWithLifecycle()
                     OperationsScreen(
+                        focusedId = searchTarget?.takeIf { currentRoute == AppRoute.Operations && it.destination == cn.pxyb.mycontrol.ui.feature.search.SearchDestination.Operations }?.focusId,
+                        onFocusConsumed = viewModel::consumeSearchTarget,
                         state = operationsState,
                         contentPadding = contentPadding,
                         onRunDiagnostics = viewModel::runDiagnostics,
@@ -551,6 +556,8 @@ internal fun AuthenticatedShell(
                 composable(AppRoute.Notifications) {
                     val notificationState by viewModel.notificationCenterState.collectAsStateWithLifecycle()
                     NotificationCenterScreen(
+                        searchTarget = searchTarget?.takeIf { currentRoute == AppRoute.Notifications && it.destination == cn.pxyb.mycontrol.ui.feature.search.SearchDestination.Notifications },
+                        onSearchTargetConsumed = viewModel::consumeSearchTarget,
                         state = notificationState,
                         contentPadding = contentPadding,
                         refreshing = notificationState.refreshing,
@@ -570,6 +577,8 @@ internal fun AuthenticatedShell(
                 composable(AppRoute.Tools) {
                     val toolsState by viewModel.toolsState.collectAsStateWithLifecycle()
                     ToolsScreen(
+                        focusedId = searchTarget?.takeIf { currentRoute == AppRoute.Tools && it.destination == cn.pxyb.mycontrol.ui.feature.search.SearchDestination.Tools }?.focusId,
+                        onFocusConsumed = viewModel::consumeSearchTarget,
                         state = toolsState,
                         contentPadding = contentPadding,
                         currentTab = state.selectedTab,
@@ -707,6 +716,8 @@ internal fun AuthenticatedShell(
                 composable(AppRoute.GoogleAccounts) {
                     val googleAccountState by viewModel.googleAccountDeskState.collectAsStateWithLifecycle()
                     GoogleAccountDeskScreen(
+                        focusedId = searchTarget?.takeIf { currentRoute == AppRoute.GoogleAccounts && it.destination == cn.pxyb.mycontrol.ui.feature.search.SearchDestination.GoogleAccounts }?.focusId,
+                        onFocusConsumed = viewModel::consumeSearchTarget,
                         state = googleAccountState,
                         contentPadding = contentPadding,
                         onDismiss = navigateBackFromSubScreen,
@@ -794,6 +805,7 @@ internal fun AuthenticatedShell(
                 composable(AppRoute.Search) {
                     val searchState by viewModel.globalSearchState.collectAsStateWithLifecycle()
                     GlobalSearchScreen(
+                        onRefresh = { viewModel.refreshGlobalSearch(force = true) },
                         focusRequest = searchFocusRequest,
                         state = searchState,
                         contentPadding = contentPadding,
@@ -845,6 +857,9 @@ internal fun AuthenticatedShell(
                             }
                         }
                         TodayScreen(
+                            onSectionChange = { section -> if (currentRoute == route) viewModel.selectWorkspaceSection(section) },
+                            searchTarget = searchTarget?.takeIf { currentRoute == route },
+                            onSearchTargetConsumed = viewModel::consumeSearchTarget,
                             state = todayState,
                             agendaState = agendaState,
                             onRefreshAgenda = viewModel.agenda::refresh,
@@ -898,7 +913,7 @@ internal fun AuthenticatedShell(
                     val grades by viewModel.grades.state.collectAsStateWithLifecycle()
                     val today by viewModel.todayState.collectAsStateWithLifecycle()
                     cn.pxyb.mycontrol.ui.feature.campus.grades.GradesScreen(grades, today.campusOverview?.gpa, contentPadding,
-                        navigateBackFromSubScreen, viewModel.grades::load, viewModel.grades::save, viewModel.grades::remove, viewModel.grades::savePlan)
+                        navigateBackFromSubScreen, { viewModel.grades.load(); viewModel.refreshCampusGpa() }, viewModel.grades::save, viewModel.grades::remove, viewModel.grades::savePlan)
                 }
                 composable(AppRoute.Screenshot) {
                     val screenshot by viewModel.screenshot.state.collectAsStateWithLifecycle()
@@ -1131,6 +1146,8 @@ internal fun AuthenticatedShell(
                 composable(AppRoute.Scenes) {
                     val scenesState by viewModel.scenesState.collectAsStateWithLifecycle()
                     ScenesScreen(
+                        focusedId = searchTarget?.takeIf { currentRoute == AppRoute.Scenes && it.destination == cn.pxyb.mycontrol.ui.feature.search.SearchDestination.Scenes }?.focusId,
+                        onFocusConsumed = viewModel::consumeSearchTarget,
                         state = scenesState,
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,

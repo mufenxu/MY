@@ -65,6 +65,7 @@ fun GlobalSearchScreen(
     onBack: () -> Unit,
     onSelect: (GlobalSearchItem) -> Unit,
     focusRequest: Int = 0,
+    onRefresh: () -> Unit = {},
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var category by rememberSaveable { mutableStateOf<String?>(null) }
@@ -109,6 +110,7 @@ fun GlobalSearchScreen(
         contentPadding = contentPadding,
         listState = listState,
         refreshing = state.refreshing,
+        onRefresh = onRefresh,
         header = {
             cn.pxyb.mycontrol.ui.components.layout.AppTopBarSurface(Modifier.padding(vertical = 8.dp)) {
                 AppSearchBar(
@@ -152,7 +154,7 @@ fun GlobalSearchScreen(
         }
         state.error?.let { message ->
             item(key = "search-error") {
-                AppFeedbackBanner(message = message, error = true)
+                AppFeedbackBanner(message = message, error = true, onRetry = onRefresh)
             }
         }
         if (results.isEmpty() && !state.refreshing) {

@@ -33,6 +33,9 @@ class PlatformApi(
     suspend fun <T> withRequestMetadata(allowCache: Boolean = true, block: suspend () -> T): PlatformResult<T> =
         http.withRequestMetadata(allowCache, block)
 
+    suspend fun <T> withCachedResponses(block: suspend () -> T): PlatformResult<T> =
+        http.withCachedResponses(block)
+
     suspend fun externalApplications(): List<ExternalApplication> = withContext(Dispatchers.IO) {
         parseExternalApplications(execute(EXTERNAL_APPLICATIONS_PATH).json)
     }
