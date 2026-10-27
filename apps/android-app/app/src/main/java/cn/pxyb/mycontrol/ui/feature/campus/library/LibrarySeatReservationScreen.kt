@@ -72,7 +72,10 @@ import cn.pxyb.mycontrol.ui.components.layout.appContentWidth
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
 import cn.pxyb.mycontrol.ui.components.picker.AppTimeRangePicker
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
+import cn.pxyb.mycontrol.util.DateTimeUtils.formatMinutesToTime
 import cn.pxyb.mycontrol.util.DateTimeUtils.parseTimeMinutes
+import java.time.LocalTime
+import java.time.ZoneId
 
 internal enum class LibrarySeatTab(val label: String) {
     Book("查询座位"),
@@ -117,8 +120,15 @@ internal fun LibrarySeatReservationScreen(
     var selectedVenueId by rememberSaveable { mutableStateOf("") }
     var selectedDate by rememberSaveable { mutableStateOf("") }
     var selectedFloorId by rememberSaveable { mutableStateOf("") }
-    var startTime by rememberSaveable { mutableStateOf("08:00") }
-    var endTime by rememberSaveable { mutableStateOf("10:00") }
+    val defaultStartMinute = remember {
+        val now = LocalTime.now(ZoneId.of("Asia/Shanghai"))
+        // 向后对齐到 15 分钟刻度，超出开放范围时取最近的可选开始时间。
+        ((now.toSecondOfDay() + 15 * 60 - 1) / (15 * 60) * 15).coerceIn(8 * 60, 21 * 60 + 15)
+    }
+    var startTime by rememberSaveable { mutableStateOf(formatMinutesToTime(defaultStartMinute)) }
+    var endTime by rememberSaveable {
+        mutableStateOf(formatMinutesToTime((defaultStartMinute + 120).coerceAtMost(21 * 60 + 30)))
+    }
     var wantPower by rememberSaveable { mutableStateOf(false) }
     var wantWindow by rememberSaveable { mutableStateOf(false) }
     var selectedAreaId by rememberSaveable { mutableStateOf("") }
