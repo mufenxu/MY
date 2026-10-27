@@ -96,12 +96,12 @@ jobs:
           ./gradlew :app:generateBaselineProfile \
             -PuseManagedProfileDevice=true \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=BaselineProfile \
-            --console=plain --no-daemon --no-configuration-cache
+            --console=plain --info --stacktrace --no-daemon --no-configuration-cache
           ./gradlew :baselineprofile:pixel2Api35BenchmarkReleaseAndroidTest \
             -PuseManagedProfileDevice=true \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR \
-            --console=plain --no-daemon --no-configuration-cache
+            --console=plain --info --stacktrace --no-daemon --no-configuration-cache
 
       - name: Generate profiles on an isolated offline fixture
         working-directory: apps/android-app
@@ -110,7 +110,7 @@ jobs:
           ./gradlew :app:generateBaselineProfile \
             -PuseManagedProfileDevice=true \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=BaselineProfile \
-            --console=plain --no-daemon --no-configuration-cache
+            --console=plain --info --stacktrace --no-daemon --no-configuration-cache
           test -s app/src/main/generated/baselineProfiles/baseline-prof.txt
           test -s app/src/main/generated/baselineProfiles/startup-prof.txt
 
@@ -121,13 +121,21 @@ jobs:
             -PuseManagedProfileDevice=true \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR \
-            --console=plain --no-daemon --no-configuration-cache
+            --console=plain --info --stacktrace --no-daemon --no-configuration-cache
 
       - name: Check startup and interaction regressions
         run: |
           node scripts/check-android-performance.mjs \
             .android-performance-baseline/apps/android-app/baselineprofile/build/outputs/managed_device_android_test_additional_output \
             apps/android-app/baselineprofile/build/outputs/managed_device_android_test_additional_output
+
+      - name: Capture runner diagnostics on failure
+        if: failure()
+        run: |
+          mkdir -p android-performance-diagnostics
+          free -h > android-performance-diagnostics/memory.txt
+          df -h > android-performance-diagnostics/disk.txt
+          sudo dmesg -T > android-performance-diagnostics/kernel.log
 
       - name: Upload generated profiles and reports
         if: always()
@@ -136,7 +144,11 @@ jobs:
           name: android-profile-${{ github.sha }}
           include-hidden-files: true
           path: |
+            android-performance-diagnostics/
             apps/android-app/app/src/main/generated/baselineProfiles/
             apps/android-app/baselineprofile/build/outputs/managed_device_android_test_additional_output/
             apps/android-app/baselineprofile/build/reports/androidTests/
+            apps/android-app/baselineprofile/build/outputs/androidTest-results/
             .android-performance-baseline/apps/android-app/baselineprofile/build/outputs/managed_device_android_test_additional_output/
+            .android-performance-baseline/apps/android-app/baselineprofile/build/reports/androidTests/
+            .android-performance-baseline/apps/android-app/baselineprofile/build/outputs/androidTest-results/
