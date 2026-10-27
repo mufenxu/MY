@@ -95,10 +95,12 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:generateBaselineProfile \
             -PuseManagedProfileDevice=true \
+            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=BaselineProfile \
             --console=plain --info --stacktrace --no-daemon --no-configuration-cache
           ./gradlew :baselineprofile:pixel2Api35BenchmarkReleaseAndroidTest \
             -PuseManagedProfileDevice=true \
+            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR \
             --console=plain --info --stacktrace --no-daemon --no-configuration-cache
@@ -109,6 +111,7 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :app:generateBaselineProfile \
             -PuseManagedProfileDevice=true \
+            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=BaselineProfile \
             --console=plain --info --stacktrace --no-daemon --no-configuration-cache
           test -s app/src/main/generated/baselineProfiles/baseline-prof.txt
@@ -119,6 +122,7 @@ jobs:
         run: |
           ./gradlew :baselineprofile:pixel2Api35BenchmarkReleaseAndroidTest \
             -PuseManagedProfileDevice=true \
+            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR \
             --console=plain --info --stacktrace --no-daemon --no-configuration-cache
