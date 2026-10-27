@@ -40,6 +40,8 @@ jobs:
   profile:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      ANDROID_SERIAL: emulator-5554
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -85,11 +87,28 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
 
-      - name: Configure headless emulator graphics and acceleration
+      - name: Start a dedicated emulator without snapshots
         run: |
+          set -euo pipefail
           sudo chmod a+rw /dev/kvm
-          mkdir -p "$HOME/.android"
-          printf '%s\n' 'Vulkan = off' > "$HOME/.android/advancedFeatures.ini"
+          sdkmanager 'system-images;android-35;default;x86_64'
+          printf 'no\n' | avdmanager create avd --name android-performance \
+            --package 'system-images;android-35;default;x86_64' --device pixel_2
+          mkdir -p android-performance-diagnostics
+          "$ANDROID_HOME/emulator/emulator" -avd android-performance \
+            -port 5554 -no-window -no-snapshot -no-audio -no-boot-anim \
+            -gpu swiftshader_indirect -feature -Vulkan \
+            > android-performance-diagnostics/emulator.log 2>&1 &
+          timeout 180 adb wait-for-device
+          for attempt in $(seq 1 90); do
+            if [[ "$(adb shell getprop sys.boot_completed | tr -d '\r')" == '1' ]]; then
+              adb shell input keyevent 82
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'Emulator did not finish booting.' >&2
+          exit 1
 
       - name: Measure baseline on the offline fixture
         working-directory: .android-performance-baseline/apps/android-app
@@ -97,13 +116,11 @@ jobs:
           set -euo pipefail
           chmod +x ./gradlew
           ./gradlew :app:generateBaselineProfile \
-            -PuseManagedProfileDevice=true \
-            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect \
+            -PuseManagedProfileDevice=false \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=BaselineProfile \
             --console=plain --info --stacktrace --no-daemon --no-configuration-cache
-          ./gradlew :baselineprofile:pixel2Api35BenchmarkReleaseAndroidTest \
-            -PuseManagedProfileDevice=true \
-            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect \
+          ./gradlew :baselineprofile:connectedBenchmarkReleaseAndroidTest \
+            -PuseManagedProfileDevice=false \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR \
             --console=plain --info --stacktrace --no-daemon --no-configuration-cache
@@ -113,8 +130,7 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew :app:generateBaselineProfile \
-            -PuseManagedProfileDevice=true \
-            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect \
+            -PuseManagedProfileDevice=false \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=BaselineProfile \
             --console=plain --info --stacktrace --no-daemon --no-configuration-cache
           test -s app/src/main/generated/baselineProfiles/baseline-prof.txt
@@ -123,9 +139,8 @@ jobs:
       - name: Measure candidate on the same device configuration
         working-directory: apps/android-app
         run: |
-          ./gradlew :baselineprofile:pixel2Api35BenchmarkReleaseAndroidTest \
-            -PuseManagedProfileDevice=true \
-            -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect \
+          ./gradlew :baselineprofile:connectedBenchmarkReleaseAndroidTest \
+            -PuseManagedProfileDevice=false \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark \
             -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR \
             --console=plain --info --stacktrace --no-daemon --no-configuration-cache
@@ -133,8 +148,13 @@ jobs:
       - name: Check startup and interaction regressions
         run: |
           node scripts/check-android-performance.mjs \
-            .android-performance-baseline/apps/android-app/baselineprofile/build/outputs/managed_device_android_test_additional_output \
-            apps/android-app/baselineprofile/build/outputs/managed_device_android_test_additional_output
+            .android-performance-baseline/apps/android-app/baselineprofile/build/outputs/connected_android_test_additional_output \
+            apps/android-app/baselineprofile/build/outputs/connected_android_test_additional_output
+
+      - name: Stop the dedicated emulator
+        if: always()
+        run: |
+          if adb get-state >/dev/null 2>&1; then adb emu kill; fi
 
       - name: Capture runner diagnostics on failure
         if: failure()
@@ -154,9 +174,9 @@ jobs:
             android-performance-diagnostics/
             /tmp/android-runner/emu-crash-*/
             apps/android-app/app/src/main/generated/baselineProfiles/
-            apps/android-app/baselineprofile/build/outputs/managed_device_android_test_additional_output/
+            apps/android-app/baselineprofile/build/outputs/connected_android_test_additional_output/
             apps/android-app/baselineprofile/build/reports/androidTests/
             apps/android-app/baselineprofile/build/outputs/androidTest-results/
-            .android-performance-baseline/apps/android-app/baselineprofile/build/outputs/managed_device_android_test_additional_output/
+            .android-performance-baseline/apps/android-app/baselineprofile/build/outputs/connected_android_test_additional_output/
             .android-performance-baseline/apps/android-app/baselineprofile/build/reports/androidTests/
             .android-performance-baseline/apps/android-app/baselineprofile/build/outputs/androidTest-results/
