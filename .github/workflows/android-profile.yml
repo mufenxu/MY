@@ -85,8 +85,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
 
-      - name: Enable emulator acceleration
-        run: sudo chmod a+rw /dev/kvm
+      - name: Configure headless emulator graphics and acceleration
+        run: |
+          sudo chmod a+rw /dev/kvm
+          mkdir -p "$HOME/.android"
+          printf '%s\n' 'Vulkan = off' > "$HOME/.android/advancedFeatures.ini"
 
       - name: Measure baseline on the offline fixture
         working-directory: .android-performance-baseline/apps/android-app
@@ -149,6 +152,7 @@ jobs:
           include-hidden-files: true
           path: |
             android-performance-diagnostics/
+            /tmp/android-runner/emu-crash-*/
             apps/android-app/app/src/main/generated/baselineProfiles/
             apps/android-app/baselineprofile/build/outputs/managed_device_android_test_additional_output/
             apps/android-app/baselineprofile/build/reports/androidTests/
