@@ -159,11 +159,11 @@ fun ModernAnimatedSplashScreen(
         }
     }
 
-    // 短暂入场后等待状态就绪，避免轮询和额外的品牌展示等待。
+    // 首帧后随状态就绪退场，不增加固定的品牌展示等待。
     val currentIsDataReady by rememberUpdatedState(isDataReady)
     val currentOnSplashFinished by rememberUpdatedState(onSplashFinished)
     LaunchedEffect(Unit) {
-        delay(MotionTokens.DurationShort.toLong())
+        androidx.compose.runtime.withFrameNanos { }
         snapshotFlow { currentIsDataReady }.first { it }
         currentOnSplashFinished()
     }
@@ -175,7 +175,7 @@ fun ModernAnimatedSplashScreen(
             exitProgress.animateTo(
                 targetValue = 1f,
                 animationSpec = tween(
-                    durationMillis = MotionTokens.DurationLong,
+                    durationMillis = MotionTokens.DurationShort,
                     easing = CubicBezierEasing(0.32f, 0f, 0.15f, 1f),
                 ),
             )

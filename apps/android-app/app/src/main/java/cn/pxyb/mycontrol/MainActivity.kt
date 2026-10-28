@@ -133,7 +133,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        if (sessionStore.isLocked()) appViewModel.lockSession()
+        if (!appViewModel.state.value.booting && sessionStore.isLocked()) appViewModel.lockSession()
         appViewModel.setAppInForeground(true)
         notificationsEnabled.value = hasNotificationPermission()
         val callback = object : ConnectivityManager.NetworkCallback() {

@@ -1,6 +1,7 @@
 package cn.pxyb.mycontrol.data
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
@@ -43,20 +44,22 @@ internal class SessionRequest(val generation: Long, val username: String?, inter
 }
 
 class SessionStore(context: Context) {
-    private val preferences = context.getSharedPreferences("secure_platform_session", Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private var initializedPreferences: SharedPreferences? = null
+    private val preferences: SharedPreferences
+        get() = synchronized(sessionLock) {
+            initializedPreferences ?: appContext.getSharedPreferences("secure_platform_session", Context.MODE_PRIVATE).also { store ->
+                // 首次使用时迁移，由启动加载在后台触发；所有入口仍共享会话锁。
+                if (!store.contains(KEY_LOCK_ENABLED) && store.contains(KEY_STORAGE_VERSION)) {
+                    store.edit().putBoolean(KEY_LOCK_ENABLED,
+                        !store.getString(KEY_COOKIE, null).isNullOrBlank()).commit()
+                }
+                if (store.getInt(KEY_STORAGE_VERSION, 0) != STORAGE_VERSION) clearSessionData(store)
+                initializedPreferences = store
+            }
+        }
     private val keyAlias = "my_control_session_key_v2"
     private val unlockedKeyAlias = "my_control_session_unlocked_key_v1"
-
-    init {
-        synchronized(sessionLock) {
-            // Preserve an explicit existing lock choice; old bearer sessions must log in again to bind a device key.
-            if (!preferences.contains(KEY_LOCK_ENABLED) && preferences.contains(KEY_STORAGE_VERSION)) {
-                preferences.edit().putBoolean(KEY_LOCK_ENABLED,
-                    !preferences.getString(KEY_COOKIE, null).isNullOrBlank()).commit()
-            }
-            if (preferences.getInt(KEY_STORAGE_VERSION, 0) != STORAGE_VERSION) clearSessionData()
-        }
-    }
 
     internal fun captureRequestSession(): SessionRequest = synchronized(sessionLock) {
         readCookie()
@@ -187,8 +190,8 @@ class SessionStore(context: Context) {
         WebSessionStore.clear()
     }
 
-    private fun clearSessionData() {
-        preferences.edit().remove(KEY_COOKIE).remove(KEY_PLAIN_COOKIE).remove(KEY_UNLOCKED_COOKIE)
+    private fun clearSessionData(store: SharedPreferences = preferences) {
+        store.edit().remove(KEY_COOKIE).remove(KEY_PLAIN_COOKIE).remove(KEY_UNLOCKED_COOKIE)
             .remove(KEY_PAYLOAD).remove(KEY_WRAPPED_KEY).remove(KEY_DEVICE_KEY_ALIAS)
             .remove(KEY_STORAGE_VERSION).remove(KEY_EXPIRES_AT).remove(KEY_LAST_USED_AT)
             .remove(KEY_IDLE_TIMEOUT).remove(KEY_ACTIVE_USERNAME).commit()

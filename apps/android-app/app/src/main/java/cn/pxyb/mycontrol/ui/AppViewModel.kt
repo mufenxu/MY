@@ -135,22 +135,12 @@ class AppViewModel(
     private val snapshotStore = ResponseSnapshotStore(application)
     private val api = PlatformApi(sessionStore, snapshotStore)
     private val networkDiagnostics = NetworkDiagnostics(api)
-    private val alertNotifier = AlertNotifier(application)
+    private val alertNotifier by lazy { AlertNotifier(application) }
     private val androidCalendarSync = AndroidCalendarSync(application)
-    private val hasSavedSession = sessionStore.hasSession()
-    private val lockEnabled = sessionStore.isLockEnabled()
-    private val savedHomePreferences = homePreferences.read()
-    private val savedAssistantPreferences = assistantPreferences.read()
     private val mutableState = MutableStateFlow(
         AppUiState(
-            booting = hasSavedSession && !lockEnabled,
-            locked = hasSavedSession && lockEnabled,
+            booting = true,
             selectedTab = restoredMainTab(savedStateHandle[SAVED_SELECTED_TAB]) ?: MainTab.Overview,
-            suggestedUsername = sessionStore.readLastUsername(),
-            appLockEnabled = lockEnabled,
-            homeQuickActionOrder = savedHomePreferences.order,
-            hiddenHomeQuickActions = savedHomePreferences.hidden,
-            assistantButtonVisible = savedAssistantPreferences.visible,
             workspaceDestination = restoredWorkspaceDestination(savedStateHandle[SAVED_WORKSPACE_DESTINATION]),
             todoSnapshot = TodoSnapshot(),
             pendingTodoMutations = 0,
@@ -185,9 +175,11 @@ class AppViewModel(
     private val registryImages = RegistryImagesStateHolder(viewModelScope, api, ::forceReauthentication)
     val registryImagesState = registryImages.state
     val todos = TodoController(viewModelScope, TodoRepository(application, api, sessionStore), mutableState, ::forceReauthentication)
-    private val notifications: NotificationController = NotificationController(
-        application, viewModelScope, api, sessionStore, personalStore, alertNotifier, mutableState, ::forceReauthentication,
-    ) { syncRemoteNotifications() }
+    private val notifications: NotificationController by lazy {
+        NotificationController(
+            application, viewModelScope, api, sessionStore, personalStore, alertNotifier, mutableState, ::forceReauthentication,
+        ) { syncRemoteNotifications() }
+    }
     val entryState = deriveState(AppUiState::toEntryUiState)
     val overviewState = deriveState(AppUiState::toOverviewUiState)
     val operationsState = deriveState(AppUiState::toOperationsUiState)
@@ -281,18 +273,57 @@ class AppViewModel(
         viewModelScope.launch {
             appUpdates.state.collect { update -> mutableState.update { it.copy(appUpdate = update) } }
         }
-        refreshLoginCapabilities()
-        if (!hasSavedSession) {
-            MyControlWidgetProvider.clear(getApplication())
-            CourseWidgetProvider.clear(getApplication())
+        viewModelScope.launch {
+            try {
+                val autoUnlock = withContext(Dispatchers.IO) {
+                    val hasSavedSession = sessionStore.hasSession()
+                    val lockEnabled = sessionStore.isLockEnabled()
+                    val savedHomePreferences = homePreferences.read()
+                    val savedAssistantPreferences = assistantPreferences.read()
+                    val username = sessionStore.readLastUsername()
+                    api.setAccount(sessionStore.readActiveUsername())
+                    if (!hasSavedSession) {
+                        MyControlWidgetProvider.clear(getApplication())
+                        CourseWidgetProvider.clear(getApplication())
+                    }
+                    mutableState.update { current ->
+                        current.copy(
+                            booting = hasSavedSession && !lockEnabled,
+                            locked = hasSavedSession && lockEnabled,
+                            suggestedUsername = username,
+                            appLockEnabled = lockEnabled,
+                            homeQuickActionOrder = savedHomePreferences.order,
+                            hiddenHomeQuickActions = savedHomePreferences.hidden,
+                            assistantButtonVisible = savedAssistantPreferences.visible,
+                        )
+                    }
+                    hasSavedSession && !lockEnabled
+                }
+                if (autoUnlock) unlockSession()
+                refreshLoginCapabilities()
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                mutableState.update { it.copy(booting = false, locked = true, error = "本地安全状态加载失败，请重新打开应用。") }
+            }
         }
-        if (hasSavedSession && !lockEnabled) unlockSession()
         viewModelScope.launch {
             mutableState
                 .map(::assistantInputs)
                 .distinctUntilChanged()
                 .debounce(250)
                 .collectLatest(::refreshAssistantSnapshot)
+        }
+        viewModelScope.launch {
+            mutableState.map { current ->
+                current.user?.username?.takeIf { !current.locked }?.let { username ->
+                    username to Triple(current.alertPreferences.dailyBriefEnabled,
+                        current.alertPreferences.morningBriefHour, current.alertPreferences.eveningBriefHour)
+                }
+            }.distinctUntilChanged().collectLatest { schedule ->
+                if (schedule != null) withContext(Dispatchers.IO) {
+                    DailyBriefScheduler.schedule(getApplication(), schedule.first)
+                }
+            }
         }
     }
 
@@ -2260,35 +2291,52 @@ class AppViewModel(
 
     private suspend fun refreshAssistantSnapshot(inputs: AssistantInputs) {
         val username = inputs.username?.takeIf { !inputs.locked } ?: return
-        val snapshot = buildPersonalAssistantSnapshot(
-            timetable = inputs.timetable,
-            todos = inputs.todos,
-            incidents = inputs.incidents,
-            alerts = inputs.alerts,
-            resources = inputs.resources,
-            backup = inputs.backup,
-            security = inputs.security,
-        )
-        val guardianAlerts = buildGuardianAlerts(backup = inputs.backup, security = inputs.security)
-            .filter { alert -> alert.type != "backup" || inputs.preferences.backupAlerts }
-        val newGuardianAlerts = withContext(Dispatchers.IO) {
-            val existingIds = personalStore.readAlerts().mapTo(mutableSetOf(), AppAlertRecord::id)
-            personalStore.writeAssistantSnapshot(snapshot)
-            personalStore.appendAlerts(guardianAlerts)
-            DailyBriefScheduler.schedule(getApplication(), username)
-            guardianAlerts.filterNot { it.id in existingIds }
+        val session = withContext(Dispatchers.IO) { sessionStore.captureRequestSession() }
+        if (session.username != username) return
+        val (snapshot, guardianAlerts) = withContext(Dispatchers.Default) {
+            buildPersonalAssistantSnapshot(
+                timetable = inputs.timetable,
+                todos = inputs.todos,
+                incidents = inputs.incidents,
+                alerts = inputs.alerts,
+                resources = inputs.resources,
+                backup = inputs.backup,
+                security = inputs.security,
+            ) to buildGuardianAlerts(backup = inputs.backup, security = inputs.security)
+                .filter { alert -> alert.type != "backup" || inputs.preferences.backupAlerts }
+        }
+        val previous = mutableState.value.assistantSnapshot
+        val snapshotChanged = previous == null || snapshot.copy(generatedAtMillis = previous.generatedAtMillis) != previous
+        // 同一分钟内内容未变时复用快照，跨分钟仍更新时间以保留日报的新鲜度判断。
+        val saveSnapshot = snapshotChanged || previous!!.generatedAtMillis / 60_000 != snapshot.generatedAtMillis / 60_000
+        val (newGuardianAlerts, storedAlerts) = withContext(Dispatchers.IO) {
+            sessionStore.withRequestSession(session) {
+                val existingAlerts = personalStore.readAlerts()
+                val existingById = existingAlerts.associateBy(AppAlertRecord::id)
+                val changedAlerts = guardianAlerts.mapNotNull { alert ->
+                    val existing = existingById[alert.id]
+                    // 已有提醒保留创建时间、已读和稍后提醒状态，避免反复生成新状态。
+                    val updated = existing?.copy(title = alert.title, body = alert.body, priority = alert.priority) ?: alert
+                    updated.takeIf { it != existing }
+                }
+                if (saveSnapshot) personalStore.writeAssistantSnapshot(snapshot)
+                val alerts = if (changedAlerts.isEmpty()) existingAlerts else {
+                    personalStore.appendAlerts(changedAlerts)
+                    personalStore.readAlerts()
+                }
+                guardianAlerts.filterNot { it.id in existingById } to alerts
+            }
         }
         newGuardianAlerts.forEach { alert ->
-            withContext(Dispatchers.IO) { alertNotifier.notifyRecord(alert) }
+            withContext(Dispatchers.IO) { sessionStore.withRequestSession(session) { alertNotifier.notifyRecord(alert) } }
         }
-        val storedAlerts = withContext(Dispatchers.IO) { personalStore.readAlerts() }
         mutableState.update { current ->
             if (current.user?.username != username || current.locked) current else current.copy(
-                assistantSnapshot = snapshot,
+                assistantSnapshot = if (saveSnapshot) snapshot else previous,
                 alerts = mergeHydratedAlerts(storedAlerts, current.alerts),
             )
         }
-        publishWidget()
+        if (snapshotChanged) publishWidget()
     }
 
     private suspend fun publishWidget() {

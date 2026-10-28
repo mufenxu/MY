@@ -2,7 +2,6 @@ package cn.pxyb.mycontrol.ui.feature.notifications
 
 import android.app.Application
 import cn.pxyb.mycontrol.AlertNotifier
-import cn.pxyb.mycontrol.DailyBriefScheduler
 import cn.pxyb.mycontrol.SnoozedAlertScheduler
 import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.AppAlertRecord
@@ -44,9 +43,11 @@ class NotificationController(
     private val onSync: () -> Unit,
 ) {
     private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
-    private val installationId = application.getSharedPreferences("app_notification_device", 0).let { preferences ->
-        preferences.getString("installation_id", null) ?: UUID.randomUUID().toString().also { id ->
-            preferences.edit().putString("installation_id", id).apply()
+    private val installationId by lazy {
+        application.getSharedPreferences("app_notification_device", 0).let { preferences ->
+            preferences.getString("installation_id", null) ?: UUID.randomUUID().toString().also { id ->
+                preferences.edit().putString("installation_id", id).apply()
+            }
         }
     }
     private var deviceRegistered = false
@@ -123,7 +124,6 @@ class NotificationController(
                     }
                     withStore {
                         writeAlertPreferences(preferences)
-                        DailyBriefScheduler.schedule(application, appState.value.user?.username)
                     }
                     appState.update { it.copy(alertPreferences = preferences, error = null, message = "提醒设置已保存。") }
                 }
@@ -149,7 +149,7 @@ class NotificationController(
     suspend fun sync() {
         flushNotificationMutations(api, store)
         val registrationError = if (!deviceRegistered) {
-            request { api.registerAppDevice(installationId) }
+            request { api.registerAppDevice(withContext(Dispatchers.IO) { installationId }) }
                 .onSuccess { deviceRegistered = true }
                 .exceptionOrNull()
         } else null

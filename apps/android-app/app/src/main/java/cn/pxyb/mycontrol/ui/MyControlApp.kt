@@ -73,13 +73,13 @@ fun MyControlApp(
     // 主内容在开屏退场时的沉浸式景深聚焦渐入 (0.95f -> 1.0f, 0.75f -> 1.0f)
     val mainContentAlpha by animateFloatAsState(
         targetValue = if (splashExiting || !splashVisible) 1f else 0.75f,
-        animationSpec = tween(durationMillis = MotionTokens.DurationLong, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
+        animationSpec = tween(durationMillis = MotionTokens.DurationShort, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
         label = "mainContentAlpha",
     )
 
     val mainContentScale by animateFloatAsState(
         targetValue = if (splashExiting || !splashVisible) 1f else 0.95f,
-        animationSpec = tween(durationMillis = MotionTokens.DurationLong, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
+        animationSpec = tween(durationMillis = MotionTokens.DurationShort, easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)),
         label = "mainContentScale",
     )
 

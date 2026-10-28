@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol.data
 import android.os.Build
 import cn.pxyb.mycontrol.BuildConfig
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.withContext
 
 import org.json.JSONArray
@@ -15,10 +16,6 @@ class PlatformApi(
     private val sessionStore: SessionStore,
     private val snapshotStore: ResponseSnapshotStore,
 ) {
-    init {
-        snapshotStore.setAccount(sessionStore.readActiveUsername())
-    }
-
     fun setAccount(username: String?) {
         snapshotStore.setAccount(username)
     }
@@ -330,8 +327,10 @@ class PlatformApi(
     }
 
     suspend fun ct8(): Ct8Data = withContext(Dispatchers.IO) {
-        val statsEnvelope = execute("/apps/core/api/ct8/stats").json
-        val statusEnvelope = execute("/apps/core/api/ct8/status?limit=6").json
+        val statsRequest = async { execute("/apps/core/api/ct8/stats").json }
+        val statusRequest = async { execute("/apps/core/api/ct8/status?limit=6").json }
+        val statsEnvelope = statsRequest.await()
+        val statusEnvelope = statusRequest.await()
         val stats = statsEnvelope.optJSONObject("stats") ?: JSONObject()
         val status = statusEnvelope.optJSONObject("data") ?: JSONObject()
         val active = status.optJSONObject("activeTask")

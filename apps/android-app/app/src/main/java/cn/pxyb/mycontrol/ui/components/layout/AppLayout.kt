@@ -41,6 +41,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshotFlow
@@ -85,7 +86,7 @@ import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
 
 internal val LocalAppNavigationHandlesBack = staticCompositionLocalOf { false }
-private val LocalTopBarProgress = staticCompositionLocalOf { 0f }
+private val LocalTopBarProgress = compositionLocalOf { 0f }
 
 internal val AppPageHorizontalPadding = 16.dp
 internal val AppPageTopSpacing = 6.dp
@@ -325,28 +326,6 @@ fun AppSubPage(
     BackHandler(enabled = showBack && !LocalAppNavigationHandlesBack.current, onBack = onBack)
     val dark = isAppInDarkTheme()
     val density = LocalDensity.current
-    var targetProgress by remember(listState) { mutableFloatStateOf(0f) }
-    val collapseDistance = with(density) { 200.dp.toPx() }
-    LaunchedEffect(listState, collapseDistance) {
-        // 记录收拢区间内的条目尺寸，避免首条短内容滚出后进度突然跳到 100%。
-        val itemSizes = mutableMapOf<Int, Int>()
-        snapshotFlow {
-            Triple(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset,
-                listState.layoutInfo.visibleItemsInfo.map { it.index to it.size })
-        }.collect { (index, offset, visibleItems) ->
-            visibleItems.filter { it.first < 32 }.forEach { (i, size) -> itemSizes[i] = size }
-            var distance = offset.toFloat()
-            for (i in 0 until minOf(index, 32)) {
-                distance += (itemSizes[i] ?: collapseDistance.toInt()) + listState.layoutInfo.mainAxisItemSpacing
-                if (distance >= collapseDistance) break
-            }
-            if (index >= 32) distance = collapseDistance
-            targetProgress = (distance / collapseDistance).coerceIn(0f, 1f)
-        }
-    }
-    val followedProgress by animateFloatAsState(targetProgress,
-        animationSpec = MotionTokens.followSpring(),
-        label = "top-bar-follow-progress")
     var headerHeightPx by remember { mutableIntStateOf(0) }
     val topContentPadding = if (!showHeader) contentPadding.calculateTopPadding()
         else if (headerHeightPx > 0) with(density) { headerHeightPx.toDp() } + 4.dp
@@ -387,11 +366,41 @@ fun AppSubPage(
         if (showHeader) Box(Modifier.widthIn(max = 760.dp).fillMaxWidth().onSizeChanged { headerHeightPx = it.height }
             .padding(start = AppPageHorizontalPadding, end = AppPageHorizontalPadding,
                 top = contentPadding.calculateTopPadding() + AppPageTopSpacing, bottom = 4.dp)) {
-            CompositionLocalProvider(LocalTopBarProgress provides followedProgress.coerceIn(0f, 1f)) {
+            CollapsingTopBar(listState) {
             if (header != null) header() else AppSecondaryHeader(
                 title = title, subtitle = "", onBack = onBack, actions = actions, showBack = showBack,
             )
             }
         }
     }
+}
+
+@Composable
+private fun CollapsingTopBar(listState: LazyListState, content: @Composable () -> Unit) {
+    val collapseDistance = with(LocalDensity.current) { 200.dp.toPx() }
+    var targetProgress by remember(listState) { mutableFloatStateOf(0f) }
+    LaunchedEffect(listState, collapseDistance) {
+        // 缓存短条目尺寸；滚动采样只输出进度，不为每帧创建条目集合。
+        val itemSizes = IntArray(32) { -1 }
+        snapshotFlow {
+            val index = listState.firstVisibleItemIndex
+            if (index >= itemSizes.size) {
+                1f
+            } else {
+                val layoutInfo = listState.layoutInfo
+                layoutInfo.visibleItemsInfo.forEach { item ->
+                    if (item.index in itemSizes.indices) itemSizes[item.index] = item.size
+                }
+                var distance = listState.firstVisibleItemScrollOffset.toFloat()
+                for (i in 0 until index) {
+                    distance += (itemSizes[i].takeIf { it >= 0 } ?: collapseDistance.toInt()) + layoutInfo.mainAxisItemSpacing
+                    if (distance >= collapseDistance) break
+                }
+                (distance / collapseDistance).coerceIn(0f, 1f)
+            }
+        }.collect { targetProgress = it }
+    }
+    val progress by animateFloatAsState(targetProgress,
+        animationSpec = MotionTokens.followSpring(), label = "top-bar-follow-progress")
+    CompositionLocalProvider(LocalTopBarProgress provides progress.coerceIn(0f, 1f), content = content)
 }
