@@ -58,7 +58,8 @@ internal class SectionRefreshController(
                     if (!fromCache) lastRefreshElapsedMs[section] = SystemClock.elapsedRealtime()
                     val cachedAt = api.cachedAtMillis()
                     updateSectionLoadState(section) {
-                        it.copy(error = null, updatedAtMillis = System.currentTimeMillis(), fromCache = fromCache, cachedAtMillis = cachedAt)
+                        it.copy(error = null, updatedAtMillis = System.currentTimeMillis(), fromCache = fromCache,
+                            cachedAtMillis = cachedAt, cacheFallback = fromCache)
                     }
                 } catch (error: Throwable) {
                     if (error is CancellationException) throw error
@@ -68,6 +69,7 @@ internal class SectionRefreshController(
                             error = error.message ?: "请稍后重试。",
                             fromCache = it.fromCache || cachedAt != null,
                             cachedAtMillis = cachedAt ?: it.cachedAtMillis,
+                            cacheFallback = it.fromCache || cachedAt != null,
                         )
                     }
                     if (error is ApiException && shouldInvalidatePlatformSession(error.status, error.code)) {
@@ -127,10 +129,11 @@ internal class SectionRefreshController(
     ) {
         mutableState.update { current ->
             val sections = current.sectionLoadStates + (section to transform(current.sectionLoadStates[section] ?: SectionLoadState()))
+            val fallbackSections = sections.values.filter { it.cacheFallback }
             current.copy(
                 sectionLoadStates = sections,
-                offlineMode = sections.values.any { it.fromCache },
-                cachedAtMillis = sections.values.filter { it.fromCache }.mapNotNull { it.cachedAtMillis }.minOrNull(),
+                offlineMode = fallbackSections.isNotEmpty(),
+                cachedAtMillis = fallbackSections.mapNotNull { it.cachedAtMillis }.minOrNull(),
             )
         }
     }

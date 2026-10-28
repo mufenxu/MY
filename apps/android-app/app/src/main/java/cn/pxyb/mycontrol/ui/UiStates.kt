@@ -48,6 +48,8 @@ data class SectionLoadState(
     val updatedAtMillis: Long? = null,
     val fromCache: Boolean = false,
     val cachedAtMillis: Long? = null,
+    // 只有请求结束后仍依赖缓存才提示；启动预览不属于缓存回退。
+    val cacheFallback: Boolean = false,
 )
 
 @Immutable
