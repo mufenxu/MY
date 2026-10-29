@@ -66,7 +66,7 @@ function isTrustedWebAdminOrigin(req) {
     const trustedOrigins = [
         process.env.CORE_ADMIN_ORIGINS,
         process.env.PLATFORM_PUBLIC_ORIGIN,
-        process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5173,http://127.0.0.1:5173'
+        process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174'
     ]
         .flatMap((value) => String(value || '').split(','))
         .map(normalizeOrigin)
