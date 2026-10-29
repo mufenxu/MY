@@ -39,7 +39,7 @@
                         :aria-selected="activeTab === 'qrcode'"
                         @click="switchTab('qrcode')">
                         <span class="auth-tab-icon">
-                            <el-icon :size="20"><component is="FullScreen" /></el-icon>
+                            <el-icon :size="20"><FullScreen /></el-icon>
                         </span>
                         <span class="auth-tab-copy">
                             <strong>{{ loginCopy.qrTab }}</strong>
@@ -51,7 +51,7 @@
                         :aria-selected="activeTab === 'account'"
                         @click="switchTab('account')">
                         <span class="auth-tab-icon">
-                            <el-icon :size="20"><component is="User" /></el-icon>
+                            <el-icon :size="20"><User /></el-icon>
                         </span>
                         <span class="auth-tab-copy">
                             <strong>{{ loginCopy.accountTab }}</strong>
