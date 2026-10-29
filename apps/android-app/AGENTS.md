@@ -118,6 +118,7 @@
 - **纯文字操作的现状说明**：内部 `TextButton` 仍用于少量行内文字操作，当前**尚未**封装对应的胶囊化纯文字组件。这属于已知技术债：新增纯文字操作请优先复用 `AppSecondaryButton` 或 `AppInlineDangerButton`；确需行内纯文字入口时，暂沿用现有 `TextButton` 写法，**不要**自行新造第四套按钮样式，也不要直接补丁式扩展 `AppButtons.kt`。
 - **严禁页面内部重复调用 `statusBarsPadding()`**。
 - **严禁混用状态跳转与路由栈**：二级路由必须登记在 `parentTabForSubScreen`。
+- **领域状态必须自带 StateHolder**：`AppUiState` 只保留跨界面共享的会话与导航字段；单一业务域的数据、加载标记与忙碌标记放进 `ui/feature/<域>/` 下继承 `FeatureStateHolder` 的状态类，界面订阅该域的 `xxxState`，不要从大状态里读平铺字段。新增或迁移领域时照 `GitHubProjectsStateHolder` 的写法：私有 `mutableState`、`loadXxx()` 带 `canRequest` 守卫、失败经 `handleRequestFailure` 触发会话失效、`clearPendingState` 复位忙碌标记。
 - **用户可见文案保持规范中文**（保留产品名、标准代码或国际协议字段原样）。
 
 ## 10. 标准公共组件库体系 (Component Library)
@@ -167,13 +168,14 @@
 
 ## 12. 设备侧回归测试 (androidTest)
 
-`app/src/androidTest/java/**` 覆盖三条最怕静默改坏的主链路：
+`app/src/androidTest/java/**` 覆盖四条最怕静默改坏的主链路：
 
 | 用例集 | 锁定的界面契约 |
 | :--- | :--- |
 | `LoginScreenTest` | 账号密码决定登录按钮可用性、二次验证满 6 位才可提交、人机验证未完成时保持禁用、错误横幅与建议账号预填 |
 | `StartupAppUpdateDialogTest` | 每个更新阶段与按钮文案/可用性一一对应，下载中不可重复触发安装，失败态保留重试入口 |
 | `LibrarySeatReservationScreenTest` | 进入即触发概览/我的预约/当前使用三条加载，三个页签可切换且切走后隐藏查询条件 |
+| `GitHubProjectsScreenTest` | 仓库列表/账号卡片/空态随状态渲染；点开仓库按 `owner/repo` 触发 Releases 加载并展示结果 |
 
 运行：`./gradlew :app:connectedDebugAndroidTest`（需模拟器或真机；**不在**根 `check` 与 CI 门禁内，CI 无设备）。
 

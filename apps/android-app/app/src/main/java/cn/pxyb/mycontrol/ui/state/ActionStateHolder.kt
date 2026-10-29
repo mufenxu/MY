@@ -24,7 +24,11 @@ class ActionStateHolder(
     private val canRun: () -> Boolean,
     private val onFeedback: (String?, String?) -> Unit,
 ) : FeatureStateHolder<ActionUiState>(parentScope, ActionUiState(), onSessionExpired) {
-    private val confirmationMutex = Mutex()
+    /**
+     * 敏感操作的系统确认框是全局互斥的：同一时刻只允许弹一个。
+     * 独立拆出的领域（如 GitHub）复用同一把锁，避免两处同时请求生物识别。
+     */
+    internal val confirmationMutex = Mutex()
     private val jobs = mutableMapOf<String, Job>()
 
     override fun clearPendingState(current: ActionUiState) = current.copy(running = emptySet())

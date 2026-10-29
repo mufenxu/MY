@@ -1,9 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.auth
 
 import androidx.compose.runtime.Immutable
-import cn.pxyb.mycontrol.data.GitHubProfileRecord
-import cn.pxyb.mycontrol.data.GitHubReleaseRecord
-import cn.pxyb.mycontrol.data.GitHubRepositoryRecord
 import cn.pxyb.mycontrol.data.PlatformUser
 import cn.pxyb.mycontrol.data.QrLoginTarget
 import cn.pxyb.mycontrol.data.TotpEnrollment
@@ -34,16 +31,8 @@ data class AppEntryUiState(
     val pendingAuthenticatorUri: String?,
     val accountManagementOpen: Boolean,
     val googleAccountDeskOpen: Boolean,
+    /** 参与 [cn.pxyb.mycontrol.ui.navigation.requestedRoute] 的二级界面推导，不能当作纯展示字段删除。 */
     val githubProjectsOpen: Boolean,
-    val githubRepositories: List<GitHubRepositoryRecord> = emptyList(),
-    val githubRepositoriesLoaded: Boolean = false,
-    val githubProfile: GitHubProfileRecord? = null,
-    val githubProfileLoaded: Boolean = false,
-    val githubReleases: List<GitHubReleaseRecord> = emptyList(),
-    val githubReleasesLoaded: Boolean = false,
-    val githubReleasesRepoFullName: String? = null,
-    val githubReleasesBusy: Boolean = false,
-    val githubVisibilityBusy: Boolean = false,
     val globalSearchOpen: Boolean,
     val assistantOpen: Boolean,
     val assistantButtonVisible: Boolean,
@@ -88,15 +77,6 @@ internal fun AppUiState.toEntryUiState() = AppEntryUiState(
     accountManagementOpen = accountManagementOpen,
     googleAccountDeskOpen = googleAccountDeskOpen,
     githubProjectsOpen = githubProjectsOpen,
-    githubRepositories = githubRepositories,
-    githubRepositoriesLoaded = githubRepositoriesLoaded,
-    githubProfile = githubProfile,
-    githubProfileLoaded = githubProfileLoaded,
-    githubReleases = githubReleases,
-    githubReleasesLoaded = githubReleasesLoaded,
-    githubReleasesRepoFullName = githubReleasesRepoFullName,
-    githubReleasesBusy = actions.running.any { it.startsWith("github-release:") },
-    githubVisibilityBusy = actions.running.any { it.startsWith("github-visibility:") },
     globalSearchOpen = globalSearchOpen,
     assistantOpen = assistantOpen,
     assistantButtonVisible = assistantButtonVisible,

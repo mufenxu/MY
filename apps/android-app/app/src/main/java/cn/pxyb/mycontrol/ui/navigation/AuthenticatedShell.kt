@@ -737,25 +737,26 @@ internal fun AuthenticatedShell(
                     )
                 }
                 composable(AppRoute.GitHubProjects) {
+                    val githubState by viewModel.githubProjectsState.collectAsStateWithLifecycle()
                     GitHubProjectsScreen(
-                        repositories = state.githubRepositories,
-                        loaded = state.githubRepositoriesLoaded,
-                        busy = state.githubVisibilityBusy,
-                        profile = state.githubProfile,
-                        profileLoaded = state.githubProfileLoaded,
-                        releases = state.githubReleases,
-                        releasesLoaded = state.githubReleasesLoaded,
-                        releasesRepoFullName = state.githubReleasesRepoFullName,
-                        releasesBusy = state.githubReleasesBusy,
+                        repositories = githubState.repositories,
+                        loaded = githubState.repositoriesLoaded,
+                        busy = githubState.visibilityBusy,
+                        profile = githubState.profile,
+                        profileLoaded = githubState.profileLoaded,
+                        releases = githubState.releases,
+                        releasesLoaded = githubState.releasesLoaded,
+                        releasesRepoFullName = githubState.releasesRepoFullName,
+                        releasesBusy = githubState.releasesBusy,
                         contentPadding = contentPadding,
                         onBack = navigateBackFromSubScreen,
-                        onRefresh = viewModel::refreshGitHubProjects,
-                        onLoadReleases = { owner, repo -> viewModel.loadGitHubReleases(owner, repo) },
+                        onRefresh = viewModel.githubProjects::refresh,
+                        onLoadReleases = { owner, repo -> viewModel.githubProjects.loadReleases(owner, repo) },
                         onCreateRelease = { owner, repo, tag, name, body, draft, prerelease ->
-                            viewModel.createGitHubRelease(owner, repo, tag, name, body, draft, prerelease, onSensitiveActionConfirmation)
+                            viewModel.githubProjects.createRelease(owner, repo, tag, name, body, draft, prerelease, onSensitiveActionConfirmation)
                         },
                         onUpdateVisibility = { owner, repo, visibility ->
-                            viewModel.updateGitHubVisibility(owner, repo, visibility, onSensitiveActionConfirmation)
+                            viewModel.githubProjects.updateVisibility(owner, repo, visibility, onSensitiveActionConfirmation)
                         },
                     )
                 }

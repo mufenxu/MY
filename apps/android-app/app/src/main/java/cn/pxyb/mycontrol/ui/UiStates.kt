@@ -13,9 +13,6 @@ import cn.pxyb.mycontrol.data.DEFAULT_HIDDEN_HOME_QUICK_ACTIONS
 import cn.pxyb.mycontrol.data.DailyNews
 import cn.pxyb.mycontrol.data.DiagnosticData
 import cn.pxyb.mycontrol.data.ExternalApplication
-import cn.pxyb.mycontrol.data.GitHubProfileRecord
-import cn.pxyb.mycontrol.data.GitHubReleaseRecord
-import cn.pxyb.mycontrol.data.GitHubRepositoryRecord
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.data.IncidentInfo
@@ -87,13 +84,6 @@ data class AppUiState(
     val backup: BackupQuality? = null,
     val iot: IotData? = null,
     val ct8: Ct8Data? = null,
-    val githubRepositories: List<GitHubRepositoryRecord> = emptyList(),
-    val githubRepositoriesLoaded: Boolean = false,
-    val githubProfile: GitHubProfileRecord? = null,
-    val githubProfileLoaded: Boolean = false,
-    val githubReleases: List<GitHubReleaseRecord> = emptyList(),
-    val githubReleasesLoaded: Boolean = false,
-    val githubReleasesRepoFullName: String? = null,
     val diagnostics: DiagnosticData? = null,
     val security: SecurityData? = null,
     val qrLoginOpen: Boolean = false,

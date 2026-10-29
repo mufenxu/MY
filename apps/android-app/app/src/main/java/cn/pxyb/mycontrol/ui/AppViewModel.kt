@@ -70,6 +70,7 @@ import cn.pxyb.mycontrol.ui.feature.notifications.NotificationController
 import cn.pxyb.mycontrol.ui.feature.notifications.toNotificationCenterUiState
 import cn.pxyb.mycontrol.ui.feature.operations.toOperationsUiState
 import cn.pxyb.mycontrol.ui.feature.overview.toOverviewUiState
+import cn.pxyb.mycontrol.ui.feature.projects.GitHubProjectsStateHolder
 import cn.pxyb.mycontrol.ui.feature.profile.CacheStorageInfo
 import cn.pxyb.mycontrol.ui.feature.profile.NetworkDiagnostics
 import cn.pxyb.mycontrol.ui.feature.profile.toProfileUiState
@@ -174,6 +175,16 @@ class AppViewModel(
     val androidReleaseState = androidReleases.state
     private val registryImages = RegistryImagesStateHolder(viewModelScope, api, ::forceReauthentication)
     val registryImagesState = registryImages.state
+    val githubProjects = GitHubProjectsStateHolder(
+        viewModelScope,
+        api,
+        canRequest = { mutableState.value.canRunRequest() },
+        onError = { message -> mutableState.update { it.copy(error = message) } },
+        onMessage = { message -> mutableState.update { it.copy(message = message) } },
+        confirmationMutex = actions.confirmationMutex,
+        onSessionExpired = ::forceReauthentication,
+    )
+    val githubProjectsState = githubProjects.state
     val todos = TodoController(viewModelScope, TodoRepository(application, api, sessionStore), mutableState, ::forceReauthentication)
     private val notifications: NotificationController by lazy {
         NotificationController(
@@ -243,9 +254,6 @@ class AppViewModel(
     private var loginCapabilitiesJob: Job? = null
     private val accountRequestScope = CoroutineScope(viewModelScope.coroutineContext + SupervisorJob(viewModelScope.coroutineContext[Job]))
     private var qrLoginJob: Job? = null
-    private var githubRepositoriesJob: Job? = null
-    private var githubProfileJob: Job? = null
-    private var githubReleasesJob: Job? = null
 
     private var appInForeground = false
     private var activeWorkspaceSection: WorkspaceDestination? = null
@@ -863,17 +871,7 @@ class AppViewModel(
             waterValves.reset()
             chaoxing.reset()
             mediaDownload.reset()
-            mutableState.update {
-                it.copy(
-                    githubRepositories = emptyList(),
-                    githubRepositoriesLoaded = false,
-                    githubProfile = null,
-                    githubProfileLoaded = false,
-                    githubReleases = emptyList(),
-                    githubReleasesLoaded = false,
-                    githubReleasesRepoFullName = null,
-                )
-            }
+            githubProjects.reset()
             featureAccountUsername = username
         }
         notifications.reset()
@@ -899,6 +897,7 @@ class AppViewModel(
         actions.cancelPending()
         appUpdates.cancelPending()
         androidReleases.cancelPending()
+        githubProjects.reset()
         alertNotifier.clear()
         sessionStore.withRequestSession(null) {
             personalStore.clearAccountData(preservePendingTodos = true)
@@ -920,9 +919,7 @@ class AppViewModel(
         screenshot.cancelPending()
         accountRequestScope.coroutineContext.cancelChildren()
         qrLoginJob = null
-        githubRepositoriesJob = null
-        githubProfileJob = null
-        githubReleasesJob = null
+        githubProjects.cancelPending()
         waterValves.cancelPending()
         chaoxing.cancelPending()
         mediaDownload.cancelPending()
@@ -1443,106 +1440,6 @@ class AppViewModel(
     fun closeGoogleAccountDesk() {
         mutableState.update { it.copy(googleAccountDeskOpen = false) }
     }
-    fun loadGitHubRepositories() {
-        if (mutableState.value.let { it.user == null || it.locked || it.busyAction == "logout" } || githubRepositoriesJob?.isActive == true) return
-        githubRepositoriesJob = accountRequestScope.launch {
-            runCatching { api.githubRepositories() }
-                .onSuccess { repositories ->
-                    mutableState.update {
-                        it.copy(
-                            githubRepositories = repositories,
-                            githubRepositoriesLoaded = true,
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    handleFeatureRequestFailure(error, ::forceReauthentication)
-                    mutableState.update {
-                        it.copy(githubRepositoriesLoaded = true, error = error.message ?: "GitHub 仓库加载失败。")
-                    }
-                }
-        }
-    }
-
-    fun loadGitHubProfile() {
-        if (mutableState.value.let { it.user == null || it.locked || it.busyAction == "logout" } || githubProfileJob?.isActive == true) return
-        githubProfileJob = accountRequestScope.launch {
-            runCatching { api.githubProfile() }
-                .onSuccess { profile ->
-                    mutableState.update {
-                        it.copy(githubProfile = profile, githubProfileLoaded = true)
-                    }
-                }
-                .onFailure { error ->
-                    handleFeatureRequestFailure(error, ::forceReauthentication)
-                    mutableState.update {
-                        it.copy(githubProfileLoaded = true, error = error.message ?: "GitHub 账号资料加载失败。")
-                    }
-                }
-        }
-    }
-
-    fun refreshGitHubProjects() {
-        mutableState.update { it.copy(error = null) }
-        loadGitHubProfile()
-        loadGitHubRepositories()
-    }
-
-    fun updateGitHubVisibility(
-        owner: String,
-        repo: String,
-        visibility: String,
-        confirmation: suspend () -> Boolean,
-    ) = runAction("github-visibility:$owner:$repo", "仓库可见性已更新。", confirmation) {
-        api.updateGitHubVisibility(owner, repo, visibility)
-        mutableState.update { it.copy(githubRepositories = api.githubRepositories()) }
-    }
-
-    fun loadGitHubReleases(owner: String, repo: String) {
-        if (mutableState.value.let { it.user == null || it.locked || it.busyAction == "logout" }) return
-        val fullName = "$owner/$repo"
-        githubReleasesJob?.cancel()
-        githubReleasesJob = accountRequestScope.launch {
-            mutableState.update {
-                it.copy(
-                    githubReleases = if (it.githubReleasesRepoFullName == fullName) it.githubReleases else emptyList(),
-                    githubReleasesRepoFullName = fullName,
-                    githubReleasesLoaded = false,
-                    error = null,
-                )
-            }
-            runCatching { api.githubReleases(owner, repo) }
-                .onSuccess { releases ->
-                    mutableState.update {
-                        it.copy(
-                            githubReleases = releases,
-                            githubReleasesLoaded = true,
-                            githubReleasesRepoFullName = fullName,
-                        )
-                    }
-                }
-                .onFailure { error ->
-                    handleFeatureRequestFailure(error, ::forceReauthentication)
-                    mutableState.update {
-                        it.copy(githubReleasesLoaded = true, error = error.message ?: "GitHub Releases 加载失败。")
-                    }
-                }
-        }
-    }
-
-    fun createGitHubRelease(
-        owner: String,
-        repo: String,
-        tag: String,
-        name: String,
-        body: String,
-        draft: Boolean,
-        prerelease: Boolean,
-        confirmation: suspend () -> Boolean,
-    ) = runAction("github-release:$owner:$repo", "Release 已创建。", confirmation) {
-        api.createGitHubRelease(owner, repo, tag, name, body, draft, prerelease)
-        loadGitHubReleases(owner, repo)
-    }
     fun handleQrLoginUrl(rawUrl: String?) {
         if (rawUrl.isNullOrBlank()) return
         val parsed = parseQrLoginUrl(rawUrl)
@@ -1812,7 +1709,7 @@ class AppViewModel(
                 googleAccounts.loadGoogleAccounts(force)
             }
             githubProjectsOpen -> {
-                refreshGitHubProjects()
+                githubProjects.refresh()
             }
             accountManagementOpen -> {
                 refreshSecurity(force)
