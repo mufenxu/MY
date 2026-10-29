@@ -164,3 +164,22 @@
 - 专用验证码输入保留 `BasicTextField`，身份码全屏展示保留专用 `Dialog`；这些例外不允许扩展成普通表单的替代体系。
 - `app/src/debug/java/cn/pxyb/mycontrol/ui/components/DesignSystemPreviews.kt` 提供浅色、深色和 1.5 倍字号预览，仅进入 Debug 源集。预览涵盖按钮状态、字段错误、筛选选中、持续反馈、头像与指标。
 - 源码检查和 Kotlin 编译不能代替实际渲染、TalkBack 或真机性能验证；报告时分别说明。
+
+## 12. 设备侧回归测试 (androidTest)
+
+`app/src/androidTest/java/**` 覆盖三条最怕静默改坏的主链路：
+
+| 用例集 | 锁定的界面契约 |
+| :--- | :--- |
+| `LoginScreenTest` | 账号密码决定登录按钮可用性、二次验证满 6 位才可提交、人机验证未完成时保持禁用、错误横幅与建议账号预填 |
+| `StartupAppUpdateDialogTest` | 每个更新阶段与按钮文案/可用性一一对应，下载中不可重复触发安装，失败态保留重试入口 |
+| `LibrarySeatReservationScreenTest` | 进入即触发概览/我的预约/当前使用三条加载，三个页签可切换且切走后隐藏查询条件 |
+
+运行：`./gradlew :app:connectedDebugAndroidTest`（需模拟器或真机；**不在**根 `check` 与 CI 门禁内，CI 无设备）。
+
+写用例的三条约定：
+
+- 只断言**界面契约**（可输入、可用性、回调收到的参数），不连后端、不依赖真实账号；鉴权与业务规则由 JVM 单测负责。
+- 交互节点优先用 `Modifier.testTag` 定位（已有 `login-username` / `login-password` / `login-factor` / `update-primary`），不要靠中文文案变化就能失效的匹配。
+- 需要提交表单时优先 `performImeAction()` 而不是点按钮：软键盘可能遮挡底部按钮，导致点击被吞掉、用例随机失败。
+

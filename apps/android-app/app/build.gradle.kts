@@ -37,6 +37,8 @@ android {
         targetSdk = 36
         versionCode = appVersionCode.get()
         versionName = appVersionName.get()
+        // 关键 UI 流程（登录、更新、预约）此前没有任何设备侧回归防护，这里补上入口。
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "APP_SIGNING_CERT_SHA256", "\"$releaseSigningFingerprint\"")
 
         buildConfigField("String", "PLATFORM_BASE_URL", "\"https://pxyb.cn\"")
@@ -176,6 +178,13 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
+
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.espresso.core)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     baselineProfile(project(":baselineprofile"))
 }

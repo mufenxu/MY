@@ -45,6 +45,7 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalAutofill
 import androidx.compose.ui.platform.LocalAutofillTree
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
@@ -67,6 +68,8 @@ internal fun LoginTextField(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
+    /** 供设备侧 UI 回归测试定位可输入节点；不影响生产行为。 */
+    testTag: String? = null,
 ) {
     var isFocused by remember { mutableStateOf(false) }
     val autofill = LocalAutofill.current
@@ -148,6 +151,7 @@ internal fun LoginTextField(
                         onValueChange = onValueChange,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
                             .onGloballyPositioned { coordinates ->
                                 autofillNode?.boundingBox = coordinates.boundsInWindow()
                             }

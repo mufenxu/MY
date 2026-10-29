@@ -180,6 +180,7 @@ internal fun LoginScreen(
                                         enabled = !state.loginBusy,
                                         autofillType = AutofillType.Username,
                                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                        testTag = "login-username",
                                     )
 
                                     Spacer(Modifier.height(14.dp))
@@ -208,6 +209,7 @@ internal fun LoginScreen(
                                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                                         keyboardActions = KeyboardActions(onDone = { submit() }),
+                                        testTag = "login-password",
                                     )
 
                                     Spacer(Modifier.height(20.dp))
@@ -270,6 +272,7 @@ internal fun LoginScreen(
                                             imeAction = ImeAction.Done,
                                         ),
                                         keyboardActions = KeyboardActions(onDone = { submit() }),
+                                        testTag = "login-factor",
                                     )
 
                                     Spacer(Modifier.height(20.dp))
@@ -345,6 +348,7 @@ internal fun LoginScreen(
                                         enabled = !state.loginBusy,
                                         autofillType = AutofillType.Username,
                                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                                        testTag = "login-username",
                                     )
 
                                     Spacer(Modifier.height(14.dp))
@@ -373,6 +377,7 @@ internal fun LoginScreen(
                                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                                         keyboardActions = KeyboardActions(onDone = { submit() }),
+                                        testTag = "login-password",
                                     )
 
                                     Spacer(Modifier.height(20.dp))
@@ -435,6 +440,7 @@ internal fun LoginScreen(
                                             imeAction = ImeAction.Done,
                                         ),
                                         keyboardActions = KeyboardActions(onDone = { submit() }),
+                                        testTag = "login-factor",
                                     )
 
                                     Spacer(Modifier.height(20.dp))

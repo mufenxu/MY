@@ -215,7 +215,9 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 
 - 目录名 `apps/android-app`，Gradle 根项目名 `MYControl`，命名空间 `cn.pxyb.mycontrol`，模块 `:app`、`:baselineprofile`、`:core:network`、`:core:security`。
 - 版本只从 `gradle/libs.versions.toml` 取。新增依赖**必须**登记到版本目录，不得在 `build.gradle.kts` 里硬编码坐标与版本。
-- 单测在 `app/src/test/java/**`，命名 `*Test.kt`，JUnit 4。**没有** instrumented 测试；设备侧代码只有 baseline profile 模块。
+- 单测在 `app/src/test/java/**`，命名 `*Test.kt`，JUnit 4。设备侧回归在 `app/src/androidTest/java/**`，覆盖登录、应用更新、图书馆座位预约三条主链路，`./gradlew :app:connectedDebugAndroidTest` 运行（需模拟器或真机）。
+- 插桩测试**不进 CI 门禁**：CI 无设备，`connectedDebugAndroidTest` 会直接失败。新增关键交互时补 androidTest，但不要把它塞进 `npm run check`。
+- 插桩测试的 `espresso-core` 必须显式锁定版本（版本目录 `testEspresso`）：Compose 测试规则传递的 3.5.0 用反射调 `InputManager.getInstance()`，该方法在 API 36 已被移除，会让所有用例报 `NoSuchMethodException`。
 - CI 门禁（[android-ci.yml](../.github/workflows/android-ci.yml)）：
   先运行 `npm run check:android-design`，再运行 `./gradlew :app:testDebugUnitTest :app:compileDebugKotlin :app:lintDebug :app:assembleDebug`
 - **没有** detekt / ktlint / spotless。因此 Kotlin 风格靠 review 与 `lintDebug`，不要声称"格式化已自动校验"。

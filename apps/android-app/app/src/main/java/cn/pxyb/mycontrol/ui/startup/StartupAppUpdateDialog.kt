@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
@@ -117,7 +118,7 @@ internal fun StartupAppUpdateDialog(
                         AppUpdatePhase.Error -> onRetry
                         else -> onDismiss
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).testTag("update-primary"),
                     enabled = state.phase !in setOf(AppUpdatePhase.Downloading, AppUpdatePhase.Installing),
                     busy = state.phase == AppUpdatePhase.Downloading,
                 )
