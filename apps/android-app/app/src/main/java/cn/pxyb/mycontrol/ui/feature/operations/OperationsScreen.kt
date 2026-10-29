@@ -1,19 +1,16 @@
 package cn.pxyb.mycontrol.ui.feature.operations
 
-import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
-import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Code
@@ -45,35 +42,42 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.IncidentInfo
+import cn.pxyb.mycontrol.data.ResourceExpiry
 import cn.pxyb.mycontrol.data.ServiceInfo
-import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
+import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppNotificationButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
+import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
+import cn.pxyb.mycontrol.ui.components.display.AppDivider
+import cn.pxyb.mycontrol.ui.components.display.AppGroupedCard
 import cn.pxyb.mycontrol.ui.components.display.AppIconTile
-import cn.pxyb.mycontrol.ui.components.display.AppMetricCell
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
+import cn.pxyb.mycontrol.ui.components.display.statusStyle
+import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
 import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonList
 import cn.pxyb.mycontrol.ui.components.feedback.GlassShimmerList
+import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
+import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
+import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.components.layout.ImmersiveHeader
-import cn.pxyb.mycontrol.ui.components.layout.PullToRefresh
-import cn.pxyb.mycontrol.ui.components.layout.appPageContentPadding
-import cn.pxyb.mycontrol.ui.components.layout.auroraBackdrop
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
-import cn.pxyb.mycontrol.ui.isRefreshing
 import cn.pxyb.mycontrol.ui.openPlatformWebLink
-import cn.pxyb.mycontrol.ui.sectionError
 import cn.pxyb.mycontrol.ui.state.blocksAction
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
-import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import kotlinx.coroutines.launch
-import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
+
+private enum class OperationsTab(val label: String) {
+    Overview("总览"),
+    Services("服务"),
+    Maintenance("维护"),
+}
 
 @Composable
 fun OperationsScreen(
@@ -94,7 +98,7 @@ fun OperationsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var showServices by rememberSaveable { mutableStateOf(false) }
+    var selectedTab by rememberSaveable { mutableStateOf(OperationsTab.Overview) }
     var openingServiceId by remember { mutableStateOf<String?>(null) }
     var serviceOpenError by remember { mutableStateOf<String?>(null) }
     val services = remember(state.overview?.services) {
@@ -123,9 +127,11 @@ fun OperationsScreen(
     var resolveTarget by remember { mutableStateOf<IncidentInfo?>(null) }
     var noteText by remember { mutableStateOf("") }
     val canOperate = state.user?.role in setOf("operator", "super_admin")
-    val activeIncidents = state.incidents.count { it.status != "resolved" }
+    val unresolvedIncidents = state.incidents.filter { it.status != "resolved" }
+    val activeIncidents = unresolvedIncidents.size
     val monitoredServices = state.overview?.monitoredCount ?: 0
     val healthyServices = state.overview?.healthyCount ?: 0
+    val serviceIssueCount = if (state.overview == null) 0 else (monitoredServices - healthyServices).coerceAtLeast(0)
     val onlineDevices = state.iot?.devices.orEmpty().count { it.online }
     val totalDevices = state.iot?.devices.orEmpty().size
     val today = LocalDate.now()
@@ -136,7 +142,37 @@ fun OperationsScreen(
             (resource to days).takeIf { days <= maxOf(60, resource.advanceNoticeDays) }
         }.sortedBy { it.second }
     }
+    val networkNeedsAttention = state.networkHealth.status in setOf("warning", "error")
+    val backupNeedsAttention = state.backup != null && state.backup?.rpoState != "healthy"
+    val attentionCount = activeIncidents + serviceIssueCount + upcomingResources.size +
+        (if (networkNeedsAttention) 1 else 0) + (if (backupNeedsAttention) 1 else 0)
+    val attentionParts = buildList {
+        if (activeIncidents > 0) add("$activeIncidents 个活动问题")
+        if (serviceIssueCount > 0) add("$serviceIssueCount 项服务异常")
+        if (upcomingResources.isNotEmpty()) add("${upcomingResources.size} 个资源待续期")
+        if (networkNeedsAttention) add("网络需检查")
+        if (backupNeedsAttention) add("备份需检查")
+    }
+    val summaryStatus = when {
+        attentionCount > 0 -> "warning"
+        state.overview != null -> "healthy"
+        else -> "unknown"
+    }
+    val summaryTitle = when {
+        attentionCount > 0 -> "$attentionCount 项需要关注"
+        state.overview != null -> "一切正常"
+        state.refreshing -> "正在获取系统状态"
+        else -> "状态待确认"
+    }
+    val summarySubtitle = when {
+        attentionCount > 0 -> attentionParts.joinToString(" · ")
+        state.overview != null -> "$monitoredServices 项服务可用，没有需要处理的事项"
+        state.refreshing -> "正在更新服务、设备与维护信息"
+        else -> "下拉刷新获取最新运行状态"
+    }
+    val contentLimit = if (useTwoPaneLayout()) 8 else 6
     val listState = rememberLazyListState()
+
     services.firstOrNull { it.id == focusedId }?.let { service ->
         cn.pxyb.mycontrol.ui.components.dialog.AppDialog(
             title = service.name,
@@ -149,65 +185,248 @@ fun OperationsScreen(
                 Text("响应耗时：${service.latencyMs?.let { "$it ms" } ?: "暂无数据"}", style = MaterialTheme.typography.bodyMedium)
                 Text("HTTP 状态：${service.httpStatus ?: "暂无数据"}", style = MaterialTheme.typography.bodyMedium)
                 if (!service.adminUrl.isNullOrBlank()) {
-                    cn.pxyb.mycontrol.ui.components.button.AppButton(text = "打开服务", onClick = { onFocusConsumed(); openService(service) })
+                    AppButton(text = "打开服务", onClick = { onFocusConsumed(); openService(service) })
                 }
             }
         }
     }
-    val dark = isAppInDarkTheme()
 
-    val isTablet = useTwoPaneLayout()
-
-    cn.pxyb.mycontrol.ui.components.layout.AppSubPage(
-        title = "状态", onBack = {}, showBack = false,
-        contentPadding = contentPadding, listState = listState,
-        refreshing = state.refreshing, onRefresh = onRefresh,
-        header = { ImmersiveHeader(
-                    title = "状态",
-                    subtitle = "系统健康、提醒与必要维护",
-                    actions = {
-                        AppNotificationButton(
-                            unreadCount = state.unreadAlerts,
-                            onClick = onOpenNotifications,
-                        )
-                    },
-                ) },
+    AppSubPage(
+        title = "状态",
+        onBack = {},
+        showBack = false,
+        contentPadding = contentPadding,
+        listState = listState,
+        refreshing = state.refreshing,
+        onRefresh = onRefresh,
+        header = {
+            ImmersiveHeader(
+                title = "状态",
+                subtitle = "系统健康、提醒与必要维护",
+                actions = {
+                    AppNotificationButton(
+                        unreadCount = state.unreadAlerts,
+                        onClick = onOpenNotifications,
+                    )
+                },
+            )
+        },
     ) {
+        state.sectionError?.let { message ->
+            item(key = "section-error", contentType = "banner") {
+                AppFeedbackBanner("部分状态数据暂不可用：$message", error = true, onRetry = onRefresh)
+            }
+        }
 
-            state.sectionError?.let { message ->
-                item(key = "section-error", contentType = "banner") {
-                    AppFeedbackBanner("部分状态数据暂不可用：$message", error = true, onRetry = onRefresh)
+        item(key = "summary", contentType = "summary") {
+            OperationsSummaryCard(
+                title = summaryTitle,
+                subtitle = summarySubtitle,
+                status = summaryStatus,
+            )
+        }
+
+        item(key = "tabs", contentType = "tabs") {
+            AppSegmentedControl(
+                options = OperationsTab.entries,
+                selected = selectedTab,
+                onSelect = { selectedTab = it },
+                label = { it.label },
+                count = { tab -> if (tab == OperationsTab.Overview) attentionCount else null },
+            )
+        }
+
+        when (selectedTab) {
+            OperationsTab.Overview -> {
+                if (attentionCount > 0) {
+                    item(key = "attention-title", contentType = "section") {
+                        AppSectionHeader(
+                            title = "需要关注",
+                            subtitle = "异常与待办已自动置顶",
+                            tag = attentionCount.toString(),
+                        )
+                    }
+                    items(
+                        items = unresolvedIncidents.take(contentLimit),
+                        key = { "attention-incident:${it.id}" },
+                        contentType = { "incident" },
+                    ) { incident ->
+                        OperationsIncidentCard(
+                            incident = incident,
+                            canOperate = canOperate,
+                            onNote = { noteTarget = incident; noteText = "" },
+                            onMute = { muteTarget = incident },
+                            onResolve = { resolveTarget = incident },
+                        )
+                    }
+                    if (serviceIssueCount > 0) {
+                        item(key = "attention-services", contentType = "attention") {
+                            AppPanel {
+                                AppActionRow(
+                                    title = "服务状态异常",
+                                    subtitle = "$serviceIssueCount 项服务需要检查运行指标",
+                                    icon = Icons.Outlined.Hub,
+                                    iconTint = ColorTokens.Red.foreground,
+                                    onClick = { selectedTab = OperationsTab.Services },
+                                    trailingContent = { AppStatusBadge("unhealthy") },
+                                )
+                            }
+                        }
+                    }
+                    if (networkNeedsAttention) {
+                        item(key = "attention-network", contentType = "attention") {
+                            AppPanel {
+                                AppActionRow(
+                                    title = "网络连接需要检查",
+                                    subtitle = state.networkHealth.message ?: "远程服务器连通性异常",
+                                    icon = Icons.Outlined.Wifi,
+                                    iconTint = ColorTokens.Red.foreground,
+                                    onClick = { selectedTab = OperationsTab.Maintenance },
+                                    trailingContent = { AppStatusBadge(state.networkHealth.status) },
+                                )
+                            }
+                        }
+                    }
+                    if (backupNeedsAttention) {
+                        item(key = "attention-backup", contentType = "attention") {
+                            AppPanel {
+                                AppActionRow(
+                                    title = "备份健康需要检查",
+                                    subtitle = state.backup?.latestName ?: "最近备份状态未确认",
+                                    icon = Icons.Outlined.Backup,
+                                    iconTint = ColorTokens.Amber.foreground,
+                                    onClick = { selectedTab = OperationsTab.Maintenance },
+                                    trailingContent = { AppStatusBadge(state.backup?.rpoState ?: "unknown") },
+                                )
+                            }
+                        }
+                    }
+                    items(
+                        items = upcomingResources.take(2),
+                        key = { "attention-resource:${it.first.id}" },
+                        contentType = { "resource" },
+                    ) { (resource, days) ->
+                        OperationsResourceCard(resource = resource, days = days)
+                    }
+                    if (upcomingResources.size > 2) {
+                        item(key = "attention-more-resources", contentType = "attention") {
+                            AppPanel {
+                                AppActionRow(
+                                    title = "查看全部到期资源",
+                                    subtitle = "共 ${upcomingResources.size} 项，按到期时间排序",
+                                    icon = Icons.Outlined.ErrorOutline,
+                                    onClick = { selectedTab = OperationsTab.Maintenance },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                item(key = "overview-title", contentType = "section") {
+                    AppSectionHeader(title = "系统概况", subtitle = "关键状态集中查看")
+                }
+                item(key = "overview", contentType = "card") {
+                    AppGroupedCard {
+                        AppActionRow(
+                            title = "服务监控",
+                            subtitle = if (state.overview == null) "暂未获取服务数据" else "$healthyServices 项健康，共 $monitoredServices 项",
+                            icon = Icons.Outlined.Hub,
+                            onClick = { selectedTab = OperationsTab.Services },
+                            trailingContent = {
+                                AppStatusBadge(
+                                    when {
+                                        state.overview == null -> "unknown"
+                                        serviceIssueCount == 0 -> "healthy"
+                                        else -> "unhealthy"
+                                    },
+                                )
+                            },
+                        )
+                        AppDivider()
+                        AppActionRow(
+                            title = "在线设备",
+                            subtitle = if (state.iot == null) "暂未获取设备数据" else "$onlineDevices 台在线，共 $totalDevices 台",
+                            icon = Icons.Outlined.Hub,
+                            trailingContent = {
+                                Text(
+                                    "$onlineDevices/$totalDevices",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = if (state.iot != null && onlineDevices == totalDevices) ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
+                                )
+                            },
+                        )
+                        AppDivider()
+                        AppActionRow(
+                            title = "网络连接",
+                            subtitle = state.networkHealth.message ?: state.networkHealth.gatewayUrl.ifBlank { "查看 DNS 与 API 连通性" },
+                            icon = Icons.Outlined.Wifi,
+                            onClick = { selectedTab = OperationsTab.Maintenance },
+                            trailingContent = {
+                                Text(
+                                    networkStatusLabel(state.networkHealth.status),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = networkStatusColor(state.networkHealth.status),
+                                )
+                            },
+                        )
+                        AppDivider()
+                        AppActionRow(
+                            title = "备份健康",
+                            subtitle = state.backup?.ageHours?.let { "最近备份距今 ${"%.1f".format(it)} 小时" } ?: "等待首次备份结果",
+                            icon = Icons.Outlined.Backup,
+                            onClick = { selectedTab = OperationsTab.Maintenance },
+                            trailingContent = { AppStatusBadge(state.backup?.rpoState ?: "unknown") },
+                        )
+                    }
+                }
+
+                item(key = "diagnostics-title", contentType = "section") {
+                    AppSectionHeader(title = "一键巡检", subtitle = "检查系统与微服务状态")
+                }
+                item(key = "diagnostics", contentType = "card") {
+                    AppPanel {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            AppButton(
+                                text = if ("diagnostics" in state.busyActions) "巡检进行中..." else "一键巡检",
+                                onClick = onRunDiagnostics,
+                                icon = Icons.Outlined.CheckCircle,
+                                enabled = !state.busyActions.blocksAction("diagnostics"),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            state.diagnostics?.checks.orEmpty().take(4).forEach { check ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(check.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                                    AppStatusBadge(check.status)
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
-            item(key = "projects") {
-                AppPanel {
-                    AppActionRow(
-                        title = "项目与发布",
-                        subtitle = "GitHub 项目、Android 发布、CT8 任务与容器镜像",
-                        icon = Icons.Outlined.Code,
-                        onClick = onOpenProjects,
-                    )
+            OperationsTab.Services -> {
+                item(key = "services-title", contentType = "section") {
+                    AppSectionHeader(title = "服务监控", subtitle = "${services.size} 项服务 · 查看指标与管理入口")
                 }
-            }
-            item(key = "services") {
-                AppPanel {
-                    AppActionRow(
-                        title = "服务监控",
-                        subtitle = "${services.size} 项服务 · ${if (showServices) "收起运行指标" else "查看运行指标与服务入口"}",
-                        icon = Icons.Outlined.Hub,
-                        onClick = { showServices = !showServices },
-                    )
-                }
-            }
-            if (showServices) {
                 serviceOpenError?.let { message ->
-                    item(key = "service-open-error") { AppFeedbackBanner(message, error = true) }
+                    item(key = "service-open-error", contentType = "banner") {
+                        AppFeedbackBanner(message, error = true)
+                    }
                 }
                 if (services.isEmpty()) {
-                    item(key = "services-empty") {
-                        if (state.refreshing) GlassShimmerList(itemCount = 2, itemHeight = 72.dp)
-                        else AppEmptyState("暂无服务数据", detail = "下拉刷新可重新获取服务状态。")
+                    item(key = "services-empty", contentType = "empty") {
+                        if (state.refreshing) {
+                            GlassShimmerList(itemCount = 2, itemHeight = 72.dp)
+                        } else {
+                            AppEmptyState("暂无服务数据", detail = "下拉刷新可重新获取服务状态。")
+                        }
                     }
                 } else {
                     items(services, key = { "service-${it.id}" }, contentType = { "service" }) { service ->
@@ -223,8 +442,11 @@ fun OperationsScreen(
                                 enabled = openingServiceId == null || openingServiceId == service.id,
                                 onClick = if (service.adminUrl.isNullOrBlank()) null else { { openService(service) } },
                                 trailingContent = {
-                                    if (openingServiceId == service.id) AppCircularProgressIndicator(Modifier.size(18.dp))
-                                    else AppStatusBadge(service.state)
+                                    if (openingServiceId == service.id) {
+                                        AppCircularProgressIndicator(Modifier.size(18.dp))
+                                    } else {
+                                        AppStatusBadge(service.state)
+                                    }
                                 },
                             )
                         }
@@ -232,265 +454,20 @@ fun OperationsScreen(
                 }
             }
 
-            if (isTablet) {
-                // 平板 / 大屏：自适应双列运维管理布局
-                item(key = "tablet-operations-layout", contentType = "tablet-operations") {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    ) {
-                        // 左列：系统概览指标 + 检查与连通性 + 诊断巡检 + 备份健康
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            AppSectionHeader(title = "系统概览", subtitle = "只保留日常需要关注的结论")
-                            AppPanel {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    AppMetricCell("健康服务", "$healthyServices/$monitoredServices", Modifier.weight(1f), if (state.overview != null && healthyServices == monitoredServices) ColorTokens.Green.foreground else ColorTokens.Amber.foreground)
-                                    AppMetricCell("活动问题", activeIncidents.toString(), Modifier.weight(1f), if (activeIncidents == 0) ColorTokens.Green.foreground else ColorTokens.Red.foreground)
-                                    AppMetricCell("在线设备", "$onlineDevices/$totalDevices", Modifier.weight(1f), if (state.iot != null && onlineDevices == totalDevices) ColorTokens.Green.foreground else ColorTokens.Amber.foreground)
-                                    AppMetricCell("即将到期", upcomingResources.size.toString(), Modifier.weight(1f), if (upcomingResources.isEmpty()) ColorTokens.Green.foreground else ColorTokens.Amber.foreground)
-                                }
-                            }
-
-                            AppSectionHeader(title = "检查与连通性", subtitle = "测量 DNS 解析与 API 响应延迟")
-                            AppPanel {
-                                Column {
-                                    OperationsStatusRow(
-                                        icon = Icons.Outlined.NotificationsActive,
-                                        iconTint = if (state.unreadAlerts == 0) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
-                                        iconBackground = if (state.unreadAlerts == 0) ColorTokens.Green.container else ColorTokens.Red.container,
-                                        title = "通知中心",
-                                        subtitle = if (state.unreadAlerts == 0) "当前没有未读提醒" else "${state.unreadAlerts} 条未读提醒需要查看",
-                                        onClick = onOpenNotifications,
-                                        trailing = "查看",
-                                    )
-                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
-                                    OperationsStatusRow(
-                                        icon = Icons.Outlined.Wifi,
-                                        iconTint = ColorTokens.Blue.foreground,
-                                        iconBackground = ColorTokens.Sky.container,
-                                        title = "远程服务器连通性",
-                                        subtitle = state.networkHealth.message
-                                            ?: state.networkHealth.gatewayUrl.ifBlank { "测量 DNS 解析与 API 响应延迟" },
-                                        busy = state.networkHealth.status == "measuring",
-                                        onClick = onMeasureNetwork,
-                                        trailing = networkStatusLabel(state.networkHealth.status),
-                                    )
-                                    if (state.networkHealth.checks.isNotEmpty()) {
-                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
-                                        Column(
-                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                            verticalArrangement = Arrangement.spacedBy(7.dp),
-                                        ) {
-                                            state.networkHealth.checks.forEach { check ->
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                                ) {
-                                                    Icon(
-                                                        imageVector = if (check.ok) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline,
-                                                        contentDescription = null,
-                                                        tint = if (check.ok) ColorTokens.Green.foreground else ColorTokens.Red.foreground,
-                                                        modifier = Modifier.size(16.dp),
-                                                    )
-                                                    Text(check.label, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-                                                    Text(
-                                                        check.detail,
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis,
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            AppSectionHeader(title = "一键巡检", subtitle = "系统健康与微服务状态体检")
-                            AppPanel {
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    AppDialogPrimaryButton(
-                                        text = if ("diagnostics" in state.busyActions) "巡检进行中..." else "立即运行一键巡检",
-                                        onClick = onRunDiagnostics,
-                                        enabled = !state.busyActions.blocksAction("diagnostics"),
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
-                                    state.diagnostics?.checks.orEmpty().take(4).forEach { check ->
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            Text(check.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                                            AppStatusBadge(check.status)
-                                        }
-                                    }
-                                }
-                            }
-
-                            AppSectionHeader(title = "备份健康", subtitle = "手机端可立即备份，恢复仍在桌面控制台完成")
-                            val backup = state.backup
-                            AppPanel {
-                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        AppIconTile(
-                                            Icons.Outlined.Backup,
-                                            if (backup?.rpoState == "healthy") ColorTokens.Green.foreground else ColorTokens.Amber.foreground,
-                                            if (backup?.rpoState == "healthy") ColorTokens.Green.container else ColorTokens.Amber.container,
-                                        )
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(backup?.latestName ?: "尚无可恢复备份", style = MaterialTheme.typography.titleMedium)
-                                            Text(
-                                                backup?.ageHours?.let { "距今 ${"%.1f".format(it)} 小时 · RPO ${backup.rpoHours} 小时" }
-                                                    ?: "等待首次备份结果",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            )
-                                        }
-                                        AppStatusBadge(backup?.rpoState ?: "unknown")
-                                    }
-                                    if (canOperate && backup?.canBackup == true) {
-                                        AppDialogPrimaryButton(
-                                            text = if ("backup" in state.busyActions) "备份提交中..." else "立即备份",
-                                            onClick = { confirmBackup = true },
-                                            enabled = !state.busyActions.blocksAction("backup"),
-                                            modifier = Modifier.fillMaxWidth(),
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // 右列：正在处理的问题 + 资源与续期到期提醒
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            AppSectionHeader(title = "正在处理的问题", subtitle = "可以直接记录、静音或标记解决")
-                            val unresolvedIncidents = state.incidents.filter { it.status != "resolved" }
-                            if (state.refreshing && unresolvedIncidents.isEmpty()) {
-                                AppSkeletonList(
-                                    rowCount = 2,
-                                    leadingSize = 36.dp,
-                                    lineWidths = listOf(0.4f, 0.66f),
-                                )
-                            } else if (unresolvedIncidents.isEmpty()) {
-                                AppEmptyState("当前没有进行中的问题", detail = "平台所有服务与组件运行稳定。")
-                            } else {
-                                unresolvedIncidents.take(8).forEach { incident ->
-                                    AppPanel {
-                                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                                                AppIconTile(Icons.Outlined.ErrorOutline, ColorTokens.Red.foreground, ColorTokens.Red.container, modifier = Modifier.size(36.dp))
-                                                Column(Modifier.weight(1f)) {
-                                                    Text(incident.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                                    Text(
-                                                        incident.description.ifBlank { "${incident.source} · ${incident.severity}" },
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        maxLines = 2,
-                                                        overflow = TextOverflow.Ellipsis,
-                                                    )
-                                                }
-                                                AppStatusBadge(incident.status)
-                                            }
-                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                TextButton(onClick = { noteTarget = incident; noteText = "" }, enabled = canOperate) {
-                                                    Icon(Icons.Outlined.EditNote, null, modifier = Modifier.size(17.dp))
-                                                    Text("记录")
-                                                }
-                                                TextButton(onClick = { muteTarget = incident }, enabled = canOperate) {
-                                                    Icon(Icons.Outlined.VolumeOff, null, modifier = Modifier.size(17.dp))
-                                                    Text("静音 1 小时")
-                                                }
-                                                TextButton(onClick = { resolveTarget = incident }, enabled = canOperate) {
-                                                    Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(17.dp))
-                                                    Text("解决")
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            AppSectionHeader(title = "资源与续期", subtitle = "域名、证书和个人资源的到期提醒")
-                            if (state.refreshing && upcomingResources.isEmpty()) {
-                                AppSkeletonList(
-                                    rowCount = 2,
-                                    leadingSize = 36.dp,
-                                    lineWidths = listOf(0.4f, 0.66f),
-                                )
-                            } else if (upcomingResources.isEmpty()) {
-                                AppEmptyState("近期没有资源到期", detail = "资源接近提醒日期后会显示在这里。")
-                            } else {
-                                upcomingResources.take(8).forEach { (resource, days) ->
-                                    AppPanel {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(14.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        ) {
-                                            AppIconTile(
-                                                Icons.Outlined.ErrorOutline,
-                                                if (days <= 7) ColorTokens.Red.foreground else ColorTokens.Amber.foreground,
-                                                if (days <= 7) ColorTokens.Red.container else ColorTokens.Amber.container,
-                                            )
-                                            Column(Modifier.weight(1f)) {
-                                                Text(resource.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                                Text(resource.type, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            }
-                                            Text(
-                                                when {
-                                                    days < 0 -> "已过期 ${-days} 天"
-                                                    days == 0 -> "今天到期"
-                                                    else -> "$days 天后"
-                                                },
-                                                style = MaterialTheme.typography.labelLarge,
-                                                color = if (days <= 7) ColorTokens.Red.foreground else ColorTokens.Amber.foreground,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                // 手机单列流
-                item(key = "overview-title", contentType = "section") {
-                    AppSectionHeader(title = "系统概览", subtitle = "只保留日常需要关注的结论")
-                }
-                item(key = "overview", contentType = "card") {
+            OperationsTab.Maintenance -> {
+                item(key = "projects", contentType = "card") {
                     AppPanel {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            AppMetricCell("健康服务", "$healthyServices/$monitoredServices", Modifier.weight(1f), if (state.overview != null && healthyServices == monitoredServices) ColorTokens.Green.foreground else ColorTokens.Amber.foreground)
-                            AppMetricCell("活动问题", activeIncidents.toString(), Modifier.weight(1f), if (activeIncidents == 0) ColorTokens.Green.foreground else ColorTokens.Red.foreground)
-                            AppMetricCell("在线设备", "$onlineDevices/$totalDevices", Modifier.weight(1f), if (state.iot != null && onlineDevices == totalDevices) ColorTokens.Green.foreground else ColorTokens.Amber.foreground)
-                            AppMetricCell("即将到期", upcomingResources.size.toString(), Modifier.weight(1f), if (upcomingResources.isEmpty()) ColorTokens.Green.foreground else ColorTokens.Amber.foreground)
-                        }
+                        AppActionRow(
+                            title = "项目与发布",
+                            subtitle = "GitHub 项目、Android 发布、CT8 任务与容器镜像",
+                            icon = Icons.Outlined.Code,
+                            onClick = onOpenProjects,
+                        )
                     }
                 }
 
                 item(key = "checks-title", contentType = "section") {
-                    AppSectionHeader(title = "检查与提醒", subtitle = "问题处理统一进入通知中心")
+                    AppSectionHeader(title = "检查与连通性", subtitle = "通知、DNS 与 API 状态")
                 }
                 item(key = "checks", contentType = "card") {
                     AppPanel {
@@ -519,8 +496,8 @@ fun OperationsScreen(
                             if (state.networkHealth.checks.isNotEmpty()) {
                                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
                                 Column(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                    verticalArrangement = Arrangement.spacedBy(7.dp),
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
                                     state.networkHealth.checks.forEach { check ->
                                         Row(
@@ -550,77 +527,8 @@ fun OperationsScreen(
                     }
                 }
 
-                if (state.incidents.any { it.status != "resolved" }) {
-                    item(key = "incident-actions-title", contentType = "section") {
-                        AppSectionHeader(title = "正在处理的问题", subtitle = "可以直接记录、静音或标记解决")
-                    }
-                    items(
-                        items = state.incidents.filter { it.status != "resolved" }.take(6),
-                        key = { "incident-action:${it.id}" },
-                        contentType = { "incident-action" },
-                    ) { incident ->
-                        AppPanel {
-                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                                    AppIconTile(Icons.Outlined.ErrorOutline, ColorTokens.Red.foreground, ColorTokens.Red.container, modifier = Modifier.size(36.dp))
-                                    Column(Modifier.weight(1f)) {
-                                        Text(incident.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                        Text(
-                                            incident.description.ifBlank { "${incident.source} · ${incident.severity}" },
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                    AppStatusBadge(incident.status)
-                                }
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    TextButton(onClick = { noteTarget = incident; noteText = "" }, enabled = canOperate) {
-                                        Icon(Icons.Outlined.EditNote, null, modifier = Modifier.size(17.dp))
-                                        Text("记录")
-                                    }
-                                    TextButton(onClick = { muteTarget = incident }, enabled = canOperate) {
-                                        Icon(Icons.Outlined.VolumeOff, null, modifier = Modifier.size(17.dp))
-                                        Text("静音 1 小时")
-                                    }
-                                    TextButton(onClick = { resolveTarget = incident }, enabled = canOperate) {
-                                        Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(17.dp))
-                                        Text("解决")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                item(key = "diagnostics", contentType = "card") {
-                    AppPanel {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            AppDialogPrimaryButton(
-                                text = if ("diagnostics" in state.busyActions) "巡检进行中..." else "立即运行一键巡检",
-                                onClick = onRunDiagnostics,
-                                enabled = !state.busyActions.blocksAction("diagnostics"),
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            state.diagnostics?.checks.orEmpty().take(4).forEach { check ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(check.label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                                    AppStatusBadge(check.status)
-                                }
-                            }
-                        }
-                    }
-                }
-
                 item(key = "resources-title", contentType = "section") {
-                    AppSectionHeader(title = "资源与续期", subtitle = "域名、证书和个人资源的到期提醒")
+                    AppSectionHeader(title = "资源与续期", subtitle = "域名、证书和个人资源")
                 }
                 if (state.refreshing && upcomingResources.isEmpty()) {
                     item(key = "resources-loading", contentType = "loading") {
@@ -636,46 +544,21 @@ fun OperationsScreen(
                     }
                 } else {
                     items(
-                        items = upcomingResources.take(6),
+                        items = upcomingResources.take(contentLimit),
                         key = { "resource:${it.first.id}" },
                         contentType = { "resource" },
                     ) { (resource, days) ->
-                        AppPanel {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(14.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            ) {
-                                AppIconTile(
-                                    Icons.Outlined.ErrorOutline,
-                                    if (days <= 7) ColorTokens.Red.foreground else ColorTokens.Amber.foreground,
-                                    if (days <= 7) ColorTokens.Red.container else ColorTokens.Amber.container,
-                                )
-                                Column(Modifier.weight(1f)) {
-                                    Text(resource.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                    Text(resource.type, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                }
-                                Text(
-                                    when {
-                                        days < 0 -> "已过期 ${-days} 天"
-                                        days == 0 -> "今天到期"
-                                        else -> "$days 天后"
-                                    },
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = if (days <= 7) ColorTokens.Red.foreground else ColorTokens.Amber.foreground,
-                                )
-                            }
-                        }
+                        OperationsResourceCard(resource = resource, days = days)
                     }
                 }
 
                 item(key = "backup-title", contentType = "section") {
-                    AppSectionHeader(title = "备份健康", subtitle = "手机端可立即备份，恢复仍在桌面控制台完成")
+                    AppSectionHeader(title = "备份健康", subtitle = "恢复仍在桌面控制台完成")
                 }
                 item(key = "backup", contentType = "card") {
                     val backup = state.backup
                     AppPanel {
-                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 AppIconTile(
                                     Icons.Outlined.Backup,
@@ -694,9 +577,10 @@ fun OperationsScreen(
                                 AppStatusBadge(backup?.rpoState ?: "unknown")
                             }
                             if (canOperate && backup?.canBackup == true) {
-                                AppDialogPrimaryButton(
+                                AppButton(
                                     text = if ("backup" in state.busyActions) "备份提交中..." else "立即备份",
                                     onClick = { confirmBackup = true },
+                                    icon = Icons.Outlined.Backup,
                                     enabled = !state.busyActions.blocksAction("backup"),
                                     modifier = Modifier.fillMaxWidth(),
                                 )
@@ -705,8 +589,7 @@ fun OperationsScreen(
                     }
                 }
             }
-
-
+        }
     }
 
     if (confirmBackup) {
@@ -727,7 +610,7 @@ fun OperationsScreen(
             title = "将事件静音 1 小时？",
             detail = "事件：${incident.title}\n静音期间将暂停此事件的提醒，异常仍需要处理。",
             confirmLabel = "确认静音",
-            icon = Icons.Outlined.VolumeOff,
+            icon = Icons.AutoMirrored.Outlined.VolumeOff,
             onDismiss = { muteTarget = null },
             onConfirm = { muteTarget = null; onIncidentMute(incident.id) },
         )
@@ -767,6 +650,110 @@ fun OperationsScreen(
 }
 
 @Composable
+private fun OperationsSummaryCard(
+    title: String,
+    subtitle: String,
+    status: String,
+) {
+    val style = statusStyle(status)
+    AppPanel {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            AppIconTile(style.icon, style.foreground, style.background, modifier = Modifier.size(48.dp))
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Medium)
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            AppStatusBadge(status)
+        }
+    }
+}
+
+@Composable
+private fun OperationsIncidentCard(
+    incident: IncidentInfo,
+    canOperate: Boolean,
+    onNote: () -> Unit,
+    onMute: () -> Unit,
+    onResolve: () -> Unit,
+) {
+    AppPanel {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AppIconTile(Icons.Outlined.ErrorOutline, ColorTokens.Red.foreground, ColorTokens.Red.container, modifier = Modifier.size(36.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(incident.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        incident.description.ifBlank { "${incident.source} · ${incident.severity}" },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                AppStatusBadge(incident.status)
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(onClick = onNote, enabled = canOperate) {
+                    Icon(Icons.Outlined.EditNote, null, modifier = Modifier.size(17.dp))
+                    Text("记录")
+                }
+                TextButton(onClick = onMute, enabled = canOperate) {
+                    Icon(Icons.AutoMirrored.Outlined.VolumeOff, null, modifier = Modifier.size(17.dp))
+                    Text("静音 1 小时")
+                }
+                TextButton(onClick = onResolve, enabled = canOperate) {
+                    Icon(Icons.Outlined.CheckCircle, null, modifier = Modifier.size(17.dp))
+                    Text("解决")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OperationsResourceCard(
+    resource: ResourceExpiry,
+    days: Int,
+) {
+    AppPanel {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            AppIconTile(
+                Icons.Outlined.ErrorOutline,
+                if (days <= 7) ColorTokens.Red.foreground else ColorTokens.Amber.foreground,
+                if (days <= 7) ColorTokens.Red.container else ColorTokens.Amber.container,
+            )
+            Column(Modifier.weight(1f)) {
+                Text(resource.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                Text(resource.type, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(
+                when {
+                    days < 0 -> "已过期 ${-days} 天"
+                    days == 0 -> "今天到期"
+                    else -> "$days 天后"
+                },
+                style = MaterialTheme.typography.labelLarge,
+                color = if (days <= 7) ColorTokens.Red.foreground else ColorTokens.Amber.foreground,
+            )
+        }
+    }
+}
+
+@Composable
 private fun OperationsStatusRow(
     icon: ImageVector,
     iconTint: Color,
@@ -786,15 +773,13 @@ private fun OperationsStatusRow(
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(11.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             AppIconTile(icon, iconTint, iconBackground, modifier = Modifier.size(36.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     title,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
-                    ),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
                 )
                 Text(
                     subtitle,
@@ -818,6 +803,14 @@ private fun OperationsStatusRow(
             }
         }
     }
+}
+
+@Composable
+private fun networkStatusColor(status: String): Color = when (status) {
+    "healthy" -> ColorTokens.Green.foreground
+    "warning" -> ColorTokens.Amber.foreground
+    "error" -> ColorTokens.Red.foreground
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 private fun networkStatusLabel(status: String): String = when (status) {
