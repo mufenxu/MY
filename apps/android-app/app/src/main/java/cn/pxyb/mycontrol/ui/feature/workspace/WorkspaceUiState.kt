@@ -6,6 +6,7 @@ import cn.pxyb.mycontrol.data.CampusTimetable
 import cn.pxyb.mycontrol.data.ResourceExpiry
 import cn.pxyb.mycontrol.data.TodoSnapshot
 import cn.pxyb.mycontrol.data.activeUnreadCount
+import cn.pxyb.mycontrol.ui.feature.campus.CampusDataUiState
 import cn.pxyb.mycontrol.ui.AppUiState
 import cn.pxyb.mycontrol.ui.DataSection
 import cn.pxyb.mycontrol.ui.isRefreshing
@@ -27,17 +28,19 @@ data class TodayUiState(
     val sectionLoadStates: Map<DataSection, cn.pxyb.mycontrol.ui.SectionLoadState> = emptyMap(),
 )
 
-internal fun AppUiState.toTodayUiState() = TodayUiState(
+internal fun AppUiState.toTodayUiState(
+    campus: CampusDataUiState,
+) = TodayUiState(
     refreshing = isRefreshing(DataSection.Todos, DataSection.Campus, DataSection.Resources, DataSection.Incidents),
     calendarSyncing = "calendar-sync" in actions.running,
     sectionError = sectionError(DataSection.Todos, DataSection.Campus, DataSection.Resources),
     offlineMode = listOf(DataSection.Todos, DataSection.Campus, DataSection.Resources).any { sectionLoadStates[it]?.fromCache == true },
     todoSnapshot = todoSnapshot,
     pendingTodoMutations = pendingTodoMutations,
-    timetable = campusTimetable,
-    campusOverview = campusOverview,
+    timetable = campus.timetable,
+    campusOverview = campus.overview,
     unreadAlerts = alerts.activeUnreadCount(),
-    resourceExpiries = resourceExpiries,
+    resourceExpiries = campus.resourceExpiries,
     sharedTodoDraft = sharedTodoDraft,
     sectionLoadStates = sectionLoadStates,
 )

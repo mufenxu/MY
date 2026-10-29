@@ -50,19 +50,21 @@ import cn.pxyb.mycontrol.data.activeUnreadCount
 import cn.pxyb.mycontrol.data.isSnoozedAt
 import cn.pxyb.mycontrol.data.mergeHydratedAlerts
 import cn.pxyb.mycontrol.data.newTodoTask
-import cn.pxyb.mycontrol.ui.feature.account.AccountSecurityController
+import cn.pxyb.mycontrol.ui.feature.account.AccountSecurityStateHolder
 import cn.pxyb.mycontrol.ui.feature.account.toAccountManagementUiState
 import cn.pxyb.mycontrol.ui.feature.assistant.AssistantChatMessageUi
 import cn.pxyb.mycontrol.ui.feature.assistant.AssistantChatUiState
 import cn.pxyb.mycontrol.ui.feature.auth.toEntryUiState
 import cn.pxyb.mycontrol.ui.feature.auth.toQrLoginUiState
-import cn.pxyb.mycontrol.ui.feature.campus.library.LibrarySeatStateHolder
+import cn.pxyb.mycontrol.ui.feature.campus.CampusDataStateHolder
+import cn.pxyb.mycontrol.ui.feature.campus.CampusDataUiState
 import cn.pxyb.mycontrol.ui.feature.campus.chaoxing.ChaoxingStateHolder
+import cn.pxyb.mycontrol.ui.feature.campus.library.LibrarySeatStateHolder
 import cn.pxyb.mycontrol.ui.feature.campus.reservation.ReservationStateHolder
 import cn.pxyb.mycontrol.ui.feature.campus.reservation.campusReservationRedirect
 import cn.pxyb.mycontrol.ui.feature.campus.toFreeClassroomUiState
 import cn.pxyb.mycontrol.ui.feature.campus.water.WaterValveStateHolder
-import cn.pxyb.mycontrol.ui.feature.google.GoogleAccountsController
+import cn.pxyb.mycontrol.ui.feature.google.GoogleAccountsStateHolder
 import cn.pxyb.mycontrol.ui.feature.google.toGoogleAccountDeskUiState
 import cn.pxyb.mycontrol.ui.feature.media.MediaDownloadStateHolder
 import cn.pxyb.mycontrol.ui.feature.news.toDailyNewsUiState
@@ -111,6 +113,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -158,9 +161,15 @@ class AppViewModel(
     ) { error, message ->
         mutableState.update { it.copy(error = error, message = message) }
     }
-    private val accountSecurity: AccountSecurityController = AccountSecurityController(api, actions, mutableState, ::forceReauthentication) {
-        refreshSecurity(force = true)
-    }
+    private val accountSecurity: AccountSecurityStateHolder = AccountSecurityStateHolder(
+        viewModelScope,
+        api,
+        actions,
+        onSessionExpired = ::forceReauthentication,
+        onRefresh = { refreshSecurity(force = true) },
+        onMessage = { message -> mutableState.update { it.copy(message = message) } },
+        onWebLoginLink = { link -> mutableState.update { it.copy(webLoginLink = link) } },
+    )
     private val appUpdateManager = AppUpdateManager(application)
     private val appUpdates = AppUpdateStateHolder(viewModelScope, appUpdateManager) { message ->
         mutableState.update { it.copy(message = message, error = null) }
@@ -191,23 +200,40 @@ class AppViewModel(
             application, viewModelScope, api, sessionStore, personalStore, alertNotifier, mutableState, ::forceReauthentication,
         ) { syncRemoteNotifications() }
     }
+    private val campusData = CampusDataStateHolder(viewModelScope, api, ::forceReauthentication)
     val entryState = deriveState(AppUiState::toEntryUiState)
-    val overviewState = deriveState(AppUiState::toOverviewUiState)
-    val operationsState = deriveState(AppUiState::toOperationsUiState)
+    val overviewState = deriveState(campusData.state) { state, campus -> state.toOverviewUiState(campus) }
+    val operationsState = deriveState(campusData.state) { state, campus -> state.toOperationsUiState(campus) }
     val toolsState = deriveState(AppUiState::toToolsUiState)
     val projectsState = deriveState(AppUiState::toProjectsUiState)
     val profileState = deriveState(AppUiState::toProfileUiState)
     val dailyNewsState = deriveState(AppUiState::toDailyNewsUiState)
-    val accountManagementState = deriveState(AppUiState::toAccountManagementUiState)
-    val googleAccounts = GoogleAccountsController(viewModelScope, api, googleAccountStore, sessionStore, mutableState, ::forceReauthentication, actions)
-    val googleAccountDeskState = deriveState(AppUiState::toGoogleAccountDeskUiState)
+    val accountManagementState = deriveState(accountSecurity.state) { state, securityFlow ->
+        state.toAccountManagementUiState(securityFlow)
+    }
+    val googleAccounts = GoogleAccountsStateHolder(
+        viewModelScope,
+        api,
+        googleAccountStore,
+        sessionStore,
+        appState = { mutableState.value },
+        actions = actions,
+        onError = { message -> mutableState.update { it.copy(error = message) } },
+        onMessage = { message -> mutableState.update { it.copy(message = message) } },
+        onSessionExpired = ::forceReauthentication,
+    )
+    val googleAccountDeskState = deriveState(googleAccounts.state) { state, accounts ->
+        accounts.toGoogleAccountDeskUiState(state.actions.running.firstOrNull { it == "google-accounts" })
+    }
     val qrLoginState = deriveState(AppUiState::toQrLoginUiState)
-    val globalSearchState = deriveState(AppUiState::toGlobalSearchUiState)
+    val globalSearchState = deriveState(googleAccounts.state, campusData.state) { state, accounts, campus ->
+        state.toGlobalSearchUiState(accounts.accounts, campus)
+    }
     private val searchTargetMutable = MutableStateFlow<GlobalSearchItem?>(null)
     val searchTarget = searchTargetMutable.asStateFlow()
     private val assistantChatMutable = MutableStateFlow(AssistantChatUiState())
     val assistantChatState: StateFlow<AssistantChatUiState> = assistantChatMutable.asStateFlow()
-    val todayState = deriveState(AppUiState::toTodayUiState)
+    val todayState = deriveState(campusData.state) { state, campus -> state.toTodayUiState(campus) }
     val agenda = cn.pxyb.mycontrol.ui.feature.agenda.AgendaStateHolder(viewModelScope, api.campus, ::forceReauthentication)
     val study = cn.pxyb.mycontrol.ui.feature.study.StudyStateHolder(viewModelScope, application, { mutableState.value.user?.username }, ::forceReauthentication)
     val energy = cn.pxyb.mycontrol.ui.feature.campus.energy.EnergyStateHolder(viewModelScope, application, api.campus, { mutableState.value.user?.username }, ::forceReauthentication)
@@ -224,7 +250,7 @@ class AppViewModel(
         onSessionExpired = ::forceReauthentication,
     )
     val waterValveState = waterValves.state
-    val freeClassroomState = deriveState(AppUiState::toFreeClassroomUiState)
+    val freeClassroomState = deriveState(campusData.state) { state, campus -> state.toFreeClassroomUiState(campus) }
     val reservations = ReservationStateHolder(viewModelScope, api.campus, personalStore, ::forceReauthentication)
     val librarySeats = LibrarySeatStateHolder(viewModelScope, api.campus, ::forceReauthentication)
     val chaoxing = ChaoxingStateHolder(
@@ -271,6 +297,21 @@ class AppViewModel(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), transform(mutableState.value))
 
+    /** 派生界面状态需要同时读两份领域状态时使用。 */
+    private fun <A, B, T> deriveState(
+        first: StateFlow<A>,
+        second: StateFlow<B>,
+        transform: (AppUiState, A, B) -> T,
+    ): StateFlow<T> = combine(mutableState, first, second, transform)
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), transform(mutableState.value, first.value, second.value))
+
+    /** 派生界面状态需要同时读领域状态时使用（领域状态已不在 [AppUiState] 里）。 */
+    private fun <S, T> deriveState(source: StateFlow<S>, transform: (AppUiState, S) -> T): StateFlow<T> =
+        combine(mutableState, source, transform)
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), transform(mutableState.value, source.value))
+
     init {
         viewModelScope.launch(Dispatchers.IO) {
             appUpdateManager.cleanupInstalledUpdates()
@@ -315,8 +356,7 @@ class AppViewModel(
             }
         }
         viewModelScope.launch {
-            mutableState
-                .map(::assistantInputs)
+            combine(mutableState, campusData.state, ::assistantInputs)
                 .distinctUntilChanged()
                 .debounce(250)
                 .collectLatest(::refreshAssistantSnapshot)
@@ -337,8 +377,8 @@ class AppViewModel(
 
     init {
         viewModelScope.launch {
-            mutableState.map { current ->
-                current.user?.username?.takeIf { !current.locked }?.let { Triple(it, current.todoSnapshot, current.campusTimetable) }
+            combine(mutableState, campusData.state) { current, campus ->
+                current.user?.username?.takeIf { !current.locked }?.let { Triple(it, current.todoSnapshot, campus.timetable) }
             }.distinctUntilChanged().debounce(500).collectLatest { inputs ->
                 if (inputs != null) withContext(Dispatchers.IO) {
                     try {
@@ -391,14 +431,10 @@ class AppViewModel(
                         booting = false,
                         locked = false,
                         user = null,
-                        googleAccounts = emptyList(),
-                        googleAccountsLoaded = false,
-                        googleAccountsRevision = 0,
-                        googleAccountMigrationPending = false,
-                        googleAccountsRemoteReady = false,
                         error = "本地安全会话已失效，请重新登录。",
                     )
                 }
+                googleAccounts.reset()
                 clearAllWidgets()
                 return@launch
             }
@@ -412,14 +448,10 @@ class AppViewModel(
                                 booting = false,
                                 locked = false,
                                 user = null,
-                                googleAccounts = emptyList(),
-                                googleAccountsLoaded = false,
-                                googleAccountsRevision = 0,
-                                googleAccountMigrationPending = false,
-                                googleAccountsRemoteReady = false,
                                 error = "登录会话已过期，请重新登录。",
                             )
                         }
+                        googleAccounts.reset()
                         clearAllWidgets()
                     } else {
                         setAccountScope(user.username)
@@ -448,11 +480,6 @@ class AppViewModel(
                             booting = false,
                             locked = sessionStore.isLockEnabled(),
                             user = null,
-                            googleAccounts = emptyList(),
-                            googleAccountsLoaded = false,
-                            googleAccountsRevision = 0,
-                            googleAccountMigrationPending = false,
-                            googleAccountsRemoteReady = false,
                             error = error.message ?: "暂时无法验证会话，请重试。",
                         )
                     }
@@ -687,7 +714,9 @@ class AppViewModel(
             stopOperationalPolling()
             cancelRefreshes()
             cancelAccountRequests()
-            googleAccounts.cancelPending()
+            googleAccounts.reset()
+            // 上锁即结束五分钟免重复验证窗口，并清掉明文恢复码与 Passkey 缓存。
+            accountSecurity.reset()
             todos.cancelPending()
             notifications.cancelPending()
             actions.cancelPending()
@@ -707,11 +736,6 @@ class AppViewModel(
                         accountManagementOpen = false,
                         googleAccountDeskOpen = false,
                         globalSearchOpen = false,
-                        googleAccounts = emptyList(),
-                        googleAccountsLoaded = false,
-                        googleAccountsRevision = 0,
-                        googleAccountMigrationPending = false,
-                        googleAccountsRemoteReady = false,
                     )
                 }
             } else {
@@ -727,11 +751,6 @@ class AppViewModel(
                         busyAction = null,
                         locked = false,
                         user = null,
-                        googleAccounts = emptyList(),
-                        googleAccountsLoaded = false,
-                        googleAccountsRevision = 0,
-                        googleAccountMigrationPending = false,
-                        googleAccountsRemoteReady = false,
                         error = "登录会话已过期，请重新登录。",
                     )
                 }
@@ -818,6 +837,7 @@ class AppViewModel(
             return
         }
         setAccountScope(result.user.username)
+        accountSecurity.reset()
         mutableState.update {
             it.copy(
                 loginBusy = false,
@@ -830,7 +850,6 @@ class AppViewModel(
                 loginRecoveryCodes = emptyList(),
                 botChallengeRequired = false,
                 botChallengeReady = false,
-                reauthenticatedUntil = 0,
                 message = null,
                 offlineMode = false,
                 cachedAtMillis = null,
@@ -855,7 +874,8 @@ class AppViewModel(
             clearRefreshCache()
             cancelAccountRequests()
             assistantChatMutable.value = AssistantChatUiState()
-            googleAccounts.cancelPending()
+            googleAccounts.reset()
+            accountSecurity.reset()
             todos.cancelPending()
             notifications.cancelPending()
             actions.reset()
@@ -886,12 +906,13 @@ class AppViewModel(
         passwordLoginChallenge = null
         pendingLoginResult = null
         botChallengeToken = ""
-        mutableState.update { it.copy(loginEnrollment = null, loginRecoveryCodes = emptyList(), reauthenticatedUntil = 0) }
+        mutableState.update { it.copy(loginEnrollment = null, loginRecoveryCodes = emptyList()) }
+        accountSecurity.reset()
         cancelAccountRequests()
         assistantChatMutable.value = AssistantChatUiState()
         pendingQrLogin = null
         clearRefreshCache()
-        googleAccounts.cancelPending()
+        googleAccounts.reset()
         todos.cancelPending()
         notifications.cancelPending()
         actions.cancelPending()
@@ -1358,7 +1379,7 @@ class AppViewModel(
             put("pendingTodoCount", pendingTodos.size)
             put("pendingTodos", pendingTodos.take(8).joinToString("；") { it.title })
         }
-        val courses = state.campusTimetable?.courses.orEmpty()
+        val courses = campusData.state.value.timetable?.courses.orEmpty()
         if (courses.isNotEmpty()) {
             put("timetable", courses.take(12).joinToString("；") { course ->
                 "${course.dayName} ${course.timeRange} ${course.courseName} @ ${course.location}"
@@ -1376,7 +1397,7 @@ class AppViewModel(
                 state.alerts.filter { !it.read && !it.isSnoozedAt() }.take(6).joinToString("；") { it.title },
             )
         }
-        state.resourceExpiries.takeIf { it.isNotEmpty() }?.let { expiries ->
+        campusData.state.value.resourceExpiries.takeIf { it.isNotEmpty() }?.let { expiries ->
             put("resourceExpiries", expiries.take(6).joinToString("；") { "${it.type} ${it.name} 于 ${it.expiresAt} 到期" })
         }
         state.backup?.let { backup ->
@@ -1874,40 +1895,27 @@ class AppViewModel(
     }
 
     private fun refreshCampusTimetable(force: Boolean = false) = launchRefresh(DataSection.Campus, force, preloadCache = {
-        val timetable = api.campus.campusTimetable()
-        mutableState.update { it.copy(campusTimetable = timetable) }
+        campusData.reloadTimetable()
     }) {
-        val timetable = api.campus.campusTimetable()
-        mutableState.update { it.copy(campusTimetable = timetable) }
+        campusData.reloadTimetable()
         publishWidget()
         evaluatePersonalReminders()
     }
 
     fun refreshCampusGpa(force: Boolean = false) = launchRefresh(DataSection.CampusGpa, force) {
-        val gpa = api.campus.campusGpa()
-        mutableState.update { it.copy(campusOverview = (it.campusOverview ?: cn.pxyb.mycontrol.data.CampusOverview()).copy(gpa = gpa)) }
+        campusData.reloadGpa()
     }
 
     private fun refreshCampusOverview(force: Boolean = false) {
         refreshCampusGpa(force)
         launchRefresh(DataSection.CampusFreeClassrooms, force) {
-            val classrooms = api.campus.campusFreeClassrooms()
-            mutableState.update { it.copy(
-                campusOverview = (it.campusOverview ?: cn.pxyb.mycontrol.data.CampusOverview()).copy(freeClassrooms = classrooms),
-                freeClassroomResult = it.freeClassroomResult ?: classrooms,
-            ) }
+            campusData.reloadFreeClassrooms()
         }
         launchRefresh(DataSection.CampusLife, force) {
-            val campus = api.campus.campusLife()
-            mutableState.update { it.copy(campusOverview = (it.campusOverview ?: cn.pxyb.mycontrol.data.CampusOverview()).copy(
-                cardBalance = campus.cardBalance, waterCode = campus.waterCode, dormitory = campus.dormitory,
-            )) }
+            campusData.reloadCampusLife()
         }
         launchRefresh(DataSection.CampusEnergy, force) {
-            val energy = api.campus.campusEnergy()
-            mutableState.update { it.copy(campusOverview = (it.campusOverview ?: cn.pxyb.mycontrol.data.CampusOverview()).copy(
-                energyBalance = energy.balance, energyRoom = energy.room,
-            )) }
+            campusData.reloadCampusEnergy()
         }
     }
 
@@ -1929,17 +1937,14 @@ class AppViewModel(
 
     fun queryFreeClassrooms(dayplus: Int, sections: List<Int>, building: String) =
         launchRefresh(DataSection.FreeClassrooms, force = true, publishError = false) {
-            val result = api.campus.campusFreeClassrooms(dayplus, sections, building)
-            mutableState.update { it.copy(freeClassroomResult = result) }
+            campusData.queryFreeClassrooms(dayplus, sections, building)
         }
 
     private fun refreshResourceExpiries(force: Boolean = false) = launchRefresh(DataSection.Resources, force, preloadCache = {
-        val resources = api.resourceExpiries()
-        mutableState.update { it.copy(resourceExpiries = resources) }
+        campusData.reloadResourceExpiries()
     }) {
-        val resources = api.resourceExpiries()
-        mutableState.update { it.copy(resourceExpiries = resources) }
-        withContext(Dispatchers.IO) { alertNotifier.evaluateResourceExpiries(resources) }
+        campusData.reloadResourceExpiries()
+        withContext(Dispatchers.IO) { alertNotifier.evaluateResourceExpiries(campusData.state.value.resourceExpiries) }
         reloadPersonalState()
     }
 
@@ -1984,9 +1989,9 @@ class AppViewModel(
         val result = withContext(Dispatchers.IO) {
             androidCalendarSync.sync(
                 accountUsername = current.user?.username ?: sessionStore.readActiveUsername(),
-                timetable = current.campusTimetable,
+                timetable = campusData.state.value.timetable,
                 todos = current.todoSnapshot,
-                resources = current.resourceExpiries,
+                resources = campusData.state.value.resourceExpiries,
                 rooms = rooms,
                 seats = seats,
             )
@@ -2055,7 +2060,8 @@ class AppViewModel(
         val incidents = runCatching { api.incidents() }.getOrDefault(current.incidents)
         val backup = runCatching { api.backupQuality() }.getOrDefault(current.backup)
         val iot = runCatching { api.iot.dashboard() }.getOrDefault(current.iot)
-        val resources = runCatching { api.resourceExpiries() }.getOrDefault(current.resourceExpiries)
+        val resources = runCatching { api.resourceExpiries() }.getOrDefault(campusData.state.value.resourceExpiries)
+        campusData.setResourceExpiries(resources)
         mutableState.update {
             it.copy(
                 diagnostics = diagnostics,
@@ -2063,7 +2069,6 @@ class AppViewModel(
                 incidents = incidents,
                 backup = backup,
                 iot = iot,
-                resourceExpiries = resources,
             )
         }
         publishWidget()
@@ -2148,14 +2153,14 @@ class AppViewModel(
         }
     }
 
-    private fun assistantInputs(state: AppUiState) = AssistantInputs(
+    private fun assistantInputs(state: AppUiState, campus: CampusDataUiState) = AssistantInputs(
         username = state.user?.username,
         locked = state.locked,
-        timetable = state.campusTimetable,
+        timetable = campus.timetable,
         todos = state.todoSnapshot,
         incidents = state.incidents,
         alerts = state.alerts,
-        resources = state.resourceExpiries,
+        resources = campus.resourceExpiries,
         backup = state.backup,
         security = state.security,
         preferences = state.alertPreferences,
@@ -2243,7 +2248,7 @@ class AppViewModel(
                 assistant = current.assistantSnapshot,
                 quickScene = current.quickScene,
             )
-            CourseWidgetProvider.publish(getApplication(), current.campusTimetable)
+            CourseWidgetProvider.publish(getApplication(), campusData.state.value.timetable)
         }
     }
 
@@ -2366,7 +2371,7 @@ class AppViewModel(
 
     private suspend fun evaluatePersonalReminders() {
         val current = mutableState.value
-        withContext(Dispatchers.IO) { alertNotifier.evaluatePersonal(current.todoSnapshot, current.campusTimetable) }
+        withContext(Dispatchers.IO) { alertNotifier.evaluatePersonal(current.todoSnapshot, campusData.state.value.timetable) }
         reloadPersonalState()
     }
 

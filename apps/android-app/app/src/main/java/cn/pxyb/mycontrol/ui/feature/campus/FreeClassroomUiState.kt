@@ -14,8 +14,10 @@ data class FreeClassroomUiState(
     val result: CampusFreeClassrooms?,
 )
 
-internal fun AppUiState.toFreeClassroomUiState() = FreeClassroomUiState(
+internal fun AppUiState.toFreeClassroomUiState(
+    campus: CampusDataUiState,
+) = FreeClassroomUiState(
     refreshing = isRefreshing(DataSection.FreeClassrooms),
     error = sectionError(DataSection.FreeClassrooms),
-    result = freeClassroomResult ?: campusOverview?.freeClassrooms,
+    result = campus.freeClassrooms ?: campus.overview?.freeClassrooms,
 )

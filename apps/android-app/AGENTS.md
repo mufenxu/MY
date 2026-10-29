@@ -118,7 +118,7 @@
 - **纯文字操作的现状说明**：内部 `TextButton` 仍用于少量行内文字操作，当前**尚未**封装对应的胶囊化纯文字组件。这属于已知技术债：新增纯文字操作请优先复用 `AppSecondaryButton` 或 `AppInlineDangerButton`；确需行内纯文字入口时，暂沿用现有 `TextButton` 写法，**不要**自行新造第四套按钮样式，也不要直接补丁式扩展 `AppButtons.kt`。
 - **严禁页面内部重复调用 `statusBarsPadding()`**。
 - **严禁混用状态跳转与路由栈**：二级路由必须登记在 `parentTabForSubScreen`。
-- **领域状态必须自带 StateHolder**：`AppUiState` 只保留跨界面共享的会话与导航字段；单一业务域的数据、加载标记与忙碌标记放进 `ui/feature/<域>/` 下继承 `FeatureStateHolder` 的状态类，界面订阅该域的 `xxxState`，不要从大状态里读平铺字段。新增或迁移领域时照 `GitHubProjectsStateHolder` 的写法：私有 `mutableState`、`loadXxx()` 带 `canRequest` 守卫、失败经 `handleRequestFailure` 触发会话失效、`clearPendingState` 复位忙碌标记。
+- **领域状态必须自带 StateHolder**：`AppUiState` 只保留跨界面共享的会话与导航字段；单一业务域的数据、加载标记与忙碌标记放进 `ui/feature/<域>/` 下继承 `FeatureStateHolder` 的状态类，界面订阅该域的 `xxxState`，不要从大状态里读平铺字段。新增或迁移领域时照 `GitHubProjectsStateHolder` 的写法：私有 `mutableState`、`loadXxx()` 带 `canRequest` 守卫、失败经 `handleRequestFailure` 触发会话失效、`clearPendingState` 复位忙碌标记。领域状态搬出 `AppUiState` 后，界面投影改为显式接收该域状态（`toXxxUiState(domain: XxxUiState)`），并在 `AppViewModel` 用带 `source` 参数的 `deriveState` 组合派生；不要再把领域字段拷回大状态做中转。
 - **用户可见文案保持规范中文**（保留产品名、标准代码或国际协议字段原样）。
 
 ## 10. 标准公共组件库体系 (Component Library)

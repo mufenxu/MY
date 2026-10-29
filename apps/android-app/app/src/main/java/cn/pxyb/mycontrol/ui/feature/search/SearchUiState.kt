@@ -4,8 +4,10 @@ import androidx.compose.runtime.Immutable
 import cn.pxyb.mycontrol.data.CampusWaterValve
 import cn.pxyb.mycontrol.data.DailyNews
 import cn.pxyb.mycontrol.data.ExternalApplication
+import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.ui.AppUiState
 import cn.pxyb.mycontrol.ui.DataSection
+import cn.pxyb.mycontrol.ui.feature.campus.CampusDataUiState
 import cn.pxyb.mycontrol.ui.isRefreshing
 import cn.pxyb.mycontrol.ui.navigation.AppRoute
 import cn.pxyb.mycontrol.ui.sectionError
@@ -60,7 +62,10 @@ internal val featureSearchItems = listOf(
     GlobalSearchItem("feature:assistant", "AI 小助手", "个人助手、安排与快捷操作", "日常安排", SearchDestination.Overview, featureRoute = AppRoute.Assistant),
 )
 
-internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
+internal fun AppUiState.toGlobalSearchUiState(
+    googleAccounts: List<GoogleAccountRecord> = emptyList(),
+    campus: CampusDataUiState = CampusDataUiState(),
+) = GlobalSearchUiState(
     refreshing = isRefreshing(
         DataSection.Overview,
         DataSection.ExternalApplications,
@@ -159,7 +164,7 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                 ),
             )
         }
-        resourceExpiries.forEach { resource ->
+        campus.resourceExpiries.forEach { resource ->
             add(
                 GlobalSearchItem(
                     id = "resource:${resource.id}",
@@ -171,7 +176,7 @@ internal fun AppUiState.toGlobalSearchUiState() = GlobalSearchUiState(
                 ),
             )
         }
-        campusTimetable?.courses.orEmpty().forEach { course ->
+        campus.timetable?.courses.orEmpty().forEach { course ->
             add(
                 GlobalSearchItem(
                     id = "course:${course.id}",

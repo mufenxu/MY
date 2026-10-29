@@ -2,8 +2,13 @@ package cn.pxyb.mycontrol.ui.feature.google
 
 import androidx.compose.runtime.Immutable
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
-import cn.pxyb.mycontrol.ui.AppUiState
 
+/**
+ * 邮箱台账界面（`GoogleAccountDeskScreen`）使用的投影。
+ *
+ * 与 [GoogleAccountsUiState] 的差别只在多了全局的 [busyAction]：
+ * 写操作走共享的 `ActionStateHolder`，忙碌标记天然属于全局动作通道。
+ */
 @Immutable
 data class GoogleAccountDeskUiState(
     val busyAction: String?,
@@ -13,10 +18,10 @@ data class GoogleAccountDeskUiState(
     val error: String? = null,
 )
 
-internal fun AppUiState.toGoogleAccountDeskUiState() = GoogleAccountDeskUiState(
-    busyAction = actions.running.firstOrNull { it == "google-accounts" },
-    googleAccounts = googleAccounts,
-    googleAccountMigrationPending = googleAccountMigrationPending,
-    loading = googleAccountsLoading,
-    error = googleAccountsError,
+internal fun GoogleAccountsUiState.toGoogleAccountDeskUiState(busyAction: String?) = GoogleAccountDeskUiState(
+    busyAction = busyAction,
+    googleAccounts = accounts,
+    googleAccountMigrationPending = migrationPending,
+    loading = loading,
+    error = error,
 )

@@ -30,7 +30,9 @@ data class AccountManagementUiState(
     val actionCompletions: Map<String, Int> = emptyMap(),
 )
 
-internal fun AppUiState.toAccountManagementUiState() = AccountManagementUiState(
+internal fun AppUiState.toAccountManagementUiState(
+    securityFlow: AccountSecurityUiState,
+) = AccountManagementUiState(
     refreshing = isRefreshing(DataSection.Security),
     sectionError = sectionError(DataSection.Security),
     busyAction = busyAction ?: actions.running.firstOrNull { "security" in actionResources(it) },
@@ -38,10 +40,10 @@ internal fun AppUiState.toAccountManagementUiState() = AccountManagementUiState(
     security = security,
     androidPasskeySupported = androidPasskeySupported,
     appLockEnabled = appLockEnabled,
-    totpEnrollment = totpEnrollment,
-    recoveryCodes = recoveryCodes,
-    passkeys = passkeys,
-    reauthenticatedUntil = reauthenticatedUntil,
+    totpEnrollment = securityFlow.totpEnrollment,
+    recoveryCodes = securityFlow.recoveryCodes,
+    passkeys = securityFlow.passkeys,
+    reauthenticatedUntil = securityFlow.reauthenticatedUntil,
     error = error,
     message = message,
     actionErrors = actions.errors.filterKeys { "security" in actionResources(it) },

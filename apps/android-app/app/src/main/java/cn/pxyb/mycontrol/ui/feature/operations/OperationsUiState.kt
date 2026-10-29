@@ -11,6 +11,7 @@ import cn.pxyb.mycontrol.data.ResourceExpiry
 import cn.pxyb.mycontrol.data.activeUnreadCount
 import cn.pxyb.mycontrol.ui.AppUiState
 import cn.pxyb.mycontrol.ui.DataSection
+import cn.pxyb.mycontrol.ui.feature.campus.CampusDataUiState
 import cn.pxyb.mycontrol.ui.feature.profile.NetworkHealth
 import cn.pxyb.mycontrol.ui.isRefreshing
 import cn.pxyb.mycontrol.ui.sectionError
@@ -32,7 +33,9 @@ data class OperationsUiState(
     val networkHealth: NetworkHealth = NetworkHealth(),
 )
 
-internal fun AppUiState.toOperationsUiState() = OperationsUiState(
+internal fun AppUiState.toOperationsUiState(
+    campus: CampusDataUiState,
+) = OperationsUiState(
     refreshing = isRefreshing(DataSection.Overview, DataSection.Incidents, DataSection.Backup, DataSection.Iot, DataSection.Resources),
     sectionError = sectionError(DataSection.Overview, DataSection.Incidents, DataSection.Backup, DataSection.Iot, DataSection.Resources),
     busyActions = actions.running.filter { actionResources(it).any(setOf("incidents", "backup", "diagnostics")::contains) }.toSet(),
@@ -40,7 +43,7 @@ internal fun AppUiState.toOperationsUiState() = OperationsUiState(
     overview = overview,
     incidents = incidents,
     iot = iot,
-    resourceExpiries = resourceExpiries,
+    resourceExpiries = campus.resourceExpiries,
     unreadAlerts = alerts.activeUnreadCount(),
     backup = backup,
     diagnostics = diagnostics,

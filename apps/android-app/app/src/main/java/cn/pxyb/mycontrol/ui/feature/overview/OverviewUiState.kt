@@ -12,6 +12,7 @@ import cn.pxyb.mycontrol.data.TodoSnapshot
 import cn.pxyb.mycontrol.data.activeUnreadCount
 import cn.pxyb.mycontrol.ui.AppUiState
 import cn.pxyb.mycontrol.ui.DataSection
+import cn.pxyb.mycontrol.ui.feature.campus.CampusDataUiState
 import cn.pxyb.mycontrol.ui.isRefreshing
 import cn.pxyb.mycontrol.ui.sectionError
 
@@ -34,7 +35,9 @@ data class OverviewUiState(
     val assistantSnapshot: PersonalAssistantSnapshot?,
 )
 
-internal fun AppUiState.toOverviewUiState() = OverviewUiState(
+internal fun AppUiState.toOverviewUiState(
+    campus: CampusDataUiState,
+) = OverviewUiState(
     refreshing = isRefreshing(DataSection.Overview, DataSection.ExternalApplications, DataSection.Incidents, DataSection.Tasks, DataSection.Campus, DataSection.Todos),
     sectionError = sectionError(DataSection.Overview, DataSection.ExternalApplications, DataSection.Incidents, DataSection.Tasks, DataSection.Campus, DataSection.Todos),
     overview = overview,
@@ -46,8 +49,8 @@ internal fun AppUiState.toOverviewUiState() = OverviewUiState(
     homeQuickActionOrder = homeQuickActionOrder,
     hiddenHomeQuickActions = hiddenHomeQuickActions,
     todoSnapshot = todoSnapshot,
-    timetable = campusTimetable,
-    campusOverview = campusOverview,
+    timetable = campus.timetable,
+    campusOverview = campus.overview,
     unreadAlerts = alerts.activeUnreadCount(),
     assistantSnapshot = assistantSnapshot,
 )

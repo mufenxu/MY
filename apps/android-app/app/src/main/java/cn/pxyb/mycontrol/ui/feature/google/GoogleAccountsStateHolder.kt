@@ -1,5 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.google
 
+import androidx.compose.runtime.Immutable
 import cn.pxyb.mycontrol.data.ApiException
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.GoogleAccountStore
@@ -8,7 +9,7 @@ import cn.pxyb.mycontrol.data.PlatformApi
 import cn.pxyb.mycontrol.data.SessionStore
 import cn.pxyb.mycontrol.ui.AppUiState
 import cn.pxyb.mycontrol.ui.state.ActionStateHolder
-import cn.pxyb.mycontrol.ui.state.handleFeatureRequestFailure
+import cn.pxyb.mycontrol.ui.state.FeatureStateHolder
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
@@ -16,36 +17,46 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-class GoogleAccountsController(
+/**
+ * Google 邮箱台账的界面状态。
+ *
+ * 迁移自 [AppUiState] 的 7 个平铺字段。台账本身是服务器权威数据，本机只做离线副本：
+ * [remoteReady] 为 false 且没有待迁移数据时，界面必须按只读缓存处理，禁止写入。
+ */
+@Immutable
+data class GoogleAccountsUiState(
+    val accounts: List<GoogleAccountRecord> = emptyList(),
+    val loaded: Boolean = false,
+    val loading: Boolean = false,
+    val error: String? = null,
+    val revision: Int = 0,
+    val migrationPending: Boolean = false,
+    val remoteReady: Boolean = false,
+)
+
+class GoogleAccountsStateHolder(
     parentScope: CoroutineScope,
     private val api: PlatformApi,
     private val googleAccountStore: GoogleAccountStore,
     private val sessionStore: SessionStore,
-    // These records also feed overview and global search; only account mutations share a resource lock.
-    private val mutableState: MutableStateFlow<AppUiState>,
-    private val onSessionExpired: (String) -> Unit,
+    private val appState: () -> AppUiState,
     private val actions: ActionStateHolder,
-) {
-    private val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
+    private val onError: (String?) -> Unit,
+    private val onMessage: (String) -> Unit,
+    onSessionExpired: (String) -> Unit,
+) : FeatureStateHolder<GoogleAccountsUiState>(parentScope, GoogleAccountsUiState(), onSessionExpired) {
     private val syncMutex = Mutex()
     private var loadJob: Job? = null
 
-    fun cancelPending() {
-        scope.coroutineContext.cancelChildren()
-        loadJob = null
-        mutableState.update { it.copy(googleAccountsLoading = false) }
-    }
+    override fun clearPendingState(current: GoogleAccountsUiState): GoogleAccountsUiState =
+        current.copy(loading = false, error = null)
 
     fun addGoogleAccount(
         primaryEmail: String,
@@ -65,7 +76,7 @@ class GoogleAccountsController(
         }
         when {
             !isValidGoogleAddress(email) -> setGoogleAccountError("请输入有效的 Google 邮箱地址。")
-            mutableState.value.googleAccounts.any { it.primaryEmail == email } ->
+            mutableState.value.accounts.any { it.primaryEmail == email } ->
                 setGoogleAccountError("这个主邮箱已经添加过了。")
             else -> persistGoogleAccounts(
                 transform = { accounts ->
@@ -91,7 +102,7 @@ class GoogleAccountsController(
             .map(::normalizeGoogleAddress)
             .filter(::isValidGoogleAddress)
             .distinct()
-        val existing = mutableState.value.googleAccounts.map { it.primaryEmail }.toSet()
+        val existing = mutableState.value.accounts.map { it.primaryEmail }.toSet()
         val newEmails = candidates.filterNot(existing::contains)
         if (newEmails.isEmpty()) {
             setGoogleAccountError("没有找到可导入的新邮箱。")
@@ -136,7 +147,7 @@ class GoogleAccountsController(
         }
         when {
             !isValidGoogleAddress(email) -> setGoogleAccountError("请输入有效的 Google 邮箱地址。")
-            mutableState.value.googleAccounts.any { it.id != id && it.primaryEmail == email } ->
+            mutableState.value.accounts.any { it.id != id && it.primaryEmail == email } ->
                 setGoogleAccountError("这个主邮箱已经被其他记录使用。")
             else -> persistGoogleAccounts(
                 transform = { accounts ->
@@ -202,7 +213,7 @@ class GoogleAccountsController(
         val normalizedAddress = normalizeGoogleAddress(address)
         when {
             !isValidGoogleAddress(normalizedAddress) -> setGoogleAccountError("请输入有效的别名地址。")
-            mutableState.value.googleAccounts
+            mutableState.value.accounts
                 .firstOrNull { it.id == accountId }
                 ?.aliases
                 ?.any { it.address == normalizedAddress } == true ->
@@ -262,11 +273,11 @@ class GoogleAccountsController(
     )
 
     fun loadGoogleAccounts(force: Boolean = false) {
-        val current = mutableState.value
+        val current = appState()
         if (current.user == null || current.locked || current.busyAction == "logout" || loadJob?.isActive == true ||
-            !force && current.googleAccountsLoaded
+            !force && mutableState.value.loaded
         ) return
-        mutableState.update { it.copy(googleAccountsLoading = true, googleAccountsError = null) }
+        mutableState.update { it.copy(loading = true, error = null) }
         val job = scope.launch(start = CoroutineStart.LAZY) {
             var localAccounts = emptyList<GoogleAccountRecord>()
             var localReadError: Throwable? = null
@@ -274,38 +285,38 @@ class GoogleAccountsController(
                 syncMutex.withLock {
                     api.withRequestMetadata(allowCache = false) {
                         val localResult = runCatching { withStore { read() } }
-                            .onFailure { handleFeatureRequestFailure(it, onSessionExpired) }
+                            .onFailure { handleRequestFailure(it) }
                         localAccounts = localResult.getOrDefault(emptyList())
                         localReadError = localResult.exceptionOrNull()
                         val snapshot = api.googleAccounts()
                         val migrationPending = snapshot.accounts.isEmpty() && localAccounts.isNotEmpty()
                         if (!migrationPending) {
                             runCatching { withStore { write(snapshot.accounts) } }
-                                .onFailure { handleFeatureRequestFailure(it, onSessionExpired) }
+                                .onFailure { handleRequestFailure(it) }
                         }
                         mutableState.update {
                             it.copy(
-                                googleAccounts = if (migrationPending) localAccounts else snapshot.accounts,
-                                googleAccountsLoaded = true,
-                                googleAccountsRevision = snapshot.revision,
-                                googleAccountMigrationPending = migrationPending,
-                                googleAccountsRemoteReady = !migrationPending,
-                                googleAccountsError = null,
+                                accounts = if (migrationPending) localAccounts else snapshot.accounts,
+                                loaded = true,
+                                revision = snapshot.revision,
+                                migrationPending = migrationPending,
+                                remoteReady = !migrationPending,
                                 error = null,
-                                message = if (migrationPending) "发现本机邮箱记录，请选择是否上传到服务器。" else it.message,
                             )
                         }
+                        onError(null)
+                        if (migrationPending) onMessage("发现本机邮箱记录，请选择是否上传到服务器。")
                     }
                 }
             } catch (error: Throwable) {
-                handleFeatureRequestFailure(error, onSessionExpired)
+                handleRequestFailure(error)
                 mutableState.update {
                     it.copy(
-                        googleAccounts = it.googleAccounts.ifEmpty { localAccounts },
-                        googleAccountsLoaded = false,
-                        googleAccountMigrationPending = false,
-                        googleAccountsRemoteReady = false,
-                        googleAccountsError = if (localReadError != null && localAccounts.isEmpty()) {
+                        accounts = it.accounts.ifEmpty { localAccounts },
+                        loaded = false,
+                        migrationPending = false,
+                        remoteReady = false,
+                        error = if (localReadError != null && localAccounts.isEmpty()) {
                             localReadError?.message ?: "Google 邮箱台账读取失败。"
                         } else {
                             error.message ?: "服务器暂时不可用，当前显示本机缓存。"
@@ -315,7 +326,7 @@ class GoogleAccountsController(
             } finally {
                 if (loadJob === currentCoroutineContext()[Job]) {
                     loadJob = null
-                    mutableState.update { it.copy(googleAccountsLoading = false) }
+                    mutableState.update { it.copy(loading = false) }
                 }
             }
         }
@@ -324,7 +335,7 @@ class GoogleAccountsController(
     }
 
     fun uploadLocalGoogleAccounts() {
-        if (!mutableState.value.googleAccountMigrationPending) return
+        if (!mutableState.value.migrationPending) return
         persistGoogleAccounts(
             transform = { it },
             successMessage = "本机邮箱记录已上传到服务器。",
@@ -332,16 +343,16 @@ class GoogleAccountsController(
     }
 
     fun discardLocalGoogleAccounts() {
-        if (!mutableState.value.googleAccountMigrationPending) return
+        if (!mutableState.value.migrationPending) return
         actions.run("google-accounts", "已清除本机缓存，服务器台账仍为空。", failureMessage = "本机缓存清除失败。") {
             syncMutex.withLock {
                 withStore { clear() }
                 mutableState.update {
                     it.copy(
-                        googleAccounts = emptyList(),
-                        googleAccountsLoaded = true,
-                        googleAccountMigrationPending = false,
-                        googleAccountsRemoteReady = true,
+                        accounts = emptyList(),
+                        loaded = true,
+                        migrationPending = false,
+                        remoteReady = true,
                     )
                 }
             }
@@ -353,31 +364,31 @@ class GoogleAccountsController(
         successMessage: String,
     ) {
         val current = mutableState.value
-        if (!current.googleAccountsRemoteReady && !current.googleAccountMigrationPending) {
+        if (!current.remoteReady && !current.migrationPending) {
             setGoogleAccountError("服务器暂时不可用，邮箱台账当前为只读缓存。")
             return
         }
         actions.run("google-accounts", successMessage, failureMessage = "Google 邮箱台账保存失败。") {
             syncMutex.withLock {
                 try {
-                    if (!mutableState.value.googleAccountsRemoteReady && !mutableState.value.googleAccountMigrationPending) {
+                    if (!mutableState.value.remoteReady && !mutableState.value.migrationPending) {
                         throw IllegalStateException("服务器暂时不可用，请重新加载邮箱台账后再修改。")
                     }
-                    val accounts = transform(mutableState.value.googleAccounts)
-                    val snapshot = api.replaceGoogleAccounts(accounts, mutableState.value.googleAccountsRevision)
+                    val accounts = transform(mutableState.value.accounts)
+                    val snapshot = api.replaceGoogleAccounts(accounts, mutableState.value.revision)
                     withStore { write(snapshot.accounts) }
                     mutableState.update {
                         it.copy(
-                            googleAccounts = snapshot.accounts,
-                            googleAccountsLoaded = true,
-                            googleAccountsRevision = snapshot.revision,
-                            googleAccountMigrationPending = false,
-                            googleAccountsRemoteReady = true,
+                            accounts = snapshot.accounts,
+                            loaded = true,
+                            revision = snapshot.revision,
+                            migrationPending = false,
+                            remoteReady = true,
                         )
                     }
                 } catch (error: Throwable) {
                     if (error is ApiException && error.code == "GOOGLE_ACCOUNT_REVISION_CONFLICT") {
-                        mutableState.update { it.copy(googleAccountsLoaded = false, googleAccountsRemoteReady = false) }
+                        mutableState.update { it.copy(loaded = false, remoteReady = false) }
                         loadGoogleAccounts()
                         throw IllegalStateException("服务器上的邮箱台账已更新，正在重新加载。", error)
                     }
@@ -392,8 +403,12 @@ class GoogleAccountsController(
         return withContext(Dispatchers.IO) { sessionStore.withRequestSession(session) { googleAccountStore.block() } }
     }
 
+    /**
+     * 输入校验与写失败只走全局提示通道：台账屏顶部的错误条带「重试」按钮，
+     * 专用于加载失败，把校验错误塞进去会让用户以为重试能解决问题。
+     */
     private fun setGoogleAccountError(message: String) {
-        mutableState.update { it.copy(error = message, message = null) }
+        onError(message)
     }
 
     private fun normalizeGoogleTags(raw: String): List<String>? {
@@ -414,13 +429,4 @@ class GoogleAccountsController(
             .toInstant()
             .toEpochMilli()
     }.getOrNull()
-
-    private fun normalizeGoogleAddress(address: String): String = address.trim().lowercase()
-
-    private fun isValidGoogleAddress(address: String): Boolean =
-        address.length <= 254 && address.count { it == '@' } == 1 &&
-            address.substringBefore('@').isNotBlank() &&
-            address.substringAfter('@').contains('.') &&
-            address.none(Char::isWhitespace)
-
 }
