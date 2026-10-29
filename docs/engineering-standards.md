@@ -165,7 +165,7 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 | 应用 | 形态 | 技术栈 | Vite | 开发端口 |
 | --- | --- | --- | --- | --- |
 | `admin-console` | 单包内含 Express 服务端 + React 客户端 | React 19 + `lucide-react`，服务端 Express 5 + `mongodb` | 7 | 5180（API 8788） |
-| `core-admin` | 纯前端 SPA | React 19 + `react-router` + Ant Design | 7 | 5173（默认） |
+| `core-admin` | 纯前端 SPA | React 19 + `react-router` + Ant Design | 7 | 5174 |
 | `exam-admin` | 纯前端 SPA | Vue 3 + `vue-router` + Element Plus | 8 | 5173 |
 | `official-website` | 单页官网 | 无框架，手写 HTML + `main.js` | 5 | 5188 |
 
@@ -178,13 +178,16 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 
 ### 已知的实质性问题（改前端前必读）
 
-- **`exam-admin` 的 lint 几乎不校验任何东西**：`eslint.config.js` 只启用 `no-debugger`/`no-dupe-keys`/`no-unreachable` 三条规则，没有 `extends` `js.configs.recommended`、没有 `globals`，虽然 `vue-eslint-parser` 在依赖里但**没有装 `eslint-plugin-vue`**，因此 Vue 模板与组件规则完全不生效。所以"exam-admin lint 通过"**不能**当作质量证据。
+- **`exam-admin` 的 lint 只覆盖正确性，不含格式**：`eslint.config.js` 使用 `@eslint/js` 的 recommended 加 `eslint-plugin-vue` 的 `flat/essential`，并显式声明浏览器与 Node globals（`vite.config.js` 单独补 `__dirname`/`process`）。**格式类规则有意不启用**——`flat/recommended` 会带出约 5300 条 `vue/html-indent`、`vue/max-attributes-per-line` 类告警，其中 4952 条可自动修复，一旦跑 `--fix` 会重排整个代码库，与 §4 的"禁止批量重排缩进"红线冲突。剩余 41 条 `no-useless-escape` 是遗留正则转义，已降级为 warning。
+- **`DashboardView.vue` 是单文件巨石，拆分仍在进行**：截至 2026-10-29 为 1897 行模板 + 1806 行 script + 3323 行 style（拆分起点 8072 行，现 7029 行，已降 13%）。script 现分 16 段，其中八块已抽到 `src/features/`：「Change Password」→ `account/usePasswordDialog.js`、「Exam Results」→ `exam-results/useExamResults.js`、「Feedback」→ `feedback/useFeedback.js`、「Personal Category Supervision」→ `personal-categories/usePersonalCategories.js`、「Paper Share」→ `paper-share/usePaperShares.js`、「Learning Operations」→ `learning-operations/useLearningOperations.js`、「User Assignment」→ `user-assignments/useUserAssignments.js`、「Wechat Binding」→ `wechat-binding/useWechatBinding.js`。**三处段名不副实**：「Methods: Category Logic」（350 行）实为分类 CRUD + 试卷分享 + 接收分享；「User Management Logic」（596 行）实为显示助手 + 学习运营 + 用户 CRUD；「Methods: Bind Logic」与「Bind Wechat Dialog」被用户分配逻辑隔开，实际是一域两段。新抽 composable 必须沿用 `src/features/exam-editor/useXxx.js` 的既有写法（参数注入依赖、返回 state/methods），不要另立目录约定。**四条约束**：① `test/frontendInvariants.test.js` 的源码正则断言会因抽取而失效——`@close="stopBindRequests"` 属模板可留在 `DashboardView`，但 `stopBindCreation[\s\S]*?bindCreateController?\.abort\(\)` 已随逻辑迁到 `useWechatBinding.js` 并在测试中改为读该文件，后续再抽同理；② 该项目**没有组件渲染测试**，拆分只能靠 `lint + test + build` 加手工冒烟，禁止一次性大改；③ 每刀先确认被抽函数在 setup 期间未被提前调用（否则 `const` 解构触发 TDZ），且被注入的依赖在**调用点之前**已声明——`renderQrcodeToElement` 就因此保留在组件内并排在调用点之前；④ 模板引用不存在的绑定**不会**在编译期报错，`build` 通过不代表拆分没漏，必须逐个核对被移动标识符的模板引用是否仍有声明；只解构模板与剩余代码真正用到的名字，其余留在 composable 内部，否则 `no-unused-vars` 判 error。**剩余三块未抽的原因**：用户 CRUD（238 行）需注入 7 个 state，且 `userSearchTimer` 由 `onBeforeUnmount` 清理（生命周期外泄，需额外暴露终止函数）、`users` 被块外 computed 读取；分类 CRUD（106 行）需注入 10 项；接收分享（62 行）会直接改写 `activeMenu`/`selectedMajorCategory`/`isExamView` 三个导航状态。这三处的注入成本已超过收益，若继续应先做依赖图再评估。
+- **`src/features/` 下的 composable 已可脱离组件单测**：8 个 composable 把 `message`（默认 `ElMessage`）与 `messageBox`（默认 `ElMessageBox`）作为可覆盖依赖注入，默认值即原导入，应用行为不变；`useWechatBinding` 另外把 `fetchWithTimeout` 与 `createSequentialPoller` 也改为可覆盖参数，默认取平台实现，因此该域也已纳入测试。`test/composable*.test.js` 用内存替身断言校验分支、请求参数、abort 竞态与状态回填，共 102 条用例（`npm test` 现有 135 条）。**三条约束**：① `ElMessage` 在 Node 里一调用就抛 `document is not defined`，所以新增 composable **不要**直接 `import { ElMessage }` 就用，一律按上述方式注入，否则该模块无法单测；② `@` 别名由 `test-support/register-alias.mjs`（经 `test` 脚本的 `--import` 加载）与 `test-support/alias-hook.mjs` 在测试运行时解析，等价于 `vite.config.js` 的 `@ → src`，候选扩展名为 `.js`/`.mjs`/`index.js`——这两个文件**必须放在 `test/` 之外**，因为 `node --test` 会把 `test/` 下任何 `.js`/`.mjs` 文件当成测试执行；③ 测试辅助里不要用 `setImmediate`（Node 专有且未登记到 `eslint.config.js` 的 globals，会触发 `no-undef`），需要冲刷微任务时用 `setTimeout(resolve, 0)`。另有一处**已按现状断言的真实缺口**：`unbindWechat` 在 HTTP 200 且 `code !== 0` 时既不提示也不刷新用户信息（全局拦截器只处理 HTTP 错误码），`composableWechatBinding.test.js` 已注明该行为，若要修复请同步更新该用例。
+- **反馈流程会重复刷新未读汇总**：`loadFeedbacks` 成功后已 `await loadFeedbackSummary()`，而 `submitFeedback`/`replyFeedback`/`closeFeedback` 在调用 `loadFeedbacks` 之后又各自调一次，同一次操作会请求两次汇总接口。属既有冗余，未改动（会改变接口调用次数）；测试断言的是"至少刷新一次"，若后续去重不会误报。
 - **`official-website` 没有 lint、没有 test、没有 check**，也没有 `.gitignore`。它的唯一校验是根 `check:website`（`node --check main.js` 语法检查 + `vite build` + `scripts/check-official-website-build.mjs` 对产物的断言）。
 - **`admin-console` 的 lint 会报约 31 条 react-hooks 警告**（`set-state-in-effect`、`exhaustive-deps`），ESLint 对 warning 返回 0，所以门禁仍通过。这些是真实的技术债，不是误报。
 - **无共享设计令牌**：`packages/` 里没有 token 包，四个应用各有独立的 CSS 变量命名空间；深色模式机制也不一致（`admin-console`、`official-website` 用 `:root[data-theme="dark"]`，`core-admin` 用 `html.dark` + 预绘制脚本，`exam-admin` 无主题切换）。
 - **`exam-admin/src/assets/css/admin.css` 在同一个文件内重复打开 `:root` 三次**，`--primary-color` 依次为 `#1b6ef3` → `#1d63e9` → `#1f5fbf`（最后一个生效），`--border-radius` 为 20px → 22px → 12px。改这个文件的配色前必须先合并重复的 `:root`。
 - **重复实现**：`sequentialPoller.js` 在 `core-admin` 与 `exam-admin` 各有一份且内容不同（无 SHA 相同）；`admin-console/src/client/experience.js` 把 `platform-browser-runtime` 的 `reportExperience` 与 FNV-1a 哈希整体抄了一份且已经漂移；`readCookie` 有 3 份副本；两个应用各有一套种子里生成的 SVG 头像生成器；四套 HTTP 层各自重复 `timeout = 12000`。
-- **`core-admin` 与 `exam-admin` 的开发端口都是 5173**（`core-admin` 的 `vite.config.js` 未设置 `server.port`），同时启动会冲突。
+- **`core-admin` 与 `exam-admin` 的开发端口已分开**：`core-admin` 固定 `5174`、`exam-admin` 固定 `5173`。`core-admin` 的本地 CORS 与 refresh cookie 信任列表已包含 `5174`，新增前端端口时必须同步 `services/core-api/services/corsService.js` 与 `services/core-api/utils/refreshCookie.js`，否则本地登录会跨域失败。
 - **`core-admin/README.md` 已过期**：标题仍是 `# admin-web`，写"React Router 7"而实际依赖是 8.x。
 
 ---
@@ -267,7 +270,7 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 5. **`services/exam-api` 使用旧式 `.eslintrc.json` + eslint 8**。
 6. **`services/iot-service` 的 `check` 不含 `test`**，由根 `check:iot` 在外部补跑。
 7. **小程序**：`smart-campus-miniapp` 的 `tsconfig.json` 排除了不存在的 `scratch` 目录；其 `preloadRule` 校验因 `app.json` 无 `preloadRule` 而暂为空转；`ROUTES` 缺 `SCAN` 与热泵设置项，导致 9 处硬编码路径。
-8. **前端**：`exam-admin` lint 实质无效（3 条规则、无 `eslint-plugin-vue`）；`official-website` 无 lint/test/check/`.gitignore`；`admin-console` 约 31 条 react-hooks 警告长期存在；无共享设计令牌包；`core-admin` 与 `exam-admin` 开发端口同为 5173；`exam-admin/src/assets/css/admin.css` 内重复打开 `:root` 三次导致同名令牌三重定义；`core-admin/README.md` 标题与依赖版本已过期。详见 §8。
+8. **前端**：`exam-admin` 已接入 `eslint-plugin-vue` 的 `flat/essential`（格式类规则有意不启用，避免批量重排），剩 41 条 `no-useless-escape` warning；`official-website` 无 lint/test/check/`.gitignore`；`admin-console` 约 31 条 react-hooks 警告长期存在；无共享设计令牌包；`exam-admin/src/assets/css/admin.css` 内重复打开 `:root` 三次导致同名令牌三重定义；`core-admin/README.md` 标题与依赖版本已过期。详见 §8。
 9. **Android**：设计约束已接入 `npm run check:android-design` 与 Android CI，检查业务层原生按钮/字段/弹窗、硬编码颜色/字号和非标准垂直间距。`AppAvatar`、`AppFilterBar`、`AppMetricDashboard`、`AppGroupedCard` 均有业务调用。少量行内 `TextButton`、专用验证码输入和身份码弹窗保留；不得据此另建普通页面组件体系。具体边界与 Debug 预览见 Android `AGENTS.md`。
 10. **前端 Vite 大版本四分**：5 / 7 / 7 / 8。与第 1 条同理，升级需独立评估。
 11. **小程序 README 过期**：曾描述不存在的 `backend/`、`admin-web/`、`admin-server/` 等目录（已在本轮修正）。若再发现文档描述不存在的东西，按"文档服从代码"处理：改文档，不改代码。

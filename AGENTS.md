@@ -53,7 +53,7 @@ MY/
 - **模块系统**：仓内 ESM 与 CJS 并存，**跟随所在目录既有形态**，不要跨服务统一。
 - **服务边界**：一个服务一个数据库（`platform_app`/`core_app`/`exam_app`/`campus_app`/`iot_app`/`notification_app`），**禁止跨服务直接读对方数据库**；功能归属见 [docs/architecture.md](docs/architecture.md) 的 *Feature ownership*，新功能必须扩展规范所有者，不得造第二份实现。
 - **内部认证**：用户身份走 `x-my-platform-sso`（Ed25519，15 秒），服务间走 HMAC `x-my-service-*` 签名（30 秒 + nonce）。禁止绕过网关直连业务容器，禁止自造第二套认证头。
-- **前端**：四个 Web 应用技术栈不同，**不要试图统一框架**；共享能力必须取自 `packages/`，不要在应用内抄一份。注意 `exam-admin` 的 lint 实质无效。
+- **前端**：四个 Web 应用技术栈不同，**不要试图统一框架**；共享能力必须取自 `packages/`，不要在应用内抄一份。`exam-admin` 的 lint 只跑 `flat/essential`（正确性），格式类规则未启用，**不要跑 `--fix` 批量重排**。`exam-admin/src/features/` 下的 composable 用 `message`/`messageBox` 参数注入提示能力（默认值即 `ElMessage`/`ElMessageBox`），新增 composable 照此办理、不要直接 import 后使用，否则无法单测。
 - **Android**：设计与 UI 红线见 [apps/android-app/AGENTS.md](apps/android-app/AGENTS.md)；版本只从 `gradle/libs.versions.toml` 取。仓内**没有** detekt/ktlint/spotless。
 - **提交**：一个提交只做一件事，标题必须有信息量（避免"修复"、"优化"单独成题）；缩进重排、依赖升级、功能改动不得混在同一提交。
 
