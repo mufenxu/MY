@@ -1906,9 +1906,16 @@ import { createAdminApi } from '@/api/admin';
 import { createMockAdminApi } from '@/api/adminMock';
 import { createCartoonAvatar } from '@/utils/cartoonAvatar';
 import { isUiPreviewMode } from '@/utils/uiPreview';
-import { fetchWithTimeout, IS_PLATFORM_SSO, logoutPlatformSession, resolveAppUrl } from '@/utils/runtime';
-import { createSequentialPoller } from '@/utils/sequentialPoller';
+import { IS_PLATFORM_SSO, logoutPlatformSession, resolveAppUrl } from '@/utils/runtime';
 import DashboardNavMenu from '@/components/DashboardNavMenu.vue';
+import { usePasswordDialog } from '@/features/account/usePasswordDialog';
+import { useExamResults } from '@/features/exam-results/useExamResults';
+import { usePersonalCategories } from '@/features/personal-categories/usePersonalCategories';
+import { useFeedback } from '@/features/feedback/useFeedback';
+import { usePaperShares } from '@/features/paper-share/usePaperShares';
+import { useLearningOperations } from '@/features/learning-operations/useLearningOperations';
+import { useWechatBinding } from '@/features/wechat-binding/useWechatBinding';
+import { useUserAssignments } from '@/features/user-assignments/useUserAssignments';
 
 const MiniLineChart = defineAsyncComponent(() => import('@/components/MiniLineChart.vue'));
 const QuestionQualityView = defineAsyncComponent(() => import('@/components/QuestionQualityView.vue'));
@@ -2438,16 +2445,6 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
         };
 
         // --- Bind Wechat Dialog ---
-        const bindDialog = reactive({
-            visible: false,
-            qrToken: '',
-            pollToken: '',
-            statusText: '正在获取二维码...'
-        });
-        let bindPoller = null;
-        let bindPollErrorCount = 0;
-        let bindCreateController = null;
-        let bindCreateSequence = 0;
         const runtimeConfig = reactive({
             scanLogin: {
                 enabled: false,
@@ -3060,35 +3057,6 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             }
         };
 
-        const resetShareForm = () => {
-            Object.assign(shareDialog.form, {
-                permission: 'view',
-                expireMode: '7d',
-                customExpiresAt: '',
-                maxAcceptEnabled: false,
-                maxAcceptCount: 0,
-                note: ''
-            });
-            shareDialog.result = null;
-            shareDialog.selectedShareId = '';
-        };
-
-        const buildShareExpiresAt = () => {
-            const mode = shareDialog.form.expireMode;
-            if (mode === 'forever') return null;
-            if (mode === 'custom') {
-                return shareDialog.form.customExpiresAt || null;
-            }
-
-            const daysMap = {
-                '1d': 1,
-                '7d': 7,
-                '30d': 30
-            };
-            const days = daysMap[mode] || 7;
-            return new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
-        };
-
         const renderQrcodeToElement = async (el, text, size = 180) => {
             if (!el || !text) return;
 
@@ -3112,156 +3080,22 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             });
         };
 
-        const renderShareQrcode = (scrollToResult = false) => {
-            nextTick(async () => {
-                const el = document.getElementById('paper-share-qrcode');
-                if (!el || !shareDialog.result) return;
-                const text = shareDialog.result.shareUrl || shareDialog.result.shareCode;
-                try {
-                    await renderQrcodeToElement(el, text, 180);
-                    if (scrollToResult) {
-                        document.querySelector('.share-result-panel')?.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'nearest',
-                        });
-                    }
-                } catch (err) {
-                    console.error('Render share QR code error:', err);
-                    ElMessage.error('二维码生成失败，请复制分享链接');
-                }
-            });
-        };
-
-        const getPaperShareIdentity = (share) => String(share?._id || share?.shareCode || '');
-
-        const selectPaperShare = (share) => {
-            if (!share) return;
-            shareDialog.result = { ...share };
-            shareDialog.selectedShareId = getPaperShareIdentity(share);
-            renderShareQrcode(true);
-        };
-
-        const getPaperShareRowClass = ({ row }) => (
-            shareDialog.selectedShareId && getPaperShareIdentity(row) === shareDialog.selectedShareId
-                ? 'is-selected-share'
-                : ''
-        );
-
-        const loadPaperShares = async () => {
-            if (!shareDialog.category?._id) return;
-            shareDialog.loading = true;
-            try {
-                const res = await adminApi.listPaperShares(shareDialog.category._id);
-                shareDialog.shares = res.data.data || [];
-            } catch (err) {
-                ElMessage.error('加载分享记录失败');
-            } finally {
-                shareDialog.loading = false;
-            }
-        };
-
-        const openShareDialog = async (exam) => {
-            if (isDemoManage.value) {
-                ElMessage.warning('示例题库不支持分享');
-                return;
-            }
-            if (exam?.readOnly) {
-                ElMessage.warning('只读试卷不能继续分享');
-                return;
-            }
-
-            shareDialog.category = exam;
-            shareDialog.visible = true;
-            resetShareForm();
-            shareDialog.shares = [];
-            await loadPaperShares();
-        };
-
-        const openCategoryAnalysis = async (exam) => {
-            if (!exam?._id) return;
-
-            analysisDialog.category = exam;
-            analysisDialog.visible = true;
-            analysisDialog.loading = true;
-            analysisDialog.data = null;
-
-            try {
-                const res = await adminApi.getCategoryAnalysis(exam._id);
-                analysisDialog.data = res.data.data;
-            } catch (err) {
-                console.error('Load category analysis error:', err);
-                ElMessage.error(err.response?.data?.message || '加载试卷分析失败');
-            } finally {
-                analysisDialog.loading = false;
-            }
-        };
-
-        const createPaperShare = async () => {
-            if (!shareDialog.category?._id) return;
-            const expiresAt = buildShareExpiresAt();
-            if (shareDialog.form.expireMode === 'custom' && !expiresAt) {
-                ElMessage.warning('请选择自定义过期时间');
-                return;
-            }
-
-            shareDialog.saving = true;
-            try {
-                const res = await adminApi.createPaperShare(shareDialog.category._id, {
-                    permission: shareDialog.form.permission,
-                    expiresAt,
-                    maxAcceptCount: shareDialog.form.maxAcceptEnabled
-                        ? Number(shareDialog.form.maxAcceptCount || 0)
-                        : 0,
-                    note: shareDialog.form.note || ''
-                });
-                shareDialog.result = res.data.data;
-                shareDialog.selectedShareId = getPaperShareIdentity(shareDialog.result);
-                ElMessage.success('分享已生成');
-                await loadPaperShares();
-                renderShareQrcode();
-            } catch (err) {
-                ElMessage.error(err.response?.data?.message || '生成分享失败');
-            } finally {
-                shareDialog.saving = false;
-            }
-        };
-
-        const copyText = async (text, successText = '已复制') => {
-            const value = String(text || '');
-            if (!value) return;
-            try {
-                if (navigator.clipboard && window.isSecureContext) {
-                    await navigator.clipboard.writeText(value);
-                } else {
-                    const textarea = document.createElement('textarea');
-                    textarea.value = value;
-                    textarea.setAttribute('readonly', '');
-                    textarea.style.position = 'fixed';
-                    textarea.style.opacity = '0';
-                    textarea.style.left = '-9999px';
-                    document.body.appendChild(textarea);
-                    textarea.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(textarea);
-                }
-                ElMessage.success(successText);
-            } catch (err) {
-                ElMessage.error('复制失败，请手动复制');
-            }
-        };
-
-        const revokePaperShare = async (share) => {
-            try {
-                await ElMessageBox.confirm('撤销后该分享码将不能继续被接收，确定撤销吗？', '撤销分享', { type: 'warning' });
-                await adminApi.revokePaperShare(share._id);
-                ElMessage.success('分享已撤销');
-                await loadPaperShares();
-            } catch (err) {
-                if (err !== 'cancel') {
-                    ElMessage.error(err.response?.data?.message || '撤销失败');
-                }
-            }
-        };
+        // --- Methods: Paper Share Logic ---
+        const {
+            selectPaperShare,
+            getPaperShareRowClass,
+            openShareDialog,
+            openCategoryAnalysis,
+            createPaperShare,
+            copyText,
+            revokePaperShare,
+        } = usePaperShares({
+            adminApi,
+            shareDialog,
+            analysisDialog,
+            isDemoManage,
+            renderQrcodeToElement,
+        });
 
         const openAcceptShareDialog = (code = '') => {
             acceptShareDialog.visible = true;
@@ -3383,402 +3217,65 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
         };
 
         // --- Exam Results Logic ---
-        const examResults = reactive({ list: [], total: 0 });
-        const examResultsFilter = reactive({ categoryId: '', userId: '' });
-        const selectedExamResults = ref([]);  // 选中的记录
-        const examResultsTable = ref(null);
-
-        // 批量删除弹窗
-        const deleteDialog = reactive({
-            visible: false,
-            mathQuestion: '',    // 数学题
-            mathAnswer: null,    // 正确答案
-            userInput: ''        // 用户输入
+        const {
+            examResults,
+            examResultsFilter,
+            selectedExamResults,
+            examResultsTable,
+            deleteDialog,
+            handleExamResultSelection,
+            clearExamResultSelection,
+            openDeleteDialog,
+            confirmBatchDelete,
+            loadExamResults,
+        } = useExamResults({
+            adminApi,
+            isConsoleMode,
+            loading,
+            beginViewRequest,
+            finishViewRequest,
+            quietRequestConfig,
         });
-
-        // 处理表格多选
-        const handleExamResultSelection = (selection) => {
-            selectedExamResults.value = selection;
-        };
-
-        const clearExamResultSelection = () => {
-            examResultsTable.value?.clearSelection?.();
-            selectedExamResults.value = [];
-        };
-
-        // 生成数学题
-        const generateMathQuestion = () => {
-            const a = Math.floor(Math.random() * 20) + 1;
-            const b = Math.floor(Math.random() * 20) + 1;
-            const operators = ['+', '-', '×'];
-            const op = operators[Math.floor(Math.random() * operators.length)];
-
-            let answer;
-            switch (op) {
-                case '+': answer = a + b; break;
-                case '-': answer = a - b; break;
-                case '×': answer = a * b; break;
-            }
-
-            deleteDialog.mathQuestion = `${a} ${op} ${b} = ?`;
-            deleteDialog.mathAnswer = answer;
-            deleteDialog.userInput = '';
-        };
-
-        // 打开删除确认弹窗
-        const openDeleteDialog = () => {
-            if (isConsoleMode.value) {
-                return;
-            }
-            if (selectedExamResults.value.length === 0) {
-                ElMessage.warning('请先选择要删除的记录');
-                return;
-            }
-            generateMathQuestion();
-            deleteDialog.visible = true;
-        };
-
-        // 确认批量删除
-        const confirmBatchDelete = async () => {
-            if (isConsoleMode.value) {
-                return;
-            }
-            const userAnswer = parseInt(deleteDialog.userInput);
-            if (isNaN(userAnswer) || userAnswer !== deleteDialog.mathAnswer) {
-                ElMessage.error('验证答案错误，请重新输入');
-                generateMathQuestion();  // 生成新题目
-                return;
-            }
-
-            try {
-                loading.value = true;
-                const ids = selectedExamResults.value.map(item => item._id);
-                const res = await adminApi.deleteExamResults(ids);
-
-                if (res.data.code === 0) {
-                    ElMessage.success(res.data.message);
-                    deleteDialog.visible = false;
-                    selectedExamResults.value = [];
-                    loadExamResults();  // 刷新列表
-                }
-            } catch (err) {
-                ElMessage.error('删除失败: ' + (err.response?.data?.message || err.message));
-            } finally {
-                loading.value = false;
-            }
-        };
-
-        const loadExamResults = async (page = 1) => {
-            if (isConsoleMode.value) {
-                return;
-            }
-            const controller = beginViewRequest('examResults');
-            try {
-                const res = await adminApi.listExamResults({
-                    page,
-                    pageSize: 20,
-                    categoryId: examResultsFilter.categoryId || undefined,
-                    userId: examResultsFilter.userId || undefined
-                }, quietRequestConfig(controller));
-                if (controller.signal.aborted) return;
-                if (res.data.code === 0) {
-                    examResults.list = res.data.data.list;
-                    examResults.total = res.data.data.total;
-                }
-            } catch (err) {
-                if (controller.signal.aborted) return;
-                ElMessage.error('加载考试记录失败');
-            } finally {
-                finishViewRequest('examResults', controller);
-            }
-        };
 
         // --- Feedback Logic ---
-        const feedbacks = reactive({ list: [], total: 0, page: 1, limit: 20 });
-        const feedbackFilter = reactive({
-            status: '',
-            keyword: '',
+        const {
+            feedbacks,
+            feedbackFilter,
+            feedbackCreateDialog,
+            feedbackCreateForm,
+            feedbackDetailDialog,
+            feedbackReplyForm,
+            loadFeedbacks,
+            openFeedbackCreateDialog,
+            submitFeedback,
+            openFeedbackDetail,
+            replyFeedback,
+            closeFeedback,
+        } = useFeedback({
+            adminApi,
+            isConsoleMode,
+            beginViewRequest,
+            finishViewRequest,
+            quietRequestConfig,
+            loadFeedbackSummary,
+            isFeedbackReplyUnread,
         });
-        const feedbackCreateDialog = reactive({
-            visible: false,
-            saving: false,
-        });
-        const feedbackCreateForm = reactive({
-            category: 'bug',
-            title: '',
-            content: '',
-            contact: '',
-        });
-        const feedbackDetailDialog = reactive({
-            visible: false,
-            saving: false,
-            item: null,
-        });
-        const feedbackReplyForm = reactive({
-            replyContent: '',
-            closeAfterReply: false,
-        });
-
-        const loadFeedbacks = async (page = 1) => {
-            const controller = beginViewRequest('feedbacks');
-            try {
-                const res = await adminApi.listFeedbacks({
-                    page,
-                    limit: feedbacks.limit,
-                    status: feedbackFilter.status || undefined,
-                    keyword: isConsoleMode.value ? undefined : (feedbackFilter.keyword || undefined),
-                }, quietRequestConfig(controller));
-                if (controller.signal.aborted) return;
-                if (res.data.code === 0) {
-                    feedbacks.list = res.data.data.list || [];
-                    feedbacks.total = res.data.data.total || 0;
-                    feedbacks.page = res.data.data.page || page;
-                    feedbacks.limit = res.data.data.limit || feedbacks.limit;
-                    await loadFeedbackSummary();
-                }
-            } catch (err) {
-                if (controller.signal.aborted) return;
-                ElMessage.error('加载反馈失败');
-            } finally {
-                finishViewRequest('feedbacks', controller);
-            }
-        };
-
-        const openFeedbackCreateDialog = () => {
-            if (!isConsoleMode.value) {
-                return;
-            }
-            Object.assign(feedbackCreateForm, {
-                category: 'bug',
-                title: '',
-                content: '',
-                contact: '',
-            });
-            feedbackCreateDialog.visible = true;
-        };
-
-        const submitFeedback = async () => {
-            if (!isConsoleMode.value) {
-                return;
-            }
-            if (!feedbackCreateForm.title.trim() || !feedbackCreateForm.content.trim()) {
-                ElMessage.warning('请填写反馈标题和详细说明');
-                return;
-            }
-
-            try {
-                feedbackCreateDialog.saving = true;
-                const res = await adminApi.createFeedback({
-                    category: feedbackCreateForm.category,
-                    title: feedbackCreateForm.title.trim(),
-                    content: feedbackCreateForm.content.trim(),
-                    contact: feedbackCreateForm.contact.trim(),
-                });
-                if (res.data.code === 0) {
-                    ElMessage.success('反馈已提交');
-                    feedbackCreateDialog.visible = false;
-                    await loadFeedbacks(1);
-                    await loadFeedbackSummary();
-                }
-            } catch (err) {
-                ElMessage.error(err.response?.data?.message || '提交反馈失败');
-            } finally {
-                feedbackCreateDialog.saving = false;
-            }
-        };
-
-        const openFeedbackDetail = async (item) => {
-            feedbackDetailDialog.item = item;
-            feedbackReplyForm.replyContent = item.replyContent || '';
-            feedbackReplyForm.closeAfterReply = false;
-            feedbackDetailDialog.visible = true;
-
-            if (isFeedbackReplyUnread(item)) {
-                try {
-                    const res = await adminApi.markFeedbackReplyRead(item._id);
-                    if (res.data.code === 0) {
-                        const readAt = res.data.data?.replyReadAt || new Date().toISOString();
-                        item.replyReadAt = readAt;
-                        if (feedbackDetailDialog.item?._id === item._id) {
-                            feedbackDetailDialog.item.replyReadAt = readAt;
-                        }
-                        await loadFeedbackSummary();
-                    }
-                } catch (err) {
-                    // Reading the detail should not be blocked by a best-effort read receipt update.
-                }
-            }
-        };
-
-        const replyFeedback = async () => {
-            if (isConsoleMode.value || !feedbackDetailDialog.item?._id) {
-                return;
-            }
-            if (!feedbackReplyForm.replyContent.trim()) {
-                ElMessage.warning('请输入回复内容');
-                return;
-            }
-
-            try {
-                feedbackDetailDialog.saving = true;
-                const res = await adminApi.replyFeedback(feedbackDetailDialog.item._id, {
-                    replyContent: feedbackReplyForm.replyContent.trim(),
-                    closeAfterReply: feedbackReplyForm.closeAfterReply,
-                });
-                if (res.data.code === 0) {
-                    ElMessage.success('回复已保存');
-                    feedbackDetailDialog.visible = false;
-                    await loadFeedbacks(feedbacks.page);
-                    await loadFeedbackSummary();
-                }
-            } catch (err) {
-                ElMessage.error(err.response?.data?.message || '保存回复失败');
-            } finally {
-                feedbackDetailDialog.saving = false;
-            }
-        };
-
-        const closeFeedback = async (item) => {
-            if (isConsoleMode.value || !item?._id) {
-                return;
-            }
-
-            try {
-                await ElMessageBox.confirm('确定关闭这条反馈吗？关闭后仍可查看历史回复。', '关闭反馈', {
-                    type: 'warning',
-                    confirmButtonText: '确认关闭',
-                    cancelButtonText: '取消',
-                });
-                const res = await adminApi.updateFeedbackStatus(item._id, { status: 'closed' });
-                if (res.data.code === 0) {
-                    ElMessage.success('反馈已关闭');
-                    feedbackDetailDialog.visible = false;
-                    await loadFeedbacks(feedbacks.page);
-                    await loadFeedbackSummary();
-                }
-            } catch (err) {
-                if (err !== 'cancel') {
-                    ElMessage.error(err.response?.data?.message || '关闭反馈失败');
-                }
-            }
-        };
 
         // --- Personal Category Supervision Logic ---
-        const personalCategories = reactive({
-            list: [],
-            total: 0,
-            page: 1,
-            limit: 20,
+        const {
+            personalCategories,
+            personalCategoryFilter,
+            personalCategoryDialog,
+            loadPersonalCategories,
+            loadPersonalCategoryQuestions,
+            openPersonalCategoryDetail,
+        } = usePersonalCategories({
+            adminApi,
+            isConsoleMode,
+            beginViewRequest,
+            finishViewRequest,
+            quietRequestConfig,
         });
-        const personalCategoryFilter = reactive({
-            keyword: '',
-            ownerStudyId: '',
-            publishStatus: 'all',
-            source: 'all',
-        });
-        const personalCategoryDialog = reactive({
-            visible: false,
-            loading: false,
-            questionsLoading: false,
-            category: null,
-            stats: null,
-            questions: [],
-            questionsTotal: 0,
-            questionsPage: 1,
-            questionsLimit: 50,
-        });
-
-        const buildPersonalCategoryParams = (page = 1) => ({
-            page,
-            limit: personalCategories.limit,
-            keyword: personalCategoryFilter.keyword || undefined,
-            ownerStudyId: personalCategoryFilter.ownerStudyId || undefined,
-            publishStatus: personalCategoryFilter.publishStatus || 'all',
-            source: personalCategoryFilter.source || 'all',
-        });
-
-        const loadPersonalCategories = async (page = 1) => {
-            if (isConsoleMode.value) {
-                return;
-            }
-            const controller = beginViewRequest('personalCategories');
-            try {
-                const res = await adminApi.listPersonalCategories(
-                    buildPersonalCategoryParams(page),
-                    quietRequestConfig(controller),
-                );
-                if (controller.signal.aborted) return;
-                if (res.data.code === 0) {
-                    const data = res.data.data || {};
-                    personalCategories.list = data.list || [];
-                    personalCategories.total = data.total || 0;
-                    personalCategories.page = data.page || page;
-                    personalCategories.limit = data.limit || personalCategories.limit;
-                }
-            } catch (err) {
-                if (controller.signal.aborted) return;
-                ElMessage.error(err.response?.data?.message || '加载个人题库失败');
-            } finally {
-                finishViewRequest('personalCategories', controller);
-            }
-        };
-
-        const loadPersonalCategoryQuestions = async (page = 1) => {
-            const categoryId = personalCategoryDialog.category?._id;
-            if (!categoryId) {
-                return;
-            }
-            personalCategoryDialog.questionsLoading = true;
-            try {
-                const res = await adminApi.listPersonalCategoryQuestions(categoryId, {
-                    page,
-                    limit: personalCategoryDialog.questionsLimit,
-                });
-                if (res.data.code === 0) {
-                    const data = res.data.data || {};
-                    personalCategoryDialog.questions = data.list || [];
-                    personalCategoryDialog.questionsTotal = data.total || 0;
-                    personalCategoryDialog.questionsPage = data.page || page;
-                    personalCategoryDialog.questionsLimit = data.limit || personalCategoryDialog.questionsLimit;
-                    if (data.category) {
-                        personalCategoryDialog.category = data.category;
-                    }
-                }
-            } catch (err) {
-                ElMessage.error(err.response?.data?.message || '加载题目失败');
-            } finally {
-                personalCategoryDialog.questionsLoading = false;
-            }
-        };
-
-        const openPersonalCategoryDetail = async (row) => {
-            if (!row?._id || isConsoleMode.value) {
-                return;
-            }
-
-            personalCategoryDialog.visible = true;
-            personalCategoryDialog.loading = true;
-            personalCategoryDialog.category = row;
-            personalCategoryDialog.stats = null;
-            personalCategoryDialog.questions = [];
-            personalCategoryDialog.questionsTotal = 0;
-            personalCategoryDialog.questionsPage = 1;
-
-            try {
-                const res = await adminApi.getPersonalCategory(row._id);
-                if (res.data.code === 0) {
-                    const data = res.data.data || {};
-                    personalCategoryDialog.category = data.category || row;
-                    personalCategoryDialog.stats = data.stats || null;
-                }
-                await loadPersonalCategoryQuestions(1);
-            } catch (err) {
-                ElMessage.error(err.response?.data?.message || '加载个人题库详情失败');
-                personalCategoryDialog.visible = false;
-            } finally {
-                personalCategoryDialog.loading = false;
-            }
-        };
 
         // --- User Management Logic ---
         const users = reactive({ list: [], total: 0 });
@@ -3891,251 +3388,33 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
             mathAnswer: null,
             userInput: ''
         });
-        const userAssignmentDialog = reactive({
-            visible: false,
-            loading: false,
-            saving: false,
-            user: null,
-            filterMajorIds: [],
-            form: {
-                majorCategoryIds: [],
-                categoryIds: [],
-            },
-            options: {
-                majorCategories: [],
-                categories: [],
-            },
+        // --- Learning Operations Logic ---
+        const {
+            learningPlans,
+            cohorts,
+            learningOpsTab,
+            learningPlanOptions,
+            cohortDialog,
+            learningPlanDialog,
+            learningOpsStats,
+            formatLearningDeadline,
+            learningPlanStateText,
+            learningPlanStateType,
+            learningCategoryLabel,
+            loadLearningOperations,
+            openCohortDialog,
+            saveCohort,
+            archiveCohort,
+            openLearningPlanDialog,
+            saveLearningPlan,
+            archiveLearningPlan,
+        } = useLearningOperations({
+            adminApi,
+            isConsoleMode,
+            beginViewRequest,
+            finishViewRequest,
+            quietRequestConfig,
         });
-        const learningPlans = ref([]);
-        const cohorts = ref([]);
-        const learningOpsTab = ref('plans');
-        const learningPlanOptions = reactive({
-            categories: [],
-            cohorts: [],
-            users: [],
-        });
-        const cohortDialog = reactive({
-            visible: false,
-            saving: false,
-            id: '',
-            form: {
-                name: '',
-                description: '',
-                memberOpenids: [],
-                status: 'active',
-            },
-        });
-        const learningPlanDialog = reactive({
-            visible: false,
-            saving: false,
-            id: '',
-            form: {
-                title: '',
-                description: '',
-                categoryIds: [],
-                cohortIds: [],
-                directUserOpenids: [],
-                dueAt: '',
-                targetScore: 60,
-                status: 'active',
-            },
-        });
-
-        const learningOpsStats = computed(() => {
-            const activePlans = learningPlans.value.filter((plan) => plan.status === 'active');
-            const assignedUsers = new Set(activePlans.flatMap((plan) => plan.userOpenids || [])).size;
-            return {
-                activePlans: activePlans.length,
-                assignedUsers,
-                overdueUsers: activePlans.reduce((sum, plan) => sum + (Number(plan.progress?.overdueCount) || 0), 0),
-            };
-        });
-
-        const formatLearningDeadline = (value) => {
-            if (!value) return '长期有效';
-            const date = new Date(value);
-            return Number.isNaN(date.getTime()) ? '未设置' : date.toLocaleString('zh-CN', {
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-            });
-        };
-
-        const learningPlanStateText = (plan) => ({
-            archived: '已归档',
-            completed: '已完成',
-            overdue: '有逾期',
-            active: '进行中',
-        }[plan.progress?.state || plan.status] || '进行中');
-
-        const learningPlanStateType = (plan) => ({
-            archived: 'info',
-            completed: 'success',
-            overdue: 'danger',
-            active: 'primary',
-        }[plan.progress?.state || plan.status] || 'primary');
-
-        const learningCategoryLabel = (category) => {
-            const majorName = category.majorCategoryId?.name || '';
-            return majorName ? `${majorName} / ${category.name}` : category.name;
-        };
-
-        const loadLearningOperations = async () => {
-            if (isConsoleMode.value) return;
-            const controller = beginViewRequest('learningPlans');
-            try {
-                const config = quietRequestConfig(controller);
-                const [plansRes, cohortsRes, optionsRes] = await Promise.all([
-                    adminApi.listLearningPlans({ status: 'all' }, config),
-                    adminApi.listCohorts({ status: 'all' }, config),
-                    adminApi.getLearningPlanOptions(config),
-                ]);
-                if (controller.signal.aborted) return;
-                learningPlans.value = plansRes.data.code === 0 ? (plansRes.data.data || []) : [];
-                cohorts.value = cohortsRes.data.code === 0 ? (cohortsRes.data.data || []) : [];
-                if (optionsRes.data.code === 0) {
-                    Object.assign(learningPlanOptions, {
-                        categories: optionsRes.data.data?.categories || [],
-                        cohorts: optionsRes.data.data?.cohorts || [],
-                        users: optionsRes.data.data?.users || [],
-                    });
-                }
-            } catch (err) {
-                if (!controller.signal.aborted) {
-                    ElMessage.error(err.response?.data?.message || '学习计划数据加载失败');
-                }
-            } finally {
-                finishViewRequest('learningPlans', controller);
-            }
-        };
-
-        const openCohortDialog = (cohort = null) => {
-            cohortDialog.id = cohort?._id || '';
-            cohortDialog.form.name = cohort?.name || '';
-            cohortDialog.form.description = cohort?.description || '';
-            cohortDialog.form.memberOpenids = [...(cohort?.memberOpenids || [])];
-            cohortDialog.form.status = cohort?.status || 'active';
-            cohortDialog.visible = true;
-        };
-
-        const saveCohort = async () => {
-            const name = cohortDialog.form.name.trim();
-            if (!name) {
-                ElMessage.warning('请输入班组名称');
-                return;
-            }
-            cohortDialog.saving = true;
-            try {
-                const payload = {
-                    name,
-                    description: cohortDialog.form.description.trim(),
-                    memberOpenids: cohortDialog.form.memberOpenids,
-                    ...(cohortDialog.id ? { status: cohortDialog.form.status } : {}),
-                };
-                const res = await adminApi.saveCohort(cohortDialog.id, payload);
-                if (res.data.code === 0) {
-                    ElMessage.success(res.data.message || '班组已保存');
-                    cohortDialog.visible = false;
-                    await loadLearningOperations();
-                }
-            } catch (err) {
-                ElMessage.error(err.response?.data?.message || '班组保存失败');
-            } finally {
-                cohortDialog.saving = false;
-            }
-        };
-
-        const archiveCohort = async (cohort) => {
-            try {
-                await ElMessageBox.confirm(`归档班组“${cohort.name}”？关联计划会立即重算覆盖考生。`, '归档班组', {
-                    type: 'warning',
-                    confirmButtonText: '归档',
-                    cancelButtonText: '取消',
-                });
-                const res = await adminApi.archiveCohort(cohort._id);
-                if (res.data.code === 0) {
-                    ElMessage.success('班组已归档');
-                    await loadLearningOperations();
-                }
-            } catch (err) {
-                if (err !== 'cancel' && err !== 'close') {
-                    ElMessage.error(err.response?.data?.message || '班组归档失败');
-                }
-            }
-        };
-
-        const openLearningPlanDialog = (plan = null) => {
-            learningPlanDialog.id = plan?._id || '';
-            learningPlanDialog.form.title = plan?.title || '';
-            learningPlanDialog.form.description = plan?.description || '';
-            learningPlanDialog.form.categoryIds = (plan?.categoryIds || []).map((item) => String(item?._id || item));
-            learningPlanDialog.form.cohortIds = (plan?.cohortIds || []).map((item) => String(item?._id || item));
-            learningPlanDialog.form.directUserOpenids = [...(plan?.directUserOpenids || [])];
-            learningPlanDialog.form.dueAt = plan?.dueAt || '';
-            learningPlanDialog.form.targetScore = Number(plan?.targetScore ?? 60);
-            learningPlanDialog.form.status = plan?.status || 'active';
-            learningPlanDialog.visible = true;
-        };
-
-        const saveLearningPlan = async () => {
-            const form = learningPlanDialog.form;
-            if (!form.title.trim()) {
-                ElMessage.warning('请输入计划名称');
-                return;
-            }
-            if (form.categoryIds.length === 0) {
-                ElMessage.warning('请至少选择一份试卷');
-                return;
-            }
-            if (form.cohortIds.length === 0 && form.directUserOpenids.length === 0) {
-                ElMessage.warning('请至少选择一个班组或一位考生');
-                return;
-            }
-            learningPlanDialog.saving = true;
-            try {
-                const payload = {
-                    title: form.title.trim(),
-                    description: form.description.trim(),
-                    categoryIds: form.categoryIds,
-                    cohortIds: form.cohortIds,
-                    directUserOpenids: form.directUserOpenids,
-                    dueAt: form.dueAt || null,
-                    targetScore: form.targetScore,
-                    ...(learningPlanDialog.id ? { status: form.status } : {}),
-                };
-                const res = await adminApi.saveLearningPlan(learningPlanDialog.id, payload);
-                if (res.data.code === 0) {
-                    ElMessage.success(res.data.message || '学习计划已保存');
-                    learningPlanDialog.visible = false;
-                    await loadLearningOperations();
-                }
-            } catch (err) {
-                ElMessage.error(err.response?.data?.message || '学习计划保存失败');
-            } finally {
-                learningPlanDialog.saving = false;
-            }
-        };
-
-        const archiveLearningPlan = async (plan) => {
-            try {
-                await ElMessageBox.confirm(`归档学习计划“${plan.title}”？`, '归档学习计划', {
-                    type: 'warning',
-                    confirmButtonText: '归档',
-                    cancelButtonText: '取消',
-                });
-                const res = await adminApi.archiveLearningPlan(plan._id);
-                if (res.data.code === 0) {
-                    ElMessage.success('学习计划已归档');
-                    await loadLearningOperations();
-                }
-            } catch (err) {
-                if (err !== 'cancel' && err !== 'close') {
-                    ElMessage.error(err.response?.data?.message || '学习计划归档失败');
-                }
-            }
-        };
 
         const loadUsers = async (page = 1) => {
             if (isConsoleMode.value) {
@@ -4371,375 +3650,55 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
                     authType.value = session.getAuthType();
                     session.setUser(res.data.data);
                 }
-            } catch (e) { }
-        };
-
-        // --- Methods: Bind Logic ---
-        const openBindDialog = () => {
-            if (isConsoleMode.value) {
-                ElMessage.info('个人题库身份使用扫码登录，无需单独绑定微信');
-                return;
-            }
-            if (!getScanLoginConfig().enabled) {
-                ElMessage.warning('扫码绑定暂未开启');
-                return;
-            }
-            bindDialog.visible = true;
-            bindDialog.statusText = '正在获取二维码...';
-            // Clear old code
-            nextTick(() => {
-                if (document.getElementById('bind-qrcode')) {
-                    document.getElementById('bind-qrcode').innerHTML = '';
-                }
-            });
-            initBindQrcode();
-        };
-
-        const initBindQrcode = async () => {
-            stopBindRequests();
-            bindPollErrorCount = 0;
-
-            if (!getScanLoginConfig().enabled) {
-                bindDialog.statusText = '扫码绑定未开启';
-                return;
-            }
-
-            const requestSequence = bindCreateSequence;
-            const controller = new AbortController();
-            bindCreateController = controller;
-
-            const oldQrToken = sessionStorage.getItem('bind_qr_token') || '';
-
-            try {
-                const requestBody = {
-                    intent: 'admin_bind',
-                };
-                if (oldQrToken) {
-                    requestBody.oldQrToken = oldQrToken;
-                }
-                const res = await fetchWithTimeout(`${getScanLoginConfig().apiBase}/qrcode/create`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody),
-                    signal: controller.signal,
-                });
-                const payload = await res.json();
-                if (controller.signal.aborted || requestSequence !== bindCreateSequence) return;
-                const data = payload.data || payload;
-                if (res.ok && payload.code === 0 && data.qrToken && data.pollToken) {
-                    bindDialog.qrToken = data.qrToken;
-                    bindDialog.pollToken = data.pollToken;
-                    sessionStorage.setItem('bind_qr_token', data.qrToken);
-                    sessionStorage.setItem('bind_qr_poll_token', data.pollToken);
-
-                    const codeContent = data.qrCodeText || `miniprogram-login://scan?qrToken=${data.qrToken}`;
-
-                    nextTick(async () => {
-                        try {
-                            if (controller.signal.aborted || requestSequence !== bindCreateSequence) return;
-                            await renderQrcodeToElement(document.getElementById('bind-qrcode'), codeContent, 180);
-                            if (controller.signal.aborted || requestSequence !== bindCreateSequence) return;
-                        } catch (err) {
-                            console.error('Render bind QR code error:', err);
-                            bindDialog.statusText = '浜岀淮鐮佺敓鎴愬け璐ワ紝璇峰埛鏂板悗閲嶈瘯';
-                        }
-                    });
-
-                    bindDialog.statusText = '请在小程序“我的 -> 扫码登录电脑端”中扫码';
-                    startBindPolling();
-                } else {
-                    bindDialog.statusText = '二维码获取失败: ' + ((payload && payload.message) || '未知错误');
-                }
-            } catch (err) {
-                if (controller.signal.aborted || requestSequence !== bindCreateSequence) return;
-                bindDialog.statusText = '网络请求失败，请稍后重试';
-            } finally {
-                if (bindCreateController === controller) {
-                    bindCreateController = null;
-                }
+            } catch (e) {
+                // 个人信息刷新失败不阻塞后台主流程，登录态以会话接口为准。
             }
         };
 
-        const groupedAssignmentCategories = computed(() => {
-            const groups = {};
-            const majorMap = {};
-            (userAssignmentDialog.options.majorCategories || []).forEach((item) => {
-                majorMap[item._id] = item;
-            });
-
-            const filterSet = new Set(userAssignmentDialog.filterMajorIds || []);
-
-            (userAssignmentDialog.options.categories || []).forEach((item) => {
-                const majorId = item.majorCategoryId?._id || item.majorCategoryId || '';
-                
-                if (filterSet.size > 0 && !filterSet.has(String(majorId))) {
-                    return;
-                }
-
-                const groupKey = majorId ? String(majorId) : 'ungrouped';
-                if (!groups[groupKey]) {
-                    groups[groupKey] = {
-                        id: groupKey,
-                        name: majorId ? (majorMap[groupKey]?.name || '未命名科目') : '未分组试卷',
-                        sortOrder: majorId ? (majorMap[groupKey]?.sortOrder || 0) : 999999,
-                        items: [],
-                    };
-                }
-                groups[groupKey].items.push(item);
-            });
-
-            return Object.values(groups)
-                .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, 'zh-Hans-CN'))
-                .map((group) => ({
-                    ...group,
-                    items: group.items.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN')),
-                }));
+        // --- User Assignment Logic ---
+        const {
+            userAssignmentDialog,
+            groupedAssignmentCategories,
+            assignmentDialogStats,
+            openUserAssignmentDialog,
+            saveUserAssignments,
+        } = useUserAssignments({
+            adminApi,
+            isConsoleMode,
+            loadUsers,
         });
 
-        const assignmentDialogStats = computed(() => {
-            const selectedIds = new Set(userAssignmentDialog.form.categoryIds || []);
-            const visibleCount = groupedAssignmentCategories.value
-                .reduce((sum, group) => sum + group.items.length, 0);
-
-            return {
-                selectedCount: selectedIds.size,
-                visibleCount,
-            };
+        // --- Wechat Binding Logic ---
+        const {
+            bindDialog,
+            openBindDialog,
+            stopBindRequests,
+            unbindWechat,
+        } = useWechatBinding({
+            adminApi,
+            isConsoleMode,
+            getScanLoginConfig,
+            renderQrcodeToElement,
+            refreshUserInfo,
         });
-
-        const openUserAssignmentDialog = async (user) => {
-            if (isConsoleMode.value) {
-                return;
-            }
-            userAssignmentDialog.visible = true;
-            userAssignmentDialog.loading = true;
-            userAssignmentDialog.user = user;
-            userAssignmentDialog.filterMajorIds = [];
-            userAssignmentDialog.form.majorCategoryIds = [];
-            userAssignmentDialog.form.categoryIds = [];
-            userAssignmentDialog.options.majorCategories = [];
-            userAssignmentDialog.options.categories = [];
-
-            try {
-                const res = await adminApi.getUserAssignments(user.openid);
-                if (res.data.code === 0) {
-                    const data = res.data.data || {};
-                    const majorIds = (data.assignment?.majorCategoryIds || []).map(String);
-                    const catIds = new Set((data.assignment?.categoryIds || []).map(String));
-                    
-                    if (majorIds.length > 0) {
-                        const majorIdSet = new Set(majorIds);
-                        (data.availableCategories || []).forEach(cat => {
-                            const catMajorId = cat.majorCategoryId?._id || cat.majorCategoryId || '';
-                            if (majorIdSet.has(String(catMajorId))) {
-                                catIds.add(String(cat._id));
-                            }
-                        });
-                    }
-                    
-                    userAssignmentDialog.form.majorCategoryIds = [];
-                    userAssignmentDialog.form.categoryIds = Array.from(catIds);
-                    userAssignmentDialog.options.majorCategories = data.availableMajorCategories || [];
-                    userAssignmentDialog.options.categories = data.availableCategories || [];
-                }
-            } catch (err) {
-                ElMessage.error('加载分配数据失败');
-                userAssignmentDialog.visible = false;
-            } finally {
-                userAssignmentDialog.loading = false;
-            }
-        };
-
-        const saveUserAssignments = async () => {
-            if (isConsoleMode.value || !userAssignmentDialog.user?.openid) {
-                return;
-            }
-
-            try {
-                userAssignmentDialog.saving = true;
-                const res = await adminApi.saveUserAssignments(userAssignmentDialog.user.openid, {
-                    majorCategoryIds: [],
-                    categoryIds: userAssignmentDialog.form.categoryIds,
-                });
-                if (res.data.code === 0) {
-                    ElMessage.success('分配保存成功');
-                    userAssignmentDialog.visible = false;
-                    loadUsers();
-                }
-            } catch (err) {
-                ElMessage.error(err.response?.data?.message || '分配保存失败');
-            } finally {
-                userAssignmentDialog.saving = false;
-            }
-        };
-
-        const startBindPolling = () => {
-            stopBindPolling();
-            bindPoller = createSequentialPoller(async (signal) => {
-                    const res = await fetchWithTimeout(
-                        `${getScanLoginConfig().apiBase}/qrcode/status?qrToken=${encodeURIComponent(bindDialog.qrToken)}&pollToken=${encodeURIComponent(bindDialog.pollToken)}`,
-                        { cache: 'no-store', signal },
-                        8000,
-                    );
-                    const payload = await res.json();
-                    if (!res.ok || payload.code !== 0) {
-                        throw new Error(payload.message || '二维码状态获取失败');
-                    }
-                    bindPollErrorCount = 0;
-                    const data = payload.data || payload;
-
-                    if (data.status === 'scanned') {
-                        bindDialog.statusText = '已扫码，请在手机确认';
-                    } else if (data.status === 'confirmed') {
-                        sessionStorage.removeItem('bind_qr_token');
-                        sessionStorage.removeItem('bind_qr_poll_token');
-                        bindDialog.statusText = '验证成功，正在绑定...';
-                        await doBind(data.tempAuthCode);
-                        return false;
-                    } else if (data.status === 'expired' || data.status === 'cancelled') {
-                        sessionStorage.removeItem('bind_qr_token');
-                        sessionStorage.removeItem('bind_qr_poll_token');
-                        bindDialog.statusText = '二维码已过期，请刷新';
-                        return false;
-                    }
-                    return true;
-            }, {
-                interval: 2000,
-                onError: () => {
-                    bindPollErrorCount += 1;
-                    if (bindPollErrorCount >= 3) {
-                        bindDialog.statusText = '二维码状态获取失败，请刷新后重试';
-                        return false;
-                    }
-                    return true;
-                },
-            });
-            bindPoller.start();
-        };
-
-        const stopBindPolling = () => {
-            bindPoller?.stop();
-            bindPoller = null;
-        };
-
-        const stopBindCreation = () => {
-            bindCreateSequence += 1;
-            bindCreateController?.abort();
-            bindCreateController = null;
-        };
-
-        const stopBindRequests = () => {
-            stopBindPolling();
-            stopBindCreation();
-        };
-
-        const doBind = async (tempAuthCode) => {
-            try {
-                const res = await adminApi.bindWechat(tempAuthCode);
-                if (res.data.code === 0) {
-                    ElMessage.success('绑定成功');
-                    bindDialog.visible = false;
-                    refreshUserInfo();
-                } else {
-                    bindDialog.statusText = res.data.message;
-                    ElMessage.error(res.data.message);
-                }
-            } catch (err) {
-                ElMessage.error(err.response?.data?.message || '绑定失败');
-                bindDialog.statusText = '绑定失败';
-            }
-        };
-
-        const unbindWechat = async () => {
-            if (isConsoleMode.value) {
-                return;
-            }
-            try {
-                await ElMessageBox.confirm('确定解除与微信的绑定吗？解除后将无法使用扫码登录。', '提示', {
-                    confirmButtonText: '确定解绑',
-                    cancelButtonText: '取消',
-                    type: 'warning'
-                });
-
-                const res = await adminApi.unbindWechat();
-                if (res.data.code === 0) {
-                    ElMessage.success('解绑成功');
-                    refreshUserInfo();
-                }
-            } catch (err) {
-                if (err !== 'cancel') {
-                    ElMessage.error(err.response?.data?.message || '解绑失败');
-                }
-            }
-        };
 
         // --- Methods: Change Password ---
-        const passwordDialog = reactive({
-            visible: false,
-            loading: false
+        const {
+            passwordDialog,
+            passwordForm,
+            openPasswordDialog,
+            submitChangePassword,
+        } = usePasswordDialog({
+            adminApi,
+            isConsoleMode,
+            isPlatformSso: IS_PLATFORM_SSO,
+            onChanged: () => {
+                setTimeout(() => {
+                    session.clear();
+                    router.push('/login');
+                }, 1500);
+            },
         });
-        const passwordForm = reactive({
-            oldPassword: '',
-            newPassword: '',
-            confirmPassword: ''
-        });
-
-        const openPasswordDialog = () => {
-            if (isConsoleMode.value) {
-                ElMessage.info('个人题库身份不使用账号密码登录');
-                return;
-            }
-            passwordForm.oldPassword = '';
-            passwordForm.newPassword = '';
-            passwordForm.confirmPassword = '';
-            passwordDialog.visible = true;
-        };
-
-        const submitChangePassword = async () => {
-            if (isConsoleMode.value) {
-                return;
-            }
-            if (!passwordForm.oldPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
-                ElMessage.warning('请填写完整信息');
-                return;
-            }
-            if (passwordForm.newPassword.length < 12) {
-                ElMessage.warning('新密码长度不能少于 12 位');
-                return;
-            }
-            if (!/[a-z]/.test(passwordForm.newPassword)
-                || !/[A-Z]/.test(passwordForm.newPassword)
-                || !/\d/.test(passwordForm.newPassword)
-                || !/[^A-Za-z0-9]/.test(passwordForm.newPassword)) {
-                ElMessage.warning('新密码需包含大小写字母、数字和特殊符号');
-                return;
-            }
-            if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-                ElMessage.warning('两次输入的新密码不一致');
-                return;
-            }
-
-            try {
-                passwordDialog.loading = true;
-                const res = await adminApi.changePassword({
-                    oldPassword: passwordForm.oldPassword,
-                    newPassword: passwordForm.newPassword
-                });
-                if (res.data.code === 0) {
-                    ElMessage.success(IS_PLATFORM_SSO ? '考试后台独立密码已修改' : '密码修改成功，请重新登录');
-                    passwordDialog.visible = false;
-                    if (IS_PLATFORM_SSO) return;
-                    setTimeout(() => {
-                        session.clear();
-                        router.push('/login');
-                    }, 1500);
-                }
-            } catch (err) {
-                ElMessage.error(err.response?.data?.message || '修改密码失败');
-            } finally {
-                passwordDialog.loading = false;
-            }
-        };
 
         
 </script>

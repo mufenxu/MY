@@ -19,11 +19,12 @@ test('globally referenced icons remain in the explicit registration set', () => 
 test('QR creation requests are cancelled when their surface closes', () => {
   const login = readSource('src', 'views', 'LoginView.vue');
   const dashboard = readSource('src', 'views', 'DashboardView.vue');
+  const binding = readSource('src', 'features', 'wechat-binding', 'useWechatBinding.js');
 
   assert.match(login, /stopQrCreation[\s\S]*?qrCreateController\?\.abort\(\)/);
   assert.match(login, /qrcode\/create[\s\S]*?signal:\s*controller\.signal/);
   assert.match(dashboard, /@close="stopBindRequests"/);
-  assert.match(dashboard, /stopBindCreation[\s\S]*?bindCreateController\?\.abort\(\)/);
+  assert.match(binding, /stopBindCreation[\s\S]*?bindCreateController\?\.abort\(\)/);
 });
 
 test('global HTTP errors remain visible unless a request opts out', () => {
