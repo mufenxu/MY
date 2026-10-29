@@ -153,7 +153,7 @@ class AppViewModel(
         viewModelScope,
         api,
         ::forceReauthentication,
-        canRun = { mutableState.value.let { it.user != null && !it.locked && it.busyAction != "logout" } },
+        canRun = { mutableState.value.canRunRequest() },
     ) { error, message ->
         mutableState.update { it.copy(error = error, message = message) }
     }
@@ -209,7 +209,7 @@ class AppViewModel(
     private val waterValves = WaterValveStateHolder(
         viewModelScope,
         api,
-        canRun = { mutableState.value.let { it.user != null && !it.locked && it.busyAction != "logout" } },
+        canRun = { mutableState.value.canRunRequest() },
         onSessionExpired = ::forceReauthentication,
     )
     val waterValveState = waterValves.state
@@ -218,7 +218,7 @@ class AppViewModel(
     val librarySeats = LibrarySeatStateHolder(viewModelScope, api.campus, ::forceReauthentication)
     val chaoxing = ChaoxingStateHolder(
         viewModelScope, api.campus.chaoxing,
-        canRun = { mutableState.value.let { it.user != null && !it.locked && it.busyAction != "logout" } },
+        canRun = { mutableState.value.canRunRequest() },
         accountName = sessionStore::readActiveUsername,
         onSessionExpired = ::forceReauthentication,
     )
@@ -283,8 +283,7 @@ class AppViewModel(
                     val username = sessionStore.readLastUsername()
                     api.setAccount(sessionStore.readActiveUsername())
                     if (!hasSavedSession) {
-                        MyControlWidgetProvider.clear(getApplication())
-                        CourseWidgetProvider.clear(getApplication())
+                        clearAllWidgets()
                     }
                     mutableState.update { current ->
                         current.copy(
@@ -301,6 +300,7 @@ class AppViewModel(
                 }
                 if (autoUnlock) unlockSession()
                 refreshLoginCapabilities()
+                notifyPendingCrash()
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
                 mutableState.update { it.copy(booting = false, locked = true, error = "本地安全状态加载失败，请重新打开应用。") }
@@ -391,8 +391,7 @@ class AppViewModel(
                         error = "本地安全会话已失效，请重新登录。",
                     )
                 }
-                MyControlWidgetProvider.clear(getApplication())
-                CourseWidgetProvider.clear(getApplication())
+                clearAllWidgets()
                 return@launch
             }
             runCatching { api.withRequestMetadata { api.auth.authStatus() } }
@@ -413,8 +412,7 @@ class AppViewModel(
                                 error = "登录会话已过期，请重新登录。",
                             )
                         }
-                        MyControlWidgetProvider.clear(getApplication())
-                        CourseWidgetProvider.clear(getApplication())
+                        clearAllWidgets()
                     } else {
                         setAccountScope(user.username)
                         mutableState.update {
@@ -464,8 +462,7 @@ class AppViewModel(
         clearAccountScopedState()
         sessionStore.clear()
         mutableState.update { it.copy(booting = false, locked = false, user = null, error = null) }
-        MyControlWidgetProvider.clear(getApplication())
-        CourseWidgetProvider.clear(getApplication())
+        clearAllWidgets()
     }
 
     fun login(
@@ -730,8 +727,7 @@ class AppViewModel(
                         error = "登录会话已过期，请重新登录。",
                     )
                 }
-                MyControlWidgetProvider.clear(getApplication())
-                CourseWidgetProvider.clear(getApplication())
+                clearAllWidgets()
             }
         }
     }
@@ -989,8 +985,7 @@ class AppViewModel(
                         hiddenHomeQuickActions = it.hiddenHomeQuickActions,
                     )
                 }
-                MyControlWidgetProvider.clear(getApplication())
-                CourseWidgetProvider.clear(getApplication())
+                clearAllWidgets()
             }
         }
     }
@@ -1448,26 +1443,6 @@ class AppViewModel(
     fun closeGoogleAccountDesk() {
         mutableState.update { it.copy(googleAccountDeskOpen = false) }
     }
-    fun openGitHubProjects() {
-        mutableState.update {
-            it.copy(
-                selectedTab = MainTab.Operations,
-                accountManagementOpen = false,
-                googleAccountDeskOpen = false,
-                githubProjectsOpen = true,
-                globalSearchOpen = false,
-                workspaceDestination = null,
-                error = null,
-                message = null,
-            )
-        }
-        refreshGitHubProjects()
-    }
-
-    fun closeGitHubProjects() {
-        mutableState.update { it.copy(githubProjectsOpen = false) }
-    }
-
     fun loadGitHubRepositories() {
         if (mutableState.value.let { it.user == null || it.locked || it.busyAction == "logout" } || githubRepositoriesJob?.isActive == true) return
         githubRepositoriesJob = accountRequestScope.launch {
@@ -2339,6 +2314,27 @@ class AppViewModel(
         if (snapshotChanged) publishWidget()
     }
 
+    /** 上次运行异常退出时只提示一次，并指引到「我的 → 诊断日志」导出。 */
+    private suspend fun notifyPendingCrash() {
+        val application = getApplication<Application>()
+        val pending = runCatching {
+            withContext(Dispatchers.IO) { cn.pxyb.mycontrol.data.CrashReporter.hasUnnotified(application) }
+        }.getOrDefault(false)
+        if (!pending) return
+        mutableState.update {
+            it.copy(message = "上次运行异常退出，可在「我的 → 诊断日志」导出记录反馈。")
+        }
+        runCatching {
+            withContext(Dispatchers.IO) { cn.pxyb.mycontrol.data.CrashReporter.markNotified(application) }
+        }
+    }
+
+    /** 账号态失效时两个桌面小组件必须成对清空，避免残留上一账号的数据。 */
+    private fun clearAllWidgets() {
+        MyControlWidgetProvider.clear(getApplication())
+        CourseWidgetProvider.clear(getApplication())
+    }
+
     private suspend fun publishWidget() {
         val current = mutableState.value
         withContext(Dispatchers.IO) {
@@ -2420,8 +2416,7 @@ class AppViewModel(
             homeQuickActionOrder = current.homeQuickActionOrder,
             hiddenHomeQuickActions = current.hiddenHomeQuickActions,
         )
-        MyControlWidgetProvider.clear(getApplication())
-        CourseWidgetProvider.clear(getApplication())
+        clearAllWidgets()
     }
 
     private fun reloadPersonalState() = notifications.reloadLocal()
@@ -2630,3 +2625,6 @@ private data class AssistantInputs(
 
 internal fun operationalAlertsReady(incidentsLoaded: Boolean, tasksLoaded: Boolean): Boolean =
     incidentsLoaded && tasksLoaded
+
+/** 会话可用且未处于退出流程时，才允许发起需要登录态的请求。 */
+internal fun AppUiState.canRunRequest(): Boolean = user != null && !locked && busyAction != "logout"

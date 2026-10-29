@@ -77,6 +77,12 @@ android {
             isDebuggable = false
             isMinifyEnabled = true
             isShrinkResources = true
+            // ML Kit 的中文 OCR 与条码模型是捆绑原生库，四套 ABI 合计约 61MB。
+            // 正式包只服务真机，x86/x86_64 仅供模拟器使用；调试与性能采集变体不受影响，
+            // 否则基线配置文件生成会在 x86_64 模拟器上装不上包。
+            ndk {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            }
             if (releaseSigningConfigured) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -160,6 +166,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.coil.compose)
     implementation(libs.coil.svg)
+    implementation(libs.coil.network.okhttp)
     implementation(project(":core:network"))
     implementation(project(":core:security"))
     implementation(libs.mlkit.barcode.scanning)

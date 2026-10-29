@@ -1,5 +1,8 @@
 package cn.pxyb.mycontrol.ui.feature.profile
 
+import android.content.Intent
+import android.widget.Toast
+import cn.pxyb.mycontrol.data.CrashReporter
 import cn.pxyb.mycontrol.ui.components.display.AppGroupedCard
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import androidx.compose.foundation.layout.FlowRow
@@ -29,6 +32,7 @@ import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import cn.pxyb.mycontrol.ui.components.layout.AppScanIcon
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.FileDownload
@@ -44,9 +48,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +64,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.ui.components.button.AppButton
@@ -121,6 +130,16 @@ fun ProfileScreen(
     val isTablet = useTwoPaneLayout()
     val listState = rememberLazyListState()
     val dark = isAppInDarkTheme()
+    val exportScope = rememberCoroutineScope()
+    var crashReportCount by remember { mutableStateOf<Int?>(null) }
+    var crashReportTime by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        val (count, time) = withContext(Dispatchers.IO) {
+            CrashReporter.reportCount(context) to CrashReporter.latestReportTime(context)
+        }
+        crashReportCount = count
+        crashReportTime = time
+    }
     val accountSections: @Composable () -> Unit = {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             ProfileSectionTitle("安全", "保护当前平台账号与登录设备")
@@ -163,6 +182,32 @@ fun ProfileScreen(
                 AppActionRow("关于与更新", subtitle = "当前版本 v${BuildConfig.VERSION_NAME} · 检查更新", icon = Icons.Outlined.Info, onClick = { showUpdateDialog = true; onCheckUpdates() })
                 AppDivider()
                 AppActionRow("隐私政策", subtitle = "了解数据的收集、存储与保护方式", icon = Icons.Outlined.PrivacyTip, onClick = { showPrivacyPolicy = true })
+                AppDivider()
+                AppActionRow(
+                    title = "诊断日志",
+                    subtitle = when {
+                        crashReportCount == null -> "正在读取本地异常记录"
+                        crashReportCount == 0 -> "暂无异常记录，应用运行正常"
+                        else -> "最近 ${crashReportTime} · 共 ${crashReportCount} 条，点击导出"
+                    },
+                    icon = Icons.Outlined.BugReport,
+                    enabled = (crashReportCount ?: 0) > 0,
+                    onClick = {
+                        exportScope.launch {
+                            val text = withContext(Dispatchers.IO) { CrashReporter.exportText(context) }
+                            if (text.isNullOrBlank()) {
+                                Toast.makeText(context, "暂无可导出的诊断日志", Toast.LENGTH_SHORT).show()
+                            } else {
+                                val share = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_SUBJECT, "MY Control 诊断日志")
+                                    putExtra(Intent.EXTRA_TEXT, text)
+                                }
+                                context.startActivity(Intent.createChooser(share, "导出诊断日志"))
+                            }
+                        }
+                    },
+                )
             }
         }
     }

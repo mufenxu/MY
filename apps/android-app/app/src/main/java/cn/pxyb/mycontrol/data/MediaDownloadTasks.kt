@@ -4,6 +4,7 @@ import android.app.DownloadManager
 import android.content.Context
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import cn.pxyb.mycontrol.core.security.EncryptedPreferenceCodec
 import java.util.UUID
 import org.json.JSONArray
 import org.json.JSONObject
@@ -27,10 +28,13 @@ internal data class MediaDownloadTask(
 // 只记录本页面创建的任务，避免把 APK 更新等其他系统下载混入视频列表。
 internal class MediaDownloadTasks(private val context: Context) {
   private val preferences = context.getSharedPreferences("media_download_tasks", Context.MODE_PRIVATE)
+  // 标题与来源地址可反推用户观看行为，与全应用其它业务数据一样按 Keystore 加密落盘。
+  // 旧的明文值由编解码器在首次读取时原地迁移为加密形式。
+  private val codec = EncryptedPreferenceCodec(preferences, "my_control_media_download_tasks")
 
   fun read(account: String?): List<MediaDownloadTask> = synchronized(lock) {
     val key = scopedStorageKey(account, "tasks") ?: return@synchronized emptyList()
-    val array = runCatching { JSONArray(preferences.getString(key, "[]")) }.getOrElse { JSONArray() }
+    val array = runCatching { JSONArray(codec.read(key) ?: "[]") }.getOrElse { JSONArray() }
     (0 until array.length()).mapNotNull { index ->
       val item = array.optJSONObject(index) ?: return@mapNotNull null
       MediaDownloadTask(item.optString("id"), item.optBoolean("hls"), item.optString("title"),
@@ -64,7 +68,7 @@ internal class MediaDownloadTasks(private val context: Context) {
         .put("cover", task.cover).put("format", task.format).put("source", task.source)
         .put("createdAt", task.createdAt).put("state", task.state).put("detail", task.detail).put("percent", task.percent))
     }
-    preferences.edit().putString(key, array.toString()).apply()
+    codec.write(key, array.toString())
   }
 
   // 在页面前台的 IO 协程轮询，真实状态分别由 DownloadManager 与 WorkManager 提供。

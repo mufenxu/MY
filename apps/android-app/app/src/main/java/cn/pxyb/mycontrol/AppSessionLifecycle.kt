@@ -8,6 +8,8 @@ import cn.pxyb.mycontrol.data.SessionStore
 class MyControlApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        // 放在最前面：越早安装，越能覆盖启动阶段的崩溃。
+        cn.pxyb.mycontrol.data.CrashReporter.install(this)
         cn.pxyb.mycontrol.data.RuntimeSecurity.initialize(this)
         AppSessionLifecycle.initialize(this)
     }

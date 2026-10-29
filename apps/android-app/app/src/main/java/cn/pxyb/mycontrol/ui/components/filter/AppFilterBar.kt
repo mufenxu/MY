@@ -112,7 +112,7 @@ fun <T> AppFilterBar(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        items(items) { item ->
+        items(items, key = { labelProvider(it) }) { item ->
             AppFilterChip(
                 label = labelProvider(item),
                 selected = item == selectedItem,

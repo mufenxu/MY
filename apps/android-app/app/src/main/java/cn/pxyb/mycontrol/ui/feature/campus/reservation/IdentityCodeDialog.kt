@@ -60,10 +60,10 @@ import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.feedback.AppSkeletonMedia
 import cn.pxyb.mycontrol.ui.theme.MotionTokens
-import coil.compose.AsyncImage
-import coil.decode.SvgDecoder
-import coil.request.CachePolicy
-import coil.request.ImageRequest
+import coil3.compose.AsyncImage
+import coil3.svg.SvgDecoder
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter

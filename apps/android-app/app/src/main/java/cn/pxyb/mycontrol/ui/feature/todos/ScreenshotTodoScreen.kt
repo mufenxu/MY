@@ -19,7 +19,7 @@ import cn.pxyb.mycontrol.ui.components.feedback.*
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.layout.*
 import cn.pxyb.mycontrol.ui.components.picker.*
-import coil.compose.AsyncImage
+import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
