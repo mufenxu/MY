@@ -24,7 +24,8 @@ MY/
 |   |-- campus-service/         # campus connector service
 |   `-- iot-service/            # MQTT and device service
 |-- packages/
-|   `-- platform-auth/          # shared platform SSO and signed service-request helpers
+|   |-- platform-auth/          # shared platform SSO and signed service-request helpers
+|   `-- platform-browser-runtime/ # shared browser runtime: SSO, timeout fetch, telemetry
 |-- automation/ct8-automation/  # non-resident automation tasks
 |-- config/                     # service registry and canonical topology without secrets
 |-- docs/                       # architecture and operations docs
