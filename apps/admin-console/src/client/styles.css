@@ -8018,7 +8018,7 @@ input:focus-visible {
 
 .backup-quality-strip {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-bottom: 12px;
 }
@@ -8042,38 +8042,6 @@ input:focus-visible {
 .quality-item > span { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 .quality-item strong { overflow: hidden; color: var(--ink); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .quality-item small { overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
-
-.backup-drill-evidence {
-  grid-column: 1 / -1;
-  padding: 9px 11px;
-  background: var(--panel-solid);
-  border: 1px solid var(--line);
-  border-radius: 9px;
-}
-
-.backup-drill-evidence summary {
-  color: var(--ink);
-  cursor: pointer;
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.backup-drill-evidence > div {
-  display: grid;
-  gap: 7px;
-  margin-top: 9px;
-}
-
-.backup-drill-evidence > div > span {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--muted);
-  font-size: 9px;
-}
-
-.backup-drill-evidence strong { color: var(--text); font-size: 9px; }
 
 @media (max-width: 1180px) {
   .ops-kpis,

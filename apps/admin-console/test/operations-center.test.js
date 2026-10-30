@@ -193,12 +193,14 @@ test('gateway latency requires consecutive breach and recovery evaluations', asy
   assert.equal((await store.listIncidents({ status: 'resolved' })).some((incident) => incident.key === 'gateway:core:latency'), true);
 });
 
-test('backup quality enforces restore drill age, RTO, and offsite incident recovery', async () => {
+test('backup quality retires restore alerts while preserving backup freshness and offsite recovery', async () => {
   let current = new Date('2026-07-18T12:00:00.000Z');
   let offsiteHealthy = false;
   const restoreFinishedAt = current.toISOString();
-  let restoreStartedAt = new Date(current.getTime() - 45 * 60000).toISOString();
+  const restoreStartedAt = new Date(current.getTime() - 45 * 60000).toISOString();
   const store = createMemoryOperationsStore({ now: () => current });
+  await store.createIncident({ key: 'backup:restore-drill', source: 'backup' });
+  await store.createIncident({ key: 'backup:restore-rto', source: 'backup', status: 'acknowledged' });
   const center = createOperationsCenter({
     services: [service],
     monitor: { refresh: async () => [{ ...service, state: 'healthy', checkedAt: current.toISOString(), latencyMs: 10 }] },
@@ -227,39 +229,37 @@ test('backup quality enforces restore drill age, RTO, and offsite incident recov
     config: {
       monitorIntervalMs: 30000,
       backupRpoHours: 26,
-      restoreDrillMaxAgeDays: 90,
-      restoreRtoMinutes: 30,
       offsiteBackupStatusUrl: 'https://offsite.example/status',
       workspaceRoot: process.cwd(),
     },
   });
 
   const breached = await center.getBackupQuality({ force: true });
-  assert.equal(breached.restoreDrillState, 'verified');
-  assert.equal(breached.restoreDurationMinutes, 45);
-  assert.equal(breached.restoreRtoState, 'breached');
+  assert.equal(breached.latestBackup.name, 'backup');
+  assert.equal(breached.rpoState, 'healthy');
   assert.equal(breached.offsite.healthy, false);
   assert.deepEqual(
     (await store.listIncidents({ status: 'open' }))
       .filter((incident) => incident.key.startsWith('backup:'))
       .map((incident) => incident.key)
       .sort(),
-    ['backup:offsite', 'backup:restore-rto'],
+    ['backup:offsite'],
   );
+  assert.equal(await store.findActiveIncident('backup:restore-rto'), null);
+  const retiredKeys = (await store.listIncidents({ status: 'resolved' })).map((incident) => incident.key);
+  assert.ok(retiredKeys.includes('backup:restore-drill'));
+  assert.ok(retiredKeys.includes('backup:restore-rto'));
 
   offsiteHealthy = true;
-  restoreStartedAt = new Date(current.getTime() - 10 * 60000).toISOString();
   const recovered = await center.getBackupQuality({ force: true });
-  assert.equal(recovered.restoreRtoState, 'met');
   assert.equal(recovered.offsite.healthy, true);
   const resolvedKeys = (await store.listIncidents({ status: 'resolved' })).map((incident) => incident.key);
   assert.ok(resolvedKeys.includes('backup:offsite'));
-  assert.ok(resolvedKeys.includes('backup:restore-rto'));
 
   current = new Date(current.getTime() + 91 * 86400000);
-  const overdue = await center.getBackupQuality({ force: true });
-  assert.equal(overdue.restoreDrillState, 'overdue');
-  assert.ok((await store.listIncidents({ status: 'open' })).some((incident) => incident.key === 'backup:restore-drill'));
+  const fresh = await center.getBackupQuality({ force: true });
+  assert.equal(fresh.rpoState, 'healthy');
+  assert.equal((await store.listIncidents({ status: 'open' })).length, 0);
 });
 
 test('external blackbox replay records outages and explicit sampling gaps', async () => {

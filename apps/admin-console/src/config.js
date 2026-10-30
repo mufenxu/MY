@@ -225,8 +225,6 @@ export function loadConfig(env = process.env) {
     backupRunnerToken: env.PLATFORM_BACKUP_RUNNER_TOKEN || '',
     backupRunnerTimeoutMs: parseInteger(env.PLATFORM_BACKUP_RUNNER_TIMEOUT_MS, 8000, { min: 1000, max: 60000 }),
     backupRpoHours: parseInteger(env.PLATFORM_BACKUP_RPO_HOURS, 26, { min: 1, max: 720 }),
-    restoreDrillMaxAgeDays: parseInteger(env.PLATFORM_RESTORE_DRILL_MAX_AGE_DAYS, 90, { min: 1, max: 365 }),
-    restoreRtoMinutes: parseInteger(env.PLATFORM_RESTORE_RTO_MINUTES, 30, { min: 1, max: 24 * 60 }),
     backupScheduleEnabled: parseBoolean(env.PLATFORM_BACKUP_SCHEDULE_ENABLED, false),
     backupScheduleTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(env.PLATFORM_BACKUP_SCHEDULE_TIME || '02:30'))
       ? String(env.PLATFORM_BACKUP_SCHEDULE_TIME || '02:30')

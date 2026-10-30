@@ -109,9 +109,8 @@ Recommended policy:
 - daily backups retained for 7 days;
 - weekly backups retained for 4 weeks;
 - monthly backups retained for 6 months;
-- a restore drill at least once per month;
-- the deployed alerting targets are RPO 26 hours and RTO 30 minutes
-  (`PLATFORM_BACKUP_RPO_HOURS` and `PLATFORM_RESTORE_RTO_MINUTES` in `compose.yml` / `.env.example`).
+- the deployed backup freshness alerting target is RPO 26 hours
+  (`PLATFORM_BACKUP_RPO_HOURS` in `compose.yml` / `.env.example`).
 
 Note: the automated local retention implemented today is a single flat window capped at 14 days
 (`BACKUP_RETENTION_DAYS`). The daily/weekly/monthly tiering above is the target policy and is not

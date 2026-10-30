@@ -71,7 +71,7 @@ npm run dev
 - `GET/POST/DELETE /api/security/passkeys/*`：Passkey 注册与撤销
 - `POST /api/security/password`：修改当前管理员密码并撤销全部会话
 - `GET /api/releases`：镜像版本与 GitHub Actions 状态
-- `GET /api/backups/quality`：RPO、异地同步与恢复演练状态
+- `GET /api/backups/quality`：最近备份、RPO、异地同步与自动备份计划
 
 ## 安全边界
 
@@ -89,7 +89,7 @@ npm run dev
 - 连续失败达到阈值后生成事件，连续恢复后自动关闭；维护窗口内继续采样但不产生新事件；
 - 事件产生和恢复可以通过内部通知服务推送企业微信；
 - 登录、事件处置、备份、恢复、发布、会话撤销和设置变更都写入审计日志；
-- 灾备质量页检查 RPO、恢复演练、异地同步状态和每日自动备份计划；
+- 灾备质量页检查最近备份、RPO、异地同步状态和每日自动备份计划；
 - 发布中心读取 GitHub Actions 和镜像版本，写操作默认关闭；
 - 发布构建、不可变镜像产物和部署结果持久化到 MongoDB，支持实际运行版本与配置漂移对比；
 - 任务中心只聚合各服务持久化任务和配置审批，不把浏览器缓存当作执行状态；

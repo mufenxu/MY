@@ -1278,16 +1278,8 @@ export function BackupQualityStrip() {
   return (
     <section className="backup-quality-strip" aria-label="灾备质量">
       <div className={`quality-item ${quality.rpoState}`}><Clock3 size={18} /><span><strong>{quality.ageHours === null ? '暂无' : `${quality.ageHours} 小时`}</strong><small>最近可恢复备份 · RPO {quality.rpoHours}h</small></span></div>
-      <div className={`quality-item ${quality.restoreDrillState === 'verified' ? 'healthy' : 'warning'}`}><DatabaseBackup size={18} /><span><strong>{quality.lastRestoreDrillAt ? formatDateTime(quality.lastRestoreDrillAt) : '尚未演练'}</strong><small>{quality.nextRestoreDrillAt ? `下次应在 ${formatDateTime(quality.nextRestoreDrillAt)} 前完成` : '需要完成首次恢复演练'}</small></span></div>
-      <div className={`quality-item ${quality.restoreRtoState === 'met' ? 'healthy' : quality.restoreRtoState === 'breached' ? 'warning' : 'unknown'}`}><Gauge size={18} /><span><strong>{quality.restoreDurationMinutes === null ? '暂无耗时' : `${quality.restoreDurationMinutes} 分钟`}</strong><small>最近恢复耗时 · RTO {quality.restoreRtoMinutes} 分钟</small></span></div>
       <div className={`quality-item ${quality.offsite.healthy === true ? 'healthy' : quality.offsite.configured ? 'warning' : 'unknown'}`}><Cloud size={18} /><span><strong>{quality.offsite.healthy === true ? '同步正常' : quality.offsite.configured ? '同步异常' : '未配置'}</strong><small>异地备份状态</small></span></div>
       <div className={`quality-item ${quality.schedule.enabled ? 'healthy' : 'unknown'}`}><FileClock size={18} /><span><strong>{quality.schedule.enabled ? `每日 ${quality.schedule.time}` : '手动执行'}</strong><small>自动备份计划</small></span></div>
-      {(quality.restoreDrills || []).length > 0 && (
-        <details className="backup-drill-evidence">
-          <summary>最近恢复演练证据（{quality.restoreDrills.length}）</summary>
-          <div>{quality.restoreDrills.slice(0, 5).map((drill) => <span key={drill.id}><strong>{formatDateTime(drill.occurredAt)}</strong><small>{drill.durationMinutes === null ? '耗时未记录' : `${drill.durationMinutes} 分钟`} · {drill.actor || 'system'} · {drill.backupName || '备份归档'}</small></span>)}</div>
-        </details>
-      )}
     </section>
   );
 }

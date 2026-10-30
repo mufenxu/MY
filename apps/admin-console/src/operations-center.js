@@ -751,6 +751,17 @@ export function createOperationsCenter({
 
   async function getBackupQuality({ force = false } = {}) {
     if (!force && backupQualityCache && now().getTime() - backupQualityCachedAt < 300000) return backupQualityCache;
+    for (const key of ['backup:restore-drill', 'backup:restore-rto']) {
+      const incident = await store.findActiveIncident(key);
+      if (!incident) continue;
+      const timestamp = now().toISOString();
+      await store.updateIncident(incident.id, {
+        status: 'resolved',
+        resolvedAt: timestamp,
+        resolvedBy: 'system',
+      }, { type: 'resolved', at: timestamp, actor: 'system', message: '恢复演练监控已移除，自动关闭历史事件' });
+      await recordAudit({ actor: 'system', action: 'incident.resolved', targetType: 'backup', targetId: key, details: { incidentId: incident.id, reason: 'restore_monitoring_removed' } });
+    }
     const settings = await getSettings();
     const status = await backups.getStatus();
     const offsite = config.offsiteBackupStatusUrl
@@ -766,32 +777,6 @@ export function createOperationsCenter({
     const valid = (status.backups || []).filter((backup) => backup.restorable && backup.createdAt);
     const latest = valid.sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))[0] || null;
     const ageHours = latest ? durationHours(latest.createdAt, now()) : null;
-    const restores = (status.jobs || []).filter((job) => job.type === 'restore' && job.status === 'succeeded');
-    const lastRestore = restores.sort((left, right) => Date.parse(right.finishedAt || right.createdAt) - Date.parse(left.finishedAt || left.createdAt))[0] || null;
-    const persistedRestores = await store.listAudit({ action: 'backup.restore_succeeded', limit: 10 });
-    const lastPersistedRestore = persistedRestores[0] || null;
-    const restoreDrillMaxAgeDays = config.restoreDrillMaxAgeDays || 90;
-    const restoreRtoMinutes = config.restoreRtoMinutes || 30;
-    const lastRestoreDrillAt = lastRestore?.finishedAt || lastPersistedRestore?.occurredAt || null;
-    const restoreDrillAgeDays = lastRestoreDrillAt ? durationHours(lastRestoreDrillAt, now()) / 24 : null;
-    const restoreDrillState = restoreDrillAgeDays === null
-      ? 'missing'
-      : restoreDrillAgeDays <= restoreDrillMaxAgeDays ? 'verified' : 'overdue';
-    const nextRestoreDrillAt = lastRestoreDrillAt
-      ? new Date(Date.parse(lastRestoreDrillAt) + restoreDrillMaxAgeDays * 86400000).toISOString()
-      : null;
-    const persistedDurationMs = lastPersistedRestore?.details?.durationMs;
-    const restoreDurationMs = lastRestore?.startedAt && lastRestore?.finishedAt
-      ? Math.max(0, Date.parse(lastRestore.finishedAt) - Date.parse(lastRestore.startedAt))
-      : persistedDurationMs !== null && persistedDurationMs !== undefined && Number.isFinite(Number(persistedDurationMs))
-        ? Number(persistedDurationMs)
-        : Number.NaN;
-    const restoreDurationMinutes = Number.isFinite(restoreDurationMs)
-      ? Math.round((restoreDurationMs / 60000) * 10) / 10
-      : null;
-    const restoreRtoState = restoreDurationMinutes === null
-      ? 'unknown'
-      : restoreDurationMinutes <= restoreRtoMinutes ? 'met' : 'breached';
     const rpoState = ageHours === null ? 'unknown' : ageHours <= settings.backupRpoHours ? 'healthy' : 'overdue';
     backupQualityCache = {
       latestBackup: latest,
@@ -800,23 +785,6 @@ export function createOperationsCenter({
       ageHours: ageHours === null ? null : Math.round(ageHours * 10) / 10,
       rpoHours: settings.backupRpoHours,
       rpoState,
-      lastRestoreDrillAt,
-      restoreDrillAgeDays: restoreDrillAgeDays === null ? null : Math.round(restoreDrillAgeDays * 10) / 10,
-      restoreDrillMaxAgeDays,
-      restoreDrillState,
-      nextRestoreDrillAt,
-      restoreDurationMinutes,
-      restoreRtoMinutes,
-      restoreRtoState,
-      restoreDrills: persistedRestores.map((event) => ({
-        id: event.id,
-        occurredAt: event.occurredAt,
-        actor: event.actor,
-        backupName: event.targetId || null,
-        durationMinutes: Number.isFinite(Number(event.details?.durationMs))
-          ? Math.round((Number(event.details.durationMs) / 60000) * 10) / 10
-          : null,
-      })),
       offsite,
       schedule: settings.backupSchedule,
       capabilities: status.capabilities,
@@ -826,30 +794,6 @@ export function createOperationsCenter({
     metrics?.recordBackupQuality?.(backupQualityCache);
 
     await Promise.all([
-      evaluateDerivedIncident({
-        key: 'backup:restore-drill',
-        active: restoreDrillState !== 'verified',
-        severity: restoreDrillState === 'missing' ? 'critical' : 'warning',
-        title: restoreDrillState === 'missing' ? 'Restore drill is missing' : 'Restore drill is overdue',
-        description: restoreDrillState === 'missing'
-          ? 'No successful restore drill has been recorded.'
-          : `The last successful restore drill is ${backupQualityCache.restoreDrillAgeDays} days old.`,
-        source: 'backup',
-        observedState: restoreDrillState,
-        details: { lastRestoreDrillAt, maxAgeDays: restoreDrillMaxAgeDays },
-      }, settings),
-      evaluateDerivedIncident({
-        key: 'backup:restore-rto',
-        active: restoreRtoState === 'breached',
-        severity: 'warning',
-        title: 'Restore exceeded the recovery time objective',
-        description: restoreDurationMinutes === null
-          ? 'Restore duration is unavailable.'
-          : `The last restore took ${restoreDurationMinutes} minutes; target is ${restoreRtoMinutes} minutes.`,
-        source: 'backup',
-        observedState: restoreRtoState,
-        details: { restoreDurationMinutes, rtoMinutes: restoreRtoMinutes },
-      }, settings),
       evaluateDerivedIncident({
         key: 'backup:offsite',
         active: offsite.configured && offsite.healthy === false,
