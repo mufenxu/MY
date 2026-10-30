@@ -197,6 +197,16 @@ exports.submitOrder = async (req, res) => {
             school, user, pass, categoryId, courses, duration
         });
         const suppliedKey = String(idempotencyKey || req.get('Idempotency-Key') || '').trim();
+        // 规范 §9 要求幂等键可界定；之前完全没校验，超长键会直接进哈希与唯一索引。
+        // 只卡上限、不设 16 字符下限，避免打断已经在传短键的调用方。
+        if (suppliedKey.length > 128) {
+            return fail(res, {
+                status: 400,
+                code: 'VALIDATION_FAILED',
+                message: '幂等键不能超过 128 个字符。',
+                details: [{ field: 'Idempotency-Key', message: '长度必须在 128 个字符以内' }],
+            });
+        }
         const legacyKey = !suppliedKey;
         const effectiveKey = suppliedKey || `legacy:${requestDigest}:${Math.floor(Date.now() / 300000)}`;
         const idempotencyKeyHash = sha256(effectiveKey);

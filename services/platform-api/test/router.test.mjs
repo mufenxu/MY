@@ -9,6 +9,7 @@ import { createApp } from '../../../apps/admin-console/src/app.js';
 import { loadConfig } from '../../../apps/admin-console/src/config.js';
 import { parseCookies } from '../../../apps/admin-console/src/auth.js';
 import { createTestDevice } from '../../../apps/admin-console/test/helpers/native-device.js';
+import { writeRateLimited } from '../src/http-errors.mjs';
 import {
   SERVICE_ROUTE_TABLE,
   boundedProxyTimeout,
@@ -488,6 +489,12 @@ test('proxy timeout aborts a stalled upstream and returns 504', async () => {
       const response = await request(port, '/api/core/stalled');
       assert.equal(response.status, 504);
       assert.equal(response.body.code, 'UPSTREAM_TIMEOUT');
+      // 网关自己的 5xx 必须和业务服务同一份信封，否则前端拿不到 requestId 排障。
+      assert.equal(response.body.ok, false);
+      assert.equal(response.body.success, false);
+      assert.equal(response.body.message, response.body.error);
+      assert.match(response.body.message, /[\u4e00-\u9fa5]/);
+      assert.equal(response.body.requestId, response.headers['x-request-id']);
     });
   } finally {
     upstream.closeAllConnections?.();
@@ -684,4 +691,45 @@ test('gateway exposes its own livez/readyz/version probes', async () => {
     const healthz = await request(port, '/healthz');
     assert.equal(healthz.status, 503);
   });
+});
+
+test('unconfigured upstream returns a unified 503 envelope', async () => {
+  const router = createPlatformRouter({ portalApp: echoApp('portal') });
+
+  await withServer(router, async (port) => {
+    const response = await request(port, '/api/campus/courses');
+    assert.equal(response.status, 503);
+    assert.equal(response.body.ok, false);
+    assert.equal(response.body.success, false);
+    assert.equal(response.body.code, 'UPSTREAM_NOT_CONFIGURED');
+    assert.equal(response.body.requestId, response.headers['x-request-id']);
+  });
+});
+
+test('rate-limited responses carry Retry-After and RateLimit headers', () => {
+  const headers = {};
+  const res = {
+    headersSent: false,
+    destroyed: false,
+    getHeader: (name) => headers[name.toLowerCase()],
+    setHeader: (name, value) => { headers[name.toLowerCase()] = value; },
+    writeHead(status, outgoing) { this.status = status; this.outgoing = outgoing; },
+    end(body) { this.rawBody = body; },
+  };
+  res.setHeader('X-Request-Id', 'req-rate-1');
+
+  writeRateLimited(res, { code: 'AI_RATE_LIMITED', retryAfter: 17, limit: 20 });
+
+  assert.equal(res.status, 429);
+  assert.equal(res.outgoing['Retry-After'], '17');
+  assert.equal(res.outgoing['RateLimit-Limit'], '20');
+  assert.equal(res.outgoing['RateLimit-Remaining'], '0');
+  assert.equal(res.outgoing['RateLimit-Reset'], '17');
+
+  const body = JSON.parse(res.rawBody);
+  assert.equal(body.ok, false);
+  assert.equal(body.code, 'AI_RATE_LIMITED');
+  assert.equal(body.retryAfter, 17);
+  assert.equal(body.requestId, 'req-rate-1');
+  assert.match(body.message, /[\u4e00-\u9fa5]/);
 });

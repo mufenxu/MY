@@ -1,4 +1,6 @@
 // Lightweight in-memory rate limiter for login and API abuse protection.
+const { createErrorPayload } = require('./requestContext');
+
 const rateLimitStore = new Map();
 const rateLimitCleanupTimer = setInterval(() => {
   const now = Date.now();
@@ -29,15 +31,17 @@ function createLimiter({ windowMs, max, message, name }) {
 
     record.count++;
 
-    res.setHeader('X-RateLimit-Limit', max);
-    res.setHeader('X-RateLimit-Remaining', Math.max(0, max - record.count));
-    res.setHeader('X-RateLimit-Reset', Math.ceil(record.resetTime / 1000));
+    // 与 express-rate-limit 的 standardHeaders 保持同一套名字（规范 §6）。
+    res.setHeader('RateLimit-Limit', max);
+    res.setHeader('RateLimit-Remaining', Math.max(0, max - record.count));
+    res.setHeader('RateLimit-Reset', Math.ceil(record.resetTime / 1000));
 
     if (record.count > max) {
-      res.setHeader('Retry-After', Math.ceil((record.resetTime - now) / 1000));
-      return res.status(429).json({
-        error: message || '请求过于频繁，请稍后再试。'
-      });
+      const retryAfter = Math.max(1, Math.ceil((record.resetTime - now) / 1000));
+      res.setHeader('Retry-After', String(retryAfter));
+      return res.status(429).json(
+        createErrorPayload(req, 429, message || '请求过于频繁，请稍后再试。', 'RATE_LIMITED'),
+      );
     }
 
     next();

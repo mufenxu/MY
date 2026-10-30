@@ -6,6 +6,34 @@ const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
 const config = require('../config');
 const logger = require('../config/logger');
+const { fail } = require('../utils/respond');
+
+/**
+ * 429 的统一写法：JSON 信封 + Retry-After。
+ *
+ * 不要退回 `message: { code: 429, message: '...' }`——那样响应体里的 code 是数字
+ * HTTP 状态（规范 §2.1 明令禁止），而且没有 Retry-After，客户端只能盲等。
+ */
+function rateLimitHandler(message) {
+    return (req, res, _next, options = {}) => {
+        const resetTime = req.rateLimit && req.rateLimit.resetTime instanceof Date
+            ? req.rateLimit.resetTime.getTime()
+            : null;
+        const windowMs = Number(options.windowMs) || 60_000;
+        const retryAfter = Math.max(
+            1,
+            resetTime ? Math.ceil((resetTime - Date.now()) / 1000) : Math.ceil(windowMs / 1000),
+        );
+        res.setHeader('Retry-After', String(retryAfter));
+        return fail(res, {
+            status: 429,
+            code: 'RATE_LIMITED',
+            message,
+            retryAfter,
+            requestId: req.id,
+        });
+    };
+}
 
 const configuredMemoryLimit = Number.parseInt(process.env.RATE_LIMIT_FALLBACK_MAX_KEYS || '', 10);
 const FALLBACK_MEMORY_MAX_KEYS = Number.isFinite(configuredMemoryLimit)
@@ -158,7 +186,7 @@ const authLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     store: createMongoStore('rate_limit_auth'),
-    message: { code: 429, message: '登录请求过于频繁，请15分钟后再试' },
+    handler: rateLimitHandler('登录请求过于频繁，请15分钟后再试'),
 });
 
 const apiLimiter = rateLimit({
@@ -167,7 +195,7 @@ const apiLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     store: createMongoStore('rate_limit_api'),
-    message: { code: 429, message: '请求过于频繁，请稍后再试' },
+    handler: rateLimitHandler('请求过于频繁，请稍后再试'),
 });
 
 const clientLimiter = rateLimit({
@@ -176,7 +204,7 @@ const clientLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     store: createMongoStore('rate_limit_client'),
-    message: { code: 429, message: '请求过于频繁，请稍后再试' },
+    handler: rateLimitHandler('请求过于频繁，请稍后再试'),
 });
 
 const aiLimiter = rateLimit({
@@ -185,7 +213,7 @@ const aiLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     store: createMongoStore('rate_limit_ai'),
-    message: { code: 429, message: 'AI解析请求过于频繁，请稍后再试' },
+    handler: rateLimitHandler('AI解析请求过于频繁，请稍后再试'),
 });
 
 const qrCreateLimiter = rateLimit({
@@ -194,7 +222,7 @@ const qrCreateLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     store: createMongoStore('rate_limit_qr_create'),
-    message: { code: 429, message: '二维码创建过于频繁，请稍后再试' },
+    handler: rateLimitHandler('二维码创建过于频繁，请稍后再试'),
 });
 
 const qrStatusLimiter = rateLimit({
@@ -203,12 +231,13 @@ const qrStatusLimiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     store: createMongoStore('rate_limit_qr_status'),
-    message: { code: 429, message: '二维码状态查询过于频繁，请稍后再试' },
+    handler: rateLimitHandler('二维码状态查询过于频繁，请稍后再试'),
 });
 
 module.exports = {
     FALLBACK_MEMORY_MAX_KEYS,
     MongoRateLimitStore,
+    rateLimitHandler,
     authLimiter,
     apiLimiter,
     clientLimiter,

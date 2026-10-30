@@ -1,3 +1,5 @@
+import { writeError } from './http-errors.mjs'
+
 const DEFAULT_MODEL = 'gpt-4o-mini'
 const DEFAULT_TIMEOUT_MS = 30_000
 const DEFAULT_RATE_LIMIT_PER_MINUTE = 12
@@ -217,6 +219,15 @@ export function createAssistantRateLimiter({ limit = DEFAULT_RATE_LIMIT_PER_MINU
       hits.set(key, timestamps)
       return true
     },
+    // 被拒时用来算 Retry-After：窗口里最早一次命中过期时就能再试。
+    retryAfterMs(key) {
+      const timestamps = hits.get(key) || []
+      if (!timestamps.length) return 0
+      const oldest = timestamps.reduce((min, value) => (value < min ? value : min), timestamps[0])
+      return Math.max(0, windowMs - (now() - oldest))
+    },
+    limit,
+    windowMs,
   }
 }
 
@@ -255,11 +266,8 @@ export function readJsonBody(req, maxBytes = MAX_BODY_BYTES) {
   })
 }
 
-export function writeJsonError(res, status, message, code) {
-  if (!res || res.destroyed || res.headersSent) {
-    res?.destroy?.()
-    return
-  }
-  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
-  res.end(JSON.stringify({ error: message, code }))
+export function writeJsonError(res, status, message, code, extra = {}) {
+  // 统一信封由 http-errors.mjs 负责（ok/success/code/error/message/requestId），
+  // 这里保留旧签名只是为了不动 14 个调用点。
+  writeError(res, { status, code, message, ...extra })
 }

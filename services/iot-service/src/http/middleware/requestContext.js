@@ -49,9 +49,15 @@ function getPublicErrorMessage(statusCode, message) {
 function createErrorPayload(req, statusCode, message, code) {
   const normalizedStatus = normalizeStatusCode(statusCode);
   const normalizedCode = normalizeErrorCode(normalizedStatus, code);
+  const text = getPublicErrorMessage(normalizedStatus, message);
 
+  // 与 docs/api-specification.md §2.1 对齐：ok/success 为 false，
+  // error 与 message 是同一句文案（前端两套读法都要能拿到）。
   return {
-    error: getPublicErrorMessage(normalizedStatus, message),
+    ok: false,
+    success: false,
+    error: text,
+    message: text,
     code: normalizedCode,
     requestId: req.id
   };

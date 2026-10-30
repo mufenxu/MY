@@ -219,6 +219,12 @@ function createApiServer({ settingsStore, mqttService, automationEngine = null }
   registerKeyRoutes(app, { mqttService, requireSession });
   registerSystemRoutes(app, { settingsStore, mqttService, requireSession });
 
+  // 兜底 404：此前未知的 /api 路径会落到 Express 默认的 HTML 页，
+  // 客户端 res.json() 直接抛 SyntaxError（core-api 已修，这里同样处理）。
+  app.use((req, res) => {
+    res.status(404).json(createErrorPayload(req, 404, '接口不存在。', 'ROUTE_NOT_FOUND'));
+  });
+
   app.use((error, req, res, next) => {
     if (res.headersSent) {
       return next(error);

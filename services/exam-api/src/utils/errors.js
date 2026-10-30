@@ -13,8 +13,16 @@ class AppError extends Error {
 }
 
 class ValidationError extends AppError {
-    constructor(message = '请求参数无效') {
+    /**
+     * @param {string} message 面向用户的合并文案
+     * @param {Array<{field: string, message: string}>} [details] 逐字段明细，
+     *   由 errorHandler 原样放进响应体的 `details[]`（core-api 一直是这个形状）。
+     */
+    constructor(message = '请求参数无效', details = []) {
         super(message, 400);
+        if (Array.isArray(details) && details.length > 0) {
+            this.details = details;
+        }
     }
 }
 

@@ -88,15 +88,23 @@ test('blackbox ingest is aborted at its request deadline without dropping the sp
     { targetId: 'platform', state: 'offline', recordedAt: '2026-07-22T00:00:00.000Z' },
   ]);
 
-  await assert.rejects(flushBlackboxSpool({
-    filename,
-    ingestUrl: 'https://pxyb.cn/api/internal/blackbox/samples',
-    token: 'x'.repeat(32),
-    probeId: 'outside-a',
-    timeoutMs: 10,
-    fetchImpl: async (url, { signal }) => new Promise((resolve, reject) => {
-      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-    }),
-  }), /timed out|timeout/i);
+  // AbortSignal.timeout() 内部用的是 unref 定时器：这个用例里唯一持有事件循环的就是它，
+  // 一旦循环提前排空，超时永远不会触发，测试会以 "Promise resolution is still pending"
+  // 被取消。这里手动保活，让超时能真的到点。
+  const keepAlive = setInterval(() => {}, 1000);
+  try {
+    await assert.rejects(flushBlackboxSpool({
+      filename,
+      ingestUrl: 'https://pxyb.cn/api/internal/blackbox/samples',
+      token: 'x'.repeat(32),
+      probeId: 'outside-a',
+      timeoutMs: 10,
+      fetchImpl: async (url, { signal }) => new Promise((resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      }),
+    }), /timed out|timeout/i);
+  } finally {
+    clearInterval(keepAlive);
+  }
   assert.equal((await readBlackboxSpool(filename)).length, 1);
 });

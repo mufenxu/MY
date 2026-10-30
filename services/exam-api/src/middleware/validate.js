@@ -21,8 +21,17 @@ function validate(schema) {
                     allowUnknown: false,
                 });
                 if (error) {
+                    // 之前这里只把 message 拼成一句话，字段路径全丢了；
+                    // 于是同样的 400，core-api 有 details[]、exam-api 没有，
+                    // exam-admin 无法高亮出错字段。字段名带来源前缀，避免
+                    // body 与 query 里同名参数分不清。
                     errors.push(
-                        ...error.details.map((d) => d.message),
+                        ...error.details.map((d) => ({
+                            field: [source, ...(Array.isArray(d.path) ? d.path : [d.path])]
+                                .filter((part) => part !== undefined && part !== '')
+                                .join('.'),
+                            message: d.message,
+                        })),
                     );
                 } else {
                     // 用经过验证和清洗的值替换原始值
@@ -32,7 +41,7 @@ function validate(schema) {
         }
 
         if (errors.length > 0) {
-            throw new ValidationError(errors.join('; '));
+            throw new ValidationError(errors.map((item) => item.message).join('; '), errors);
         }
 
         next();

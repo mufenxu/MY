@@ -41,11 +41,12 @@ Link: </api/core/v1/users>; rel="successor-version"
 | `ok` / `success` | 新契约字段 / 兼容字段。两者都写 `false`，因为 `apps/core-admin` 仍有多处 `res.data.success` 判断。 |
 | `code` | 稳定字符串枚举，来自错误码注册表。**不要把 HTTP 状态码写进来**。 |
 | `error` / `message` | 同一句面向用户的文案，两个字段并存是兼容措施，见 2.3。 |
-| `details` | 只在 400/422 出现，数组，元素为 `{ field, message }`。 |
+| `details` | 只在 400/422 出现，数组，元素为 `{ field, message }`。`field` **必须带来源前缀**：`body.email`、`query.page`、`params.id`。 |
 | `requestId` | 与响应头 `X-Request-Id` 一致，排障时用它串日志。 |
 
 - **HTTP 状态码表达传输语义，`code` 表达业务语义**，两者不得互相顶替：禁止 `HTTP 200 + code: 400`，也禁止把 HTTP 状态当业务码。
 - 5xx 一律只回通用文案，**不回传原始 `error.message`**（可能包含上游地址、连接串、内部路径）。
+- **网关不得例外**：502 / 503 / 504 同样是这份信封，而且必须带 `requestId`——故障时最常看到的就是它。实现：`services/platform-api/src/http-errors.mjs` 的 `writeError()` / `writeRateLimited()`。
 - 实现：各服务本地 `respond.js` 的 `fail(res, { status, code, message, details, requestId })`。
 
 ### 2.2 成功响应（**本轮不动**）
@@ -175,7 +176,8 @@ router.post('/orders', validate({
 
 ## 9. 幂等与并发
 
-- 创建类写接口接受 `Idempotency-Key`（16–128 字符），命中直接返回首次结果 + `Idempotent-Replay: true`。
+- 创建类写接口接受 `Idempotency-Key`（**1–128 字符**，建议客户端用 ≥16 的随机串）。服务端只校验上限：短键不影响正确性，但碰撞概率高。命中时直接返回首次结果 + `Idempotent-Replay: true`。
+- 键缺失时不允许静默跳过幂等。`courseOrderController` 的兜底是 `legacy:<digest>:<5 分钟桶>`，**只能防连点，不能防重试**——超过 5 分钟的同请求会再执行一次。新资源要么强制要求键（缺失返回 400），要么像 todos 一样用 `If-Match`。
 - 可并发编辑的资源用 `ETag` + `If-Match`：缺失返回 `428`，不匹配返回 `409`/`412` 并回传当前快照。
 - 幂等键必须与服务端唯一索引同时存在（只有键没有唯一索引，等于没有幂等）。
 - 现成范本：`controllers/courseOrderController.js` 的幂等键 + `CourseOrderBatch` 唯一索引；`controllers/todoController.js` 的 `If-Match`/`revision` → 428 → 409。新资源照抄这两个，不要另发明一套。
@@ -193,13 +195,95 @@ router.post('/orders', validate({
 
 | 命令 | 作用 |
 | --- | --- |
-| `npm run check:contract` | 错误码注册表合法性 + 未登记 code 检测 + 自测 |
-| `npm run check:gateway` | 网关路由表、探针路径、代理超时与错误归一化 |
+| `npm run check:contract` | 注册表合法性 + **全量扫描 `services/` 的 code 字面量** + 基线漂移检查 + 自测 |
+| `npm run check:gateway` | 网关路由表、探针路径、代理超时、错误信封与限流响应头 |
 | `npm run check:core` / `check:exam` / `check:iot` / `check:notification` / `check:campus` | 各服务的语法 + lint + 单测 |
 
-契约测试断言的不变量：404 是 JSON、429 是 JSON 且带 `Retry-After`、CastError 映射 400、`/livez` 不依赖数据库、网关保留探针路径不被改写。
+契约测试断言的不变量：404 是 JSON、429 是 JSON 且带 `Retry-After`、CastError 映射 400、`/livez` 不依赖数据库、网关保留探针路径不被改写、网关 5xx 也是统一信封。
 
-## 12. 仍未统一的部分（已知边界）
+错误码的棘轮分两层：
+
+- **注册表**（`packages/api-contract/error-codes.json`）：唯一真相，63 个码。
+- **基线**（`packages/api-contract/error-code-baseline.json`）：21 个存量码按「code → 允许出现的文件」放行。**新代码不允许往基线里加**；某个码登记后，对应基线条目必须删除，否则 `check:contract` 失败。
+
+## 12. 字段命名与序列化
+
+新端点（`/v1` 起）必须遵守；存量不做批量改名。
+
+| 项 | 规则 |
+| --- | --- |
+| 字段名 | lowerCamelCase。禁止新增 snake_case，也禁止 `createTime` 这种"表字段直出"的命名 |
+| 时间 | ISO 8601 UTC 字符串：`2026-10-30T07:44:22.000Z`。新字段一律用它 |
+| 布尔 | 真 `true` / `false`。不用 `0`/`1`，也不用 `"1"` |
+| 金额 | 整数分（`amountCents`）。不要用浮点元 |
+| 空值 | 对象字段无值时给 `null` 并**保留键**；数组无值时给 `[]`。不要省略键 |
+| 枚举 | 首发即稳定。新增值只能追加，不能改既有值的含义 |
+
+存量已经有三套风格，**不要为了整齐去统一**：
+
+- core-api：`createdAt`（模型里用 `Number` 存 `Date.now()`，响应是**数字**时间戳）
+- exam-api：`createTime` / `updateTime`（mongoose `timestamps`，响应是 **ISO 串**）
+- campus-service：`created_at` / `updated_at`（snake_case）
+
+`createdAt` 在 core-api 是数字、在别处是字符串，**同名字段类型不同**。客户端解析前先判类型，不要直接 `new Date(value)`。
+
+## 13. 排序、过滤与搜索
+
+此前全仓只有零散的 `status` / `keyword` / `type`，没有排序约定；新增列表接口按此执行：
+
+- 排序用单参数 `sort`，`-` 表示降序，多字段逗号分隔：`?sort=status,-createdAt`
+- 排序字段**必须走白名单**，禁止把 `sort` 直接拼进 Mongo 的 `sort()`（注入 + 走不了索引）
+- 排序要有稳定兜底（末尾追加 `_id`），否则翻页会重复或漏项
+- 过滤参数直接用资源字段名，多值逗号分隔：`?status=Completed,Failed`（不要用 `status[]=`）
+- 全文搜索用 `q`，不要在同一个服务里并存 `keyword` / `search` 两套
+- 分页沿用 §5，不要在列表接口里再发明 `offset` / `skip`
+
+## 14. 成功状态码
+
+- 创建 `201` + `Location` 指向新资源（`courseOrderController` 的批量下单是现成例子）
+- 删除 `204`，无响应体
+- 其它成功一律 `200`
+- 批量部分失败用 `207`，见 §16
+- **存量一律 200 的不要顺手改**：`core-admin` 存在 `status === 200` 判断，改成 201 会走到错误分支。只有新端点用 201 / 204
+
+## 15. 文件上传
+
+- `multipart/form-data`，文件字段名固定 `file`（`core-api/routes/settings.js` 的备份恢复即此约定），元数据放普通字段
+- 必须声明 `limits.fileSize`；超限返回 `413` + `PAYLOAD_TOO_LARGE`，不要让它掉成 500
+- MIME 与扩展名**双白名单**校验，不信任 `Content-Type`
+- `memoryStorage` 只用于 ≤20MB；更大的走流式落盘
+- 响应给出可直接使用的资源：`{ id, url, size, mime }`
+
+## 16. 批量与长任务
+
+- 批量写单次上限 100 条（课程订单按业务收紧到 20 条），并在 schema 里用 `maxItems` 卡住
+- 批量结果：全成功 `200`；部分失败 `207` + `{ items: [{ ok, code?, message? }] }`。**不允许**"部分失败还返回 200 空 body"
+- 预期耗时 >10s 的操作不要占着请求：返回 `202` + `Location: /jobs/{id}`，任务资源至少有 `status`（`queued|running|succeeded|failed`）、`progress`、`result`、`error`
+- 现状：`/api/user/ai/question-analysis` 仍同步执行，靠网关 `longRunning` 的 60s 超时兜住。新增同类能力优先走 202，不要继续加长超时
+
+## 17. 什么算破坏性变更
+
+判定标准，用来决定是否必须新开 `/v1`：
+
+**破坏性——必须走 `/v1` 或改为新增字段**
+
+- 删除 / 重命名字段
+- 改字段类型（含 number → string、可空 → 非空）
+- 收紧校验：新增 required、缩小 `max` / `min`、减少枚举取值
+- 改枚举值的**含义**（不是新增值）
+- 改分页默认页大小，或改 `total` 的口径
+- 改已有 `code` 的语义，或把某个 `code` 换一个 HTTP 状态
+- 状态码变更（把 200 改成 201 / 204 也算）
+
+**非破坏性——可以直接发**
+
+- 新增可选字段、新增端点、新增错误码
+- 放宽校验（去掉 required、放大 `max`）
+- 新增枚举取值（前提：客户端对未知值有兜底）
+
+旧路径下线前至少保留一个发布周期，并带 §1 的 `Deprecation` / `Sunset` 头。
+
+## 18. 仍未统一的部分（已知边界）
 
 以下差异是**已知且有意保留**的，改动它们需要单独议题：
 
@@ -208,3 +292,7 @@ router.post('/orders', validate({
 - 成功体仍是 5 种。
 - `/v1` 尚未引入；OpenAPI 尚未覆盖全部端点（当前只有 notification-service 提供 `/openapi.json`）。
 - 幂等与 `If-Match` 仍是"按资源手写"，尚未抽成通用中间件。
+- **校验文案不全是中文**：core-api 的关键 schema 写了 `.messages()`，其余 schema 与 exam-api 多数还在用 Joi 默认的英文文案（`"name" is required`），经 `details[].message` 直接到了界面上。改到哪个 schema 就补哪个，不批量重写。
+- **门户（admin-console）还有 112 个未登记错误码**：它在本规范的扫描范围之外（`services/` 才算服务单元）。要收口需要单独一轮，把门户的码按前缀分组登记。
+- **压缩与缓存头不一致**：只有 exam-api 引入了 `compression()`；campus-service / iot-service 的 API 响应没有 `Cache-Control`。网关层做压缩会改变 `Content-Length`，属于独立议题。
+- **`PLATFORM_READ_ONLY` 名不副实**：网关的 `rejectReadOnlyWrite` 用它表达"只读角色"，而注册表里它是"系统只读状态"。code 已被测试与前端引用，暂不改名。

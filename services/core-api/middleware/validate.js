@@ -26,9 +26,15 @@ function toValidationError(details) {
     return error;
 }
 
-function formatDetails(error) {
+/**
+ * 字段路径带上来源前缀（`body.email` / `query.page`）。
+ * 三源校验下 `page` 可能同时出现在 body 与 query 里，不带前缀就分不清是哪个。
+ */
+function formatDetails(error, source) {
     return error.details.map((detail) => ({
-        field: Array.isArray(detail.path) ? detail.path.join('.') : String(detail.path || ''),
+        field: [source, ...(Array.isArray(detail.path) ? detail.path : [detail.path])]
+            .filter((part) => part !== undefined && part !== '')
+            .join('.'),
         message: detail.message,
     }));
 }
@@ -63,7 +69,7 @@ const validate = (schema, options = {}) => (req, res, next) => {
     if (isJoiSchema(schema)) {
         const { error, value } = schema.validate(req.body, settings);
         if (error) {
-            errors.push(...formatDetails(error));
+            errors.push(...formatDetails(error, 'body'));
         } else {
             req.body = value;
         }
@@ -72,7 +78,7 @@ const validate = (schema, options = {}) => (req, res, next) => {
             if (!schema || !schema[source]) continue;
             const { error, value } = schema[source].validate(req[source], settings);
             if (error) {
-                errors.push(...formatDetails(error));
+                errors.push(...formatDetails(error, source));
             } else {
                 applyValue(req, source, value);
             }

@@ -24,6 +24,7 @@ import {
   readDownloadConfig,
   resolveDownloadTarget,
 } from './download-parse.mjs';
+import { writeError, writeRateLimited } from './http-errors.mjs';
 
 const PROXY_CONTEXT = Symbol('platformProxyContext');
 const PROXY_TIMEOUT_MIN_MS = 1_000;
@@ -157,11 +158,12 @@ function writeProxyError(res, error) {
     return;
   }
   const timedOut = normalizeProxyError(error) === 'timeout';
-  res.writeHead(timedOut ? 504 : 502, { 'Content-Type': 'application/json; charset=utf-8' });
-  res.end(JSON.stringify({
-    error: timedOut ? 'Upstream service timed out.' : 'Upstream service is unavailable.',
+  // 502/504 是线上最常见的响应之一，必须和业务服务同一份信封：
+  // 带 ok/success/code/requestId，文案走注册表的中文兜底，不回传上游原文。
+  writeError(res, {
+    status: timedOut ? 504 : 502,
     code: timedOut ? 'UPSTREAM_TIMEOUT' : 'UPSTREAM_UNAVAILABLE',
-  }));
+  });
   console.error('Platform proxy error:', error.message);
 }
 
@@ -189,10 +191,8 @@ function rejectUnauthenticated(req, res, pathname) {
     res.end();
     return;
   }
-  res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-  res.end(JSON.stringify({ error: '统一登录会话已失效，请重新登录。', code: 'PLATFORM_SESSION_REQUIRED' }));
+  writeError(res, { status: 401, code: 'PLATFORM_SESSION_REQUIRED' });
 }
-
 function requestOrigin(req) {
   const value = req.headers.origin || req.headers.referer || '';
   if (!value) return '';
@@ -213,13 +213,17 @@ function managedSocketAllowed(req, platformPublicOrigin) {
 }
 
 function rejectCrossSiteWrite(res) {
-  res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-  res.end(JSON.stringify({ error: '跨站管理请求已被拒绝。', code: 'PLATFORM_CSRF_REJECTED' }));
+  writeError(res, { status: 403, code: 'PLATFORM_CSRF_REJECTED' });
 }
 
 function rejectReadOnlyWrite(res) {
-  res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-  res.end(JSON.stringify({ error: '只读管理员不能修改业务数据。', code: 'PLATFORM_READ_ONLY' }));
+  // 注意：code 沿用 PLATFORM_READ_ONLY（既有契约，测试与前端可能判它），
+  // 但这里的实际语义是「只读角色」，所以文案单独给。
+  writeError(res, {
+    status: 403,
+    code: 'PLATFORM_READ_ONLY',
+    message: '只读管理员不能修改业务数据。',
+  });
 }
 
 export function createCoreWebApp({ coreApp, staticPath }) {
@@ -265,7 +269,7 @@ export function createCoreWebApp({ coreApp, staticPath }) {
   }
 
   app.use((req, res) => {
-    res.status(404).json({ error: '页面不存在。', code: 'NOT_FOUND' });
+    writeError(res, { status: 404, code: 'NOT_FOUND' });
   });
   return app;
 }
@@ -443,8 +447,7 @@ export function createPlatformRouter({
 
   function proxyRequest(req, res, target, service, route = null) {
     if (!target) {
-      res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ error: '内部服务未配置。', code: 'UPSTREAM_NOT_CONFIGURED' }));
+      writeError(res, { status: 503, code: 'UPSTREAM_NOT_CONFIGURED' });
       return;
     }
     const pathname = new URL(req.url || '/', 'http://platform.internal').pathname;
@@ -535,7 +538,11 @@ export function createPlatformRouter({
     }
     const subject = String(session.sub || session.username || session.nonce || 'anonymous');
     if (!assistantLimiter.allow(subject)) {
-      writeJsonError(res, 429, 'AI 助手请求过于频繁，请稍后再试。', 'AI_RATE_LIMITED');
+      writeRateLimited(res, {
+        code: 'AI_RATE_LIMITED',
+        retryAfter: Math.ceil(assistantLimiter.retryAfterMs(subject) / 1000),
+        limit: assistantLimiter.limit,
+      });
       return;
     }
     const body = await readJsonBody(replayDeviceBody(req));
@@ -599,7 +606,11 @@ export function createPlatformRouter({
     const subject = String(session.sub || session.username || session.nonce || 'anonymous');
     if (!downloadLimiter.allow(subject)) {
       finishMetric({ outcome: 'error', errorKind: 'rate-limit', statusClass: '4xx' });
-      writeJsonError(res, 429, '解析请求过于频繁，请稍后再试。', 'DOWNLOAD_RATE_LIMITED');
+      writeRateLimited(res, {
+        code: 'DOWNLOAD_RATE_LIMITED',
+        retryAfter: Math.ceil(downloadLimiter.retryAfterMs(subject) / 1000),
+        limit: downloadLimiter.limit,
+      });
       return;
     }
     try {

@@ -9,6 +9,7 @@ import {
   pingPortalStores,
 } from './portal-store-lifecycle.mjs';
 import { resolveRuntimePaths } from './runtime-paths.mjs';
+import { writeError } from './http-errors.mjs';
 import { checkExternalServices, resolveServiceMode } from './service-targets.mjs';
 import { createSessionVerifierCache } from './session-cache.mjs';
 import { SESSION_COOKIE_NAME, parseCookies, sessionCookieName } from '../../../apps/admin-console/src/auth.js';
@@ -174,8 +175,7 @@ const server = http.createServer((req, res) => {
   router.handler(req, res).catch((error) => {
     console.error('Unhandled platform request:', error);
     if (!res.headersSent) {
-      res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ error: '平台内部错误。', code: 'PLATFORM_INTERNAL_ERROR' }));
+      writeError(res, { status: 500, code: 'PLATFORM_INTERNAL_ERROR' });
     } else {
       res.destroy(error);
     }

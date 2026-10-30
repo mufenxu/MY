@@ -1,0 +1,68 @@
+{
+  "_comment": "错误码基线：登记「存量且暂未接入注册表的 code → 允许出现的文件」。新增代码不允许往这里加，必须登记到 error-codes.json；某个 code 登记后这条基线要删掉（check:contract 会检查）。",
+  "codes": {
+    "API_CLIENT_RATE_LIMITED": [
+      "services/notification-service/src/app.js"
+    ],
+    "AUTH_ACCOUNT_DISABLED": [
+      "services/core-api/middleware/auth.js"
+    ],
+    "AUTH_TOKEN_INVALID": [
+      "services/core-api/middleware/auth.js"
+    ],
+    "AUTH_TOKEN_MISSING": [
+      "services/core-api/middleware/auth.js"
+    ],
+    "AUTH_TOKEN_REVOKED": [
+      "services/core-api/middleware/auth.js"
+    ],
+    "AUTH_USER_NOT_FOUND": [
+      "services/core-api/middleware/auth.js"
+    ],
+    "DEDUPE_RESERVATION_BUSY": [
+      "services/notification-service/src/notification-store.js"
+    ],
+    "EXPLICIT_TARGET_REQUIRED": [
+      "services/notification-service/src/app.js"
+    ],
+    "GOOGLE_ACCOUNT_REVISION_CONFLICT": [
+      "services/core-api/controllers/googleAccountController.js"
+    ],
+    "MANAGEMENT_SEND_RATE_LIMITED": [
+      "services/notification-service/src/app.js"
+    ],
+    "MANAGEMENT_UNAUTHORIZED": [
+      "services/notification-service/src/app.js"
+    ],
+    "PLATFORM_SSO_ACCOUNT_NOT_MAPPED": [
+      "services/core-api/middleware/auth.js"
+    ],
+    "PLATFORM_SSO_ROLE_INVALID": [
+      "services/core-api/middleware/auth.js"
+    ],
+    "RENDERED_MESSAGE_TOO_LONG": [
+      "services/notification-service/src/notification-orchestrator.js"
+    ],
+    "TEMPLATE_UNAVAILABLE": [
+      "services/notification-service/src/notification-orchestrator.js"
+    ],
+    "TEMPLATE_VARIABLE_MISSING": [
+      "services/notification-service/src/notification-orchestrator.js"
+    ],
+    "TODO_REVISION_CONFLICT": [
+      "services/core-api/controllers/todoController.js"
+    ],
+    "TODO_REVISION_REQUIRED": [
+      "services/core-api/controllers/todoController.js"
+    ],
+    "VALIDATION_ERROR": [
+      "services/notification-service/src/app.js"
+    ],
+    "WEBHOOK_DISABLED": [
+      "services/core-api/middleware/webhookVerify.js"
+    ],
+    "WEBHOOK_NOT_CONFIGURED": [
+      "services/core-api/middleware/webhookVerify.js"
+    ]
+  }
+}

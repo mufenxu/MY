@@ -222,7 +222,7 @@ function createApp({
         }
       }
       const identity = verifySignedRequest(req, config.internalCallers || []);
-      if (!identity) return res.status(401).json({ errcode: 401, errmsg: '无效的通知服务凭据' });
+      if (!identity) return res.status(401).json({ ok: false, success: false, errcode: 401, errmsg: '无效的通知服务凭据' });
       req.serviceCaller = identity.caller;
       req.apiClient = null;
       return next();
@@ -288,7 +288,7 @@ function createApp({
     return async (req, res, next) => {
       if (hasScope(req.apiClient, scope)) return next();
       await recordManagedApiRequest(req, { endpoint, httpStatus: 403, errorCode: 'API_SCOPE_REQUIRED', body: req.body });
-      return res.status(403).json({ errcode: 403, errmsg: '当前 API Key 权限不足', code: 'API_SCOPE_REQUIRED', requestId: req.id });
+      return res.status(403).json({ ok: false, success: false, errcode: 403, errmsg: '当前 API Key 权限不足', code: 'API_SCOPE_REQUIRED', requestId: req.id });
     };
   }
 
@@ -298,11 +298,11 @@ function createApp({
       const target = targetSelector(req.body || {});
       if (!target.touser && !target.toparty && !target.totag) {
         await recordManagedApiRequest(req, { endpoint, httpStatus: 400, errorCode: 'EXPLICIT_TARGET_REQUIRED', body: req.body });
-        return res.status(400).json({ errcode: 400, errmsg: '托管 API 客户端必须明确指定接收目标', code: 'EXPLICIT_TARGET_REQUIRED', requestId: req.id });
+        return res.status(400).json({ ok: false, success: false, errcode: 400, errmsg: '托管 API 客户端必须明确指定接收目标', code: 'EXPLICIT_TARGET_REQUIRED', requestId: req.id });
       }
       if (requiresBroadcastScope(target) && !hasScope(req.apiClient, 'notifications:broadcast')) {
         await recordManagedApiRequest(req, { endpoint, httpStatus: 403, errorCode: 'BROADCAST_SCOPE_REQUIRED', body: req.body });
-        return res.status(403).json({ errcode: 403, errmsg: '部门、标签、多用户或全员发送需要广播权限', code: 'BROADCAST_SCOPE_REQUIRED', requestId: req.id });
+        return res.status(403).json({ ok: false, success: false, errcode: 403, errmsg: '部门、标签、多用户或全员发送需要广播权限', code: 'BROADCAST_SCOPE_REQUIRED', requestId: req.id });
       }
       return next();
     };
@@ -319,7 +319,7 @@ function createApp({
     if (window.count >= limit) {
       res.setHeader('Retry-After', String(Math.max(1, Math.ceil((window.resetAt - timestamp) / 1000))));
       await recordManagedApiRequest(req, { endpoint, httpStatus: 429, errorCode: 'API_CLIENT_RATE_LIMITED', body: req.body });
-      return res.status(429).json({ errcode: 429, errmsg: '当前 API 客户端调用过于频繁', code: 'API_CLIENT_RATE_LIMITED', requestId: req.id });
+      return res.status(429).json({ ok: false, success: false, errcode: 429, errmsg: '当前 API 客户端调用过于频繁', code: 'API_CLIENT_RATE_LIMITED', requestId: req.id });
     }
     window.count += 1;
     apiRateWindows.set(req.apiClient.clientId, window);
@@ -808,22 +808,22 @@ function createApp({
       const parsed = appNotificationSchema.parse(req.body);
       if (req.apiClient?.managed && !hasScope(req.apiClient, 'notifications:app:send')) {
         await recordManagedApiRequest(req, { endpoint: '/v1/notifications', httpStatus: 403, errorCode: 'API_SCOPE_REQUIRED', body: req.body });
-        return res.status(403).json({ errcode: 403, errmsg: '当前 API Key 缺少 App 通知发送权限', code: 'API_SCOPE_REQUIRED', requestId: req.id });
+        return res.status(403).json({ ok: false, success: false, errcode: 403, errmsg: '当前 API Key 缺少 App 通知发送权限', code: 'API_SCOPE_REQUIRED', requestId: req.id });
       }
       const isBroadcast = parsed.audience.users.length > 1 || requiresBroadcastScope(parsed.wecom || {});
       if (req.apiClient?.managed && isBroadcast && !hasScope(req.apiClient, 'notifications:broadcast')) {
         await recordManagedApiRequest(req, { endpoint: '/v1/notifications', httpStatus: 403, errorCode: 'BROADCAST_SCOPE_REQUIRED', body: req.body });
-        return res.status(403).json({ errcode: 403, errmsg: '多用户通知需要广播权限', code: 'BROADCAST_SCOPE_REQUIRED', requestId: req.id });
+        return res.status(403).json({ ok: false, success: false, errcode: 403, errmsg: '多用户通知需要广播权限', code: 'BROADCAST_SCOPE_REQUIRED', requestId: req.id });
       }
       const requiresExternalSendScope = parsed.channels.includes('wecom') || parsed.channels.includes('cmcc');
       if (req.apiClient?.managed && requiresExternalSendScope && !hasScope(req.apiClient, 'notifications:send')) {
         await recordManagedApiRequest(req, { endpoint: '/v1/notifications', httpStatus: 403, errorCode: 'API_SCOPE_REQUIRED', body: req.body });
-        return res.status(403).json({ errcode: 403, errmsg: '当前 API Key 缺少外部通道发送权限', code: 'API_SCOPE_REQUIRED', requestId: req.id });
+        return res.status(403).json({ ok: false, success: false, errcode: 403, errmsg: '当前 API Key 缺少外部通道发送权限', code: 'API_SCOPE_REQUIRED', requestId: req.id });
       }
       if (parsed.scheduledAt && parsed.scheduledAt > new Date()) {
         if (req.apiClient?.managed && !hasScope(req.apiClient, 'notifications:enqueue')) {
           await recordManagedApiRequest(req, { endpoint: '/v1/notifications', httpStatus: 403, errorCode: 'API_SCOPE_REQUIRED', body: req.body });
-          return res.status(403).json({ errcode: 403, errmsg: '当前 API Key 缺少通知编排权限', code: 'API_SCOPE_REQUIRED', requestId: req.id });
+          return res.status(403).json({ ok: false, success: false, errcode: 403, errmsg: '当前 API Key 缺少通知编排权限', code: 'API_SCOPE_REQUIRED', requestId: req.id });
         }
         const queued = await orchestrator.enqueueApp(req.body, {
           caller: req.serviceCaller,
@@ -1539,16 +1539,46 @@ function createApp({
     }
   });
 
+  // 兜底 404：此前未知路径会落到 Express 默认 HTML 页，客户端 res.json() 直接抛错。
+  app.use((req, res) => {
+    res.status(404).json({
+      ok: false,
+      success: false,
+      errcode: 404,
+      errmsg: '接口不存在。',
+      error: '接口不存在。',
+      message: '接口不存在。',
+      code: 'ROUTE_NOT_FOUND',
+      requestId: req.id,
+    });
+  });
+
   app.use((error, req, res, _next) => {
     if (error.name === 'ZodError') {
-      return res.status(400).json({ errcode: 400, errmsg: '请求参数错误', error: '请求参数错误。', code: 'VALIDATION_ERROR', details: error.issues });
+      return res.status(400).json({
+        ok: false,
+        success: false,
+        errcode: 400,
+        errmsg: '请求参数错误',
+        error: '请求参数错误。',
+        message: '请求参数错误。',
+        // 沿用既有 VALIDATION_ERROR，避免改 code 值造成破坏性变更（见规范 §17）。
+        code: 'VALIDATION_ERROR',
+        details: error.issues,
+        requestId: req.id,
+      });
     }
     const status = Number.isFinite(Number(error.status)) ? Number(error.status) : 500;
     if (status === 500) console.error(`[${req.id}]`, error);
+    const text = status === 500 ? '通知服务内部错误。' : error.message;
     return res.status(status).json({
+      ok: false,
+      success: false,
+      // errcode / errmsg 是外部对接方在解析的旧字段，不能删。
       errcode: status,
       errmsg: status === 500 ? '服务器内部错误' : error.message,
-      error: status === 500 ? '通知服务内部错误。' : error.message,
+      error: text,
+      message: text,
       code: error.code || (status === 500 ? 'INTERNAL_ERROR' : 'DELIVERY_FAILED'),
       requestId: req.id,
     });
