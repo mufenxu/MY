@@ -1,3 +1,4 @@
+import { isTimetableCacheFresh } from "../lib/timetable-cache.js";
 import {
   ACADEMIC_TIMETABLE_SOURCES,
   JWXS_ACADEMIC_STATUS_URL,
@@ -69,6 +70,13 @@ export function createAcademicService({
   const ACADEMIC_EVALUATION_AUTO_MAX_RUNTIME_MS = 90 * 60 * 1000;
 
   const ACADEMIC_EVALUATION_AUTO_JOB_TTL_MS = 24 * 60 * 60 * 1000;
+
+  // 课表一次刷新要顺次打上游三次（课表页 + 学期课程 JSON + 校历），而客户端会按
+  // 30–60 秒轮询；课表本身变化极慢，因此优先返回这个窗口内的缓存，过期才回源。
+  const ACADEMIC_TIMETABLE_CACHE_TTL_MS = Math.max(
+    0,
+    Number(process.env.HGU_ACADEMIC_TIMETABLE_CACHE_TTL_MS || 120_000)
+  );
 
   const academicEvaluationDrafts = new Map();
 
@@ -1215,15 +1223,20 @@ export function createAcademicService({
     if (!row) return null;
     try {
       const cached = sensitiveJson.decode(row.cache_json);
-      if (cached.sourceKey === source.key) return cached;
+      const cachedAt = row.updated_at || cached.cachedAt || null;
+      if (cached.sourceKey === source.key) return { ...cached, cachedAt };
       if (!cached.sourceKey && source.key === "selection" && String(cached.source || "").includes("/thisSemesterCurriculum/callback")) {
-        return { ...cached, sourceKey: source.key, sourceLabel: source.label };
+        return { ...cached, sourceKey: source.key, sourceLabel: source.label, cachedAt };
       }
       return null;
     } catch (error) {
       if (String(row.cache_json || "").startsWith("enc:v1:")) throw error;
       return null;
     }
+  }
+
+  function academicTimetableCacheFresh(cached, now = Date.now()) {
+    return isTimetableCacheFresh(cached, ACADEMIC_TIMETABLE_CACHE_TTL_MS, now);
   }
 
   async function saveAcademicTimetableCache(data, source = ACADEMIC_TIMETABLE_SOURCES.current) {
@@ -1235,7 +1248,19 @@ export function createAcademicService({
     );
   }
 
-  async function getAcademicTimetable(source = ACADEMIC_TIMETABLE_SOURCES.current) {
+  async function getAcademicTimetable(source = ACADEMIC_TIMETABLE_SOURCES.current, options = {}) {
+    const force = Boolean(options?.force ?? options?.refresh);
+    if (!force) {
+      let warm = null;
+      try {
+        warm = await readAcademicTimetableCache(source);
+      } catch {
+        warm = null;
+      }
+      if (warm && academicTimetableCacheFresh(warm)) {
+        return { ...warm, live: true, cached: true };
+      }
+    }
     try {
       const page = await fetchAcademicTimetableHtml(source);
       let parsed;

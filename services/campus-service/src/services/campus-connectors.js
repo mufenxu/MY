@@ -1041,11 +1041,14 @@ export function createCampusConnectors({
   async function getCampusSummary(queryInput = {}) {
     const billQuery = normalizeCampusBillQuery(queryInput);
     await ensureCampusSessions();
-    // These connectors share one persisted UIAS/CAS jar. Run them in order so a
-    // later login cannot invalidate a token while another connector is using it.
-    const [cardResult] = await Promise.allSettled([getCampusCard(billQuery)]);
-    const [waterResult] = await Promise.allSettled([getCampusWater(billQuery)]);
-    const [accommodationResult] = await Promise.allSettled([getCampusAccommodation()]);
+    // 三路都是只读，且分别走 easytong / uwc / dormitory 三套独立身份，会话在
+    // ensureCampusSessions() 后已就绪，可以并行。持久化由 saveSessionJarForUser 的
+    // 版本号乐观锁 + 合并重试保证，不会互相覆盖。
+    const [cardResult, waterResult, accommodationResult] = await Promise.allSettled([
+      getCampusCard(billQuery),
+      getCampusWater(billQuery),
+      getCampusAccommodation()
+    ]);
     const jar = await readSessionJar();
     const status = campusSessionSummary(jar);
     const campusError = status.lastError || null;

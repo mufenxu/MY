@@ -345,7 +345,7 @@ export function createBackgroundSchedulers({
             await reloginSchoolSessionIfWanted({ message: "academic auto refresh" });
             if (!(await hasAcademicRefreshSession())) return;
             const timetable = await withAcademicSessionLock(
-              () => getAcademicTimetable(ACADEMIC_TIMETABLE_SOURCES.current)
+              () => getAcademicTimetable(ACADEMIC_TIMETABLE_SOURCES.current, { force: true })
             );
             const sessions = timetable.stats?.arrangedSessions ?? timetable.courses?.length ?? 0;
             if (timetable.live === false) {
@@ -365,7 +365,7 @@ export function createBackgroundSchedulers({
                 const recovered = await recoverSchoolSessionAfterAuthError(error);
                 if (recovered) {
                   const retried = await withAcademicSessionLock(
-                    () => getAcademicTimetable(ACADEMIC_TIMETABLE_SOURCES.current)
+                    () => getAcademicTimetable(ACADEMIC_TIMETABLE_SOURCES.current, { force: true })
                   );
                   if (retried.live === false) {
                     logger.warn("academic_refresh_used_cache", {

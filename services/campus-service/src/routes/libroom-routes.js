@@ -1,3 +1,12 @@
+import { mapWithConcurrency } from "../lib/bounded-concurrency.js";
+
+// 上游没有「批量查可用性」接口，只能逐空间查；并发上限用于避免一次性几十个请求
+// 打向学校系统而触发频率限制。
+const LIBROOM_AVAILABILITY_CONCURRENCY = Math.max(
+  1,
+  Math.trunc(Number(process.env.HGU_LIBROOM_AVAILABILITY_CONCURRENCY || 4))
+);
+
 export async function handleLibroomRoutes(req, res, url, {
   HttpError,
   autoReservationTaskPublic,
@@ -134,7 +143,7 @@ export async function handleLibroomRoutes(req, res, url, {
         }
       };
 
-      const results = await Promise.all(spaces.map(checkAvailability));
+      const results = await mapWithConcurrency(spaces, LIBROOM_AVAILABILITY_CONCURRENCY, checkAvailability);
       const availableSpaces = results.filter(Boolean);
       logger.info("libroom_spaces_query_completed", {
         date,

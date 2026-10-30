@@ -25,7 +25,9 @@ export async function handleAcademicRoutes(req, res, url, {
 }) {
   if (url.pathname === "/api/academic/timetable") {
     const source = academicTimetableSourceFromSearch(url.searchParams);
-    json(res, 200, { ok: true, data: await withAcademicSessionLock(() => getAcademicTimetable(source)) });
+    // refresh=1 用于显式回源（下拉刷新）；不带参数时走短 TTL 缓存，避免轮询反复打上游。
+    const force = /^(1|true|yes)$/i.test(String(url.searchParams.get("refresh") || "").trim());
+    json(res, 200, { ok: true, data: await withAcademicSessionLock(() => getAcademicTimetable(source, { force })) });
     return true;
   }
   if (url.pathname === "/api/academic/integrations" && req.method === "GET") {
