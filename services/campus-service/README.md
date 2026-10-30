@@ -57,6 +57,8 @@ server.js    学校系统连接器、业务编排和 API 路由
 
 一卡通生活用水平台在同一账号换取新 token 时会立即废弃旧 token，并返回“账号在其他地方登录”。校园余额、用水和住宿连接器共用同一份 UIAS/CAS 会话，`getCampusSummary` 必须保持串行调用，不能改回 `Promise.all` 并发；UWC 请求还会进行有上限的自动会话恢复，前端在最终认证错误时会自动补查一次用水数据。调整校园接口编排后必须运行 `test/auth-recovery.test.js`，并验证首次打开页面无需手动点“查询”即可显示用水码。
 
+学校部分系统（WebVPN、内网网关）会使用自签名证书。这类证书浏览器可能放行，但 Node 的严格校验会拒绝，错误被压成 `fetch failed`，日志里显示 `cause.code = DEPTH_ZERO_SELF_SIGNED_CERT`，很容易被误判成“网络不通”。请求层因此采用「先严格、后降级」：默认仍按标准 CA 校验，只有确认是证书类错误，才对已通过 `*.hgu.edu.cn` 白名单校验的目标降级重试一次，其它域名完全不受影响。每次降级会记录 `upstream_tls_verification_relaxed`，附带对端证书的 subject / issuer / fingerprint256，可据此判断是学校自建 CA 还是链路上的第三方网关。如需强制严格校验，设置 `HGU_UPSTREAM_TLS_STRICT=1`。
+
 `campus_app` MongoDB 数据库会按系统账号隔离保存学校会话、一卡通临时 Token 或个人课表缓存。学校 Cookie/Token 会使用 AES-256-GCM 加密后入库；生产环境必须配置并长期备份独立的 `HGU_DATA_ENCRYPTION_KEY`。请勿提交或公开分享数据库和密钥。
 
 默认会在首次启动时创建管理员账号。开发环境默认账号为 `admin`，密码为 `admin12345678`；公网部署请务必通过 `.env` 设置 `HGU_ADMIN_USERNAME` 和 `HGU_ADMIN_PASSWORD`。创建更多系统账号：

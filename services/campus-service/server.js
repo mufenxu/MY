@@ -49,6 +49,13 @@ import {
 } from "./src/lib/libroom.js";
 import { normalizeLibrarySeatReservationInput } from "./src/lib/library-seat.js";
 import { discardUpstreamResponse, releaseUpstreamResponse, trackUpstreamResponse } from "./src/lib/upstream-response.js";
+import {
+  certificateFailureCode,
+  createRelaxedTlsReporter,
+  describePeerCertificate,
+  hostOf,
+  loadRelaxedDispatcher
+} from "./src/lib/upstream-tls.js";
 import { createCampusRepository } from "./src/storage/campus-repository.js";
 import { handleCampusCoreRoutes } from "./src/routes/campus-core-routes.js";
 import { handleChaoxingRoutes } from "./src/routes/chaoxing-routes.js";
@@ -138,6 +145,9 @@ const TRUST_PROXY = parseBooleanEnv(process.env.HGU_TRUST_PROXY, false);
 const ENABLE_HSTS = parseBooleanEnv(process.env.HGU_ENABLE_HSTS, NODE_ENV === "production");
 const MAX_UPSTREAM_RESPONSE_BYTES = Number(process.env.HGU_MAX_UPSTREAM_RESPONSE_BYTES || 5 * 1024 * 1024);
 const MAX_CONCURRENT_UPSTREAM_REQUESTS = Number(process.env.HGU_MAX_CONCURRENT_UPSTREAM_REQUESTS || 32);
+// 学校内网/网关常驻自签名证书。默认允许在证书类错误时对 *.hgu.edu.cn 降级重试；
+// 设为 1 则严格校验，证书不合法直接失败。
+const UPSTREAM_TLS_STRICT = parseBooleanEnv(process.env.HGU_UPSTREAM_TLS_STRICT, false);
 const API_REQUESTS_PER_MINUTE = Number(process.env.HGU_API_REQUESTS_PER_MINUTE || 180);
 const SCHOOL_LOGIN_MAX_ATTEMPTS = Number(process.env.HGU_SCHOOL_LOGIN_MAX_ATTEMPTS || 5);
 const EXTRA_ALLOWED_SCHOOL_HOSTS = new Set(
@@ -1705,6 +1715,36 @@ function assertUpstreamResponseSize(response) {
   }
 }
 
+const reportRelaxedTls = createRelaxedTlsReporter();
+
+// 调用方必须先用 assertAllowedSchoolUrl 校验过 url，因此降级只可能作用于校方域名。
+// 证书正常的请求仍走标准校验，这里不改变任何默认安全策略。
+async function fetchUpstream(url, options) {
+  try {
+    return await fetch(url, options);
+  } catch (error) {
+    const certificateCode = certificateFailureCode(error);
+    if (!certificateCode || UPSTREAM_TLS_STRICT || options?.signal?.aborted) throw error;
+    const dispatcher = await loadRelaxedDispatcher();
+    if (!dispatcher) throw error;
+    const host = hostOf(url);
+    if (reportRelaxedTls(host)) {
+      // 不阻塞请求：证书身份探测失败也不影响本次响应。
+      describePeerCertificate(host)
+        .then((certificate) => {
+          logger.warn("upstream_tls_verification_relaxed", {
+            host,
+            certificateCode,
+            certificate,
+            hint: "学校侧证书无法用公共 CA 校验，已对该校方域名放行；如需强制校验请设置 HGU_UPSTREAM_TLS_STRICT=1"
+          });
+        })
+        .catch(() => {});
+    }
+    return await fetch(url, { ...options, dispatcher });
+  }
+}
+
 async function readUpstreamText(response) {
   try {
     assertUpstreamResponseSize(response);
@@ -1762,7 +1802,7 @@ async function fetchWithJar(url, {
   if (cookie) requestHeaders.cookie = cookie;
 
   try {
-    const response = await fetch(safeUrl, {
+    const response = await fetchUpstream(safeUrl, {
       method,
       headers: requestHeaders,
       body,
@@ -2385,7 +2425,7 @@ async function schoolRequest(path, {
   activeUpstreamRequests += 1;
   try {
     assertAllowedSchoolUrl(targetUrl.href);
-    const response = await fetch(targetUrl, options);
+    const response = await fetchUpstream(targetUrl, options);
     assertUpstreamResponseSize(response);
     if (session.source === "stored") updateJarFromResponse(session.jar, response, targetUrl.href);
     const text = await readUpstreamText(response);
