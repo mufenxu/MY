@@ -420,6 +420,15 @@ function upstreamMessage(payload, fallback) {
   return String(payload?.message || payload?.msg || payload?.error || fallback);
 }
 
+// 学校系统把各种失败都包成「操作失败」，直接透给用户没有信息量。
+// 这类泛化文案换成能指导下一步动作的提示。
+const GENERIC_UPSTREAM_MESSAGE = /^(操作失败|请求失败|系统繁忙|系统异常|失败|error|failed|error occurred)$/i;
+
+function exchangeFailureMessage(payload, fallback) {
+  const message = upstreamMessage(payload, "").trim();
+  return message && !GENERIC_UPSTREAM_MESSAGE.test(message) ? message : fallback;
+}
+
 function firstString(value, keys, fallback = "") {
   if (!value || typeof value !== "object") return fallback;
   for (const key of keys) {
@@ -739,7 +748,10 @@ export async function exchangeLibroomMemberToken({ cas, requestImpl, fetchImpl =
     const responseOk = rawResult?.ok !== undefined ? Boolean(rawResult.ok) : statusCode >= 200 && statusCode < 300;
     const token = payload?.data?.member?.token || payload?.member?.token || payload?.data?.token;
     if (!responseOk || (payload?.code !== undefined && Number(payload.code) !== 0) || !token) {
-      fail(responseOk ? 401 : statusCode, upstreamMessage(payload, "空间预约身份转换失败。"), "LIBROOM_AUTH_EXPIRED");
+      // 票据一次性：被消费或过期时上游仍然回 HTTP 200 + code:1。这属于上游侧的
+      // 兑换失败，不是学校登录态失效，所以报 502 而不是 401，避免前端把用户
+      // 引导到「重新登录学校账号」（实测 CAS 会话此时是好的）。
+      fail(responseOk ? 502 : statusCode, exchangeFailureMessage(payload, "图书馆预约系统身份转换失败，请重新打开官方入口后重试。"), "LIBROOM_AUTH_EXPIRED");
     }
     return String(token);
   }
@@ -756,7 +768,7 @@ export async function exchangeLibroomMemberToken({ cas, requestImpl, fetchImpl =
     const payload = await response.json().catch(() => ({}));
     const token = payload?.data?.member?.token || payload?.member?.token || payload?.data?.token;
     if (!response.ok || (payload?.code !== undefined && Number(payload.code) !== 0) || !token) {
-      fail(response.ok ? 401 : response.status, upstreamMessage(payload, "空间预约身份转换失败。"), "LIBROOM_AUTH_EXPIRED");
+      fail(response.ok ? 502 : response.status, exchangeFailureMessage(payload, "图书馆预约系统身份转换失败，请重新打开官方入口后重试。"), "LIBROOM_AUTH_EXPIRED");
     }
     return String(token);
   } finally {

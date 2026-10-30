@@ -22,7 +22,8 @@ import {
 } from "../lib/libroom.js";
 import { DAY_MS } from "../lib/academic-config.js";
 import { discardUpstreamResponse } from "../lib/upstream-response.js";
-import { HttpError } from "../lib/http.js";
+import { HttpError, isUpstreamNetworkFailure } from "../lib/http.js";
+import { readUpstreamFailure, recordUpstreamFailure } from "../lib/failure-cooldown.js";
 import { isCookieExpired, mergeSessionJars } from "../lib/session-jar.js";
 import { KeyedSerialQueue } from "../lib/keyed-serial-queue.js";
 import {
@@ -92,13 +93,42 @@ export function createReservationService({
     return error;
   }
 
+  // `TypeError: fetch failed` 自身没有 code，真正原因在 cause 链上。换票失败
+  // 80% 的场景是连不上（DNS/TCP/TLS），不记录 cause 就只能看到一个没有信息量的 message。
+  function upstreamCauseFields(error) {
+    const codes = [];
+    let node = error?.cause;
+    for (let depth = 0; node && typeof node === "object" && depth < 4; depth += 1) {
+      if (node.code) codes.push(String(node.code));
+      if (Array.isArray(node.errors)) {
+        for (const item of node.errors.slice(0, 3)) {
+          if (item?.code) codes.push(String(item.code));
+        }
+      }
+      node = node.cause;
+    }
+    if (!codes.length) return {};
+    return {
+      causeCodes: [...new Set(codes)],
+      causeHost: error?.cause?.hostname || error?.cause?.host || null
+    };
+  }
+
   function libroomFailureLog(error) {
     return {
       stage: error?.libroomStage || null,
       status: error?.status || null,
       code: error?.code || null,
-      message: error?.message || null
+      message: error?.message || null,
+      ...upstreamCauseFields(error)
     };
+  }
+
+  // 会话里存的 lastError 会直接透给客户端，不能把 "fetch failed" 这种英文内部信息留下来。
+  function sessionFailureText(error, fallback) {
+    if (isCasLoginRequiredError(error)) return casLoginRequiredMessage(error);
+    if (isUpstreamNetworkFailure(error)) return "学校系统当前无法访问，请稍后重试。";
+    return error?.message || fallback;
   }
 
   function upstreamUrlShape(value) {
@@ -188,6 +218,9 @@ export function createReservationService({
         const cached = cachedLibroomToken(jar);
         if (cached) return cached;
       }
+      // 上游刚连不上时快速失败：并发轮询不必每个都重跑一遍完整登录 / 换票链路。
+      const cooling = readUpstreamFailure(jar.meta?.libroom);
+      if (cooling) throw new HttpError(cooling.status, cooling.message, { retryAfterMs: cooling.retryAfterMs }, cooling.code);
       try {
         const token = await issueLibroomMemberToken(jar);
         await saveSessionJar(jar);
@@ -197,10 +230,16 @@ export function createReservationService({
         markCasFailureIfNeeded(jar, error);
         jar.meta ||= {};
         jar.meta.libroom = {
-          lastError: isCasLoginRequiredError(error)
-            ? casLoginRequiredMessage(error)
-            : (error.message || "空间预约会话已过期，请重新登录学校账号。")
+          lastError: sessionFailureText(error, "空间预约会话已过期，请重新登录学校账号。")
         };
+        if (isUpstreamNetworkFailure(error)) {
+          recordUpstreamFailure(jar.meta.libroom, {
+            at: nowIso(),
+            status: 502,
+            code: "UPSTREAM_UNAVAILABLE",
+            message: jar.meta.libroom.lastError
+          });
+        }
         await saveSessionJar(jar).catch(() => {});
         throw error;
       }
@@ -221,9 +260,7 @@ export function createReservationService({
         markCasFailureIfNeeded(jar, error);
         jar.meta ||= {};
         jar.meta.libroom = {
-          lastError: isCasLoginRequiredError(error)
-            ? casLoginRequiredMessage(error)
-            : (error.message || "空间预约官方入口打开失败，请重新登录学校账号。")
+          lastError: sessionFailureText(error, "空间预约官方入口打开失败，请重新登录学校账号。")
         };
         await saveSessionJar(jar).catch(() => {});
         throw error;
@@ -286,9 +323,7 @@ export function createReservationService({
         markCasFailureIfNeeded(jar, error);
         jar.meta ||= {};
         jar.meta.libroom = {
-          lastError: isCasLoginRequiredError(error)
-            ? casLoginRequiredMessage(error)
-            : (error.message || "空间预约官方入口打开失败，请重新登录学校账号。")
+          lastError: sessionFailureText(error, "空间预约官方入口打开失败，请重新登录学校账号。")
         };
         await saveSessionJar(jar).catch(() => {});
         throw error;
@@ -390,9 +425,12 @@ export function createReservationService({
         || ""
       ).trim();
       if (!response.ok || (payload?.code !== undefined && Number(payload.code) !== 200 && payload.status !== true) || !token) {
+        // 与研讨间同理：入口票据换不出成员令牌是上游兑换失败，不是学校登录态失效。
+        const upstreamText = String(payload?.message || payload?.msg || payload?.error || "").trim();
+        const genericText = !upstreamText || /^(操作失败|请求失败|系统繁忙|系统异常|失败|error|failed)$/i.test(upstreamText);
         throw new HttpError(
-          response.ok ? 401 : response.status,
-          payload?.message || payload?.msg || payload?.error || "座位预约身份转换失败。",
+          response.ok ? 502 : response.status,
+          genericText ? "座位预约系统身份转换失败，请重新打开官方入口后重试。" : upstreamText,
           null,
           "LIBRARY_SEAT_AUTH_EXPIRED"
         );
@@ -418,6 +456,8 @@ export function createReservationService({
         const cached = cachedLibrarySeatToken(jar);
         if (cached) return cached;
       }
+      const cooling = readUpstreamFailure(jar.meta?.librarySeat);
+      if (cooling) throw new HttpError(cooling.status, cooling.message, { retryAfterMs: cooling.retryAfterMs }, cooling.code);
       try {
         const credentials = savedSchoolReloginCredentials(jar) || {};
         const token = await issueLibrarySeatMemberToken(jar, credentials);
@@ -428,10 +468,16 @@ export function createReservationService({
         markCasFailureIfNeeded(jar, error);
         jar.meta ||= {};
         jar.meta.librarySeat = {
-          lastError: isCasLoginRequiredError(error)
-            ? casLoginRequiredMessage(error)
-            : (error.message || "座位预约会话已过期，请重新登录学校账号。")
+          lastError: sessionFailureText(error, "座位预约会话已过期，请重新登录学校账号。")
         };
+        if (isUpstreamNetworkFailure(error)) {
+          recordUpstreamFailure(jar.meta.librarySeat, {
+            at: nowIso(),
+            status: 502,
+            code: "UPSTREAM_UNAVAILABLE",
+            message: jar.meta.librarySeat.lastError
+          });
+        }
         await saveSessionJar(jar).catch(() => {});
         throw error;
       }
@@ -454,9 +500,7 @@ export function createReservationService({
         markCasFailureIfNeeded(jar, error);
         jar.meta ||= {};
         jar.meta.librarySeat = {
-          lastError: isCasLoginRequiredError(error)
-            ? casLoginRequiredMessage(error)
-            : (error.message || "座位预约官方入口打开失败，请重新登录学校账号。")
+          lastError: sessionFailureText(error, "座位预约官方入口打开失败，请重新登录学校账号。")
         };
         await saveSessionJar(jar).catch(() => {});
         throw error;

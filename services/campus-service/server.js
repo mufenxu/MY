@@ -20,7 +20,8 @@ import { KeyedSerialQueue } from "./src/lib/keyed-serial-queue.js";
 import { FixedWindowAttemptLimiter } from "./src/lib/rate-limiter.js";
 import { shouldLogClientError, shouldLogRequestCompleted } from "./src/lib/request-logging.js";
 import { loadDotEnv, parseBooleanEnv } from "./src/lib/env.js";
-import { createHttpToolkit, HttpError } from "./src/lib/http.js";
+import { createHttpToolkit, HttpError, isUpstreamNetworkFailure } from "./src/lib/http.js";
+import { casLoginRequiredMessage, isCasLoginRequiredError } from "./src/lib/auth-errors.js";
 import { normalizePagination } from "./src/lib/pagination.js";
 import { hashPassword, isValidUsername, normalizeUsername, verifyPassword } from "./src/lib/password.js";
 import { createSensitiveJsonCodec, deriveDataEncryptionKey } from "./src/lib/sensitive-json.js";
@@ -1515,27 +1516,8 @@ function librarySeatSessionSummary(jar) {
   });
 }
 
-function isCasLoginRequiredError(error) {
-  const message = error?.message || "";
-  const code = error?.code || "";
-  return Boolean(
-    error?.status === 401
-    && (
-      /统一身份认证|CAS|重新登录学校账号/.test(message)
-      || code === "LIBROOM_AUTH_EXPIRED"
-      || code === "LIBROOM_CAS_TICKET_REQUIRED"
-      || code === "LIBRARY_SEAT_AUTH_EXPIRED"
-      || code === "LIBRARY_SEAT_CAS_TOKEN_REQUIRED"
-    )
-  );
-}
-
-function casLoginRequiredMessage(error) {
-  const message = error?.message || "";
-  return /统一身份认证|CAS|重新登录学校账号/.test(message)
-    ? message
-    : "统一身份认证会话已过期，请重新登录学校账号。";
-}
+// isCasLoginRequiredError / casLoginRequiredMessage 已迁到 src/lib/auth-errors.js：
+// 只有「拿不到统一认证票据」才算需要重新登录，业务系统的票据兑换失败不再算。
 
 function markCasFailureIfNeeded(jar, error) {
   if (isCasLoginRequiredError(error)) {
@@ -2799,8 +2781,13 @@ async function handleApi(req, res, url) {
 }
 
 function respondApiError(req, res, url, error) {
+  // 连接层失败（DNS / TCP / TLS 建连不成功）说明请求没到学校系统，
+  // 必须报 502 而不是本站 500，否则监控会把“上游不可达”算成自己的故障。
+  const upstreamUnreachable = isUpstreamNetworkFailure(error);
   const rawStatus = Number(error?.status);
-  const status = Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus <= 599 ? rawStatus : 500;
+  const status = upstreamUnreachable
+    ? 502
+    : (Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus <= 599 ? rawStatus : 500);
   const context = userContextStorage.getStore() || {};
   const logFields = {
     requestId: context.requestId,
@@ -2810,6 +2797,7 @@ function respondApiError(req, res, url, error) {
     status,
     error
   };
+  if (upstreamUnreachable) logFields.upstreamUnreachable = true;
   if (status >= 500) logger.error("http_request_failed", logFields);
   else if (status !== 401 && status !== 404) logger.warn("http_request_rejected", logFields);
   const safeDetails = error?.details && status < 500
@@ -2817,8 +2805,12 @@ function respondApiError(req, res, url, error) {
     : undefined;
   json(res, status, {
     ok: false,
-    error: status >= 500 && NODE_ENV === "production" ? "服务器暂时无法完成请求，请稍后重试。" : (error.message || "服务器异常"),
-    code: error.code || (status >= 500 ? "INTERNAL_ERROR" : "REQUEST_FAILED"),
+    error: upstreamUnreachable
+      ? "学校系统暂时无法访问，请稍后重试。"
+      : (status >= 500 && NODE_ENV === "production" ? "服务器暂时无法完成请求，请稍后重试。" : (error.message || "服务器异常")),
+    code: upstreamUnreachable
+      ? "UPSTREAM_UNAVAILABLE"
+      : (error.code || (status >= 500 ? "INTERNAL_ERROR" : "REQUEST_FAILED")),
     details: safeDetails,
     requestId: context.requestId || null
   });

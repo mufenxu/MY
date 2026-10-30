@@ -9,6 +9,49 @@ export class HttpError extends Error {
   }
 }
 
+// 连接层失败的 errno/undici 码。这类错误说明请求根本没到学校系统，
+// 与“学校系统回了 500”是两回事，对外应报 502 而不是本站 500。
+const UPSTREAM_NETWORK_CODES = new Set([
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "EAI_FAIL",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ECONNABORTED",
+  "ETIMEDOUT",
+  "ENETUNREACH",
+  "EHOSTUNREACH",
+  "EPIPE",
+  "EPROTO",
+  "CERT_HAS_EXPIRED",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "ERR_TLS_CERT_ALTNAME_INVALID",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_SOCKET",
+  "UND_ERR_CLOSED",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT"
+]);
+
+function hasUpstreamNetworkCode(error, depth = 0) {
+  if (!error || typeof error !== "object" || depth > 4) return false;
+  if (error.code && UPSTREAM_NETWORK_CODES.has(String(error.code))) return true;
+  if (Array.isArray(error.errors) && error.errors.some((item) => hasUpstreamNetworkCode(item, depth + 1))) {
+    return true;
+  }
+  return hasUpstreamNetworkCode(error.cause, depth + 1);
+}
+
+// 只判定“没有 status 的裸错误”。已经由 HttpError 赋过 status 的走原有映射，
+// 避免把上游业务拒绝（401/409/502…）重新解释成连接失败。
+export function isUpstreamNetworkFailure(error) {
+  if (!error || typeof error !== "object" || Number(error.status)) return false;
+  if (hasUpstreamNetworkCode(error)) return true;
+  return error instanceof TypeError && /fetch failed/i.test(String(error.message || ""));
+}
+
 function forwardedProto(req) {
   const value = String(req.headers["x-forwarded-proto"] || "").split(",", 1)[0].trim().toLowerCase();
   if (value) return value;
