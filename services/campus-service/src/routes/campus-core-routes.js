@@ -1,7 +1,9 @@
 export async function handleCampusCoreRoutes(req, res, url, {
   HttpError,
+  beginCasSmsLogin,
   campusQueryFromSearch,
   clearSessionJar,
+  completeCasSmsLogin,
   currentUserId,
   defaultMonth,
   getCampusAccommodation,
@@ -52,6 +54,47 @@ export async function handleCampusCoreRoutes(req, res, url, {
       data = await loginWithCas({ ...body, saveCredentials: body.autoRelogin === true });
       schoolLoginLimiter.reset(currentUserId());
       logger.info("audit_school_account_connected", { actorUserId: currentUserId() });
+    } catch (error) {
+      schoolLoginLimiter.recordFailure(currentUserId());
+      throw error;
+    }
+    json(res, 200, { ok: true, data });
+    return true;
+  }
+  if (url.pathname === "/api/auth/login/sms/send" && req.method === "POST") {
+    const body = await readBodyJson(req);
+    const schoolLoginLimit = schoolLoginLimiter.check(currentUserId());
+    if (!schoolLoginLimit.allowed) {
+      throw new HttpError(
+        429,
+        `学校账号登录尝试较多，请 ${Math.ceil(schoolLoginLimit.retryAfterMs / 1000)} 秒后重试。`,
+        null,
+        "SCHOOL_LOGIN_RATE_LIMITED"
+      );
+    }
+    const data = await beginCasSmsLogin({ phone: body.phone });
+    json(res, 202, { ok: true, data });
+    return true;
+  }
+  if (url.pathname === "/api/auth/login/sms/verify" && req.method === "POST") {
+    const body = await readBodyJson(req);
+    const schoolLoginLimit = schoolLoginLimiter.check(currentUserId());
+    if (!schoolLoginLimit.allowed) {
+      throw new HttpError(
+        429,
+        `学校账号登录尝试较多，请 ${Math.ceil(schoolLoginLimit.retryAfterMs / 1000)} 秒后重试。`,
+        null,
+        "SCHOOL_LOGIN_RATE_LIMITED"
+      );
+    }
+    let data;
+    try {
+      data = await completeCasSmsLogin({
+        pendingId: body.pendingId,
+        code: body.code,
+        rememberMe: body.rememberMe !== false
+      });
+      schoolLoginLimiter.reset(currentUserId());
     } catch (error) {
       schoolLoginLimiter.recordFailure(currentUserId());
       throw error;

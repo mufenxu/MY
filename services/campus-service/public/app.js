@@ -461,6 +461,12 @@ document.addEventListener("visibilitychange", () => {
 
 window.__HGU_APP_READY__ = true;
 window.HguCampusApi = api;
+window.HguSmsLogin?.mount({
+  onSuccess: async () => {
+    await loadAuthStatus();
+    await refresh();
+  }
+});
 initDialog();
 initEnhancedControls();
 init();
@@ -876,11 +882,16 @@ async function login() {
     await refresh();
   } catch (error) {
     setNotice(error.message, "error");
+    // 学校启用短信二次验证后，密码登录必然停在验证码这一步，直接把短信登录通道展开。
+    if (error.code === "CAS_SMS_REQUIRED") {
+      window.HguSmsLogin?.reveal("学校已启用短信二次验证。请输入绑定的手机号，获取验证码后完成连接。");
+    }
   } finally {
     nodes.loginButton.disabled = false;
     nodes.loginButton.textContent = state.auth?.needsLogin ? "重新登录并保存会话" : "登录并保存会话";
   }
 }
+
 
 async function logout() {
   nodes.logoutButton.disabled = true;
@@ -2454,6 +2465,7 @@ async function api(path, options = {}) {
     const error = new Error(payload.error || `HTTP ${response.status}`);
     error.details = payload.details;
     error.status = response.status;
+    error.code = payload.code;
     if (p.handleSessionError(response.status, payload.code)) throw error;
     if (shouldHandleAppAccessError(path, options, error)) {
       handleAppAccessExpired(error);

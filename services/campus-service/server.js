@@ -59,6 +59,14 @@ import { handleSystemAdminRoutes } from "./src/routes/system-admin-routes.js";
 import { renderAcademicCalendar } from "./src/lib/academic-calendar.js";
 import { casLoginUrlWithService, isCasLoginRedirect, isCasLogoutRedirect } from "./src/lib/uias-cas.js";
 import {
+  casSmsSendUrl,
+  createSmsPendingStore,
+  isMobilePhone,
+  looksLikeSmsChallenge,
+  maskSmsPhone,
+  normalizeSmsPhone
+} from "./src/lib/cas-sms-login.js";
+import {
   cookieHeaderFor,
   emptySessionJar as emptyJar,
   isCookieExpired,
@@ -1804,6 +1812,14 @@ async function followRedirectsWithJar(startUrl, jar, options = {}) {
   throw new HttpError(502, "登录跳转次数过多。");
 }
 
+const casSmsPending = createSmsPendingStore();
+
+const CAS_LOGIN_HEADERS = Object.freeze({
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+});
+
+const CAS_SMS_REQUIRED_MESSAGE = "学校账号已启用短信二次验证，服务器无法代收验证码。请改用「短信验证码登录」完成连接。";
+
 async function loginCasService({ jar, username, password, rememberMe = true, serviceUrl }) {
   const loginUrl = `${CAS_ORIGIN}/cas/login?service=${encodeURIComponent(serviceUrl)}`;
   const loginPage = await fetchWithJar(loginUrl, {
@@ -1862,6 +1878,9 @@ async function loginCasService({ jar, username, password, rememberMe = true, ser
 
   if (post.status < 300 || post.status >= 400) {
     const failureHtml = await readUpstreamText(post);
+    if (looksLikeSmsChallenge(failureHtml)) {
+      throw new HttpError(400, CAS_SMS_REQUIRED_MESSAGE, null, "CAS_SMS_REQUIRED");
+    }
     throw new HttpError(401, htmlErrorMessage(failureHtml));
   }
 
@@ -1934,6 +1953,9 @@ async function getCasTicketRedirect({ jar, username, password, rememberMe = true
   });
   if (post.status < 300 || post.status >= 400) {
     const failureHtml = await readUpstreamText(post);
+    if (looksLikeSmsChallenge(failureHtml)) {
+      throw new HttpError(400, CAS_SMS_REQUIRED_MESSAGE, null, "CAS_SMS_REQUIRED");
+    }
     throw new HttpError(401, htmlErrorMessage(failureHtml));
   }
   const location = post.headers.get("location");
@@ -1942,17 +1964,13 @@ async function getCasTicketRedirect({ jar, username, password, rememberMe = true
   return assertAllowedSchoolUrl(new URL(location, action).href);
 }
 
-async function loginWithCasFull({ username, password, rememberMe = true, saveCredentials = false }) {
-  const jar = emptyJar();
-  // loginCasService 返回的响应持有上游并发槽，必须在调用方消费掉。
-  const casLogin = await loginCasService({ jar, username, password, rememberMe, serviceUrl: SERVICE_URL });
-  await discardUpstreamResponse(casLogin.response).catch(() => {});
-
-  jar.meta.schoolAccount = normalizeSchoolLoginAccount(username);
-  jar.meta.autoRelogin = saveCredentials
+async function finalizeCasLogin({ jar, schoolAccount, password = "", rememberMe = true, saveCredentials = false }) {
+  jar.meta.schoolAccount = normalizeSchoolLoginAccount(schoolAccount) || null;
+  // 短信验证码登录没有可复用的密码，此时不写入自动重登凭据，避免用空密码反复重试。
+  jar.meta.autoRelogin = saveCredentials && password
     ? {
         enabled: true,
-        username: normalizeSchoolLoginAccount(username),
+        username: normalizeSchoolLoginAccount(schoolAccount),
         password,
         rememberMe: rememberMe !== false,
         savedAt: new Date().toISOString()
@@ -1971,20 +1989,24 @@ async function loginWithCasFull({ username, password, rememberMe = true, saveCre
     jar.meta.account = view.account || null;
     jar.meta.ownerName = view.ownerName || null;
     jar.meta.lastValidatedAt = new Date().toISOString();
+    // 短信验证码登录时调用方拿不到学号，登录成功后再用上游返回的账号补齐。
+    if (!jar.meta.schoolAccount && view.account) {
+      jar.meta.schoolAccount = normalizeSchoolLoginAccount(view.account);
+    }
   }
-  await activateCampusSessions(jar, { username, password, rememberMe }).catch((error) => {
+  await activateCampusSessions(jar, { username: schoolAccount, password, rememberMe }).catch((error) => {
     jar.meta.campus ||= {};
     jar.meta.campus.lastError = error.message || "校园一卡通登录失败";
   });
-  await activateAcademicSession(jar, { username, password, rememberMe }).catch((error) => {
+  await activateAcademicSession(jar, { username: schoolAccount, password, rememberMe }).catch((error) => {
     jar.meta.academic ||= {};
     jar.meta.academic.lastError = error.message || "教务系统登录失败";
   });
-  await activatePortalSession(jar, { username, password, rememberMe }).catch((error) => {
+  await activatePortalSession(jar, { username: schoolAccount, password, rememberMe }).catch((error) => {
     jar.meta.portal ||= {};
     jar.meta.portal.lastError = error.message || "用户中心登录失败";
   });
-  await issueLibroomMemberToken(jar, { username, password, rememberMe }).catch((error) => {
+  await issueLibroomMemberToken(jar, { username: schoolAccount, password, rememberMe }).catch((error) => {
     logger.warn("libroom_member_token_failed", { userId: currentUserId(), ...libroomFailureLog(error) });
     markCasFailureIfNeeded(jar, error);
     jar.meta.libroom = {
@@ -1997,8 +2019,157 @@ async function loginWithCasFull({ username, password, rememberMe = true, saveCre
   return { view, status: storedSessionSummary(jar) };
 }
 
+async function loginWithCasFull({ username, password, rememberMe = true, saveCredentials = false }) {
+  const jar = emptyJar();
+  // loginCasService 返回的响应持有上游并发槽，必须在调用方消费掉。
+  const casLogin = await loginCasService({ jar, username, password, rememberMe, serviceUrl: SERVICE_URL });
+  await discardUpstreamResponse(casLogin.response).catch(() => {});
+  return finalizeCasLogin({ jar, schoolAccount: username, password, rememberMe, saveCredentials });
+}
+
 async function loginWithCas({ username, password, rememberMe = true, saveCredentials = false }) {
   return loginWithCasFull({ username, password, rememberMe, saveCredentials });
+}
+
+// 学校 CAS 在密码校验通过后会强制下发短信二次验证，服务器无法代收验证码。
+// 因此改走学校自带的“手机号 + 短信验证码”登录通道：服务器负责建立会话并触发下发，
+// 验证码由用户在客户端输入后回传，服务器再用同一会话换取 CASTGC。
+async function beginCasSmsLogin({ phone, serviceUrl = SERVICE_URL }) {
+  const normalized = normalizeSmsPhone(phone);
+  if (!isMobilePhone(normalized)) {
+    throw new HttpError(400, "请输入与学校账号绑定的 11 位手机号。", null, "CAS_SMS_PHONE_INVALID");
+  }
+
+  const cooldown = casSmsPending.sendAllowed(currentUserId());
+  if (!cooldown.allowed) {
+    throw new HttpError(
+      429,
+      `验证码发送过于频繁，请 ${Math.ceil(cooldown.retryAfterMs / 1000)} 秒后再试。`,
+      null,
+      "CAS_SMS_SEND_TOO_FREQUENT"
+    );
+  }
+
+  const jar = emptyJar();
+  const loginUrl = casLoginUrlWithService(`${CAS_ORIGIN}/cas/login`, serviceUrl, CAS_ORIGIN);
+  const page = await fetchWithJar(loginUrl, { jar, headers: CAS_LOGIN_HEADERS });
+  const html = await readUpstreamText(page);
+
+  const execution = extractInputValue(html, "execution");
+  if (!execution) {
+    throw new HttpError(
+      502,
+      "未找到学校登录令牌 execution，登录页结构可能已变化。",
+      { endpoint: "/cas/login" },
+      "CAS_LOGIN_PAGE_CHANGED"
+    );
+  }
+  const action = new URL(extractFormAction(html, serviceUrl), loginUrl).href;
+
+  const smsResponse = await fetchWithJar(casSmsSendUrl(CAS_ORIGIN), {
+    jar,
+    method: "POST",
+    headers: {
+      accept: "application/json, text/plain, */*",
+      "content-type": "application/x-www-form-urlencoded; charset=UTF-8",
+      origin: CAS_ORIGIN,
+      referer: loginUrl,
+      "x-requested-with": "XMLHttpRequest"
+    },
+    body: new URLSearchParams({ request_username: normalized }).toString()
+  });
+  const smsPayload = parseJsonLike(await readUpstreamText(smsResponse)) || {};
+  if (smsPayload.success !== true && smsPayload.success !== "true") {
+    throw new HttpError(
+      400,
+      smsPayload.errormsg || "短信验证码发送失败，请确认该手机号已绑定学校账号。",
+      { errorcode: smsPayload.errorcode || null },
+      "CAS_SMS_SEND_FAILED"
+    );
+  }
+
+  casSmsPending.markSent(currentUserId());
+  const pending = casSmsPending.put({
+    userId: currentUserId(),
+    jar,
+    phone: normalized,
+    execution,
+    action,
+    serviceUrl
+  });
+  logger.info("cas_sms_code_sent", { userId: currentUserId(), phone: maskSmsPhone(normalized) });
+  return {
+    pendingId: pending.id,
+    phone: maskSmsPhone(normalized),
+    expiresInSeconds: Math.floor(pending.expiresInMs / 1000)
+  };
+}
+
+async function completeCasSmsLogin({ pendingId, code, rememberMe = true }) {
+  const taken = casSmsPending.take({ userId: currentUserId(), id: String(pendingId || "") });
+  if (!taken.ok) {
+    const message = taken.reason === "expired"
+      ? "验证码已超时，请重新获取。"
+      : taken.reason === "too_many_attempts"
+        ? "验证码错误次数过多，请重新获取。"
+        : "登录会话已失效，请重新获取验证码。";
+    throw new HttpError(410, message, null, "CAS_SMS_PENDING_INVALID");
+  }
+
+  const smsCode = String(code || "").replace(/\D+/g, "");
+  if (smsCode.length < 4) {
+    throw new HttpError(400, "请输入手机收到的短信验证码。", null, "CAS_SMS_CODE_INVALID");
+  }
+
+  const { jar, phone, action } = taken.entry;
+  const form = new URLSearchParams();
+  form.set("username", phone);
+  form.set("smscode", smsCode);
+  form.set("execution", taken.entry.execution);
+  form.set("_eventId", "submit");
+  form.set("loginType", "2");
+  form.set("submit", "登录");
+  if (rememberMe) form.set("rememberMe", "true");
+
+  const post = await fetchWithJar(action, {
+    jar,
+    method: "POST",
+    headers: {
+      ...CAS_LOGIN_HEADERS,
+      "content-type": "application/x-www-form-urlencoded",
+      origin: CAS_ORIGIN,
+      referer: action
+    },
+    body: form.toString()
+  });
+
+  if (post.status < 300 || post.status >= 400) {
+    const failureHtml = await readUpstreamText(post);
+    // 验证码错误时 CAS 会换发新的 execution，保留待验证会话以便用户重新输入。
+    const nextExecution = extractInputValue(failureHtml, "execution");
+    if (nextExecution) taken.entry.execution = nextExecution;
+    throw new HttpError(
+      401,
+      htmlErrorMessage(failureHtml, "验证码不正确或已过期，请重新输入。"),
+      null,
+      "CAS_SMS_CODE_REJECTED"
+    );
+  }
+
+  const location = post.headers.get("location");
+  await discardUpstreamResponse(post);
+  if (!location) {
+    throw new HttpError(401, "学校未返回登录跳转地址，短信验证码登录失败。", null, "CAS_SMS_NO_REDIRECT");
+  }
+
+  const landing = await followRedirectsWithJar(new URL(location, action).href, jar, {
+    method: "GET",
+    headers: CAS_LOGIN_HEADERS
+  });
+  await discardUpstreamResponse(landing.response).catch(() => {});
+  casSmsPending.drop(String(pendingId));
+  logger.info("audit_school_account_connected_by_sms", { actorUserId: currentUserId() });
+  return finalizeCasLogin({ jar, schoolAccount: "", rememberMe, saveCredentials: false });
 }
 
 function calendarPaths(token) {
@@ -2634,8 +2805,10 @@ async function handleApiRoutes(req, res, url) {
 
     if (await handleCampusCoreRoutes(req, res, url, {
       HttpError,
+      beginCasSmsLogin,
       campusQueryFromSearch,
       clearSessionJar,
+      completeCasSmsLogin,
       currentUserId,
       defaultMonth,
       getCampusAccommodation,

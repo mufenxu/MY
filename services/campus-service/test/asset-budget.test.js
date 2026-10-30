@@ -7,6 +7,7 @@ const budgets = {
   "public/academic-integrations.js": 8 * 1024,
   "public/academic-integrations.css": 8 * 1024,
   "public/admin.js": 4 * 1024,
+  "public/sms-login.js": 8 * 1024,
   "public/libroom-page.js": 16 * 1024,
   "public/libroom-page.css": 8 * 1024,
   "public/browser-check.js": 4 * 1024,

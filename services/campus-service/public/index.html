@@ -225,6 +225,18 @@
         </label>
         <button id="loginButton" type="submit">登录并保存会话</button>
       </form>
+      <div class="sms-login">
+        <button id="smsLoginToggle" type="button" class="auth-link">学校要求短信验证？改用短信验证码登录</button>
+        <form id="smsLoginForm" class="login-form" autocomplete="off" hidden>
+          <input id="smsPhoneInput" type="tel" inputmode="numeric" maxlength="11" placeholder="学校绑定的手机号" autocomplete="tel">
+          <div class="sms-code-row">
+            <input id="smsCodeInput" type="text" inputmode="numeric" maxlength="8" placeholder="短信验证码">
+            <button id="smsSendButton" type="button" class="ghost">获取验证码</button>
+          </div>
+          <p id="smsLoginHint" hidden></p>
+          <button id="smsLoginButton" type="submit">验证并登录</button>
+        </form>
+      </div>
       <div class="auth-actions">
         <button id="logoutButton" type="button" class="ghost">退出学校会话</button>
       </div>
@@ -912,6 +924,7 @@
   <script src="./platform-runtime.js?v=20260715-sso-v1" defer></script>
   <script src="./formatters.js?v=20260722-global-scope-v1" defer></script>
   <script src="./academic-integrations.js?v=20260721-calendar-reminders" defer></script>
+  <script src="./sms-login.js?v=20261030" defer></script>
   <script src="./app.js?v=20260912-school-relogin" defer></script>
   <script src="./libroom-page.js" defer></script>
   <script src="./admin.js?v=20260715-admin-workspace-v2" defer></script>

@@ -508,6 +508,64 @@ body[data-app-locked="true"] #appGate {
   gap: 12px;
 }
 
+.sms-login {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.auth-link {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--campus-start);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.auth-link:hover {
+  color: var(--campus-end);
+}
+
+.sms-code-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.sms-code-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sms-code-row button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+#smsLoginHint {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+#smsLoginHint[data-tone="ok"] {
+  color: var(--sync-start);
+}
+
+#smsLoginHint[data-tone="error"] {
+  color: #ef4444;
+}
+
 .password-field {
   position: relative;
   display: block;
