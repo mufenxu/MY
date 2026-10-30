@@ -21,7 +21,7 @@ import { FixedWindowAttemptLimiter } from "./src/lib/rate-limiter.js";
 import { shouldLogClientError, shouldLogRequestCompleted } from "./src/lib/request-logging.js";
 import { loadDotEnv, parseBooleanEnv } from "./src/lib/env.js";
 import { createHttpToolkit, HttpError, isUpstreamNetworkFailure } from "./src/lib/http.js";
-import { casLoginRequiredMessage, isCasLoginRequiredError } from "./src/lib/auth-errors.js";
+import { casLoginRequiredMessage, isCasLoginRequiredError, schoolAccountRequiredCode } from "./src/lib/auth-errors.js";
 import { normalizePagination } from "./src/lib/pagination.js";
 import { hashPassword, isValidUsername, normalizeUsername, verifyPassword } from "./src/lib/password.js";
 import { createSensitiveJsonCodec, deriveDataEncryptionKey } from "./src/lib/sensitive-json.js";
@@ -3085,6 +3085,14 @@ function respondApiError(req, res, url, error) {
   const safeDetails = error?.details && status < 500
     ? Object.fromEntries(Object.entries(error.details).filter(([key]) => ["waitSeconds", "availableAt", "code"].includes(key)))
     : undefined;
+  // 学校账号失效的 401 统一成 SCHOOL_ACCOUNT_REQUIRED，客户端据此拉起短信登录弹窗。
+  // 原始 code 仍保留在日志的 error 字段里，排障不受影响。
+  const normalizedCode = schoolAccountRequiredCode({
+    status,
+    code: error?.code,
+    message: error?.message,
+    pathname: url.pathname
+  });
   json(res, status, {
     ok: false,
     error: upstreamUnreachable
@@ -3092,7 +3100,7 @@ function respondApiError(req, res, url, error) {
       : (status >= 500 && NODE_ENV === "production" ? "服务器暂时无法完成请求，请稍后重试。" : (error.message || "服务器异常")),
     code: upstreamUnreachable
       ? "UPSTREAM_UNAVAILABLE"
-      : (error.code || (status >= 500 ? "INTERNAL_ERROR" : "REQUEST_FAILED")),
+      : (normalizedCode || error.code || (status >= 500 ? "INTERNAL_ERROR" : "REQUEST_FAILED")),
     details: safeDetails,
     requestId: context.requestId || null
   });

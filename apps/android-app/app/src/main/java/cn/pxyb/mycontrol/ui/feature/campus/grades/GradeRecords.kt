@@ -71,8 +71,9 @@ fun parseGradeCsv(csv: String): List<GradeRecord> {
 
 data class GradePlan(val requiredCredits: Double? = null, val targetGpa: Double? = null, val futureCredits: Double? = null)
 data class GradesUiState(val loading: Boolean = false, val loaded: Boolean = false, val records: List<GradeRecord> = emptyList(), val plan: GradePlan = GradePlan(), val error: String? = null)
-class GradesStateHolder(parent: CoroutineScope, context: Context, private val account: () -> String?, onExpired: (String) -> Unit) :
-    FeatureStateHolder<GradesUiState>(parent, GradesUiState(), onExpired) {
+class GradesStateHolder(parent: CoroutineScope, context: Context, private val account: () -> String?, onExpired: (String) -> Unit,
+    onSchoolAccountRequired: () -> Unit = {}) :
+    FeatureStateHolder<GradesUiState>(parent, GradesUiState(), onExpired, onSchoolAccountRequired) {
     private val codec = EncryptedPreferenceCodec(context.getSharedPreferences("academic_records", Context.MODE_PRIVATE), "my_control_academic_records")
     private fun key() = "grades:${checkNotNull(accountStorageScope(account())) { "请先登录。" }}"
     fun load() {

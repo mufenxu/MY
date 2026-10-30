@@ -20,7 +20,8 @@ class LibrarySeatStateHolder(
     parentScope: CoroutineScope,
     private val campus: CampusRepository,
     onSessionExpired: (String) -> Unit,
-) : FeatureStateHolder<LibrarySeatUiState>(parentScope, LibrarySeatUiState(), onSessionExpired) {
+    onSchoolAccountRequired: () -> Unit = {},
+) : FeatureStateHolder<LibrarySeatUiState>(parentScope, LibrarySeatUiState(), onSessionExpired, onSchoolAccountRequired) {
     private var queryJob: Job? = null
     private var makeLifeJob: Job? = null
     private var timelineJob: Job? = null

@@ -16,8 +16,9 @@ data class AgendaUiState(
     val errors: List<String> = emptyList(),
 )
 
-class AgendaStateHolder(parentScope: CoroutineScope, private val campus: CampusRepository, onExpired: (String) -> Unit) :
-    FeatureStateHolder<AgendaUiState>(parentScope, AgendaUiState(), onExpired) {
+class AgendaStateHolder(parentScope: CoroutineScope, private val campus: CampusRepository, onExpired: (String) -> Unit,
+    onSchoolAccountRequired: () -> Unit = {}) :
+    FeatureStateHolder<AgendaUiState>(parentScope, AgendaUiState(), onExpired, onSchoolAccountRequired) {
     fun refresh() {
         if (mutableState.value.loading) return
         scope.launch {

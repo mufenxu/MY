@@ -79,7 +79,8 @@ class EnergyStore(context: Context, username: String) {
 }
 
 class EnergyStateHolder(parent: CoroutineScope, private val context: Context, private val campus: CampusRepository,
-    private val account: () -> String?, onExpired: (String) -> Unit) : FeatureStateHolder<EnergyUiState>(parent, EnergyUiState(), onExpired) {
+    private val account: () -> String?, onExpired: (String) -> Unit, onSchoolAccountRequired: () -> Unit = {}) :
+    FeatureStateHolder<EnergyUiState>(parent, EnergyUiState(), onExpired, onSchoolAccountRequired) {
     fun load(month: String = mutableState.value.month) = launchAction({ loading }, { copy(loading = true, error = null) }, {
         val username = checkNotNull(account()) { "请先登录。" }
         val savedStore = EnergyStore(context, username)

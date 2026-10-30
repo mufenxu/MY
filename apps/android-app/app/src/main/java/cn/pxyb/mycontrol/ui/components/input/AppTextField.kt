@@ -30,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -62,6 +63,13 @@ fun AppTextField(
     errorMessage: String? = null,
     keyboardOptions: KeyboardOptions = if (isPassword) KeyboardOptions(keyboardType = KeyboardType.Password) else KeyboardOptions.Default,
     keyboardActions: KeyboardActions = KeyboardActions.Default,
+    /**
+     * 供设备侧 UI 回归测试定位可输入节点。
+     *
+     * 必须落在真正的可编辑节点上：外层 Column 不是可聚焦节点，把 tag 挂在那里
+     * `performTextInput` 会直接失败。
+     */
+    testTag: String? = null,
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
     val isError = !errorMessage.isNullOrBlank()
@@ -105,6 +113,7 @@ fun AppTextField(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 58.dp)
+                .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
                 .shadow(if (enabled) 2.dp else 0.dp, fieldShape)
                 .semantics {
                     // 标签移到框外后，读屏名称仍需附着在可编辑节点上。

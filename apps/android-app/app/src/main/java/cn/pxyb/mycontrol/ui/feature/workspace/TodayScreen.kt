@@ -93,6 +93,7 @@ fun TodayScreen(
     onOpenLibrarySeatReservation: () -> Unit,
     onOpenWaterValve: () -> Unit,
     onOpenChaoxing: () -> Unit,
+    onOpenSchoolAccountLogin: () -> Unit = {},
     onConsumeSharedDraft: () -> Unit,
     onOpenFeature: (String) -> Unit = {},
     initialSection: WorkspaceDestination = WorkspaceDestination.Today,
@@ -506,6 +507,7 @@ fun TodayScreen(
                     onOpenLibrarySeatReservation = onOpenLibrarySeatReservation,
                     onOpenWaterValve = onOpenWaterValve,
                     onOpenChaoxing = onOpenChaoxing,
+                    onOpenSchoolAccountLogin = onOpenSchoolAccountLogin,
                 )
             }
         }

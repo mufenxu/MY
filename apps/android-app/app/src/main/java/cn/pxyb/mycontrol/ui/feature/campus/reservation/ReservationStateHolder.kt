@@ -22,7 +22,8 @@ class ReservationStateHolder(
     private val campus: CampusRepository,
     private val store: PersonalWorkspaceStore,
     onSessionExpired: (String) -> Unit,
-) : FeatureStateHolder<ReservationUiState>(parentScope, ReservationUiState(), onSessionExpired) {
+    onSchoolAccountRequired: () -> Unit = {},
+) : FeatureStateHolder<ReservationUiState>(parentScope, ReservationUiState(), onSessionExpired, onSchoolAccountRequired) {
     private var autoCandidateSpacesJob: Job? = null
 
     override fun clearPendingState(current: ReservationUiState) = current.copy(

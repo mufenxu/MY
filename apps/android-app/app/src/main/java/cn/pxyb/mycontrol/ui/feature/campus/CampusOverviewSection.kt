@@ -52,6 +52,7 @@ internal fun CampusOverviewSection(
     onOpenLibrarySeatReservation: () -> Unit,
     onOpenWaterValve: () -> Unit,
     onOpenChaoxing: () -> Unit,
+    onOpenSchoolAccountLogin: () -> Unit = {},
 ) {
     if (overview == null) {
         Column(
@@ -65,7 +66,12 @@ internal fun CampusOverviewSection(
                 onOpenWaterValve = onOpenWaterValve,
                 onOpenChaoxing = onOpenChaoxing,
             )
-            AppEmptyState("校园信息正在同步", detail = "连接学校账号后，会显示成绩、空教室、一卡通和宿舍能耗。")
+            AppEmptyState(
+                "校园信息正在同步",
+                detail = "连接学校账号后，会显示成绩、空教室、一卡通和宿舍能耗。",
+                actionText = "连接学校账号",
+                onAction = onOpenSchoolAccountLogin,
+            )
         }
         return
     }

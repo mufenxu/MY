@@ -35,6 +35,18 @@ internal const val CAMPUS_LIBRARY_SEAT_TIMELINE_PATH = "$CAMPUS_API_PATH/campus/
 internal const val CAMPUS_LIBRARY_SEAT_BREACHES_PATH = "$CAMPUS_API_PATH/campus/library-seat/breaches"
 internal const val CAMPUS_LIBRARY_SEAT_DOOR_LOGS_PATH = "$CAMPUS_API_PATH/campus/library-seat/door-logs"
 
+/** 学校账号「手机号 + 短信验证码」登录通道。 */
+internal const val CAMPUS_SMS_SEND_PATH = "$CAMPUS_API_PATH/auth/login/sms/send"
+internal const val CAMPUS_SMS_VERIFY_PATH = "$CAMPUS_API_PATH/auth/login/sms/verify"
+
+/**
+ * 学校账号（统一身份认证）失效的服务端语义 code。
+ *
+ * 由 campus-service 在响应出口归一：教务、能耗、用户中心、研讨间、座位预约等
+ * 各连接器抛出的 401 文案不同，但都表示「只有用户重新登录学校账号才能恢复」。
+ */
+internal const val SCHOOL_ACCOUNT_REQUIRED = "SCHOOL_ACCOUNT_REQUIRED"
+
 internal fun shouldInvalidatePlatformSession(status: Int, code: String): Boolean =
     status == 401 && code in setOf(
         "UNAUTHORIZED",
@@ -45,3 +57,13 @@ internal fun shouldInvalidatePlatformSession(status: Int, code: String): Boolean
         "DEVICE_KEY_UNAVAILABLE",
         "DEVICE_RISK_DETECTED",
     )
+
+/**
+ * 学校账号失效：应弹出短信登录弹窗，**不能**清掉平台会话。
+ *
+ * 两者必须分开：平台会话失效要回到登录页，学校账号失效只是校园数据取不到，
+ * 应用其余功能仍然可用。把它并入 [shouldInvalidatePlatformSession] 会让用户
+ * 在校园会话过期时被整个踢出应用。
+ */
+internal fun isSchoolAccountRequired(status: Int, code: String): Boolean =
+    status == 401 && code == SCHOOL_ACCOUNT_REQUIRED

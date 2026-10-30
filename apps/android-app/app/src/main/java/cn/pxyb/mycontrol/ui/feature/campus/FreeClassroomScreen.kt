@@ -155,7 +155,7 @@ fun FreeClassroomScreen(
             item(key = "free-room-error", contentType = "banner") {
                 AppFeedbackBanner(
                     message = if (message.contains("登录") || message.contains("会话")) {
-                        "学校账号登录已失效，请重新登录后再查询。"
+                        "学校账号登录已失效，刷新或重新进入本页会自动弹出登录。"
                     } else {
                         "空教室查询失败：$message"
                     },

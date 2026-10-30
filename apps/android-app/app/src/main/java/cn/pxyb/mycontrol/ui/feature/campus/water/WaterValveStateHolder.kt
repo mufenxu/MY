@@ -16,7 +16,8 @@ class WaterValveStateHolder(
     private val api: PlatformApi,
     private val canRun: () -> Boolean,
     onSessionExpired: (String) -> Unit,
-) : FeatureStateHolder<WaterValveUiState>(parentScope, WaterValveUiState(), onSessionExpired) {
+    onSchoolAccountRequired: () -> Unit = {},
+) : FeatureStateHolder<WaterValveUiState>(parentScope, WaterValveUiState(), onSessionExpired, onSchoolAccountRequired) {
     private val waterValveMutex = Mutex()
     private var waterBillJob: Job? = null
 

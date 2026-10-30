@@ -41,7 +41,8 @@ class ChaoxingStateHolder(
     private val canRun: () -> Boolean,
     private val accountName: () -> String?,
     onSessionExpired: (String) -> Unit,
-) : FeatureStateHolder<ChaoxingUiState>(parentScope, ChaoxingUiState(), onSessionExpired) {
+    onSchoolAccountRequired: () -> Unit = {},
+) : FeatureStateHolder<ChaoxingUiState>(parentScope, ChaoxingUiState(), onSessionExpired, onSchoolAccountRequired) {
     override fun clearPendingState(current: ChaoxingUiState) = current.copy(
         busy = false, operation = "", location = null,
         pending = current.pending || current.operation == "sign",

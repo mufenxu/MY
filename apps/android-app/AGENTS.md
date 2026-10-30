@@ -176,6 +176,7 @@
 | `StartupAppUpdateDialogTest` | 每个更新阶段与按钮文案/可用性一一对应，下载中不可重复触发安装，失败态保留重试入口 |
 | `LibrarySeatReservationScreenTest` | 进入即触发概览/我的预约/当前使用三条加载，三个页签可切换且切走后隐藏查询条件 |
 | `GitHubProjectsScreenTest` | 仓库列表/账号卡片/空态随状态渲染；点开仓库按 `owner/repo` 触发 Releases 加载并展示结果 |
+| `SchoolAccountLoginDialogTest` | 学校账号短信登录弹窗：手机号满 11 位才触发发码、验证码满 6 位才触发登录、未发码时不可提交、隐藏态不渲染字段 |
 
 运行：`./gradlew :app:connectedDebugAndroidTest`（需模拟器或真机；**不在**根 `check` 与 CI 门禁内，CI 无设备）。
 

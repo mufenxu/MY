@@ -597,6 +597,34 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         return envelope.optJSONObject("data") ?: envelope
     }
 
+    /** 让学校给已绑定学校账号的手机号下发短信验证码。 */
+    internal suspend fun sendSchoolSmsCode(phone: String): SchoolSmsChallenge = withContext(Dispatchers.IO) {
+        val envelope = http.execute(
+            CAMPUS_SMS_SEND_PATH,
+            method = "POST",
+            body = JSONObject().put("phone", phone),
+        ).json
+        val data = envelope.optJSONObject("data") ?: envelope
+        SchoolSmsChallenge(
+            pendingId = data.campusOptionalText("pendingId")
+                ?: throw ApiException("学校未返回短信验证会话，请重新获取验证码。", 502, "CAS_SMS_PENDING_MISSING"),
+            maskedPhone = data.campusOptionalText("phone") ?: phone,
+            expiresInSeconds = data.optInt("expiresInSeconds", 300).coerceAtLeast(60),
+        )
+    }
+
+    /** 用短信验证码换取学校登录票据，服务端随后零密码激活全部校园子系统。 */
+    internal suspend fun verifySchoolSmsCode(pendingId: String, code: String): Unit = withContext(Dispatchers.IO) {
+        http.execute(
+            CAMPUS_SMS_VERIFY_PATH,
+            method = "POST",
+            body = JSONObject()
+                .put("pendingId", pendingId)
+                .put("code", code)
+                .put("rememberMe", true),
+        )
+    }
+
     private suspend fun <T> campusRequestOrNull(request: suspend () -> T): T? = try {
         request()
     } catch (error: CancellationException) {
@@ -618,3 +646,17 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
 private const val LIBRARY_SEAT_SEAT_CACHE_MS = 60_000L
 
 private const val LIBRARY_SEAT_SEAT_CACHE_LIMIT = 40
+
+/** 一次待验证的短信登录会话。 */
+internal data class SchoolSmsChallenge(
+    val pendingId: String,
+    val maskedPhone: String,
+    val expiresInSeconds: Int,
+)
+
+/**
+ * 服务端对不存在的字段可能返回 JSON null，`optString` 会得到字面量 "null"，
+ * 直接透到界面会显示成 "null"。这里统一收敛成 null。
+ */
+internal fun JSONObject.campusOptionalText(key: String): String? =
+    if (isNull(key)) null else optString(key).trim().takeIf { it.isNotEmpty() && it != "null" }

@@ -3,6 +3,7 @@ package cn.pxyb.mycontrol.ui.state
 import android.os.SystemClock
 import cn.pxyb.mycontrol.data.ApiException
 import cn.pxyb.mycontrol.data.PlatformApi
+import cn.pxyb.mycontrol.data.isSchoolAccountRequired
 import cn.pxyb.mycontrol.data.shouldInvalidatePlatformSession
 import cn.pxyb.mycontrol.ui.AppUiState
 import cn.pxyb.mycontrol.ui.DataSection
@@ -22,6 +23,7 @@ internal class SectionRefreshController(
     private val api: PlatformApi,
     private val mutableState: MutableStateFlow<AppUiState>,
     private val onSessionExpired: (String) -> Unit,
+    private val onSchoolAccountRequired: () -> Unit = {},
 ) {
     private val refreshJobs = mutableMapOf<DataSection, Job>()
     private val lastRefreshElapsedMs = mutableMapOf<DataSection, Long>()
@@ -74,6 +76,9 @@ internal class SectionRefreshController(
                     }
                     if (error is ApiException && shouldInvalidatePlatformSession(error.status, error.code)) {
                         onSessionExpired(error.message ?: "登录会话已失效，请重新登录。")
+                    } else if (error is ApiException && isSchoolAccountRequired(error.status, error.code)) {
+                        // 学校账号失效由弹窗统一接管，不再往顶部堆一条全局错误横幅。
+                        onSchoolAccountRequired()
                     } else if (publishError) {
                         mutableState.update { it.copy(error = "部分数据暂不可用：${error.message ?: "请稍后重试。"}") }
                     }

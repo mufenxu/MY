@@ -455,7 +455,7 @@ internal fun LibrarySeatReservationScreen(
             item(key = "seat-error", contentType = "banner") {
                 AppFeedbackBanner(
                     if (message.contains("登录") || message.contains("会话")) {
-                        "学校账号登录已失效，请重新登录后再试。"
+                        "学校账号登录已失效，刷新或重新进入本页会自动弹出登录。"
                     } else {
                         "操作失败：$message"
                     },

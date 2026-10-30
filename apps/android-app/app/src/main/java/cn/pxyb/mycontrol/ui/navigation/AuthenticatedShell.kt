@@ -107,6 +107,7 @@ import cn.pxyb.mycontrol.ui.feature.authenticator.AuthenticatorCloudPanel
 import cn.pxyb.mycontrol.ui.feature.authenticator.AuthenticatorScreen
 import cn.pxyb.mycontrol.ui.feature.authenticator.AuthenticatorViewModel
 import cn.pxyb.mycontrol.ui.feature.campus.FreeClassroomScreen
+import cn.pxyb.mycontrol.ui.feature.campus.account.SchoolAccountLoginDialog
 import cn.pxyb.mycontrol.ui.feature.campus.library.LibrarySeatReservationScreen
 import cn.pxyb.mycontrol.ui.feature.campus.library.LibrarySeatTab
 import cn.pxyb.mycontrol.ui.feature.campus.reservation.ReservationScreen
@@ -219,6 +220,7 @@ internal fun AuthenticatedShell(
 
     val sharedImage by viewModel.sharedImage.collectAsStateWithLifecycle()
     val searchTarget by viewModel.searchTarget.collectAsStateWithLifecycle()
+    val schoolAccountState by viewModel.schoolAccountState.collectAsStateWithLifecycle()
     LaunchedEffect(sharedImage) {
         sharedImage?.let { uri ->
             navigateToSubScreen(AppRoute.Screenshot)
@@ -894,6 +896,7 @@ internal fun AuthenticatedShell(
                                 navigateToSubScreen(AppRoute.CampusWaterValve)
                             },
                             onOpenChaoxing = { navigateToSubScreen(AppRoute.Chaoxing) },
+                            onOpenSchoolAccountLogin = viewModel::openSchoolAccountLogin,
                             onConsumeSharedDraft = viewModel::consumeSharedTodoDraft,
                             onOpenFeature = navigateToSubScreen,
                             initialSection = destination,
@@ -1199,6 +1202,17 @@ internal fun AuthenticatedShell(
                     }) else null,
                 )
             }
+
+            SchoolAccountLoginDialog(
+                state = schoolAccountState,
+                onDismiss = viewModel::dismissSchoolAccountLogin,
+                onPhoneChange = viewModel::updateSchoolAccountPhone,
+                onCodeChange = viewModel::updateSchoolAccountCode,
+                onSendCode = viewModel::sendSchoolAccountCode,
+                onResendCode = viewModel::resendSchoolAccountCode,
+                onBackToPhone = viewModel::backToSchoolAccountPhone,
+                onVerify = viewModel::verifySchoolAccountCode,
+            )
 
             if (settingsOpen || initialSetupOpen) {
                 AppSettingsDialog(

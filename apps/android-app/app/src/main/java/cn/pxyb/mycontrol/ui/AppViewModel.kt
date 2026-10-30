@@ -58,6 +58,7 @@ import cn.pxyb.mycontrol.ui.feature.auth.toEntryUiState
 import cn.pxyb.mycontrol.ui.feature.auth.toQrLoginUiState
 import cn.pxyb.mycontrol.ui.feature.campus.CampusDataStateHolder
 import cn.pxyb.mycontrol.ui.feature.campus.CampusDataUiState
+import cn.pxyb.mycontrol.ui.feature.campus.account.SchoolAccountStateHolder
 import cn.pxyb.mycontrol.ui.feature.campus.chaoxing.ChaoxingStateHolder
 import cn.pxyb.mycontrol.ui.feature.campus.library.LibrarySeatStateHolder
 import cn.pxyb.mycontrol.ui.feature.campus.reservation.ReservationStateHolder
@@ -200,7 +201,23 @@ class AppViewModel(
             application, viewModelScope, api, sessionStore, personalStore, alertNotifier, mutableState, ::forceReauthentication,
         ) { syncRemoteNotifications() }
     }
-    private val campusData = CampusDataStateHolder(viewModelScope, api, ::forceReauthentication)
+    /**
+     * 学校账号（统一身份认证）短信登录。
+     *
+     * 校园域任意请求返回 SCHOOL_ACCOUNT_REQUIRED 都会打开这个弹窗：用户留在当前页
+     * 输入手机号与短信验证码就能恢复，不必再切到后台网页。平台会话失效仍然走
+     * [forceReauthentication]，两者不能混用。
+     */
+    private val schoolAccount = SchoolAccountStateHolder(
+        viewModelScope,
+        api.campus,
+        onSessionExpired = ::forceReauthentication,
+        onRecovered = ::onSchoolAccountRecovered,
+        onMessage = { message -> mutableState.update { it.copy(message = message, error = null) } },
+    )
+    val schoolAccountState = schoolAccount.state
+    private val requestSchoolLogin: () -> Unit = { schoolAccount.requestLogin() }
+    private val campusData = CampusDataStateHolder(viewModelScope, api, ::forceReauthentication, requestSchoolLogin)
     val entryState = deriveState(AppUiState::toEntryUiState)
     val overviewState = deriveState(campusData.state) { state, campus -> state.toOverviewUiState(campus) }
     val operationsState = deriveState(campusData.state) { state, campus -> state.toOperationsUiState(campus) }
@@ -234,10 +251,10 @@ class AppViewModel(
     private val assistantChatMutable = MutableStateFlow(AssistantChatUiState())
     val assistantChatState: StateFlow<AssistantChatUiState> = assistantChatMutable.asStateFlow()
     val todayState = deriveState(campusData.state) { state, campus -> state.toTodayUiState(campus) }
-    val agenda = cn.pxyb.mycontrol.ui.feature.agenda.AgendaStateHolder(viewModelScope, api.campus, ::forceReauthentication)
+    val agenda = cn.pxyb.mycontrol.ui.feature.agenda.AgendaStateHolder(viewModelScope, api.campus, ::forceReauthentication, requestSchoolLogin)
     val study = cn.pxyb.mycontrol.ui.feature.study.StudyStateHolder(viewModelScope, application, { mutableState.value.user?.username }, ::forceReauthentication)
-    val energy = cn.pxyb.mycontrol.ui.feature.campus.energy.EnergyStateHolder(viewModelScope, application, api.campus, { mutableState.value.user?.username }, ::forceReauthentication)
-    val grades = cn.pxyb.mycontrol.ui.feature.campus.grades.GradesStateHolder(viewModelScope, application, { mutableState.value.user?.username }, ::forceReauthentication)
+    val energy = cn.pxyb.mycontrol.ui.feature.campus.energy.EnergyStateHolder(viewModelScope, application, api.campus, { mutableState.value.user?.username }, ::forceReauthentication, requestSchoolLogin)
+    val grades = cn.pxyb.mycontrol.ui.feature.campus.grades.GradesStateHolder(viewModelScope, application, { mutableState.value.user?.username }, ::forceReauthentication, requestSchoolLogin)
     val screenshot = cn.pxyb.mycontrol.ui.feature.todos.ScreenshotStateHolder(viewModelScope, application, { mutableState.value.user?.username }, ::forceReauthentication)
     val sharedImage = MutableStateFlow<android.net.Uri?>(null)
     fun acceptSharedImage(uri: android.net.Uri) { sharedImage.value = uri }
@@ -248,16 +265,18 @@ class AppViewModel(
         api,
         canRun = { mutableState.value.canRunRequest() },
         onSessionExpired = ::forceReauthentication,
+        onSchoolAccountRequired = requestSchoolLogin,
     )
     val waterValveState = waterValves.state
     val freeClassroomState = deriveState(campusData.state) { state, campus -> state.toFreeClassroomUiState(campus) }
-    val reservations = ReservationStateHolder(viewModelScope, api.campus, personalStore, ::forceReauthentication)
-    val librarySeats = LibrarySeatStateHolder(viewModelScope, api.campus, ::forceReauthentication)
+    val reservations = ReservationStateHolder(viewModelScope, api.campus, personalStore, ::forceReauthentication, requestSchoolLogin)
+    val librarySeats = LibrarySeatStateHolder(viewModelScope, api.campus, ::forceReauthentication, requestSchoolLogin)
     val chaoxing = ChaoxingStateHolder(
         viewModelScope, api.campus.chaoxing,
         canRun = { mutableState.value.canRunRequest() },
         accountName = sessionStore::readActiveUsername,
         onSessionExpired = ::forceReauthentication,
+        onSchoolAccountRequired = requestSchoolLogin,
     )
     val mediaDownload = MediaDownloadStateHolder(
         viewModelScope,
@@ -284,7 +303,7 @@ class AppViewModel(
     private var appInForeground = false
     private var activeWorkspaceSection: WorkspaceDestination? = null
     private var networkRecoveryJob: Job? = null
-    private val sectionRefresh = SectionRefreshController(viewModelScope, api, mutableState, ::forceReauthentication)
+    private val sectionRefresh = SectionRefreshController(viewModelScope, api, mutableState, ::forceReauthentication, requestSchoolLogin)
     private var alertsSeeded = false
     private var initialIncidentsLoaded = false
     private var initialTasksLoaded = false
@@ -909,6 +928,8 @@ class AppViewModel(
         mutableState.update { it.copy(loginEnrollment = null, loginRecoveryCodes = emptyList()) }
         accountSecurity.reset()
         cancelAccountRequests()
+        // 学校账号登录弹窗里的手机号与验证码属于个人信息，退出或切换账号时必须一并清掉。
+        schoolAccount.cancelPending()
         assistantChatMutable.value = AssistantChatUiState()
         pendingQrLogin = null
         clearRefreshCache()
@@ -1572,7 +1593,7 @@ class AppViewModel(
             try {
                 onOpen(api.campus.campusReservationOfficialWebSession())
             } catch (error: Throwable) {
-                handleFeatureRequestFailure(error, ::forceReauthentication)
+                handleFeatureRequestFailure(error, ::forceReauthentication, requestSchoolLogin)
                 reservations.showError(error.message ?: "学校官方预约入口打开失败，请稍后重试。")
                 throw error
             }
@@ -1918,6 +1939,29 @@ class AppViewModel(
             campusData.reloadCampusEnergy()
         }
     }
+
+    /**
+     * 短信登录成功后的数据恢复。
+     *
+     * 只重读数据：预约提交、水阀开关这类有副作用的操作不自动重放，
+     * 否则一次登录会在用户不知情时把失败的操作重新提交一遍。
+     */
+    private fun onSchoolAccountRecovered() {
+        sectionRefresh.retryUnavailableSections()
+        refreshCampusTimetable(force = true)
+        refreshCampusOverview(force = true)
+        activeWorkspaceSection?.let { refreshWorkspaceSection(it, force = true) }
+    }
+
+    // 学校账号短信登录弹窗：界面只发意图，手机号/验证码/倒计时都留在 SchoolAccountStateHolder。
+    fun openSchoolAccountLogin() = schoolAccount.startFresh()
+    fun dismissSchoolAccountLogin() = schoolAccount.dismiss()
+    fun updateSchoolAccountPhone(value: String) = schoolAccount.onPhoneChange(value)
+    fun updateSchoolAccountCode(value: String) = schoolAccount.onCodeChange(value)
+    fun sendSchoolAccountCode() = schoolAccount.sendCode()
+    fun resendSchoolAccountCode() = schoolAccount.resendCode()
+    fun backToSchoolAccountPhone() = schoolAccount.backToPhone()
+    fun verifySchoolAccountCode() = schoolAccount.verify()
 
     fun refreshWaterValve(force: Boolean = false) = waterValves.refreshWaterValve(force)
 
@@ -2410,7 +2454,7 @@ class AppViewModel(
             try {
                 onOpen(api.campus.librarySeatOfficialWebSession())
             } catch (error: Throwable) {
-                handleFeatureRequestFailure(error, ::forceReauthentication)
+                handleFeatureRequestFailure(error, ::forceReauthentication, requestSchoolLogin)
                 librarySeats.showError(error.message ?: "学校官方座位预约入口打开失败，请稍后重试。")
                 throw error
             }

@@ -32,7 +32,8 @@ class CampusDataStateHolder(
     parentScope: CoroutineScope,
     private val api: PlatformApi,
     onSessionExpired: (String) -> Unit,
-) : FeatureStateHolder<CampusDataUiState>(parentScope, CampusDataUiState(), onSessionExpired) {
+    onSchoolAccountRequired: () -> Unit = {},
+) : FeatureStateHolder<CampusDataUiState>(parentScope, CampusDataUiState(), onSessionExpired, onSchoolAccountRequired) {
     /** 纯数据缓存，没有需要撤销的「进行中」标记。 */
     override fun clearPendingState(current: CampusDataUiState): CampusDataUiState = current
 

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HttpError } from "../src/lib/http.js";
-import { casLoginRequiredMessage, isCasLoginRequiredError } from "../src/lib/auth-errors.js";
+import { casLoginRequiredMessage, isCasLoginRequiredError, schoolAccountRequiredCode, SCHOOL_ACCOUNT_REQUIRED } from "../src/lib/auth-errors.js";
 import { exchangeLibroomMemberToken } from "../src/lib/libroom.js";
 
 function upstreamError(status, message, code) {
@@ -71,4 +71,63 @@ test("研讨间换票成功时返回成员令牌", async () => {
     })
   });
   assert.equal(token, "member-token");
+});
+
+test("学校账号失效的 401 归一成统一 code", () => {
+  const cases = [
+    { status: 401, message: "统一身份认证会话已过期，请重新登录学校账号。" },
+    { status: 401, message: "教务系统会话已过期，请重新登录学校账号。" },
+    { status: 401, message: "还没有连接学校账号，请先登录。" },
+    { status: 401, message: "学校平台返回登录页，会话可能已过期。" },
+    { status: 401, message: "学校预约入口未返回统一认证票据。", code: "LIBROOM_CAS_TICKET_REQUIRED" },
+    { status: 401, message: "座位预约官方入口未返回登录票据。", code: "LIBRARY_SEAT_CAS_TOKEN_REQUIRED" }
+  ];
+  for (const item of cases) {
+    assert.equal(
+      schoolAccountRequiredCode({ ...item, pathname: "/api/energy/summary" }),
+      SCHOOL_ACCOUNT_REQUIRED,
+      item.message
+    );
+  }
+});
+
+test("不需要重新登录的 401 与其它状态码保持原样", () => {
+  // 票据已拿到、仅下游兑换失败：重新登录解决不了，归一化会让用户被反复要求登录。
+  assert.equal(
+    schoolAccountRequiredCode({
+      status: 401,
+      code: "LIBRARY_SEAT_AUTH_EXPIRED",
+      message: "座位预约系统身份转换失败，请重新打开官方入口后重试。",
+      pathname: "/api/campus/library-seat/overview"
+    }),
+    null
+  );
+  assert.equal(
+    schoolAccountRequiredCode({ status: 401, code: "LIBROOM_AUTH_EXPIRED", message: "操作失败", pathname: "/api/libroom/spaces" }),
+    null
+  );
+  assert.equal(
+    schoolAccountRequiredCode({ status: 401, message: "服务器异常", pathname: "/api/energy/summary" }),
+    null
+  );
+  assert.equal(
+    schoolAccountRequiredCode({ status: 502, message: "统一身份认证会话已过期，请重新登录学校账号。", pathname: "/api/energy/summary" }),
+    null
+  );
+  assert.equal(
+    schoolAccountRequiredCode({ status: 400, code: "CAS_SMS_REQUIRED", message: "学校已启用短信二次验证。", pathname: "/api/auth/login" }),
+    null
+  );
+});
+
+test("系统账号自身的 401 不得被判成学校账号失效", () => {
+  // 否则平台密码输错会弹出「学校账号登录」，把用户引到错误的恢复路径。
+  const authPaths = ["/api/auth/login", "/api/auth/login/sms/send", "/api/auth/login/sms/verify", "/api/auth/status"];
+  for (const pathname of authPaths) {
+    assert.equal(
+      schoolAccountRequiredCode({ status: 401, message: "系统账号或密码不正确。", pathname }),
+      null,
+      pathname
+    );
+  }
 });
