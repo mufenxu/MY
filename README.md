@@ -26,12 +26,14 @@ MY/
 |-- packages/
 |   |-- platform-auth/          # shared platform SSO and signed service-request helpers
 |   `-- platform-browser-runtime/ # shared browser runtime: SSO, timeout fetch, telemetry
-|-- automation/ct8-automation/  # non-resident automation tasks
+|-- automation/ct8-automation/  # deployment templates for external automation
 |-- config/                     # service registry and canonical topology without secrets
 |-- docs/                       # architecture and operations docs
 |-- infra/                      # Docker and reverse proxy config
-`-- scripts/                    # workspace maintenance commands
+`-- scripts/                    # workspace commands grouped by responsibility
 ```
+
+Installable projects are registered once in `config/workspace-projects.json`. Install, audit and convention checks use that registry; each project keeps its own lockfile. Root npm command names remain the entry points for grouped scripts.
 
 ## Local admin console
 

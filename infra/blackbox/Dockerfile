@@ -5,9 +5,9 @@ ENV NODE_ENV=production \
     PLATFORM_BLACKBOX_SPOOL_FILE=/state/blackbox-spool.jsonl
 
 WORKDIR /app
-COPY --chown=node:node scripts/platform-blackbox-probe.mjs ./scripts/platform-blackbox-probe.mjs
+COPY --chown=node:node scripts/checks/platform-blackbox-probe.mjs ./scripts/checks/platform-blackbox-probe.mjs
 RUN mkdir -p /state && chown node:node /state
 
 USER node
 VOLUME ["/state"]
-CMD ["node", "scripts/platform-blackbox-probe.mjs"]
+CMD ["node", "scripts/checks/platform-blackbox-probe.mjs"]

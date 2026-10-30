@@ -1,12 +1,12 @@
-# GitHub 自动登录（SSH）
+# CT8 自动化工作流部署模板
 
-本仓库提供通过 GitHub Actions 进行 SSH 自动登录与批量登录能力（支持代理与出口 IP 去重）。
+CT8 API 归属 `services/core-api`，通过 `GH_OWNER`、`GH_REPO` 和 `GH_WORKFLOW` 调度独立 GitHub 仓库。此目录保存部署模板与使用说明，不是本仓库的可执行 Actions 工作流。
 
 > 注意：请确保遵守目标系统的使用条款，合理合法使用自动化登录。
 
 ## 一、准备工作
 
-在 GitHub 仓库中，依次打开 Settings → Secrets and variables → Actions。
+将 `templates/ssh-login.yml` 部署到 `GH_OWNER/GH_REPO` 指定仓库的 `.github/workflows/ssh-login.yml`，在该目标仓库中打开 Settings → Secrets and variables → Actions 配置 Secrets。Core 服务中的 `GH_WORKFLOW` 使用目标仓库的工作流文件名；真实环境配置沿用现有值。
 
 ### 1. SSH 所需 Secrets（支持密码登录；支持代理/多账号）
 
@@ -49,8 +49,7 @@
 - 打开 Actions → 选择 `SSH Login` → `Run workflow`
 - 可在输入框自定义登录后执行的命令，默认 `uname -a`
 
-工作流文件位于本子项目内：`automation/ct8-automation/.github/workflows/ssh-login.yml`。
-注意它**不在仓库根的 `.github/workflows/` 下**，因此无法从本仓库的 Actions 页面直接 dispatch；如需运行，请按 GitHub 对工作流目录的要求部署，或把该文件复制到根 `.github/workflows/`（复制前请确认根仓库的权限与 secrets 配置）。
+工作流模板位于 `templates/ssh-login.yml`。运行入口是 `GH_OWNER/GH_REPO` 指定的目标仓库 Actions 页面，或统一控制台的自动化中心。更新模板后需要在目标仓库同步部署；本仓库的 CI 不会执行该模板。
 
 #### 1.1 单账号登录（最简单）
 

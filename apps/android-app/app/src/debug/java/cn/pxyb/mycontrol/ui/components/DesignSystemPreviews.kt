@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -28,6 +29,7 @@ import cn.pxyb.mycontrol.ui.components.display.AppAvatar
 import cn.pxyb.mycontrol.ui.components.display.AppGroupedCard
 import cn.pxyb.mycontrol.ui.components.display.AppMetricCard
 import cn.pxyb.mycontrol.ui.components.display.AppMetricDashboard
+import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
@@ -53,6 +55,13 @@ private fun ComponentsPreview(dark: Boolean) {
                 var input by remember { mutableStateOf("小组课程研讨") }
                 var selected by remember { mutableStateOf(true) }
                 Text("公共组件", style = MaterialTheme.typography.headlineSmall)
+                // 分区标题：右侧说明必须贴齐标题栏右边缘，用于盯住副标题对齐回归
+                AppSectionHeader("接入应用", subtitle = "已接入的应用快捷访问", icon = Icons.Outlined.Apps)
+                AppSectionHeader(
+                    "设备与开关",
+                    subtitle = "常用灯光与插座",
+                    trailing = { Text("查看状态", style = MaterialTheme.typography.labelSmall) },
+                )
                 AppGroupedCard {
                     AppActionRow("账号与安全", subtitle = "密码、登录设备与多重验证", onClick = {},
                         trailingContent = { AppAvatar("MY") })

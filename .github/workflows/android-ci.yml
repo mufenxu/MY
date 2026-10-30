@@ -5,10 +5,10 @@ on:
     branches: [main]
     paths:
       - 'apps/android-app/**'
-      - 'scripts/android-release.mjs'
-      - 'scripts/android-release.test.mjs'
-      - 'scripts/check-android-design.mjs'
-      - 'scripts/check-android-design.test.mjs'
+      - 'scripts/release/android-release.mjs'
+      - 'scripts/release/android-release.test.mjs'
+      - 'scripts/checks/check-android-design.mjs'
+      - 'scripts/checks/check-android-design.test.mjs'
       - '.github/workflows/android-ci.yml'
       - '.github/workflows/android-release.yml'
   workflow_dispatch:

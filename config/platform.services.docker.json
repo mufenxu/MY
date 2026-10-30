@@ -99,7 +99,7 @@
       "name": "CT8 GitHub 自动化",
       "shortName": "CT8 自动化",
       "category": "automation",
-      "description": "GitHub Actions 驱动的 SSH 调度与批量任务",
+      "description": "Core API 调度独立 GitHub 仓库的 SSH 自动化任务；本目录保存部署模板",
       "baseUrl": null,
       "healthPath": null,
       "adminUrl": null,

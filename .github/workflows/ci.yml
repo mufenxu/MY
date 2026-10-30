@@ -5,8 +5,8 @@ on:
     branches: [main]
     paths-ignore:
       - 'apps/android-app/**'
-      - 'scripts/android-release.mjs'
-      - 'scripts/android-release.test.mjs'
+      - 'scripts/release/android-release.mjs'
+      - 'scripts/release/android-release.test.mjs'
       - '.github/workflows/android-release.yml'
       - '.github/workflows/android-ci.yml'
       - '.github/workflows/android-profile.yml'
@@ -14,8 +14,8 @@ on:
     branches: [main]
     paths-ignore:
       - 'apps/android-app/**'
-      - 'scripts/android-release.mjs'
-      - 'scripts/android-release.test.mjs'
+      - 'scripts/release/android-release.mjs'
+      - 'scripts/release/android-release.test.mjs'
       - '.github/workflows/android-release.yml'
       - '.github/workflows/android-ci.yml'
       - '.github/workflows/android-profile.yml'
@@ -123,15 +123,15 @@ jobs:
         run: |
           set -euo pipefail
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            node scripts/resolve-image-targets.mjs --manual all --github-output resolved.env
+            node scripts/release/resolve-image-targets.mjs --manual all --github-output resolved.env
           elif [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
             git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD > changed-files.txt
-            node scripts/resolve-image-targets.mjs --files changed-files.txt --github-output resolved.env
+            node scripts/release/resolve-image-targets.mjs --files changed-files.txt --github-output resolved.env
           elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
-            node scripts/resolve-image-targets.mjs --manual all --github-output resolved.env
+            node scripts/release/resolve-image-targets.mjs --manual all --github-output resolved.env
           else
             git diff --name-only "${{ github.event.before }}" "${GITHUB_SHA}" > changed-files.txt
-            node scripts/resolve-image-targets.mjs --files changed-files.txt --github-output resolved.env
+            node scripts/release/resolve-image-targets.mjs --files changed-files.txt --github-output resolved.env
           fi
           source resolved.env
           TARGETS="${targets}" node <<'NODE' >> "${GITHUB_OUTPUT}"
@@ -208,10 +208,10 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Create ephemeral environment
-        run: node scripts/create-ci-env.mjs .env.ci
+        run: node scripts/workspace/create-ci-env.mjs .env.ci
 
       - name: Validate ephemeral secrets
-        run: node scripts/validate-deployment-env.mjs .env.ci
+        run: node scripts/workspace/validate-deployment-env.mjs .env.ci
 
       - name: Build the complete stack
         run: docker compose --env-file .env.ci -f infra/docker/compose.yml -f infra/docker/compose.ci.yml build
@@ -235,10 +235,10 @@ jobs:
           http://127.0.0.1:22100/api/iot/api/ready
 
       - name: Verify platform session and metrics
-        run: node --env-file=.env.ci scripts/verify-platform-smoke.mjs
+        run: node --env-file=.env.ci scripts/checks/verify-platform-smoke.mjs
 
       - name: Verify MongoDB isolation
-        run: node --env-file=.env.ci scripts/verify-mongodb-isolation.mjs .env.ci
+        run: node --env-file=.env.ci scripts/checks/verify-mongodb-isolation.mjs .env.ci
 
       - name: Show container logs on failure
         if: failure()

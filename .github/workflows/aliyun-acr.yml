@@ -25,16 +25,17 @@ on:
       - services/notification-service/**
       - services/campus-service/**
       - services/iot-service/**
-      - scripts/backup-runner.mjs
-      - scripts/backup-mongodb-container.mjs
-      - scripts/restore-mongodb-container.mjs
+      - scripts/database/backup-runner.mjs
+      - scripts/database/backup-mongodb-container.mjs
+      - scripts/database/restore-mongodb-container.mjs
       - infra/docker/compose.yml
+      - infra/docker/compose.split.yml
       - infra/docker/mongodb.Dockerfile
       - infra/docker/mongodb-entrypoint.sh
       - infra/docker/mongo-init.sh
       - infra/docker/ensure-users.js
-      - scripts/buildx-metadata.mjs
-      - scripts/resolve-image-targets.mjs
+      - scripts/release/buildx-metadata.mjs
+      - scripts/release/resolve-image-targets.mjs
       - .github/workflows/aliyun-acr.yml
   workflow_dispatch:
     inputs:
@@ -125,7 +126,7 @@ jobs:
           set -euo pipefail
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             raw_targets="${RAW_TARGETS_INPUT:-platform,backup}"
-            node scripts/resolve-image-targets.mjs \
+            node scripts/release/resolve-image-targets.mjs \
               --manual "${raw_targets}" \
               --github-output "${GITHUB_OUTPUT}"
           else
@@ -134,7 +135,7 @@ jobs:
             else
               git show --name-only --format= "${GITHUB_SHA}" > changed-files.txt
             fi
-            node scripts/resolve-image-targets.mjs \
+            node scripts/release/resolve-image-targets.mjs \
               --files changed-files.txt \
               --github-output "${GITHUB_OUTPUT}"
           fi
@@ -150,7 +151,7 @@ jobs:
           RELEASE_STATUS: building
           RELEASE_TARGETS: ${{ steps.resolve.outputs.release_targets }}
           RELEASE_REVISION: ${{ github.sha }}
-        run: node scripts/release-workflow-callback.mjs
+        run: node scripts/release/release-workflow-callback.mjs
 
       - name: Check ACR secrets
         if: steps.resolve.outputs.targets != ''
@@ -184,83 +185,15 @@ jobs:
             exit 1
           fi
 
-          declare -A dockerfiles=(
-            [platform]="infra/docker/platform-api.Dockerfile"
-            [notification]="infra/docker/notification-service.Dockerfile"
-            [backup]="infra/docker/backup-runner.Dockerfile"
-            [campus]="infra/docker/campus-service.Dockerfile"
-            [iot]="infra/docker/iot-service.Dockerfile"
-            [mongodb]="infra/docker/mongodb.Dockerfile"
-          )
-          declare -A contexts=(
-            [platform]="."
-            [notification]="."
-            [backup]="."
-            [campus]="."
-            [iot]="."
-            [mongodb]="infra/docker"
-          )
-          declare -A tags=(
-            [platform]="platform-api-latest"
-            [notification]="notification-service-latest"
-            [backup]="backup-runner-latest"
-            [campus]="campus-service-latest"
-            [iot]="iot-service-latest"
-            [mongodb]="mongodb-7.0"
-          )
-
-          normalize_target() {
-            printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | xargs
-          }
-
-          targets=()
-          IFS=',' read -ra requested <<< "${RAW_TARGETS}"
-          for item in "${requested[@]}"; do
-            target="$(normalize_target "${item}")"
-            [ -z "${target}" ] && continue
-            if [ "${target}" = "all" ]; then
-              targets=(platform notification backup campus iot mongodb)
-              break
-            fi
-            case "${target}" in
-              platform-api|core|core-api|exam|exam-api) target="platform" ;;
-              notification-service) target="notification" ;;
-              backup-runner) target="backup" ;;
-              campus-service) target="campus" ;;
-              iot-service) target="iot" ;;
-              mongo) target="mongodb" ;;
-            esac
-            if [ -z "${dockerfiles[$target]+x}" ]; then
-              echo "Unknown target: ${target}" >&2
-              exit 1
-            fi
-            targets+=("${target}")
-          done
-
-          if [ "${#targets[@]}" -eq 0 ]; then
-            echo "No valid targets selected." >&2
-            exit 1
-          fi
-
-          unique_targets=()
-          for target in "${targets[@]}"; do
-            duplicate=false
-            for selected in "${unique_targets[@]}"; do
-              if [ "${selected}" = "${target}" ]; then
-                duplicate=true
-                break
-              fi
-            done
-            if [ "${duplicate}" = false ]; then
-              unique_targets+=("${target}")
-            fi
-          done
+          IFS=',' read -ra targets <<< "${RAW_TARGETS}"
 
           short_sha="${GITHUB_SHA::12}"
           build_timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           : > release-artifacts.tsv
-          for target in "${unique_targets[@]}"; do
-            image_tag="${tags[$target]}"
+          for target in "${targets[@]}"; do
+            IFS=$'\t' read -r dockerfile context image_tag < <(
+              jq -r --arg target "${target}" '.targets[$target] | [.dockerfile, .context, .tag] | @tsv' config/image-build-targets.json
+            )
             image="${ACR_IMAGE}:${image_tag}"
             candidate="${ACR_IMAGE}:${image_tag}-${short_sha}"
             metadata_file="build-metadata-${target}.json"
@@ -268,7 +201,7 @@ jobs:
             echo "::group::Build candidate ${target} -> ${candidate}"
             docker buildx build \
               --platform linux/amd64 \
-              --file "${dockerfiles[$target]}" \
+              --file "${dockerfile}" \
               --build-arg "BUILD_REVISION=${GITHUB_SHA}" \
               --build-arg "BUILD_TIMESTAMP=${build_timestamp}" \
               --cache-from "type=gha,scope=${target}" \
@@ -280,8 +213,8 @@ jobs:
               --provenance=false \
               --sbom=false \
               --push \
-              "${contexts[$target]}"
-            digest="$(node scripts/buildx-metadata.mjs "${metadata_file}")"
+              "${context}"
+            digest="$(node scripts/release/buildx-metadata.mjs "${metadata_file}")"
             rm -f "${metadata_file}"
             reference="${ACR_IMAGE}@${digest}"
             printf '%s\t%s\t%s\t%s\t%s\n' "${target}" "${image}" "${digest}" "${reference}" "${candidate}" >> release-artifacts.tsv
@@ -294,32 +227,16 @@ jobs:
           RAW_TARGETS: ${{ steps.resolve.outputs.targets }}
         run: |
           set -euo pipefail
-          node scripts/create-ci-env.mjs .env.release-smoke
+          node scripts/workspace/create-ci-env.mjs .env.release-smoke
           sed -i "s|^PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY=.*|PLATFORM_RELEASE_ALLOWED_IMAGE_REPOSITORY=${ACR_IMAGE}|" .env.release-smoke
-          declare -A tags=(
-            [platform]="platform-api-latest"
-            [notification]="notification-service-latest"
-            [backup]="backup-runner-latest"
-            [campus]="campus-service-latest"
-            [iot]="iot-service-latest"
-            [mongodb]="mongodb-7.0"
-          )
-          declare -A env_keys=(
-            [platform]="PLATFORM_API_IMAGE"
-            [notification]="NOTIFICATION_SERVICE_IMAGE"
-            [backup]="BACKUP_RUNNER_IMAGE"
-            [campus]="CAMPUS_SERVICE_IMAGE"
-            [iot]="IOT_SERVICE_IMAGE"
-            [mongodb]="MONGODB_IMAGE"
-          )
           short_sha="${GITHUB_SHA::12}"
-          for target in platform notification backup campus iot mongodb; do
-            suffix="${tags[$target]}"
+          while IFS=$'\t' read -r target tag env_key; do
+            suffix="${tag}"
             if printf ',%s,' "${RAW_TARGETS}" | grep -q ",${target},"; then
               suffix="${suffix}-${short_sha}"
             fi
-            sed -i "s|^${env_keys[$target]}=.*|${env_keys[$target]}=${ACR_IMAGE}:${suffix}|" .env.release-smoke
-          done
+            sed -i "s|^${env_key}=.*|${env_key}=${ACR_IMAGE}:${suffix}|" .env.release-smoke
+          done < <(jq -r '.targets | to_entries[] | [.key, .value.tag, .value.envKey] | @tsv' config/image-build-targets.json)
 
       - name: Smoke test exact candidate images
         if: steps.resolve.outputs.targets != ''
@@ -347,11 +264,11 @@ jobs:
 
           pull_with_retry
           "${compose[@]}" up -d --no-build --wait --wait-timeout 240
-          node --env-file=.env.release-smoke scripts/verify-platform-smoke.mjs
+          node --env-file=.env.release-smoke scripts/checks/verify-platform-smoke.mjs
           curl --fail --retry 10 --retry-delay 3 \
             --header 'X-Forwarded-Proto: https' \
             http://127.0.0.1:22100/api/iot/api/ready
-          node --env-file=.env.release-smoke scripts/verify-mongodb-isolation.mjs .env.release-smoke
+          node --env-file=.env.release-smoke scripts/checks/verify-mongodb-isolation.mjs .env.release-smoke
 
       - name: Show exact-candidate logs on failure
         if: failure() && steps.resolve.outputs.targets != '' && hashFiles('.env.release-smoke') != ''
@@ -397,19 +314,12 @@ jobs:
             done
           }
 
-          declare -A tags=(
-            [platform]="platform-api-latest"
-            [notification]="notification-service-latest"
-            [backup]="backup-runner-latest"
-            [campus]="campus-service-latest"
-            [iot]="iot-service-latest"
-            [mongodb]="mongodb-7.0"
-          )
           short_sha="${GITHUB_SHA::12}"
           IFS=',' read -ra targets <<< "${RAW_TARGETS}"
           for target in "${targets[@]}"; do
-            candidate="${ACR_IMAGE}:${tags[$target]}-${short_sha}"
-            deployment_tag="${ACR_IMAGE}:${tags[$target]}"
+            tag="$(jq -r --arg target "${target}" '.targets[$target].tag' config/image-build-targets.json)"
+            candidate="${ACR_IMAGE}:${tag}-${short_sha}"
+            deployment_tag="${ACR_IMAGE}:${tag}"
             promote_with_retry "${candidate}" "${deployment_tag}"
           done
 
@@ -434,4 +344,4 @@ jobs:
           RELEASE_TARGETS: ${{ steps.resolve.outputs.release_targets }}
           RELEASE_REVISION: ${{ github.sha }}
           RELEASE_ARTIFACTS_FILE: release-artifacts.tsv
-        run: node scripts/release-workflow-callback.mjs
+        run: node scripts/release/release-workflow-callback.mjs

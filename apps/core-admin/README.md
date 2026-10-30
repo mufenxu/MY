@@ -1,11 +1,11 @@
-# admin-web
+# core-admin
 
-`admin-web` 是本项目的 React 管理后台前端，负责承载管理端页面、公开查询页以及后台登录流程。
+`core-admin` 是本项目的 React 管理后台前端，负责承载管理端页面、公开查询页以及后台登录流程。
 
 ## 技术栈
 
 - React 19
-- React Router 7
+- React Router 8
 - Ant Design 6
 - Axios
 - Vite 7

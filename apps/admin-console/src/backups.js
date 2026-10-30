@@ -430,8 +430,8 @@ export function createBackupManager({
 } = {}) {
   const jobs = new Map();
   const backupRoot = path.resolve(config.backupRoot);
-  const backupScript = path.join(config.workspaceRoot, 'scripts', 'backup-mongodb.mjs');
-  const restoreScript = path.join(config.workspaceRoot, 'scripts', 'restore-mongodb.mjs');
+  const backupScript = path.join(config.workspaceRoot, 'scripts', 'database', 'backup-mongodb.mjs');
+  const restoreScript = path.join(config.workspaceRoot, 'scripts', 'database', 'restore-mongodb.mjs');
   const preRestoreBackupEnabled = config.preRestoreBackupEnabled !== false;
 
   function recentJobs() {

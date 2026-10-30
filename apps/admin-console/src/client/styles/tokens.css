@@ -1,0 +1,103 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  color: #0f172a;
+  background: #f8fafc;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* 主色调：纯白高透冰霜毛玻璃设计系统 (Apple Vision Glass Pro) */
+  --page: #f8fafc;
+  --shell: #ffffff;
+  --sidebar: rgba(255, 255, 255, 0.75);
+  --sidebar-border: rgba(255, 255, 255, 0.85);
+  --panel: rgba(255, 255, 255, 0.78);
+  --panel-solid: #ffffff;
+  --panel-muted: rgba(241, 245, 249, 0.7);
+  --ink: #0f172a;
+  --text: #334155;
+  --muted: #64748b;
+  --subtle: #94a3b8;
+  --type-caption: 12px;
+  --type-label: 13px;
+  --type-body: 14px;
+  --line: rgba(226, 232, 240, 0.8);
+  --line-strong: rgba(203, 213, 225, 0.9);
+
+  /* 水晶毛玻璃专属材质变量 */
+  --glass-bg: rgba(255, 255, 255, 0.76);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.52);
+  --glass-bg-hover: rgba(255, 255, 255, 0.92);
+  --glass-border: rgba(255, 255, 255, 0.85);
+  --glass-border-subtle: rgba(226, 232, 240, 0.75);
+  --glass-border-hover: rgba(59, 130, 246, 0.45);
+  --glass-blur: blur(20px);
+  --glass-shadow: 0 10px 30px -5px rgba(24, 39, 75, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --glass-shadow-hover: 0 16px 36px -4px rgba(24, 39, 75, 0.1), inset 0 1px 0 rgba(255, 255, 255, 1);
+
+  --blue: #2563eb;
+  --blue-soft: rgba(37, 99, 235, 0.08);
+  --blue-glow: rgba(37, 99, 235, 0.25);
+  --cyan: #0891b2;
+  --cyan-soft: rgba(8, 145, 178, 0.08);
+  --pink: #db2777;
+  --pink-soft: rgba(219, 39, 119, 0.08);
+  --orange: #ea580c;
+  --orange-soft: rgba(234, 88, 12, 0.08);
+  --green: #10b981;
+  --green-soft: rgba(16, 185, 129, 0.08);
+  --purple: #7c3aed;
+  --purple-soft: rgba(124, 58, 237, 0.08);
+  --red: #ef4444;
+  --red-soft: rgba(239, 68, 68, 0.08);
+  --shadow: 0 14px 38px rgba(15, 23, 42, 0.06);
+  --shadow-soft: 0 4px 16px rgba(15, 23, 42, 0.04);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  /* 夜间模式：深空黑曜石流光毛玻璃系统 */
+  --page: #080c14;
+  --shell: #0d1322;
+  --sidebar: rgba(13, 19, 34, 0.82);
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --panel: rgba(15, 23, 42, 0.75);
+  --panel-solid: #0f172a;
+  --panel-muted: rgba(30, 41, 59, 0.7);
+  --ink: #f8fafc;
+  --text: #cbd5e1;
+  --muted: #94a3b8;
+  --subtle: #64748b;
+  --line: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.18);
+
+  /* 暗夜水晶毛玻璃材质 */
+  --glass-bg: rgba(15, 23, 42, 0.72);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.03);
+  --glass-bg-hover: rgba(255, 255, 255, 0.07);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-border-subtle: rgba(255, 255, 255, 0.06);
+  --glass-border-hover: rgba(56, 189, 248, 0.45);
+  --glass-blur: blur(24px);
+  --glass-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --glass-shadow-hover: 0 18px 48px rgba(0, 0, 0, 0.65), 0 0 20px rgba(56, 189, 248, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+
+  --blue: #3b82f6;
+  --blue-soft: rgba(59, 130, 246, 0.15);
+  --blue-glow: rgba(59, 130, 246, 0.45);
+  --cyan: #06b6d4;
+  --cyan-soft: rgba(6, 182, 212, 0.15);
+  --pink: #f43f5e;
+  --pink-soft: rgba(244, 63, 94, 0.15);
+  --orange: #f97316;
+  --orange-soft: rgba(249, 115, 22, 0.15);
+  --green: #10b981;
+  --green-soft: rgba(16, 185, 129, 0.15);
+  --purple: #8b5cf6;
+  --purple-soft: rgba(139, 92, 246, 0.15);
+  --red: #f87171;
+  --red-soft: rgba(248, 113, 113, 0.15);
+  --shadow: 0 20px 56px rgba(0, 0, 0, 0.6);
+  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.4);
+}

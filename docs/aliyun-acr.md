@@ -44,9 +44,9 @@ services/exam-api/**
 services/notification-service/**
 services/campus-service/**
 services/iot-service/**
-scripts/backup-runner.mjs
-scripts/backup-mongodb-container.mjs
-scripts/restore-mongodb-container.mjs
+scripts/database/backup-runner.mjs
+scripts/database/backup-mongodb-container.mjs
+scripts/database/restore-mongodb-container.mjs
 infra/docker/compose.yml
 infra/docker/mongodb.Dockerfile
 infra/docker/mongodb-entrypoint.sh

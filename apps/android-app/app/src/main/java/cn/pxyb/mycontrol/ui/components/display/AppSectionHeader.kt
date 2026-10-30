@@ -81,7 +81,9 @@ fun AppSectionHeader(
         if (!subtitle.isNullOrBlank()) {
             Text(
                 subtitle,
-                modifier = Modifier.weight(1f, fill = false),
+                // 必须填满分配到的宽度，End 对齐才会贴到标题栏右边缘；
+                // 用 fill = false 时子项按内容收缩，整行左聚集，右侧会留出空隙。
+                modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.End,

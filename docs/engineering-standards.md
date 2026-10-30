@@ -28,11 +28,8 @@
 ## 2. Node 与包管理
 
 - 运行时基线 **Node.js ≥ 20.11**（根 `package.json` 的 `engines`）。这个下限不是随手写的：`scripts/` 中有多个脚本使用 `import.meta.dirname`（需 ≥ 20.11），`check-official-website-build.mjs` 使用 `fs.readdirSync(dir, { recursive: true })`（需 ≥ 20.1）。CI 实际只测 **Node 24**，且**没有** Node 版本矩阵，所以低于 20.11 的组合从未被验证。`services/*` 与 `apps/*` 中另有若干子项目声明了 `>=20.0.0`，尚未与根下限对齐。
-- 每个子项目**独立** `package.json` + `package-lock.json`，不使用 npm workspaces。安装入口是 `npm run install:ci`（即 `scripts/install-workspace.mjs`），它按固定顺序对每个子项目执行 `npm ci`。
-- **新增子项目必须同时登记到三处**，否则不会被安装、审计或校验：
-  1. `scripts/install-workspace.mjs` 的 `projects`
-  2. `scripts/audit-workspace.mjs` 的项目列表
-  3. 根 `package.json` 相应的 `check:*` 脚本
+- 每个子项目**独立** `package.json` + `package-lock.json`，不使用 npm workspaces。安装入口是 `npm run install:ci`（即 `scripts/workspace/install-workspace.mjs`），它按固定顺序对每个子项目执行 `npm ci`。
+- 新增可安装子项目只登记到 `config/workspace-projects.json`；安装脚本、审计脚本和结构检查共同读取该清单。根 `package.json` 保留各项目的 `check:*` 编排，结构检查保证所有项目的检查可达。
 - 依赖**只提交 `package-lock.json`，不提交 `node_modules`**（已由 `.gitignore` 覆盖）。
 
 ---
@@ -78,9 +75,9 @@
 npm run check
 ```
 
-它由根 `package.json` 以 `&&` 串联 18 个子检查组成，**第一步是 `check:conventions`**——一个只读的仓库约定校验器（`scripts/check-workspace-conventions.mjs` + `scripts/lib/workspace-conventions.mjs`）。它把本文件的以下规则变成可执行的断言，因此规范不会悄悄漂移：
+它由根 `package.json` 以 `&&` 串联 18 个子检查组成，**第一步是 `check:conventions`**——一个只读的仓库约定校验器（`scripts/checks/check-workspace-conventions.mjs` + `scripts/lib/workspace-conventions.mjs`）。它把本文件的以下规则变成可执行的断言，因此规范不会悄悄漂移：
 
-- 每个自带 `package-lock.json` 的项目都登记在 `scripts/install-workspace.mjs` 与 `scripts/audit-workspace.mjs`，且两处列表一致；
+- 每个自带 `package-lock.json` 的项目都登记在 `config/workspace-projects.json`，安装、审计和结构检查读取同一清单；
 - 每个这样的项目都有 `check` 脚本，且根 `check:*` 链能到达它；
 - 包名符合 `@my-platform/<项目目录名>`（嵌套项目按**所属项目**目录命名，如 `apps/smart-campus-miniapp/miniprogram` → `@my-platform/smart-campus-miniapp`）；
 - `private: true` 与 `description` 非空；
@@ -88,7 +85,7 @@ npm run check
 - `package.json` 为 2 空格缩进（除非该路径在 `.editorconfig` 中声明了 4 空格例外）；
 - `config/service-topology.json` 的每个 `registryId` 都存在于两个 `config/platform.services.*.json` 中。
 
-新增规则时改 `scripts/lib/workspace-conventions.mjs`、在 `scripts/workspace-conventions.test.mjs` 补一条单测、并在本节登记，**三处同一次提交完成**。
+新增规则时改 `scripts/lib/workspace-conventions.mjs`、在 `scripts/checks/workspace-conventions.test.mjs` 补一条单测、并在本节登记，**三处同一次提交完成**。
 
 **新增或修改任何子项目时，必须让该子项目的 `check` 保持可通过，并在根 `check` 中可达。**
 
@@ -119,7 +116,7 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 
 **关键事实**：`docker-smoke` 的条件包含 `github.event_name != 'push'`，因此 **`main` 推送时不跑完整栈冒烟**；`container-images` 的 `needs` 只含 `quality`/`repository-security`/`codeql`/`image-targets`，**不含** `docker-smoke`。也就是说 main 推送会发布 GHCR 镜像，而完整栈冒烟被跳过。真正在发布前做"精确候选镜像"冒烟的是 ACR 流水线（[aliyun-acr.yml](../.github/workflows/aliyun-acr.yml)），它先等待该 commit 的 CI 成功，再冒烟，最后才把可移动的 `*-latest` 部署标签指向已验证的候选 digest。
 
-`.github/workflows/` 下只跟踪本仓的 5 个流程；`automation/ct8-automation/.github/workflows/ssh-login.yml` 属于自动化子项目，**不在本仓根 `.github/workflows/`**，因此无法从本仓直接 dispatch。
+`.github/workflows/` 只保存本仓可执行工作流。CT8 在 `GH_OWNER/GH_REPO` 指定的独立仓库运行，本仓的 `automation/ct8-automation/templates/ssh-login.yml` 是部署模板；运行与 Secrets 配置均由目标仓库负责。
 
 ---
 
@@ -160,6 +157,8 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 
 ## 8. 前端应用约定
 
+控制台服务端的认证、扫码和 WebView 登录路由集中在 `apps/admin-console/src/routes/`；公共路由和受保护路由仍在原位置分别注册。客户端 `styles.css` 只声明模块导入顺序，具体样式位于 `styles/`，后期覆盖位于 `styles/overrides/`；拆分样式时不得改变级联顺序。
+
 四个 Web 应用，**四个不同的技术栈**，且都通过 Vite 构建、都是 ESM（`"type": "module"`）：
 
 | 应用 | 形态 | 技术栈 | Vite | 开发端口 |
@@ -182,13 +181,13 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 - **`DashboardView.vue` 是单文件巨石，拆分仍在进行**：截至 2026-10-29 为 1897 行模板 + 1806 行 script + 3323 行 style（拆分起点 8072 行，现 7029 行，已降 13%）。script 现分 16 段，其中八块已抽到 `src/features/`：「Change Password」→ `account/usePasswordDialog.js`、「Exam Results」→ `exam-results/useExamResults.js`、「Feedback」→ `feedback/useFeedback.js`、「Personal Category Supervision」→ `personal-categories/usePersonalCategories.js`、「Paper Share」→ `paper-share/usePaperShares.js`、「Learning Operations」→ `learning-operations/useLearningOperations.js`、「User Assignment」→ `user-assignments/useUserAssignments.js`、「Wechat Binding」→ `wechat-binding/useWechatBinding.js`。**三处段名不副实**：「Methods: Category Logic」（350 行）实为分类 CRUD + 试卷分享 + 接收分享；「User Management Logic」（596 行）实为显示助手 + 学习运营 + 用户 CRUD；「Methods: Bind Logic」与「Bind Wechat Dialog」被用户分配逻辑隔开，实际是一域两段。新抽 composable 必须沿用 `src/features/exam-editor/useXxx.js` 的既有写法（参数注入依赖、返回 state/methods），不要另立目录约定。**四条约束**：① `test/frontendInvariants.test.js` 的源码正则断言会因抽取而失效——`@close="stopBindRequests"` 属模板可留在 `DashboardView`，但 `stopBindCreation[\s\S]*?bindCreateController?\.abort\(\)` 已随逻辑迁到 `useWechatBinding.js` 并在测试中改为读该文件，后续再抽同理；② 该项目**没有组件渲染测试**，拆分只能靠 `lint + test + build` 加手工冒烟，禁止一次性大改；③ 每刀先确认被抽函数在 setup 期间未被提前调用（否则 `const` 解构触发 TDZ），且被注入的依赖在**调用点之前**已声明——`renderQrcodeToElement` 就因此保留在组件内并排在调用点之前；④ 模板引用不存在的绑定**不会**在编译期报错，`build` 通过不代表拆分没漏，必须逐个核对被移动标识符的模板引用是否仍有声明；只解构模板与剩余代码真正用到的名字，其余留在 composable 内部，否则 `no-unused-vars` 判 error。**剩余三块未抽的原因**：用户 CRUD（238 行）需注入 7 个 state，且 `userSearchTimer` 由 `onBeforeUnmount` 清理（生命周期外泄，需额外暴露终止函数）、`users` 被块外 computed 读取；分类 CRUD（106 行）需注入 10 项；接收分享（62 行）会直接改写 `activeMenu`/`selectedMajorCategory`/`isExamView` 三个导航状态。这三处的注入成本已超过收益，若继续应先做依赖图再评估。
 - **`src/features/` 下的 composable 已可脱离组件单测**：8 个 composable 把 `message`（默认 `ElMessage`）与 `messageBox`（默认 `ElMessageBox`）作为可覆盖依赖注入，默认值即原导入，应用行为不变；`useWechatBinding` 另外把 `fetchWithTimeout` 与 `createSequentialPoller` 也改为可覆盖参数，默认取平台实现，因此该域也已纳入测试。`test/composable*.test.js` 用内存替身断言校验分支、请求参数、abort 竞态与状态回填，共 102 条用例（`npm test` 现有 135 条）。**三条约束**：① `ElMessage` 在 Node 里一调用就抛 `document is not defined`，所以新增 composable **不要**直接 `import { ElMessage }` 就用，一律按上述方式注入，否则该模块无法单测；② `@` 别名由 `test-support/register-alias.mjs`（经 `test` 脚本的 `--import` 加载）与 `test-support/alias-hook.mjs` 在测试运行时解析，等价于 `vite.config.js` 的 `@ → src`，候选扩展名为 `.js`/`.mjs`/`index.js`——这两个文件**必须放在 `test/` 之外**，因为 `node --test` 会把 `test/` 下任何 `.js`/`.mjs` 文件当成测试执行；③ 测试辅助里不要用 `setImmediate`（Node 专有且未登记到 `eslint.config.js` 的 globals，会触发 `no-undef`），需要冲刷微任务时用 `setTimeout(resolve, 0)`。另有一处**已按现状断言的真实缺口**：`unbindWechat` 在 HTTP 200 且 `code !== 0` 时既不提示也不刷新用户信息（全局拦截器只处理 HTTP 错误码），`composableWechatBinding.test.js` 已注明该行为，若要修复请同步更新该用例。
 - **反馈流程会重复刷新未读汇总**：`loadFeedbacks` 成功后已 `await loadFeedbackSummary()`，而 `submitFeedback`/`replyFeedback`/`closeFeedback` 在调用 `loadFeedbacks` 之后又各自调一次，同一次操作会请求两次汇总接口。属既有冗余，未改动（会改变接口调用次数）；测试断言的是"至少刷新一次"，若后续去重不会误报。
-- **`official-website` 没有 lint、没有 test、没有 check**，也没有 `.gitignore`。它的唯一校验是根 `check:website`（`node --check main.js` 语法检查 + `vite build` + `scripts/check-official-website-build.mjs` 对产物的断言）。
+- **官网采用轻量检查**：`apps/official-website/package.json` 已提供 `check`（`node --check main.js && npm run build`），根 `check:website` 再调用 `scripts/checks/check-official-website-build.mjs` 验证产物；官网当前没有独立 lint 或 test 脚本。
 - **`admin-console` 的 lint 会报约 31 条 react-hooks 警告**（`set-state-in-effect`、`exhaustive-deps`），ESLint 对 warning 返回 0，所以门禁仍通过。这些是真实的技术债，不是误报。
 - **无共享设计令牌**：`packages/` 里没有 token 包，四个应用各有独立的 CSS 变量命名空间；深色模式机制也不一致（`admin-console`、`official-website` 用 `:root[data-theme="dark"]`，`core-admin` 用 `html.dark` + 预绘制脚本，`exam-admin` 无主题切换）。
 - **`exam-admin/src/assets/css/admin.css` 在同一个文件内重复打开 `:root` 三次**，`--primary-color` 依次为 `#1b6ef3` → `#1d63e9` → `#1f5fbf`（最后一个生效），`--border-radius` 为 20px → 22px → 12px。改这个文件的配色前必须先合并重复的 `:root`。
 - **重复实现**：`sequentialPoller.js` 在 `core-admin` 与 `exam-admin` 各有一份且内容不同（无 SHA 相同）；`admin-console/src/client/experience.js` 把 `platform-browser-runtime` 的 `reportExperience` 与 FNV-1a 哈希整体抄了一份且已经漂移；`readCookie` 有 3 份副本；两个应用各有一套种子里生成的 SVG 头像生成器；四套 HTTP 层各自重复 `timeout = 12000`。
 - **`core-admin` 与 `exam-admin` 的开发端口已分开**：`core-admin` 固定 `5174`、`exam-admin` 固定 `5173`。`core-admin` 的本地 CORS 与 refresh cookie 信任列表已包含 `5174`，新增前端端口时必须同步 `services/core-api/services/corsService.js` 与 `services/core-api/utils/refreshCookie.js`，否则本地登录会跨域失败。
-- **`core-admin/README.md` 已过期**：标题仍是 `# admin-web`，写"React Router 7"而实际依赖是 8.x。
+- **`core-admin/README.md` 与依赖对齐**：项目名为 `core-admin`，React Router 为 8.x；依赖版本的权威来源为本项目 `package.json`。
 
 ---
 
@@ -227,7 +226,7 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 ## 11. 环境变量与密钥
 
 - `.env` 与任何 `**/.env` **绝不提交**（已在 `.gitignore`）。提交的只有 `.env.example`。
-- `.env.example` 必须与 `scripts/validate-deployment-env.mjs` 的校验规则保持一致；密钥名变更时同步更新 `scripts/check-ci-env-contract.mjs` 与 CI 缓存/契约。
+- `.env.example` 必须与 `scripts/workspace/validate-deployment-env.mjs` 的校验规则保持一致；密钥名变更时同步更新 `scripts/checks/check-ci-env-contract.mjs` 与 CI 缓存/契约。
 - 生产环境校验会拒绝弱会话密钥、公开模板密钥、占位值；`create-ci-env.mjs` 生成的 `.env.ci` 是一次性环境，仅用于 Docker 冒烟测试。
 - 已被自动校验的部分（可依赖）：`validate-deployment-env.mjs` 的 26 个必需项 + 8 个可选项 + 2 个 Base64URL-32 字节密钥 + 跨键取值唯一性；以及 `check-ci-env-contract.mjs` 保证 `compose.yml` 中每个 `${VAR:?}` 都由 `create-ci-env.mjs` 生成。
 - **未被该规则覆盖的缺口**：约 62 个被 compose 或脚本引用、但**不在 `.env.example`** 中的变量名，其中运维相关的包括 `BACKUP_RETENTION_DAYS`、`PLATFORM_BLACKBOX_*` 系列、`LEGACY_CAMPUS_DB`、`LEGACY_IOT_DATA_DIR`、`PLATFORM_BACKUP_*` 与 `PLATFORM_RESTORE_COMMAND`。它们多数有 compose 内置默认值。**新增这类变量时同步补进 `.env.example`**，否则运维无法从模板发现它。
@@ -237,7 +236,9 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 
 ## 12. 脚本约定（`scripts/`）
 
-- 一律 `.mjs`（根 `package.json` 无 `"type"` 字段，`.mjs` 是显式声明 ESM 的机制），100% ESM：**不使用 `require(`**。
+按职责分组：`workspace/` 管理安装、审计和环境；`checks/` 提供结构、契约、性能与冒烟检查；`release/` 管理镜像和 Android 发布；`database/` 管理备份、恢复与迁移；`security/` 管理密钥工具；`dev/` 提供本地开发入口；共享工具及规则放在 `lib/`。调用入口保留根 `package.json` 的命令名称。
+
+- Node 脚本一律 `.mjs`（根 `package.json` 无 `"type"` 字段），使用 ESM，不使用 `require(`。Android 签名保留既有 PowerShell 与 Java 工具。
 - 命名 kebab-case、动词开头（`check-*`、`verify-*`、`backup-*`、`resolve-*`）。
 - 失败必须产生**非零退出状态**并打印可定位的完整原因（不要只打印 `Error`）。仓内两种写法都合法且都在用：`process.exit(1)`（9 个脚本，多为校验器）与 `process.exitCode = 1`（8 个脚本，多为 async/转换脚本）。新脚本择一即可，但不要"打印了错误却返回 0"。
 - 需要共享的进程级工具放在 `scripts/lib/`；已有 `scripts/lib/npm-command.mjs` 解析 npm CLI（含 Windows `npm.cmd` 回退），**不要在新脚本里再写 `process.platform === 'win32' ? 'npm.cmd' : 'npm'`**。
@@ -272,17 +273,17 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 5. **`services/exam-api` 使用旧式 `.eslintrc.json` + eslint 8**。
 6. **`services/iot-service` 的 `check` 不含 `test`**，由根 `check:iot` 在外部补跑。
 7. **小程序**：`smart-campus-miniapp` 的 `tsconfig.json` 排除了不存在的 `scratch` 目录；其 `preloadRule` 校验因 `app.json` 无 `preloadRule` 而暂为空转；`ROUTES` 缺 `SCAN` 与热泵设置项，导致 9 处硬编码路径。
-8. **前端**：`exam-admin` 已接入 `eslint-plugin-vue` 的 `flat/essential`（格式类规则有意不启用，避免批量重排），剩 41 条 `no-useless-escape` warning；`official-website` 无 lint/test/check/`.gitignore`；`admin-console` 约 31 条 react-hooks 警告长期存在；无共享设计令牌包；`exam-admin/src/assets/css/admin.css` 内重复打开 `:root` 三次导致同名令牌三重定义；`core-admin/README.md` 标题与依赖版本已过期。详见 §8。
+8. **前端**：`exam-admin` 已接入 `eslint-plugin-vue` 的 `flat/essential`（格式类规则有意不启用，避免批量重排），剩 41 条 `no-useless-escape` warning；`official-website` 已有轻量 `check`，无独立 lint/test；`admin-console` 约 31 条 react-hooks 警告长期存在；无共享设计令牌包；`exam-admin/src/assets/css/admin.css` 内重复打开 `:root` 三次导致同名令牌三重定义；`core-admin/README.md` 已与项目名及依赖版本对齐。详见 §8。
 9. **Android**：设计约束已接入 `npm run check:android-design` 与 Android CI，检查业务层原生按钮/字段/弹窗、硬编码颜色/字号和非标准垂直间距。`AppAvatar`、`AppFilterBar`、`AppMetricDashboard`、`AppGroupedCard` 均有业务调用。少量行内 `TextButton`、专用验证码输入和身份码弹窗保留；不得据此另建普通页面组件体系。具体边界与 Debug 预览见 Android `AGENTS.md`。
 10. **前端 Vite 大版本四分**：5 / 7 / 7 / 8。与第 1 条同理，升级需独立评估。
 11. **小程序 README 过期**：曾描述不存在的 `backend/`、`admin-web/`、`admin-server/` 等目录（已在本轮修正）。若再发现文档描述不存在的东西，按"文档服从代码"处理：改文档，不改代码。
 12. **CLI 惯用法不统一**（风格问题，无行为风险）：入口守卫在 `pathToFileURL(...).href === import.meta.url` 与 `path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)` 之间分裂；参数解析有手写三种风格；失败有 `process.exit(1)` 与 `process.exitCode = 1` 两种。新脚本按 §12 任选其一即可，不必回改存量。
-13. **镜像目标/别名/标签映射有三份副本**：`config/image-build-targets.json`（唯一被 `resolve-image-targets.mjs` 校验）、`scripts/trigger-acr-build.mjs` 内硬编码的 `TARGETS`（**完全不读配置文件**）、以及 `aliyun-acr.yml` 中的 bash `declare -A`（且在同一 workflow 内重复了一次）。三者目前一致，但后两份无任何校验。
-14. **ACR 触发路径与镜像目标图不一致**：`config/image-build-targets.json` 把 `infra/docker/compose.split.yml` 映射到 `platform` 目标，但 `aliyun-acr.yml` 的 32 项 `paths:` 允许列表不含该文件。结果是改回滚叠加层按图应重建 platform 镜像，却不会自动触发，只能手动 dispatch。
+13. **镜像元数据已集中**：`config/image-build-targets.json` 是目标、别名、Dockerfile、上下文、标签、Compose 服务名与环境变量名的唯一来源。解析器、ACR 操作提示脚本及 ACR workflow 均读取该文件。
+14. **ACR 回滚配置触发路径已对齐**：`infra/docker/compose.split.yml` 已同时登记在镜像目标图与 ACR workflow 的 `paths` 中。
 15. **GHCR 发布不受完整栈冒烟约束**：`main` 推送时 `docker-smoke` 被跳过，而 `container-images` 的 `needs` 不含它，因此 GHCR 会发布未经完整栈冒烟的镜像。ACR 路径反而有精确候选冒烟——两套发布链的保证强度不同，见 §5。
-16. **无自动化观测的删除决策逻辑**：`scripts/qiniu-android-retention.mjs` 导出决定"哪些 APK 会被删除"的函数，却既无单测也未被根 `package.json` 引用（因此连 `node --check` 都不跑）；`scripts/acr-image-probe.mjs` 的删除守卫同样无测试。另有 8 个脚本完全不在 `npm run check` 覆盖内。
+16. **无自动化观测的删除决策逻辑**：`scripts/release/qiniu-android-retention.mjs` 导出决定"哪些 APK 会被删除"的函数，却既无单测也未被根 `package.json` 引用（因此连 `node --check` 都不跑）；`scripts/release/acr-image-probe.mjs` 的删除守卫同样无测试。另有 8 个脚本完全不在 `npm run check` 覆盖内。
 17. **`.env.example` 缺 62 个被引用变量**（详见 §11），其中 `BACKUP_RETENTION_DAYS` 尤其容易误导：代码默认且**硬上限为 14 天**，而文档曾写 30 天（已修正文档）。该变量至今不在模板中。
-18. **`automation/ct8-automation/README.md` 曾与自身 workflow 矛盾（本轮已修）**：README 曾记录 7 个 `PANEL_*`/`*_SELECTOR` 变量与 `SSH_PRIVATE_KEY`/`SSH_PASSPHRASE`，但 `ssh-login.yml` 一个都不读（它硬性要求 `SSH_HOST` + `SSH_PASSWORD`，用 `sshpass`），而 workflow 真正使用的 `RESULT_CALLBACK_*`、`EMAS_*` 反而未记录。现已按 workflow 实际读取的 11 个 secrets 重写。**仍存在的结构问题**：该 workflow 位于 `automation/ct8-automation/.github/workflows/`，`gh`/Actions 不会执行它，且无法从本仓根 dispatch；而 `config/platform.services.*.json` 仍把 `ct8-automation` 宣传为在线服务、`.env.example` 的 `GH_WORKFLOW=ssh-login.yml` 指向根目录并不存在的同名文件。这需要产品决策（是把 workflow 迁到根目录，还是停止把它当在线服务），不在本轮范围内。
+18. **CT8 执行归属已明确**：Core API 调度独立 GitHub 仓库；`automation/ct8-automation/templates/ssh-login.yml` 仅为部署模板，目标仓库维护可执行工作流及 Secrets。本仓服务目录将其登记为 `automation`，不提供常驻服务的健康检查。
 19. **Dependabot 覆盖曾有两处空洞（本轮已修）**：`npm` 条目漏了 `/apps/official-website`；`docker` 条目指向根目录 `/`，而根目录没有任何 Dockerfile 或 compose 文件，导致所有 digest 固定的基础镜像从不更新。现改为列出 `/infra/docker` 与 `/infra/blackbox`。
 20. **`.env.release-smoke` 曾未被 `.gitignore` 覆盖（本轮已修）**：`aliyun-acr.yml` 用 `create-ci-env.mjs` 生成该文件（含随机密钥），但当时 `.gitignore` 只忽略了 `.env` 与 `.env.ci`。现已连同 `release-artifacts.tsv`、`changed-files.txt`、`build-metadata-*.json`、`blackbox-spool.jsonl` 一并忽略。
 21. **`ci.yml` 曾遗漏 `.github/workflows/android-profile.yml`（本轮已修）**：该文件已存在且仅手动触发，但不在 `paths-ignore` 中，因此修改它会触发全量 CI。
@@ -295,7 +296,7 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 
 - [ ] `npm run check` 通过（或说明了为何无法本地运行）。
 - [ ] 若改了某个子项目，它的 `check` 脚本仍存在且不被绕过。
-- [ ] 若新增子项目，已登记到 `install-workspace.mjs`、`audit-workspace.mjs` 与根 `check`。
+- [ ] 若新增可安装子项目，已登记到 `config/workspace-projects.json`，且根 `check` 可达其检查。
 - [ ] 若改了入口文件位置，`main`/`start`/`check`/Dockerfile 已同步。
 - [ ] 若改了用户可见行为，`README.md` 或相关 `docs/` 已同步（文档服从代码）。
 - [ ] 没有把缩进重排、依赖升级与功能改动混在同一提交。

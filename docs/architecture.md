@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | `platform-api` | `services/platform-api`、`services/core-api`、`services/exam-api` | 统一门户、网关、综合与考试业务 API 及管理前端；使用各模块独立数据库账号，不持有 Mongo root 凭据 |
 | `notification-service` | `services/notification-service` | 企业微信通知 API |
-| `backup-runner` | `scripts/backup-runner.mjs` | 内网限定的备份/恢复执行器，使用专用 Mongo backup/restore 账号 |
+| `backup-runner` | `scripts/database/backup-runner.mjs` | 内网限定的备份/恢复执行器，使用专用 Mongo backup/restore 账号 |
 | `campus-service` | `services/campus-service` | 校园系统连接器与用户网页 |
 | `iot-service` | `services/iot-service` | MQTT、设备控制、遥测和 WebSocket |
 | `mongodb` | Official image | 为六个业务模块提供隔离数据库 |

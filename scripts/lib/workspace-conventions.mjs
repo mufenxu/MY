@@ -10,8 +10,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-/** Projects that must be registered everywhere a project list exists. */
-export const REGISTRATION_SOURCES = ['scripts/install-workspace.mjs', 'scripts/audit-workspace.mjs'];
+export const PROJECT_REGISTRY = 'config/workspace-projects.json';
 
 /** Package names that intentionally do not follow the @my-platform/* convention. */
 export const PACKAGE_NAME_EXEMPTIONS = new Set(['examples/external-sso-express']);
@@ -35,13 +34,6 @@ export function createRepository(root) {
     readText: (relativePath) => fs.readFileSync(toAbsolute(relativePath), 'utf8'),
     readJson: (relativePath) => JSON.parse(fs.readFileSync(toAbsolute(relativePath), 'utf8')),
   };
-}
-
-/** Extract a project list from a registry script by reading its string literals. */
-export function extractProjectList(text, sourceName) {
-  const match = text.match(/const projects = \[([\s\S]*?)\];/);
-  if (!match) throw new Error(`Could not find a "const projects = [...]" list in ${sourceName}`);
-  return [...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]);
 }
 
 /**
@@ -98,32 +90,17 @@ export function collectConventionFailures(repo) {
   const allProjects = discoverProjects(repo);
   const managedProjects = allProjects.filter((project) => repo.exists(`${project}/package-lock.json`));
 
-  // Rule 1: every npm-ci managed project is registered in both registry scripts.
-  const registryLists = new Map(
-    REGISTRATION_SOURCES.map((file) => [file, extractProjectList(repo.readText(file), file)]),
-  );
-
-  for (const [file, list] of registryLists) {
-    const listed = new Set(list);
-    for (const project of managedProjects) {
-      if (!listed.has(project)) {
-        fail(file, `project "${project}" owns a package-lock.json but is not registered`);
-      }
-    }
-    for (const project of list) {
-      if (!repo.exists(`${project}/package.json`)) {
-        fail(file, `registered project "${project}" has no package.json`);
-      }
+  // Rule 1: install, audit and this gate consume the same project registry.
+  const registeredProjects = repo.readJson(PROJECT_REGISTRY);
+  const listed = new Set(registeredProjects);
+  for (const project of managedProjects) {
+    if (!listed.has(project)) {
+      fail(PROJECT_REGISTRY, `project "${project}" owns a package-lock.json but is not registered`);
     }
   }
-
-  const [primaryList] = registryLists.values();
-  for (const [file, list] of registryLists) {
-    const primary = new Set(primaryList);
-    for (const project of list) {
-      if (!primary.has(project)) {
-        fail(file, `"${project}" is registered here but missing from ${REGISTRATION_SOURCES[0]}`);
-      }
+  for (const project of registeredProjects) {
+    if (!managedProjects.includes(project)) {
+      fail(PROJECT_REGISTRY, `registered project "${project}" has no package.json or package-lock.json`);
     }
   }
 

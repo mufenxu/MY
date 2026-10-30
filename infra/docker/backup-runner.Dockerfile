@@ -21,7 +21,7 @@ COPY --chown=node:node apps/admin-console/package.json apps/admin-console/packag
 RUN npm ci --omit=dev --prefix apps/admin-console \
     && npm cache clean --force
 COPY --chown=node:node apps/admin-console/src/backups.js apps/admin-console/src/backupArchives.js apps/admin-console/src/backupStorage.js ./apps/admin-console/src/
-COPY --chown=node:node scripts/backup-runner.mjs scripts/backup-mongodb-container.mjs scripts/restore-mongodb-container.mjs ./scripts/
+COPY --chown=node:node scripts/database/backup-runner.mjs scripts/database/backup-mongodb-container.mjs scripts/database/restore-mongodb-container.mjs ./scripts/database/
 
 RUN mongodump --version >/dev/null \
     && mongorestore --version >/dev/null \
@@ -34,4 +34,4 @@ EXPOSE 22103
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD ["node", "-e", "fetch('http://127.0.0.1:22103/health').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
 
-CMD ["node", "scripts/backup-runner.mjs"]
+CMD ["node", "scripts/database/backup-runner.mjs"]

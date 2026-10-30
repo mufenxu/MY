@@ -345,8 +345,8 @@ services:
       PLATFORM_BACKUP_UPLOAD_MAX_BYTES: ${PLATFORM_BACKUP_UPLOAD_MAX_BYTES:-5368709120}
       PLATFORM_BACKUP_STORAGE_ENCRYPTION_KEY: ${PLATFORM_BACKUP_STORAGE_ENCRYPTION_KEY:-}
       PLATFORM_BACKUP_STORAGE_STATE_PATH: /app/state/offsite.json
-      PLATFORM_BACKUP_COMMAND: node /app/scripts/backup-mongodb-container.mjs
-      PLATFORM_RESTORE_COMMAND: node /app/scripts/restore-mongodb-container.mjs
+      PLATFORM_BACKUP_COMMAND: node /app/scripts/database/backup-mongodb-container.mjs
+      PLATFORM_RESTORE_COMMAND: node /app/scripts/database/restore-mongodb-container.mjs
       PLATFORM_RESTORE_CONFIRM_TEXT: ${PLATFORM_RESTORE_CONFIRM_TEXT:-RESTORE ALL DATA}
       PLATFORM_RESTORE_PRE_BACKUP: ${PLATFORM_RESTORE_PRE_BACKUP:-true}
       PLATFORM_CORE_UPLOADS_DIR: /app/services/core-api/uploads

@@ -1,6 +1,9 @@
+import { registerWebLoginRoutes } from './routes/web-login-routes.js';
+import { registerQrLoginRoutes, registerQrApprovalRoutes } from './routes/qr-login-routes.js';
+import { registerAuthRoutes, registerLogoutRoute, registerReauthenticationRoutes } from './routes/auth-routes.js';
 import { createMemoryAuthenticatorVaultStore } from './authenticator-vault-store.js';
 import { registerAuthenticatorVaultRoutes } from './routes/authenticator-vault-routes.js';
-import { renderAppLoginTransitionHtml, renderAppLoginErrorHtml } from './app-login-pages.js';
+import { renderAppLoginErrorHtml } from './app-login-pages.js';
 import { registerExternalAppRoutes } from './routes/external-app-routes.js';
 import { registerNotificationRoutes } from './routes/notification-routes.js';
 import { registerOperationsRoutes } from './routes/operations-routes.js';
@@ -16,7 +19,7 @@ import compression from 'compression';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
-import QRCode from 'qrcode';
+
 import {
   SESSION_COOKIE_NAME,
   createPasswordHash,
@@ -30,7 +33,7 @@ import { createMemoryAuthStore } from './auth-store.js';
 import { createMemoryAuthRiskStore } from './auth-risk-store.js';
 import { createNativeDeviceSecurity, DeviceSecurityError, proofDigest } from './native-device-security.js';
 import { BackupOperationError, createBackupManager, createBackupRunnerClient } from './backups.js';
-import { verifyTurnstileToken } from './bot-challenge.js';
+
 import { createChangeCalendar } from './change-calendar.js';
 import { ConfigurationError, createConfigurationManager } from './configuration-manager.js';
 import { createMemoryConfigurationStore } from './configuration-store.js';
@@ -1038,481 +1041,77 @@ export function createApp({
     return res.send(await metrics.render());
   });
 
-  app.get('/api/auth/status', async (req, res) => {
-    if (config.authDisabled) {
-      return res.json({ authenticated: true, authDisabled: true, totpRequired: false, user: { username: 'local-admin', role: 'super_admin', totpEnabled: false } });
-    }
-    const session = await readSession(req);
-    const account = session ? await accounts.findAccount(session.sub) : null;
-    const mfaCompliant = !config.requireMfa || strongFactorEnabled(account);
-    return res.json({
-      authenticated: Boolean(session && account?.active && mfaCompliant),
-      authDisabled: false,
-      totpRequired: Boolean(account?.totpEnabled),
-      mfaRequired: Boolean(config.requireMfa),
-      mfaEnrollmentRequired: Boolean(account?.active && !mfaCompliant),
-      passkeySupported: true,
-      androidPasskeySupported: (config.androidAppCertFingerprints || []).length > 0,
-      deviceSecurity: {
-        proofRequired: Boolean(config.androidRequireDeviceProof),
-        attestationConfigured: Boolean(config.androidAttestationRootSha256?.length),
-        integrityRequired: Boolean(config.androidRequireIntegrity),
-        integrity: session?.nativeIntegrity || 'unverified',
-      },
-      botProtectionConfigured: Boolean(config.turnstileSiteKey && config.turnstileSecretKey),
-      turnstileSiteKey: config.turnstileSiteKey || undefined,
-      user: session && account?.active && mfaCompliant ? authUser(account) : null,
-    });
+  const { loginLimiter, qrCreateLimiter, webLoginLimiter, qrApprovalLimiter } = registerAuthRoutes(app, {
+    accounts,
+    authUser,
+    clearSessionCookies,
+    config,
+    deviceSecurity,
+    fetchImpl,
+    isAndroidAppRequest,
+    issueAuthenticatedSession,
+    nativeIntegrityAllowed,
+    nativeLoginProof,
+    passkeys,
+    publicUrl,
+    readSession,
+    recordAudit,
+    recordLoginFailure,
+    requestDeviceId,
+    requireConsoleRequest,
+    risk,
+    sendRiskResponse,
+    sessionCookieOptions,
+    sessions,
+    strongFactorEnabled,
+    upgradePasswordHashAfterLogin,
   });
 
-  const loginLimiter = rateLimit({
-    windowMs: config.loginWindowMinutes * 60 * 1000,
-    limit: Math.max(config.loginMaxAttempts * 3, 30),
-    standardHeaders: 'draft-8',
-    legacyHeaders: false,
-    skipSuccessfulRequests: true,
-    message: { error: '登录尝试过多，请稍后再试。', code: 'LOGIN_RATE_LIMITED' },
-  });
-  const qrCreateLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    limit: 20,
-    standardHeaders: 'draft-8',
-    legacyHeaders: false,
-    message: { error: '二维码创建过于频繁，请稍后再试。', code: 'QR_LOGIN_RATE_LIMITED' },
-  });
-  const webLoginLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    limit: 20,
-    standardHeaders: 'draft-8',
-    legacyHeaders: false,
-    message: { error: 'Web login ticket requests are too frequent.', code: 'WEB_LOGIN_RATE_LIMITED' },
-  });
-  const qrApprovalLimiter = rateLimit({
-    windowMs: 60 * 1000,
-    limit: 60,
-    standardHeaders: 'draft-8',
-    legacyHeaders: false,
-    message: { error: '扫码确认请求过于频繁，请稍后再试。', code: 'QR_LOGIN_RATE_LIMITED' },
+  registerQrLoginRoutes(app, {
+    URLSearchParams,
+    accounts,
+    browserQrResponse,
+    clearQrBrowserVerifier,
+    config,
+    isAndroidAppRequest,
+    issueAuthenticatedSession,
+    nativeLoginProof,
+    publicUrl,
+    qrApprovalLimiter,
+    qrCreateLimiter,
+    qrLoginCookieName,
+    qrLoginCookieOptions,
+    qrLogins,
+    readQrBrowserVerifier,
+    requestDeviceId,
+    requireConsoleRequest,
+    strongFactorEnabled,
+    validQrRequestId,
   });
 
-  app.post('/api/auth/device/challenge', qrCreateLimiter, requireConsoleRequest, async (req, res) => {
-    return res.json(await deviceSecurity.challenge());
+  registerWebLoginRoutes(app, {
+    accounts,
+    config,
+    isAndroidAppRequest,
+    issueSessionCookie,
+    normalizeWebLoginRedirect,
+    publicUrl,
+    readSession,
+    recordAudit,
+    requireConsoleRequest,
+    sessions,
+    strongFactorEnabled,
+    webLoginLimiter,
+    webLoginTickets,
   });
 
-  app.post('/api/auth/native/refresh', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
-    const refreshToken = req.body?.refreshToken;
-    if (typeof refreshToken !== 'string' || !/^[A-Za-z0-9_-]{16}\.[A-Za-z0-9_-]{43}$/.test(refreshToken)) {
-      return res.status(401).json({ error: '登录会话已失效，请重新登录。', code: 'SESSION_REFRESH_INVALID' });
-    }
-    const proof = await deviceSecurity.proof(req);
-    const refreshed = await sessions.refreshNative(refreshToken, {
-      thumbprint: proof.thumbprint, accessTtlSeconds: config.androidAccessTtlSeconds,
-    });
-    await app.locals.onConsoleSessionsChanged();
-    const account = refreshed ? await accounts.findAccount(refreshed.sub) : null;
-    if (!refreshed || !account?.active || (config.requireMfa && !strongFactorEnabled(account)) ||
-        refreshed.accountId !== account.id || (refreshed.authVersion || 0) !== (account.authVersion || 0) ||
-        !nativeIntegrityAllowed(refreshed)) {
-      if (refreshed) await app.locals.revokeConsoleSessions({ subject: refreshed.sub, nonce: refreshed.nonce });
-      clearSessionCookies(res, config);
-      return res.status(401).json({ error: '登录会话已失效或设备证明已过期，请重新登录。', code: 'SESSION_REFRESH_INVALID' });
-    }
-    res.cookie(sessionCookieName(config.isProduction), refreshed.token, sessionCookieOptions(config, config.androidAccessTtlSeconds / 3600));
-    return res.json({ session: {
-      refreshToken: refreshed.refreshToken,
-      accessExpiresAt: new Date(refreshed.accessExpiresAt * 1000).toISOString(),
-      expiresAt: new Date(refreshed.expiresAt * 1000).toISOString(),
-      deviceBound: true, deviceIntegrity: refreshed.nativeIntegrity,
-    } });
-  });
-
-  app.post('/api/auth/login', loginLimiter, requireConsoleRequest, async (req, res) => {
-    if (config.authDisabled) {
-      return res.json({
-        authenticated: true,
-        authDisabled: true,
-        totpRequired: false,
-        user: { username: 'local-admin', role: 'super_admin', totpEnabled: false },
-      });
-    }
-
-    const deviceProof = await nativeLoginProof(req);
-    const username = String(req.body?.username || '').trim();
-    const password = String(req.body?.password || '');
-    const riskState = await risk.assess({ username, ip: req.ip });
-    if (riskState.blocked) return sendRiskResponse(res, riskState);
-    if (riskState.challengeRequired) {
-      const challenge = await verifyTurnstileToken({
-        token: req.body?.challengeToken,
-        secretKey: config.turnstileSecretKey,
-        remoteIp: req.ip,
-        expectedHostname: publicUrl.hostname,
-        fetchImpl,
-      });
-      if (!challenge.valid) {
-        return res.status(401).json({
-          error: '请先完成人机验证。',
-          code: 'BOT_CHALLENGE_REQUIRED',
-          details: { challengeRequired: true, turnstileSiteKey: config.turnstileSiteKey },
-        });
-      }
-    }
-
-    const account = await accounts.findAccount(username);
-    const passwordHash = account?.passwordHash || config.adminPasswordHash;
-    const passwordValid = await verifyPassword(password, passwordHash);
-    if (!account?.active || !passwordValid) {
-      return sendRiskResponse(res, await recordLoginFailure(req, username, 'invalid_credentials'));
-    }
-    if (config.requireMfa && !account.totpEnabled && account.passkeyCount > 0) {
-      return res.status(401).json({ error: '该账号必须使用 Passkey 登录。', code: 'PASSKEY_REQUIRED' });
-    }
-    await upgradePasswordHashAfterLogin(username, account.passwordHash, password);
-    if (!account.totpEnabled && !config.requireMfa) return issueAuthenticatedSession(req, res, account, 'password');
-
-    const enrollment = account.totpEnabled ? null : await accounts.beginTotpEnrollment(username);
-    const challengeId = await accounts.saveChallenge({
-      kind: 'password_login', username,
-      challenge: {
-        accountId: account.id, authVersion: account.authVersion || 0,
-        step: enrollment ? 'enrollment' : 'totp',
-        enrollmentId: enrollment?.id,
-        deviceId: requestDeviceId(req), android: isAndroidAppRequest(req),
-        deviceKeyThumbprint: deviceProof?.thumbprint || '',
-      },
-    });
-    if (enrollment) await recordAudit(req, { actor: username, action: 'security.totp_enrollment_started', targetType: 'account', targetId: username });
-    return res.status(202).json({
-      authenticated: false,
-      code: enrollment ? 'MFA_ENROLLMENT_REQUIRED' : 'SECOND_FACTOR_REQUIRED',
-      details: {
-        challengeId, expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
-        totpRequired: true, recoveryCodeAllowed: account.recoveryCodesRemaining > 0,
-        ...(enrollment ? { enrollment } : {}),
-      },
-    });
-  });
-
-  app.post('/api/auth/login/complete', loginLimiter, requireConsoleRequest, async (req, res) => {
-    const invalidChallenge = () => res.status(401).json({ error: '登录验证已过期或失效，请重新输入账号密码。', code: 'LOGIN_CHALLENGE_INVALID' });
-    const pending = await accounts.findChallenge(req.body?.challengeId, 'password_login');
-    if (!pending) return invalidChallenge();
-    const { username, challenge } = pending;
-    const deviceProof = await nativeLoginProof(req);
-    if ((challenge.deviceKeyThumbprint || '') !== (deviceProof?.thumbprint || '')) return invalidChallenge();
-    const account = await accounts.findAccount(username);
-    if (!account?.active || account.id !== challenge.accountId || (account.authVersion || 0) !== challenge.authVersion
-      || challenge.android !== isAndroidAppRequest(req) || challenge.deviceId !== requestDeviceId(req)) return invalidChallenge();
-    const riskState = await risk.assess({ username, ip: req.ip });
-    if (riskState.blocked) return sendRiskResponse(res, riskState);
-    const factor = challenge.step === 'enrollment'
-      ? await accounts.confirmTotpEnrollment(username, req.body?.enrollmentCode, { enrollmentId: challenge.enrollmentId, authVersion: challenge.authVersion })
-      : await accounts.consumeSecondFactor(username, { totp: req.body?.totp, recoveryCode: req.body?.recoveryCode });
-    if (!factor || (challenge.step !== 'enrollment' && (!account.totpEnabled || !factor.valid))) {
-      await accounts.failChallenge(req.body?.challengeId, 'password_login');
-      return sendRiskResponse(res, await recordLoginFailure(req, username, 'invalid_second_factor'));
-    }
-    if (!await accounts.consumeChallenge(req.body?.challengeId, 'password_login', username)) return invalidChallenge();
-    const current = await accounts.findAccount(username);
-    if (!current?.active || current.id !== challenge.accountId || (current.authVersion || 0) !== challenge.authVersion) return invalidChallenge();
-    if (challenge.step === 'enrollment') await recordAudit(req, { actor: username, action: 'security.totp_enabled', targetType: 'account', targetId: username });
-    return issueAuthenticatedSession(req, res, current, challenge.step === 'enrollment' ? 'password_totp_enrollment' : `password_${factor.method}`, factor.recoveryCodes ? { recoveryCodes: factor.recoveryCodes } : {});
-  });
-
-  app.post('/api/auth/recovery', loginLimiter, requireConsoleRequest, async (req, res) => {
-    const pending = await accounts.findChallenge(req.body?.recoveryToken, 'account_recovery');
-    const account = pending ? await accounts.findAccount(pending.username) : null;
-    const invalid = () => res.status(400).json({ error: '账号恢复凭据无效或已过期。', code: 'ACCOUNT_RECOVERY_INVALID' });
-    if (!account?.active || account.id !== pending.challenge.accountId || (account.authVersion || 0) !== pending.challenge.authVersion) return invalid();
-    const newPassword = String(req.body?.newPassword || '');
-    if (newPassword.length < 15 || newPassword.length > 256) return res.status(400).json({ error: '新密码长度需要在 15 到 256 个字符之间。', code: 'INVALID_PASSWORD' });
-    const passwordHash = await createPasswordHash(newPassword);
-    if (!await accounts.consumeChallenge(req.body.recoveryToken, 'account_recovery', account.username)) return invalid();
-    if (!await accounts.resetCredentials(account.username, pending.challenge.authVersion, passwordHash)) return invalid();
-    await app.locals.revokeConsoleSessions({ subject: account.username });
-    await risk.recordSuccess({ username: account.username, ip: req.ip });
-    await recordAudit(req, { actor: account.username, action: 'security.account_recovered', targetType: 'account', targetId: account.username });
-    return res.json({ recovered: true, username: account.username, mfaEnrollmentRequired: Boolean(config.requireMfa) });
-  });
-
-  app.post('/api/auth/passkey/options', loginLimiter, requireConsoleRequest, async (req, res) => {
-    const deviceProof = await nativeLoginProof(req);
-    const username = String(req.body?.username || '').trim();
-    const riskState = await risk.assess({ username, ip: req.ip });
-    if (riskState.blocked) return sendRiskResponse(res, riskState);
-    if (riskState.challengeRequired) {
-      const challenge = await verifyTurnstileToken({
-        token: req.body?.challengeToken,
-        secretKey: config.turnstileSecretKey,
-        remoteIp: req.ip,
-        expectedHostname: publicUrl.hostname,
-        fetchImpl,
-      });
-      if (!challenge.valid) {
-        return res.status(401).json({
-          error: '请先完成人机验证。',
-          code: 'BOT_CHALLENGE_REQUIRED',
-          details: { challengeRequired: true, turnstileSiteKey: config.turnstileSiteKey },
-        });
-      }
-    }
-    const result = await passkeys.authenticationOptions(username, { binding: deviceProof?.thumbprint || '' });
-    if (!result) {
-      await recordLoginFailure(req, username, 'passkey_unavailable');
-      return res.status(400).json({ error: '该账号没有可用的 Passkey。', code: 'PASSKEY_UNAVAILABLE' });
-    }
-    return res.json(result);
-  });
-
-  app.post('/api/auth/passkey/verify', loginLimiter, requireConsoleRequest, async (req, res) => {
-    const deviceProof = await nativeLoginProof(req);
-    const requestedUsername = String(req.body?.username || '').trim();
-    const riskState = await risk.assess({ username: requestedUsername, ip: req.ip });
-    if (riskState.blocked) return sendRiskResponse(res, riskState);
-    try {
-      const verification = await passkeys.verifyAuthentication(requestedUsername, req.body, { binding: deviceProof?.thumbprint || '' });
-      const username = verification.username || requestedUsername;
-      const account = verification.verified ? await accounts.findAccount(username) : null;
-      if (!verification.verified || !account?.active || verification.accountId !== account.id || verification.authVersion !== (account.authVersion || 0)) {
-        return sendRiskResponse(res, await recordLoginFailure(req, username, 'invalid_passkey'));
-      }
-      return issueAuthenticatedSession(req, res, account, 'passkey');
-    } catch {
-      return sendRiskResponse(res, await recordLoginFailure(req, requestedUsername, 'invalid_passkey'));
-    }
-  });
-
-  app.post('/api/auth/qr/requests', qrCreateLimiter, requireConsoleRequest, async (req, res, next) => {
-    if (config.authDisabled) {
-      return res.status(400).json({ error: '本地免登录模式不需要扫码登录。', code: 'QR_LOGIN_DISABLED' });
-    }
-    try {
-      const clientKind = String(req.body?.clientKind || 'browser');
-      const androidRequester = clientKind === 'android';
-      if (!['browser', 'android'].includes(clientKind)) {
-        return res.status(400).json({ error: '二维码请求来源无效。', code: 'QR_LOGIN_INVALID_CLIENT' });
-      }
-      if (androidRequester && !isAndroidAppRequest(req)) {
-        return res.status(403).json({ error: 'Android 登录二维码仅允许官方 App 创建。', code: 'QR_LOGIN_INVALID_CLIENT' });
-      }
-      if (androidRequester && String(req.body?.confirmationMethod || 'passkey') !== 'passkey') {
-        return res.status(400).json({ error: '二维码确认方式无效。', code: 'QR_LOGIN_INVALID_CONFIRMATION' });
-      }
-      if (androidRequester && (config.androidAppCertFingerprints || []).length === 0) {
-        return res.status(503).json({ error: 'Android Passkey 尚未配置应用签名证书。', code: 'QR_ANDROID_PASSKEY_UNAVAILABLE' });
-      }
-      const requesterDeviceId = androidRequester ? requestDeviceId(req) : '';
-      if (androidRequester && !requesterDeviceId) {
-        return res.status(400).json({ error: 'Android 登录二维码缺少设备标识。', code: 'QR_LOGIN_DEVICE_MISSING' });
-      }
-      const deviceProof = androidRequester ? await nativeLoginProof(req) : null;
-      const created = await qrLogins.create({
-        browserIp: req.ip,
-        browserUserAgent: req.get('user-agent'),
-        clientKind,
-        requesterDeviceId,
-        requesterKeyThumbprint: deviceProof?.thumbprint || '',
-      });
-      const loginUrl = new URL('/app/qr-login', publicUrl.origin);
-      loginUrl.searchParams.set('requestId', created.requestId);
-      loginUrl.hash = new URLSearchParams({ scanToken: created.scanToken }).toString();
-      const responseBody = {
-        ...browserQrResponse(created.record),
-        clientKind,
-        qrDataUrl: await QRCode.toDataURL(loginUrl.toString(), {
-          errorCorrectionLevel: 'M',
-          margin: 1,
-          width: 280,
-        }),
-      };
-      if (androidRequester) {
-        responseBody.requesterVerifier = created.browserVerifier;
-      } else {
-        res.cookie(
-          qrLoginCookieName(config, created.requestId),
-          created.browserVerifier,
-          qrLoginCookieOptions(config),
-        );
-      }
-      return res.status(201).json(responseBody);
-    } catch (error) {
-      next(error);
-      return undefined;
-    }
-  });
-
-  app.get('/api/auth/qr/requests/:id', async (req, res) => {
-    const requestId = validQrRequestId(req.params.id);
-    if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
-    const record = await qrLogins.getForBrowser(requestId, readQrBrowserVerifier(req, requestId));
-    if (!record) return res.status(410).json({ error: '二维码已过期，请刷新后重试。', code: 'QR_LOGIN_EXPIRED' });
-    return res.json(browserQrResponse(record));
-  });
-
-  app.post('/api/auth/qr/requests/:id/status', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
-    const requestId = validQrRequestId(req.params.id);
-    if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
-    const requesterVerifier = String(req.body?.requesterVerifier || '');
-    const record = await qrLogins.getForRequester(requestId, requesterVerifier, requestDeviceId(req));
-    if (!record) return res.status(410).json({ error: '二维码已过期，请重新发起登录。', code: 'QR_LOGIN_EXPIRED' });
-    const deviceProof = await nativeLoginProof(req);
-    if ((record.requesterKeyThumbprint || '') !== (deviceProof?.thumbprint || '')) {
-      throw new DeviceSecurityError('DEVICE_KEY_MISMATCH', '二维码登录请求与当前设备不匹配。');
-    }
-    return res.json(browserQrResponse(record));
-  });
-
-  app.post('/api/auth/qr/requests/:id/consume', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
-    const requestId = validQrRequestId(req.params.id);
-    if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
-    const requesterVerifier = String(req.body?.requesterVerifier || '');
-    let record = await qrLogins.getForRequester(requestId, requesterVerifier, requestDeviceId(req));
-    const androidRequester = Boolean(record);
-    const browserVerifier = androidRequester ? requesterVerifier : readQrBrowserVerifier(req, requestId);
-    if (!record) record = await qrLogins.getForBrowser(requestId, browserVerifier);
-    if (!record) return res.status(410).json({ error: '二维码已过期，请刷新后重试。', code: 'QR_LOGIN_EXPIRED' });
-    if (androidRequester) {
-      const deviceProof = await nativeLoginProof(req);
-      if ((record.requesterKeyThumbprint || '') !== (deviceProof?.thumbprint || '')) {
-        throw new DeviceSecurityError('DEVICE_KEY_MISMATCH', '二维码登录请求与当前设备不匹配。');
-      }
-    }
-    if (record.status !== 'approved') {
-      return res.status(409).json({ error: 'App 尚未完成登录确认。', code: 'QR_LOGIN_NOT_APPROVED', details: { status: record.status } });
-    }
-    const account = await accounts.findAccount(record.approvedBy);
-    if (!account?.active || (config.requireMfa && !strongFactorEnabled(account))) {
-      return res.status(403).json({ error: '批准账号当前不可用于登录。', code: 'QR_LOGIN_ACCOUNT_UNAVAILABLE' });
-    }
-    const consumed = await qrLogins.consume(
-      requestId,
-      browserVerifier,
-      androidRequester ? requestDeviceId(req) : '',
-    );
-    if (!consumed) return res.status(409).json({ error: '二维码已被使用。', code: 'QR_LOGIN_ALREADY_USED' });
-    if (!androidRequester) clearQrBrowserVerifier(res, requestId);
-    const authenticationMethod = androidRequester
-      ? `qr_android_${consumed.confirmationMethod || 'biometric'}`
-      : `qr_app_${consumed.confirmationMethod || 'biometric'}`;
-    return issueAuthenticatedSession(req, res, account, authenticationMethod);
-  });
-
-  app.delete('/api/auth/qr/requests/:id', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
-    const requestId = validQrRequestId(req.params.id);
-    if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
-    const cancelled = await qrLogins.cancel(requestId, readQrBrowserVerifier(req, requestId));
-    clearQrBrowserVerifier(res, requestId);
-    return res.json({ cancelled: Boolean(cancelled) });
-  });
-
-  app.post('/api/auth/web-login-tickets', webLoginLimiter, requireConsoleRequest, async (req, res, next) => {
-    if (config.authDisabled) {
-      return res.status(400).json({ error: 'Web login tickets are disabled in local bypass mode.', code: 'WEB_LOGIN_DISABLED' });
-    }
-    if (!isAndroidAppRequest(req)) {
-      return res.status(403).json({ error: 'Web login tickets can only be created by the Android app.', code: 'WEB_LOGIN_ANDROID_REQUIRED' });
-    }
-    try {
-      const session = await readSession(req);
-      if (!session) return res.status(401).json({ error: 'Please sign in first.', code: 'UNAUTHORIZED' });
-      const account = await accounts.findAccount(session.sub);
-      if (!account?.active || (config.requireMfa && !strongFactorEnabled(account))) {
-        return res.status(403).json({ error: 'Current account cannot create web login tickets.', code: 'WEB_LOGIN_ACCOUNT_UNAVAILABLE' });
-      }
-      const redirect = normalizeWebLoginRedirect(req.body?.redirect, publicUrl);
-      if (!redirect) {
-        return res.status(400).json({ error: 'Web login redirect is invalid.', code: 'WEB_LOGIN_REDIRECT_INVALID' });
-      }
-      const created = await webLoginTickets.create({
-        username: account.username,
-        role: account.role,
-        redirect,
-        appSessionNonce: session.nonce,
-        appIp: req.ip,
-        appUserAgent: req.get('user-agent'),
-      });
-      const loginUrl = new URL('/console/app-login', publicUrl.origin);
-      loginUrl.searchParams.set('ticket', created.ticket);
-      loginUrl.searchParams.set('redirect', redirect);
-      await recordAudit(req, {
-        actor: account.username,
-        action: 'auth.web_login_ticket.create',
-        targetType: 'session',
-        targetId: session.nonce || '',
-        details: { redirect },
-      });
-      return res.status(201).json({
-        loginUrl: loginUrl.toString(),
-        redirect,
-        expiresAt: created.record.expiresAt,
-      });
-    } catch (error) {
-      next(error);
-      return undefined;
-    }
-  });
-
-  app.get('/app-login', webLoginLimiter, async (req, res, next) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-    res.setHeader('Content-Security-Policy', "default-src 'self' 'unsafe-inline' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; base-uri 'self'");
-    const ticket = String(req.query?.ticket || '');
-    const requestedRedirect = normalizeWebLoginRedirect(req.query?.redirect, publicUrl);
-    if (!ticket || !requestedRedirect) {
-      return res.status(400).send(renderAppLoginErrorHtml('链接无效', '免密登录链接不完整或已失效。'));
-    }
-    try {
-      const consumed = await webLoginTickets.consume(ticket);
-      if (!consumed) {
-        return res.status(410).send(renderAppLoginErrorHtml('登录凭据已过期', '该免密登录凭据已过期或已被使用，请返回安卓 App 重新打开。'));
-      }
-      if (consumed.redirect !== requestedRedirect) {
-        return res.status(400).send(renderAppLoginErrorHtml('跳转目标无效', '安全重定向目标校验失败。'));
-      }
-      if (!await sessions.isActive({ nonce: consumed.appSessionNonce, subject: consumed.username })) {
-        return res.status(410).send(renderAppLoginErrorHtml('来源会话已失效', '原登录设备已退出或会话已撤销，请重新登录后再打开。'));
-      }
-      const account = await accounts.findAccount(consumed.username);
-      if (!account?.active || (config.requireMfa && !strongFactorEnabled(account))) {
-        return res.status(403).send(renderAppLoginErrorHtml('无权访问', '当前账号已被禁用或尚未满足多因素认证要求。'));
-      }
-      const embeddedWebSession = consumed.sessionKind === 'embedded_web';
-      await issueSessionCookie(req, res, account, 'android_web_ticket', embeddedWebSession ? {
-        policy: { ttlHours: 0.25, idleMinutes: Math.min(config.sessionIdleMinutes, 5) },
-        sessionKind: 'embedded_web',
-        parentSessionNonce: consumed.appSessionNonce,
-        replaceExisting: true,
-      } : { policy: { ttlHours: 0.25, idleMinutes: 5 }, sessionKind: 'browser', parentSessionNonce: consumed.appSessionNonce });
-      await recordAudit(req, {
-        actor: account.username,
-        action: 'auth.web_login_ticket.consume',
-        targetType: 'account',
-        targetId: account.username,
-        details: { redirect: consumed.redirect },
-      });
-      if (req.query?.direct === '1' || req.get('x-direct-redirect') === '1') {
-        return res.redirect(303, consumed.redirect);
-      }
-      res.setHeader('Location', consumed.redirect);
-      return res.send(renderAppLoginTransitionHtml(consumed.redirect));
-    } catch (error) {
-      next(error);
-      return undefined;
-    }
-  });
-
-  app.post('/api/auth/logout', requireConsoleRequest, async (req, res) => {
-    const token = readSessionToken(req);
-    const session = await readSession(req);
-    if (session) await app.locals.revokeConsoleSessions({ subject: session.sub, nonce: session.nonce });
-    await app.locals.onConsoleSessionRevoked(token);
-    clearSessionCookies(res, config);
-    await recordAudit(req, {
-      actor: session?.sub || 'anonymous',
-      action: 'auth.logout',
-      targetType: 'session',
-      targetId: session?.nonce || '',
-    });
-    res.json({ authenticated: false });
+  registerLogoutRoute(app, {
+    clearSessionCookies,
+    config,
+    readSession,
+    readSessionToken,
+    recordAudit,
+    requireConsoleRequest,
   });
 
   const releaseCallbackLimiter = rateLimit({
@@ -1581,138 +1180,26 @@ export function createApp({
     webLoginTickets,
   });
 
-  app.post('/api/auth/qr/requests/:id/scan', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
-    const requestId = validQrRequestId(req.params.id);
-    const scanToken = String(req.body?.scanToken || '');
-    if (!requestId || scanToken.length < 32 || scanToken.length > 128) {
-      return res.status(400).json({ error: '二维码内容无效。', code: 'QR_LOGIN_INVALID' });
-    }
-    const record = await qrLogins.scan(requestId, scanToken, req.consoleUser.username);
-    if (!record) return res.status(410).json({ error: '二维码已失效或已由其他账号扫描。', code: 'QR_LOGIN_UNAVAILABLE' });
-    await recordAudit(req, {
-      action: 'auth.qr_scan',
-      targetType: 'qr_login',
-      targetId: requestId,
-      details: { browserIp: record.browserIp, browser: userAgentLabel(record.browserUserAgent) },
-    });
-    return res.json(appQrResponse(record, req.consoleUser.role));
+  registerQrApprovalRoutes(app, {
+    appQrResponse,
+    config,
+    passkeys,
+    qrApprovalLimiter,
+    qrLogins,
+    recordAudit,
+    requireConsoleRequest,
+    userAgentLabel,
+    validQrRequestId,
   });
 
-  app.post('/api/auth/qr/requests/:id/passkey/options', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
-    const requestId = validQrRequestId(req.params.id);
-    if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
-    const record = await qrLogins.getForActor(requestId, req.consoleUser.username);
-    if (!record || record.status !== 'scanned') {
-      return res.status(409).json({ error: '扫码请求当前不可确认。', code: 'QR_LOGIN_NOT_SCANNED' });
-    }
-    if ((config.androidAppCertFingerprints || []).length === 0) {
-      return res.status(503).json({ error: 'Android Passkey 尚未配置应用签名证书。', code: 'QR_ANDROID_PASSKEY_UNAVAILABLE' });
-    }
-    const result = await passkeys.authenticationOptions(req.consoleUser.username, {
-      purpose: 'qr_approval', sessionNonce: req.consoleSession.nonce, binding: requestId,
-    });
-    if (!result) {
-      return res.status(403).json({ error: '请先绑定 Passkey，再使用扫码批准登录。', code: 'QR_PASSKEY_REQUIRED' });
-    }
-    return res.json(result);
-  });
-
-  app.post('/api/auth/qr/requests/:id/approve', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
-    const requestId = validQrRequestId(req.params.id);
-    if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
-    const record = await qrLogins.getForActor(requestId, req.consoleUser.username);
-    if (!record || record.status !== 'scanned') {
-      return res.status(409).json({ error: '扫码请求当前不可确认。', code: 'QR_LOGIN_NOT_SCANNED' });
-    }
-
-    const confirmationMethod = 'passkey';
-    if ((config.androidAppCertFingerprints || []).length === 0) {
-      return res.status(503).json({ error: 'Android Passkey 尚未配置应用签名证书。', code: 'QR_ANDROID_PASSKEY_UNAVAILABLE' });
-    }
-    try {
-      const verification = await passkeys.verifyAuthentication(req.consoleUser.username, req.body?.passkey, {
-        purpose: 'qr_approval', sessionNonce: req.consoleSession.nonce, binding: requestId,
-      });
-      if (!verification.verified) throw new Error('Passkey verification failed.');
-    } catch {
-      await recordAudit(req, {
-        action: 'auth.qr_approve',
-        outcome: 'failure',
-        targetType: 'qr_login',
-        targetId: requestId,
-        details: { reason: 'invalid_passkey' },
-      });
-      return res.status(403).json({ error: 'Passkey 验证失败，未批准网页登录。', code: 'QR_PASSKEY_INVALID' });
-    }
-
-    const approved = await qrLogins.approve(requestId, req.consoleUser.username, confirmationMethod);
-    if (!approved) return res.status(409).json({ error: '扫码请求状态已变化，请重新扫描。', code: 'QR_LOGIN_STATE_CHANGED' });
-    await recordAudit(req, {
-      action: 'auth.qr_approve',
-      targetType: 'qr_login',
-      targetId: requestId,
-      details: { confirmationMethod, browserIp: approved.browserIp, browser: userAgentLabel(approved.browserUserAgent) },
-    });
-    return res.json({ approved: true, ...appQrResponse(approved, req.consoleUser.role) });
-  });
-
-  app.post('/api/auth/qr/requests/:id/reject', qrApprovalLimiter, requireConsoleRequest, async (req, res) => {
-    const requestId = validQrRequestId(req.params.id);
-    if (!requestId) return res.status(400).json({ error: '二维码请求编号无效。', code: 'QR_LOGIN_INVALID' });
-    const rejected = await qrLogins.reject(requestId, req.consoleUser.username);
-    if (!rejected) return res.status(409).json({ error: '扫码请求状态已变化。', code: 'QR_LOGIN_STATE_CHANGED' });
-    await recordAudit(req, {
-      action: 'auth.qr_reject',
-      targetType: 'qr_login',
-      targetId: requestId,
-    });
-    return res.json({ rejected: true });
-  });
-
-  app.post('/api/auth/reauth/passkey/options', loginLimiter, requireConsoleRequest, async (req, res) => {
-    const result = await passkeys.authenticationOptions(req.consoleUser.username, { purpose: 'reauthentication', sessionNonce: req.consoleSession.nonce });
-    if (!result) return res.status(400).json({ error: '当前账号没有可用的 Passkey。', code: 'PASSKEY_UNAVAILABLE' });
-    return res.json(result);
-  });
-
-  app.post('/api/auth/reauth/passkey/verify', loginLimiter, requireConsoleRequest, async (req, res) => {
-    try {
-      const result = await passkeys.verifyAuthentication(req.consoleUser.username, req.body, { purpose: 'reauthentication', sessionNonce: req.consoleSession.nonce });
-      if (!result.verified) return res.status(403).json({ error: 'Passkey 二次验证失败。', code: 'REAUTHENTICATION_FAILED' });
-      const expiresAt = await sessions.markReauthenticated(readSessionToken(req));
-      if (!expiresAt) return res.status(401).json({ error: '登录会话已失效。', code: 'UNAUTHORIZED' });
-      await app.locals.onConsoleSessionChanged(readSessionToken(req));
-      await recordAudit(req, { action: 'auth.reauthenticate', targetType: 'account', targetId: req.consoleUser.username, details: { method: 'passkey' } });
-      return res.json({ reauthenticated: true, expiresAt: new Date(expiresAt * 1000).toISOString() });
-    } catch {
-      return res.status(403).json({ error: 'Passkey 二次验证失败。', code: 'REAUTHENTICATION_FAILED' });
-    }
-  });
-
-  app.post('/api/auth/reauth', loginLimiter, requireConsoleRequest, async (req, res) => {
-    // Extending the elevated window always requires a fresh factor, including after Passkey authentication.
-    if (!await verifyReauthentication(req, { allowRecent: false })) {
-      await recordAudit(req, {
-        action: 'auth.reauthenticate',
-        outcome: 'failure',
-        targetType: 'session',
-        targetId: req.consoleSession?.nonce || '',
-        details: { reason: 'invalid_credentials' },
-      });
-      return res.status(403).json({ error: '管理员二次验证失败。', code: 'REAUTHENTICATION_FAILED' });
-    }
-    const sessionToken = readSessionToken(req);
-    const expiresAt = await sessions.markReauthenticated(sessionToken);
-    if (!expiresAt) {
-      return res.status(401).json({ error: '当前会话已失效。', code: 'UNAUTHORIZED' });
-    }
-    await app.locals.onConsoleSessionChanged(sessionToken);
-    await recordAudit(req, {
-      action: 'auth.reauthenticate',
-      targetType: 'session',
-      targetId: req.consoleSession?.nonce || '',
-    });
-    return res.json({ reauthenticated: true, expiresAt: new Date(expiresAt * 1000).toISOString() });
+  registerReauthenticationRoutes(app, {
+    loginLimiter,
+    passkeys,
+    readSessionToken,
+    recordAudit,
+    requireConsoleRequest,
+    sessions,
+    verifyReauthentication,
   });
 
   app.get('/api/services', (req, res) => {

@@ -94,7 +94,7 @@ docker compose --env-file .env -f infra/docker/compose.yml start platform-api no
 npm run backup
 ```
 
-这个命令会短暂停止业务容器，创建 MongoDB 副本集时间点归档，复制核心上传文件，然后只重启原本正在运行的服务。它会写入带校验和的备份目录，并按 `BACKUP_RETENTION_DAYS` 清理本地备份。该变量的实际默认值是 **14 天，且被硬编码上限 14 天**（见 `scripts/backup-mongodb.mjs` 与 `scripts/backup-mongodb-container.mjs`），设更大的值不会生效；它也不在 `.env.example` 中。请把备份目录同步到加密的异地存储；同一台服务器上的本地备份不等于灾备。
+这个命令会短暂停止业务容器，创建 MongoDB 副本集时间点归档，复制核心上传文件，然后只重启原本正在运行的服务。它会写入带校验和的备份目录，并按 `BACKUP_RETENTION_DAYS` 清理本地备份。该变量的实际默认值是 **14 天，且被硬编码上限 14 天**（见 `scripts/database/backup-mongodb.mjs` 与 `scripts/database/backup-mongodb-container.mjs`），设更大的值不会生效；它也不在 `.env.example` 中。请把备份目录同步到加密的异地存储；同一台服务器上的本地备份不等于灾备。
 
 命令行恢复入口仍可用于服务器维护场景：
 

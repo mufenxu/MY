@@ -34,18 +34,18 @@ MY/
 |-- packages/
 |   |-- platform-auth/          平台内部身份签发与 SSO/HMAC 验签（CJS + ESM 双入口）
 |   `-- platform-browser-runtime/ 浏览器侧共享运行时（SSO、超时请求、体验上报）
-|-- automation/ct8-automation/  非常驻自动化任务
+|-- automation/ct8-automation/  独立仓库自动化任务的部署模板
 |-- config/                     无密钥的服务注册表与拓扑契约
 |-- docs/                       架构、运维、发布与工程规范
 |-- infra/                      Docker、反向代理与部署配置
-`-- scripts/                    工作区维护与 CI 辅助脚本
+`-- scripts/                    按职责分组的工作区维护与 CI 辅助脚本
 ```
 
 *（本树与根 [README.md](README.md) 保持一致；两侧任一处改动时同步另一处。）*
 
 ## 红线速览
 
-- **门禁**：提交前 `npm run check` 必须通过。它是根 `package.json` 里 `&&` 串联的全量检查，**第一步是 `check:conventions`**（只读的仓库约定校验器，会断言包名、`private`、`description`、`main` 可解析、`check` 脚本存在且可达、`package.json` 缩进、项目登记一致性）。新增子项目必须同时登记到 `scripts/install-workspace.mjs`、`scripts/audit-workspace.mjs` 和根 `check:*`。
+- **门禁**：提交前 `npm run check` 必须通过。它是根 `package.json` 里 `&&` 串联的全量检查，**第一步是 `check:conventions`**（只读的仓库约定校验器，会断言包名、`private`、`description`、`main` 可解析、`check` 脚本存在且可达、`package.json` 缩进、项目登记一致性）。新增可安装子项目登记到 `config/workspace-projects.json`，由安装、审计与结构检查共同读取，并接入根 `check:*`。
 - **测试**：只用 Node 内置 `node --test` + `node:assert/strict`。不要引入 jest / mocha / vitest。测试**不连真实数据库**，用内存替身。
 - **密钥**：`.env`、`**/project.private.config.json`、任何令牌/私钥**绝不提交**。`config/` 内不得出现密钥。
 - **包名**：`@my-platform/<目录名>` + `private: true` + 非空 `description`；`main`/`exports` 必须指向真实存在的文件。

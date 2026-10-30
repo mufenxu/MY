@@ -1,0 +1,14 @@
+[
+  "apps/admin-console",
+  "apps/official-website",
+  "apps/core-admin",
+  "apps/exam-admin",
+  "apps/exam-miniapp",
+  "apps/smart-campus-miniapp/miniprogram",
+  "services/platform-api",
+  "services/core-api",
+  "services/exam-api",
+  "services/campus-service",
+  "services/iot-service",
+  "services/notification-service"
+]

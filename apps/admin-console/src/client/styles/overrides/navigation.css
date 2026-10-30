@@ -1,0 +1,480 @@
+
+
+/* Grouped console navigation and consolidated overview */
+.workspace-section-nav {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 5px;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  transition: all 0.25s ease;
+}
+
+.workspace-tabs {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.workspace-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.workspace-tabs button {
+  position: relative;
+  min-width: max-content;
+  min-height: 40px;
+  padding: 0 16px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0;
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.workspace-tabs button:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--blue-soft) 52%, transparent);
+}
+
+.workspace-tabs button.active {
+  color: var(--blue);
+  background: var(--panel-solid);
+  border-color: color-mix(in srgb, var(--blue) 16%, var(--line));
+  box-shadow: 0 5px 14px rgba(40, 119, 247, 0.1), inset 0 1px rgba(255, 255, 255, 0.72);
+}
+
+.workspace-tabs button:active {
+  transform: translateY(1px);
+}
+
+.workspace-section-nav > a {
+  display: inline-flex;
+  min-height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  color: var(--blue);
+  background: color-mix(in srgb, var(--blue-soft) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--blue) 13%, transparent);
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 750;
+  text-decoration: none;
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.workspace-section-nav > a:hover {
+  color: var(--ink);
+  background: var(--panel-solid);
+  border-color: color-mix(in srgb, var(--blue) 22%, var(--line));
+  box-shadow: 0 5px 14px rgba(40, 119, 247, 0.08);
+  transform: translateY(-1px);
+}
+
+:root[data-theme="dark"] .workspace-section-nav {
+  background: color-mix(in srgb, var(--panel-solid) 84%, transparent);
+  box-shadow: 0 10px 28px rgba(2, 7, 22, 0.22), inset 0 1px rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme="dark"] .workspace-tabs button.active {
+  background: color-mix(in srgb, var(--panel-solid) 88%, var(--blue-soft));
+  box-shadow: 0 5px 16px rgba(2, 7, 22, 0.24), inset 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.dashboard-grid {
+  min-height: 540px;
+  grid-template-columns: minmax(520px, 1.42fr) minmax(340px, 0.88fr);
+  grid-template-rows: minmax(540px, auto);
+}
+
+.performance-card {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.portfolio-card {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.performance-heading {
+  align-items: flex-end;
+}
+
+.performance-heading-actions,
+.monitoring-control,
+.portfolio-header-actions {
+  display: flex;
+}
+
+.performance-heading-actions {
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.monitoring-control {
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 5px 4px 10px;
+  color: var(--blue);
+  background: var(--blue-soft);
+  border: 1px solid color-mix(in srgb, var(--blue) 16%, transparent);
+  border-radius: 8px;
+}
+
+.monitoring-control > span {
+  display: flex;
+  min-width: 60px;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.monitoring-control small,
+.monitoring-control strong {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.15;
+}
+
+.monitoring-control strong {
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.toggle-switch.compact {
+  width: 42px;
+  height: 24px;
+  flex-basis: 42px;
+}
+
+.toggle-switch.compact > span {
+  width: 16px;
+  height: 16px;
+}
+
+.toggle-switch.compact.active > span {
+  left: 22px;
+}
+
+.portfolio-header-actions {
+  align-items: center;
+  gap: 8px;
+}
+
+.portfolio-header-actions .icon-action {
+  width: 34px;
+  height: 34px;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-grid {
+    grid-template-columns: minmax(440px, 1.18fr) minmax(320px, 0.82fr);
+    grid-template-rows: minmax(540px, auto);
+  }
+
+  .performance-card,
+  .portfolio-card {
+    grid-row: 1;
+  }
+
+  .portfolio-card {
+    grid-column: 2;
+    min-height: 540px;
+  }
+
+  .portfolio-list {
+    display: block;
+  }
+}
+
+@media (max-width: 900px) {
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+  }
+
+  .performance-card,
+  .portfolio-card {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .portfolio-card {
+    min-height: 410px;
+  }
+}
+
+@media (max-width: 620px) {
+  .mobile-menu-button,
+  .notification-button {
+    width: 48px;
+    height: 48px;
+    flex: 0 0 48px;
+  }
+
+  .workspace-section-nav {
+    top: 0;
+    min-height: 58px;
+    gap: 6px;
+    margin-bottom: 14px;
+    padding: 5px;
+    border-radius: 12px;
+  }
+
+  .workspace-tabs button {
+    min-height: 48px;
+    padding-inline: 12px;
+  }
+
+  .workspace-section-nav > a {
+    width: 48px;
+    min-height: 48px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .workspace-section-nav > a span {
+    display: none;
+  }
+
+  .performance-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .performance-heading-actions {
+    justify-content: space-between;
+  }
+  background: color-mix(in srgb, var(--blue-soft) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--blue) 13%, transparent);
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 750;
+  text-decoration: none;
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.workspace-section-nav > a:hover {
+  color: var(--ink);
+  background: var(--panel-solid);
+  border-color: color-mix(in srgb, var(--blue) 22%, var(--line));
+  box-shadow: 0 5px 14px rgba(40, 119, 247, 0.08);
+  transform: translateY(-1px);
+}
+
+:root[data-theme="dark"] .workspace-section-nav {
+  background: color-mix(in srgb, var(--panel-solid) 84%, transparent);
+  box-shadow: 0 10px 28px rgba(2, 7, 22, 0.22), inset 0 1px rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme="dark"] .workspace-tabs button.active {
+  background: color-mix(in srgb, var(--panel-solid) 88%, var(--blue-soft));
+  box-shadow: 0 5px 16px rgba(2, 7, 22, 0.24), inset 0 1px rgba(255, 255, 255, 0.05);
+}
+
+.dashboard-grid {
+  min-height: 540px;
+  grid-template-columns: minmax(520px, 1.42fr) minmax(340px, 0.88fr);
+  grid-template-rows: minmax(540px, auto);
+}
+
+.performance-card {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.portfolio-card {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.performance-heading {
+  align-items: flex-end;
+}
+
+.performance-heading-actions,
+.monitoring-control,
+.portfolio-header-actions {
+  display: flex;
+}
+
+.performance-heading-actions {
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.monitoring-control {
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 5px 4px 10px;
+  color: var(--blue);
+  background: var(--blue-soft);
+  border: 1px solid color-mix(in srgb, var(--blue) 16%, transparent);
+  border-radius: 8px;
+}
+
+.monitoring-control > span {
+  display: flex;
+  min-width: 60px;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.monitoring-control small,
+.monitoring-control strong {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.15;
+}
+
+.monitoring-control strong {
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.toggle-switch.compact {
+  width: 42px;
+  height: 24px;
+  flex-basis: 42px;
+}
+
+.toggle-switch.compact > span {
+  width: 16px;
+  height: 16px;
+}
+
+.toggle-switch.compact.active > span {
+  left: 22px;
+}
+
+.portfolio-header-actions {
+  align-items: center;
+  gap: 8px;
+}
+
+.portfolio-header-actions .icon-action {
+  width: 34px;
+  height: 34px;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-grid {
+    grid-template-columns: minmax(440px, 1.18fr) minmax(320px, 0.82fr);
+    grid-template-rows: minmax(540px, auto);
+  }
+
+  .performance-card,
+  .portfolio-card {
+    grid-row: 1;
+  }
+
+  .portfolio-card {
+    grid-column: 2;
+    min-height: 540px;
+  }
+
+  .portfolio-list {
+    display: block;
+  }
+}
+
+@media (max-width: 900px) {
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+  }
+
+  .performance-card,
+  .portfolio-card {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .portfolio-card {
+    min-height: 410px;
+  }
+}
+
+@media (max-width: 620px) {
+  .mobile-menu-button,
+  .notification-button {
+    width: 48px;
+    height: 48px;
+    flex: 0 0 48px;
+  }
+
+  .workspace-section-nav {
+    top: 0;
+    min-height: 58px;
+    gap: 6px;
+    margin-bottom: 14px;
+    padding: 5px;
+    border-radius: 12px;
+  }
+
+  .workspace-tabs button {
+    min-height: 48px;
+    padding-inline: 12px;
+  }
+
+  .workspace-section-nav > a {
+    width: 48px;
+    min-height: 48px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .workspace-section-nav > a span {
+    display: none;
+  }
+
+  .performance-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .performance-heading-actions {
+    justify-content: space-between;
+  }
+
+  .monitoring-control {
+    min-height: 44px;
+  }
+
+  .portfolio-header-actions .icon-action {
+    width: 44px;
+    height: 44px;
+  }
+
+  .ops-kpis.notify-api-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

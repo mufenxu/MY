@@ -5,7 +5,13 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const readSource = (...parts) => fs.readFileSync(path.join(appRoot, ...parts), 'utf8');
+const readSource = (...parts) => {
+  const filename = path.join(appRoot, ...parts);
+  const source = fs.readFileSync(filename, 'utf8');
+  if (!filename.endsWith('styles.css')) return source;
+  return source.replace(/^@import "([^"]+)";$/gm, (_, stylesheet) =>
+    fs.readFileSync(path.resolve(path.dirname(filename), stylesheet), 'utf8'));
+};
 const readConsoleSource = () => [
   'App.jsx',
   'Dashboard.jsx',
