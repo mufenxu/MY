@@ -731,15 +731,29 @@ function createApp({
     req.path === '/management/cmcc/media' ? uploadJsonParser : defaultJsonParser
   )(req, res, next));
 
-  app.get('/healthz', (_req, res) => res.json({ status: 'ok' }));
+  const serviceVersion = String(
+    process.env.PLATFORM_RELEASE_REVISION || process.env.GIT_SHA || 'unknown',
+  ).slice(0, 64);
+  app.get('/livez', (_req, res) => res.json({ status: 'ok', service: 'notification-service', version: serviceVersion }));
+  app.get('/healthz', (_req, res) => res.json({ status: 'ok', service: 'notification-service', version: serviceVersion }));
   app.get('/readyz', async (_req, res) => {
     try {
       const ready = await store.ping();
-      res.status(ready ? 200 : 503).json({ status: ready ? 'ready' : 'not-ready' });
+      res.status(ready ? 200 : 503).json({
+        status: ready ? 'ready' : 'not-ready',
+        service: 'notification-service',
+        version: serviceVersion,
+      });
     } catch {
-      res.status(503).json({ status: 'not-ready' });
+      res.status(503).json({ status: 'not-ready', service: 'notification-service', version: serviceVersion });
     }
   });
+  app.get('/version', (_req, res) => res.json({
+    status: 'ok',
+    service: 'notification-service',
+    version: serviceVersion,
+    node: process.version,
+  }));
   app.get('/openapi.json', (_req, res) => res.json(buildOpenApiDocument()));
 
   app.post('/notify', rateLimit({

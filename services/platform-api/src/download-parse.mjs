@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import net from 'node:net';
+import { lookup as defaultLookup } from 'node:dns/promises';
 import { spawn } from 'node:child_process';
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
@@ -53,7 +55,9 @@ const MIME_BY_EXTENSION = new Map([
   ['flac', 'audio/flac'],
 ]);
 
-// 通用分支会把地址交给 yt-dlp 在服务器上发起请求，因此先挡掉回环、内网与链路本地地址，避免被当成内网探测代理。
+// 通用分支会把地址交给 yt-dlp 在服务器上发起请求，因此先挡掉回环、内网与链路本地地址，
+// 避免被当成内网探测代理。这里只是**快速失败**的第一道闸：字符串黑名单挡不住
+// 「域名解析到内网」「十进制 IP」「IPv4-mapped IPv6」，真正的判定在 assertFetchableTarget()。
 const BLOCKED_HOST_PATTERNS = [
   /^localhost$/i,
   /\.(?:localhost|local|internal|home\.arpa)$/i,
@@ -68,6 +72,18 @@ const BLOCKED_HOST_PATTERNS = [
   /^\[?f[cd][0-9a-f]{2}:/i,
   /^\[?fe80:/i,
 ];
+
+// 只有这些平台主机的解析结果可以跳过 DNS 私网校验：
+// 它们是本服务显式支持的分享入口，且不会被用户控制指向。
+const ALLOWED_PLATFORM_HOSTS = [
+  /(^|\.)douyin\.com$/i,
+  /(^|\.)iesdouyin\.com$/i,
+  /^haijiao-\d+\.suancaihu\.eu\.org$/i,
+];
+
+// 除 80/443 之外一律拒绝：http://public-host:6379 这类地址会被下游当成内网探测入口。
+const DEFAULT_PORTS = new Set(['', '80', '443']);
+
 
 const ttwidCache = { value: '', expiresAt: 0 };
 const parseCache = new Map();
@@ -176,17 +192,210 @@ export function isDouyinUrl(value) {
   }
 }
 
+// URL 的 hostname 对 IPv6 会带方括号，FQDN 可能带结尾的点（`localhost.`）。
+function normalizeHostname(value) {
+  const text = String(value || '').trim().toLowerCase();
+  if (text.startsWith('[') && text.endsWith(']')) return text.slice(1, -1);
+  return text.replace(/\.$/, '');
+}
+
+function ipv4ToInt(address) {
+  const parts = address.split('.');
+  if (parts.length !== 4) return null;
+  let result = 0;
+  for (const part of parts) {
+    if (!/^\d{1,3}$/.test(part)) return null;
+    const value = Number(part);
+    if (value > 255) return null;
+    result = (result * 256) + value;
+  }
+  return result >>> 0;
+}
+
+function isPrivateIPv4(address) {
+  const value = ipv4ToInt(address);
+  if (value === null) return true; // 解析不了就按不安全处理
+  const inRange = (base, bits) => {
+    const size = 2 ** (32 - bits);
+    return value >= base && value < base + size;
+  };
+  return inRange(ipv4ToInt('0.0.0.0'), 8)        // 本网络
+    || inRange(ipv4ToInt('10.0.0.0'), 8)
+    || inRange(ipv4ToInt('100.64.0.0'), 10)      // CGNAT
+    || inRange(ipv4ToInt('127.0.0.0'), 8)
+    || inRange(ipv4ToInt('169.254.0.0'), 16)     // 链路本地 / 云元数据
+    || inRange(ipv4ToInt('172.16.0.0'), 12)
+    || inRange(ipv4ToInt('192.0.0.0'), 24)
+    || inRange(ipv4ToInt('192.0.2.0'), 24)
+    || inRange(ipv4ToInt('192.168.0.0'), 16)
+    || inRange(ipv4ToInt('198.18.0.0'), 15)
+    || inRange(ipv4ToInt('198.51.100.0'), 24)
+    || inRange(ipv4ToInt('203.0.113.0'), 24)
+    || inRange(ipv4ToInt('224.0.0.0'), 4)        // 组播
+    || inRange(ipv4ToInt('240.0.0.0'), 4);       // 保留 + 广播
+}
+
+// 把 IPv6 展开成 16 字节，才能判定 fe80::/10、IPv4-mapped 与 NAT64 嵌入的 IPv4。
+function ipv6ToBytes(value) {
+  let text = String(value || '').toLowerCase();
+  const zoneIndex = text.indexOf('%');
+  if (zoneIndex >= 0) text = text.slice(0, zoneIndex);
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+
+  const expandIpv4Tail = (groups) => {
+    const last = groups[groups.length - 1];
+    if (!last || !last.includes('.')) return groups;
+    const octets = last.split('.').map(Number);
+    if (octets.length !== 4 || octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return null;
+    return [
+      ...groups.slice(0, -1),
+      ((octets[0] << 8) | octets[1]).toString(16),
+      ((octets[2] << 8) | octets[3]).toString(16),
+    ];
+  };
+
+  const split = (segment) => (segment ? segment.split(':').filter((part) => part !== '') : []);
+  const head = expandIpv4Tail(split(halves[0]));
+  const tail = halves.length === 2 ? expandIpv4Tail(split(halves[1])) : [];
+  if (!head || !tail) return null;
+
+  const missing = 8 - head.length - tail.length;
+  if (missing < 0) return null;
+  if (halves.length === 1 && missing !== 0) return null;
+
+  const groups = [...head, ...new Array(missing).fill('0'), ...tail];
+  const bytes = [];
+  for (const group of groups) {
+    if (!/^[0-9a-f]{1,4}$/.test(group)) return null;
+    const number = Number.parseInt(group, 16);
+    bytes.push((number >> 8) & 0xff, number & 0xff);
+  }
+  return bytes.length === 16 ? bytes : null;
+}
+
+function isPrivateIPv6(address) {
+  const bytes = ipv6ToBytes(address);
+  if (!bytes) return true;
+  const embeddedIPv4 = (offset) => `${bytes[offset]}.${bytes[offset + 1]}.${bytes[offset + 2]}.${bytes[offset + 3]}`;
+
+  if (bytes.every((byte) => byte === 0)) return true;                                  // ::
+  if (bytes.slice(0, 15).every((byte) => byte === 0) && bytes[15] === 1) return true;   // ::1
+  if ((bytes[0] & 0xfe) === 0xfc) return true;                                          // fc00::/7
+  if (bytes[0] === 0xfe && (bytes[1] & 0xc0) === 0x80) return true;                     // fe80::/10
+  if (bytes[0] === 0xff) return true;                                                   // ff00::/8 multicast
+  // ::ffff:a.b.c.d —— 十进制写法常用来绕过朴素的字符串黑名单
+  if (bytes.slice(0, 10).every((byte) => byte === 0) && bytes[10] === 0xff && bytes[11] === 0xff) {
+    return isPrivateIPv4(embeddedIPv4(12));
+  }
+  // 64:ff9b::/96 NAT64
+  if (bytes[0] === 0x00 && bytes[1] === 0x64 && bytes[2] === 0xff && bytes[3] === 0x9b
+    && bytes.slice(4, 12).every((byte) => byte === 0)) {
+    return isPrivateIPv4(embeddedIPv4(12));
+  }
+  return false;
+}
+
+/**
+ * 判定一个已解析出的 IP 是否属于内网 / 保留网段。
+ * 非 IP 字符串一律返回 true（调用方只应传 DNS 解析结果）。
+ */
+export function isPrivateAddress(address) {
+  const value = normalizeHostname(address);
+  const family = net.isIP(value);
+  if (family === 4) return isPrivateIPv4(value);
+  if (family === 6) return isPrivateIPv6(value);
+  return true;
+}
+
+export function isAllowedPlatformHost(value) {
+  const hostname = normalizeHostname(value);
+  if (!hostname) return false;
+  return ALLOWED_PLATFORM_HOSTS.some((pattern) => pattern.test(hostname));
+}
+
 export function isBlockedShareTarget(value) {
-  let hostname = '';
+  let parsed;
   try {
-    const parsed = new URL(value);
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return true;
-    hostname = parsed.hostname.toLowerCase();
+    parsed = new URL(value);
   } catch {
     return true;
   }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return true;
+  if (parsed.username || parsed.password) return true;
+  if (!DEFAULT_PORTS.has(parsed.port)) return true;
+
+  const hostname = normalizeHostname(parsed.hostname);
+  if (!hostname) return true;
+  // 十进制 / 十六进制形式的 IP（2130706433、0x7f000001）不是合法域名，直接拒绝。
+  if (/^\d+$/.test(hostname) || /^0x[0-9a-f]+$/i.test(hostname)) return true;
+  if (net.isIP(hostname)) return isPrivateAddress(hostname);
   return BLOCKED_HOST_PATTERNS.some((pattern) => pattern.test(hostname));
 }
+
+/**
+ * 在真正发起请求前确认目标是公网地址。
+ *
+ * 黑名单只能挡住字面量，挡不住「域名解析到 127.0.0.1」与各种 IP 变体，
+ * 所以这里对主机名做一次 DNS 解析，并检查**每一条**解析结果。
+ *
+ * 已知边界：DNS 解析与实际连接之间存在 TOCTOU 窗口（DNS rebinding）。
+ * 要彻底消除需要把解析结果固定成 IP 再连接，当前由「只允许 80/443 + 拒绝内网」
+ * 把可利用面收窄到「攻击者控制的域名在两次解析之间切换」，成本高于收益。
+ */
+export async function assertFetchableTarget(value, { lookup = defaultLookup } = {}) {
+  let parsed;
+  try {
+    parsed = new URL(String(value || ''));
+  } catch {
+    throw resolveError(400, '没有识别到有效的链接。', 'INVALID_URL');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw resolveError(400, '该链接不受支持。', 'URL_NOT_ALLOWED');
+  }
+  if (parsed.username || parsed.password) {
+    throw resolveError(400, '该链接不受支持。', 'URL_NOT_ALLOWED');
+  }
+  if (!DEFAULT_PORTS.has(parsed.port)) {
+    throw resolveError(400, '该链接的端口不受支持。', 'URL_NOT_ALLOWED');
+  }
+
+  const hostname = normalizeHostname(parsed.hostname);
+  if (!hostname) throw resolveError(400, '没有识别到有效的链接。', 'INVALID_URL');
+  if (isAllowedPlatformHost(hostname)) return parsed;
+
+  if (net.isIP(hostname)) {
+    if (isPrivateAddress(hostname)) {
+      throw resolveError(400, '不支持解析内网或本地地址。', 'BLOCKED_TARGET');
+    }
+    return parsed;
+  }
+  if (/^\d+$/.test(hostname) || /^0x[0-9a-f]+$/i.test(hostname)) {
+    throw resolveError(400, '不支持解析内网或本地地址。', 'BLOCKED_TARGET');
+  }
+  if (BLOCKED_HOST_PATTERNS.some((pattern) => pattern.test(hostname))) {
+    throw resolveError(400, '不支持解析内网或本地地址。', 'BLOCKED_TARGET');
+  }
+
+  let records;
+  try {
+    records = await lookup(hostname, { all: true, verbatim: true });
+  } catch {
+    throw resolveError(400, '链接的域名无法解析。', 'URL_NOT_ALLOWED');
+  }
+  const addresses = Array.isArray(records) ? records : [records];
+  if (addresses.length === 0) {
+    throw resolveError(400, '链接的域名无法解析。', 'URL_NOT_ALLOWED');
+  }
+  // 任何一条解析结果落在内网都拒绝：多 A 记录里混一条 127.0.0.1 就够绕过。
+  for (const record of addresses) {
+    if (isPrivateAddress(record && record.address)) {
+      throw resolveError(400, '不支持解析内网或本地地址。', 'BLOCKED_TARGET');
+    }
+  }
+  return parsed;
+}
+
 
 function readParseCache(key) {
   const entry = parseCache.get(key);
@@ -255,14 +464,36 @@ async function readTtwid(fetchImpl, signal) {
   return ttwid;
 }
 
-async function resolveAwemeId(url, fetchImpl, signal) {
+// 短链会 302 到 www.douyin.com；这里逐跳校验而不是 redirect: 'follow'，
+// 避免一次跳转把服务器带到内网地址（也顺便限定了最大跳数）。
+async function fetchWithValidatedRedirects(url, init, fetchImpl, signal, lookup, maxHops = 5) {
+  let current = url;
+  for (let hop = 0; hop <= maxHops; hop += 1) {
+    await assertFetchableTarget(current, { lookup });
+    const response = await fetchImpl(current, { ...init, redirect: 'manual', signal });
+    const status = Number(response && response.status) || 0;
+    const location = response && response.headers && typeof response.headers.get === 'function'
+      ? response.headers.get('location')
+      : '';
+    if (status >= 300 && status < 400 && location) {
+      current = new URL(location, current).href;
+      continue;
+    }
+    return response;
+  }
+  throw resolveError(400, '链接跳转次数过多。', 'URL_NOT_ALLOWED');
+}
+
+async function resolveAwemeId(url, fetchImpl, signal, lookup) {
   const direct = new URL(url).pathname.match(AWEME_ID_PATTERN);
   if (direct) return direct[1];
-  const response = await fetchImpl(url, {
-    redirect: 'follow',
+  const response = await fetchWithValidatedRedirects(
+    url,
+    { headers: { 'User-Agent': BROWSER_UA, Referer: DOUYIN_REFERER } },
+    fetchImpl,
     signal,
-    headers: { 'User-Agent': BROWSER_UA, Referer: DOUYIN_REFERER },
-  });
+    lookup,
+  );
   const finalUrl = String(response.url || '');
   try {
     await response.body?.cancel?.();
@@ -521,13 +752,13 @@ function buildGenericResult(info) {
   };
 }
 
-async function resolveUncachedTarget(shareUrl, config, fetchImpl) {
+async function resolveUncachedTarget(shareUrl, config, fetchImpl, lookup) {
   if (isDouyinUrl(shareUrl)) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), config.timeoutMs);
     timer.unref?.();
     try {
-      const awemeId = await resolveAwemeId(shareUrl, fetchImpl, controller.signal);
+      const awemeId = await resolveAwemeId(shareUrl, fetchImpl, controller.signal, lookup);
       const detail = await fetchAwemeDetailWithRetry(awemeId, fetchImpl, controller.signal);
       return buildDouyinResult(detail);
     } catch (error) {
@@ -542,7 +773,13 @@ async function resolveUncachedTarget(shareUrl, config, fetchImpl) {
   return buildGenericResult(await runYtDlp(shareUrl, config));
 }
 
-export async function resolveDownloadTarget({ url, allowHls = false, config = readDownloadConfig(), fetchImpl = globalThis.fetch } = {}) {
+export async function resolveDownloadTarget({
+  url,
+  allowHls = false,
+  config = readDownloadConfig(),
+  fetchImpl = globalThis.fetch,
+  lookup = defaultLookup,
+} = {}) {
   const shareUrl = extractShareUrl(url);
   if (!shareUrl) {
     throw resolveError(400, '没有识别到有效的视频链接。', 'INVALID_URL');
@@ -550,6 +787,8 @@ export async function resolveDownloadTarget({ url, allowHls = false, config = re
   if (isBlockedShareTarget(shareUrl)) {
     throw resolveError(400, '不支持解析内网或本地地址。', 'BLOCKED_TARGET');
   }
+  // 字符串黑名单挡不住「域名解析到内网」，这里做一次真实解析再放行到下游。
+  await assertFetchableTarget(shareUrl, { lookup });
   const parsed = new URL(shareUrl);
   if (/^haijiao-\d+\.suancaihu\.eu\.org$/i.test(parsed.hostname) && parsed.pathname === '/play') {
     if (!allowHls) {

@@ -162,6 +162,9 @@ const router = createPlatformRouter({
     portalApp.locals.recordDownloadMetric?.(metric);
     console.info(JSON.stringify({ event: 'platform_download_parse', ...metric }));
   },
+  // 网关自己的 /readyz：进程活着但下游全挂时必须能返回 503。
+  readinessCheck,
+  serviceVersion: process.env.PLATFORM_RELEASE_REVISION || process.env.GIT_SHA || 'unknown',
 });
 
 const host = process.env.PLATFORM_API_HOST || '0.0.0.0';

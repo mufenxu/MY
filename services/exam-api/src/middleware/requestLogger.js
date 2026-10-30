@@ -35,6 +35,8 @@ function redactUrl(originalUrl = '') {
 function requestLogger(req, res, next) {
     const start = Date.now();
 
+    // req.id 与 X-Request-Id 由 app.js 的请求上下文中间件统一注入（上游网关的 id 会被复用），
+    // 这里只消费，不再生成，避免同一次请求出现两个 id。
     res.on('finish', () => {
         const duration = Date.now() - start;
         const level = res.statusCode >= 400 ? 'warn' : 'info';

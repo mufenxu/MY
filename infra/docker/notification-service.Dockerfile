@@ -14,6 +14,7 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 COPY --chown=node:node packages/platform-auth/ ./packages/platform-auth/
+COPY --chown=node:node packages/api-contract/ ./packages/api-contract/
 WORKDIR /app/services/notification-service
 COPY --chown=node:node services/notification-service/ ./
 COPY --from=deps --chown=node:node /build/services/notification-service/node_modules ./node_modules

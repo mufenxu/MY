@@ -35,6 +35,10 @@ import { verifyPlatformSso } from "./src/lib/platform-sso.js";
 import { platformRoleAllowsRequest } from "./src/lib/platform-role.js";
 import { invalidateRequestMemo, requestMemo, setRequestMemo } from "./src/lib/request-memo.js";
 import { createStaticAssetHandler } from "./src/lib/static-assets.js";
+
+const CAMPUS_SERVICE_VERSION = String(
+  process.env.PLATFORM_RELEASE_REVISION || process.env.GIT_SHA || "unknown"
+).slice(0, 64);
 import {
   libroomAvailabilityCovers,
   libroomIsFutureSlot,
@@ -2546,6 +2550,34 @@ async function handleApiRoutes(req, res, url) {
     if (url.pathname === "/api/ready") {
       const ready = await repository.ping();
       json(res, ready ? 200 : 503, { ok: ready, service: "hgu-campus-hub", ready });
+      return;
+    }
+    // 统一健康契约：/livez 不查依赖，/readyz 反映存储就绪，/version 供发布核对。
+    if (url.pathname === "/livez") {
+      json(res, 200, { status: "ok", service: "campus-service", version: CAMPUS_SERVICE_VERSION });
+      return;
+    }
+    if (url.pathname === "/readyz") {
+      let ready = false;
+      try {
+        ready = Boolean(await repository.ping());
+      } catch {
+        ready = false;
+      }
+      json(res, ready ? 200 : 503, {
+        status: ready ? "ready" : "not-ready",
+        service: "campus-service",
+        version: CAMPUS_SERVICE_VERSION,
+      });
+      return;
+    }
+    if (url.pathname === "/version") {
+      json(res, 200, {
+        status: "ok",
+        service: "campus-service",
+        version: CAMPUS_SERVICE_VERSION,
+        node: process.version,
+      });
       return;
     }
     const calendarMatch = url.pathname.match(/^\/api\/academic\/calendar\/([A-Za-z0-9_-]{43,128})\.ics$/);

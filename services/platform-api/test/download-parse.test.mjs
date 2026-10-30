@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  assertFetchableTarget,
   buildMediaAsset,
   extensionFromUrl,
   extractShareUrl,
   formatSize,
   isBlockedShareTarget,
   isDouyinUrl,
+  isPrivateAddress,
   mediaMimeType,
   normalizeDownloadExtension,
   readDownloadConfig,
@@ -63,6 +65,74 @@ test('isBlockedShareTarget 拦截回环、内网与链路本地地址', () => {
   assert.equal(isBlockedShareTarget('https://v.douyin.com/b0HckDdF-iw/'), false);
   assert.equal(isBlockedShareTarget('https://www.bilibili.com/video/BV1xx'), false);
   assert.equal(isBlockedShareTarget(''), true);
+});
+
+test('isPrivateAddress 覆盖 IPv6、IPv4-mapped 与 NAT64 变体', () => {
+  for (const address of [
+    '127.0.0.1', '10.0.0.5', '172.20.1.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0',
+    '::1', '::', 'fd00::1', 'fe80::1', '::ffff:127.0.0.1', '::ffff:7f00:1', '64:ff9b::127.0.0.1',
+  ]) {
+    assert.equal(isPrivateAddress(address), true, address);
+  }
+  for (const address of ['93.184.216.34', '8.8.8.8', '2001:4860:4860::8888']) {
+    assert.equal(isPrivateAddress(address), false, address);
+  }
+  // 不是 IP 的字符串无法判定，按不安全处理。
+  assert.equal(isPrivateAddress('not-an-ip'), true);
+});
+
+test('assertFetchableTarget 拒绝非标准端口、凭证与十进制 IP', async () => {
+  const noLookup = async () => {
+    throw new Error('拒绝这类地址时不应该发起 DNS 查询');
+  };
+
+  const cases = [
+    ['http://example.com:6379/video', 'URL_NOT_ALLOWED'],
+    ['http://user:pass@example.com/video', 'URL_NOT_ALLOWED'],
+    ['ftp://example.com/video', 'URL_NOT_ALLOWED'],
+    ['http://2130706433/video', 'BLOCKED_TARGET'],
+    ['http://0x7f000001/video', 'BLOCKED_TARGET'],
+    ['http://[::ffff:127.0.0.1]/video', 'BLOCKED_TARGET'],
+    ['http://[::1]/video', 'BLOCKED_TARGET'],
+  ];
+
+  for (const [candidate, code] of cases) {
+    await assert.rejects(
+      assertFetchableTarget(candidate, { lookup: noLookup }),
+      (error) => error.status === 400 && error.code === code,
+      candidate,
+    );
+  }
+});
+
+test('assertFetchableTarget 拦住解析到内网的域名，放行解析到公网的域名', async () => {
+  const internalLookup = async () => [{ address: '127.0.0.1', family: 4 }];
+  await assert.rejects(
+    assertFetchableTarget('https://evil.example.com/video', { lookup: internalLookup }),
+    (error) => error.code === 'BLOCKED_TARGET',
+  );
+
+  // 多 A 记录里混一条内网也要拒绝
+  const mixedLookup = async () => [
+    { address: '93.184.216.34', family: 4 },
+    { address: '10.0.0.7', family: 4 },
+  ];
+  await assert.rejects(
+    assertFetchableTarget('https://mixed.example.com/video', { lookup: mixedLookup }),
+    (error) => error.code === 'BLOCKED_TARGET',
+  );
+
+  const publicLookup = async () => [{ address: '93.184.216.34', family: 4 }];
+  const parsed = await assertFetchableTarget('https://example.com/video', { lookup: publicLookup });
+  assert.equal(parsed.hostname, 'example.com');
+});
+
+test('assertFetchableTarget 对平台白名单主机不发起 DNS 查询', async () => {
+  const noLookup = async () => {
+    throw new Error('白名单主机不需要 DNS');
+  };
+  const parsed = await assertFetchableTarget('https://v.douyin.com/b0HckDdF-iw/', { lookup: noLookup });
+  assert.equal(parsed.hostname, 'v.douyin.com');
 });
 
 test('readDownloadConfig 使用默认值并夹住超时范围', () => {

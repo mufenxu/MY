@@ -9,6 +9,7 @@ const { encrypt, decrypt } = require('../utils/crypto');
 const { escapeRegex } = require('../utils/helpers');
 const courseOrderSubmissionWorker = require('../services/courseOrderSubmissionWorker');
 const { parsePagination } = require('../utils/pagination');
+const { fail } = require('../utils/respond');
 
 // 全局记录正在进行的查课账号（同分类同账号防止并发多次向第三方发起请求）
 const activeQueries = new Set();
@@ -154,7 +155,7 @@ exports.queryCourseList = async (req, res) => {
                  });
             } else {
                  const errorMsg = mxResult?.msg || mxResult?.message || '该账号下未查询到有效课程';
-                 res.json({ code: 400, message: errorMsg });
+                 return fail(res, { status: 400, code: 'INVALID_PARAMETER', message: errorMsg });
             }
         } finally {
             // 确保并发锁一定会释放
@@ -225,9 +226,10 @@ exports.submitOrder = async (req, res) => {
         }
 
         if (!batch || batch.requestDigest !== requestDigest) {
-            return res.status(409).json({
+            return fail(res, {
+                status: 409,
                 code: 'ORDER_IDEMPOTENCY_CONFLICT',
-                message: '同一幂等键不能用于不同的订单内容'
+                message: '同一幂等键不能用于不同的订单内容',
             });
         }
 
@@ -415,7 +417,7 @@ exports.refreshProgress = async (req, res) => {
         }
 
         if (!order.remoteOrderId && !order.remoteOid) {
-            return res.json({ code: 400, message: '该订单为无底单异常流，无法查到远程进度' });
+            return fail(res, { status: 400, code: 'INVALID_PARAMETER', message: '该订单为无底单异常流，无法查到远程进度' });
         }
 
         const category = await CourseCategory.findOne({ noun: order.platformId });
@@ -485,7 +487,7 @@ exports.retryOrder = async (req, res) => {
         }
 
         if (!order.remoteOrderId) {
-            return res.json({ code: 400, message: '该订单为无底单异常流，无法远程补刷' });
+            return fail(res, { status: 400, code: 'INVALID_PARAMETER', message: '该订单为无底单异常流，无法远程补刷' });
         }
 
         const mxRes = await mxPlatform.retryOrder(order.account, decrypt(order.password), order.remoteOrderId, order.platformCode);
@@ -497,7 +499,7 @@ exports.retryOrder = async (req, res) => {
             await order.save();
             return res.json({ code: 200, message: '补单提交成功', data: serializeOrderForClient(order) });
         } else {
-            return res.json({ code: 400, message: mxRes?.msg || '操作失败' });
+            return fail(res, { status: 400, code: 'INVALID_PARAMETER', message: mxRes?.msg || '操作失败' });
         }
     } catch (error) {
         logger.error(`[RetryOrder] ${error.message}`, { stack: error.stack });
@@ -513,7 +515,7 @@ exports.publicSearch = async (req, res) => {
     try {
         const { q } = req.query;
         if (!q || q.length < 2) {
-            return res.json({ code: 400, message: '请输入有效的订单号或下单账号' });
+            return fail(res, { status: 400, code: 'INVALID_PARAMETER', message: '请输入有效的订单号或下单账号' });
         }
 
         const safeQuery = escapeRegex(q.trim());
@@ -532,7 +534,7 @@ exports.publicSearch = async (req, res) => {
             .lean();
 
         if (orders.length === 0) {
-            return res.json({ code: 404, message: '未找到相关订单信息，请核对输入' });
+            return fail(res, { status: 404, code: 'NOT_FOUND', message: '未找到相关订单信息，请核对输入' });
         }
 
         // 数据脱敏
@@ -582,7 +584,7 @@ exports.publicRefresh = async (req, res) => {
         }
 
         if (!order.remoteOrderId && !order.remoteOid) {
-            return res.json({ code: 400, message: '该订单为无底单异常流，无法获取远程进度' });
+            return fail(res, { status: 400, code: 'INVALID_PARAMETER', message: '该订单为无底单异常流，无法获取远程进度' });
         }
 
         // 调用第三方同步逻辑 (与 refreshProgress 复用同样逻辑，但不带 userId 校验)

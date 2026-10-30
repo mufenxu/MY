@@ -144,7 +144,7 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 - **校验**：`joi`（core-api 用 `schemas/`，exam-api 用 `src/validators/`，后者还校验 query/params 并 `stripUnknown`）、`zod`（notification-service）、其余为手写规范化。新增或改动接口时沿用所属服务的既有校验库。
 - **数据层**：`core-api`、`exam-api` 用 mongoose，模型在 `models/` 或 `src/models/`；`notification-service`、`campus-service`、`iot-service` 用原生 `mongodb` 驱动 + 单一仓储模块。
 - **数据库命名**：一个服务一个库，**禁止跨服务直接读对方数据库**。库名：`platform_app`、`core_app`、`exam_app`、`campus_app`、`iot_app`、`notification_app`。env 变量名不统一（`MONGO_URI`、`MONGODB_URI`、`CORE_MONGODB_URI` 风格各异），以各服务 `package.json` 所在目录的 `.env.example` 为准。
-- **响应形态**：五种并存（`{success}`、`{code,data,message}`、`{errcode,errmsg}`、`{ok,data}`、裸 JSON + `{error,code}`）。**改动接口时保持所属服务现有形态**；跨服务的形态统一属于独立议题，不在日常改动范围内。
+- **响应形态**：存量端点仍是五种并存（`{success}`、`{code,data,message}`、`{errcode,errmsg}`、`{ok,data}`、裸 JSON + `{error,code}`）。**失败响应（4xx/5xx）已统一**为 `{ ok:false, success:false, code, error, message, details?, requestId }`，由各服务的 `utils/respond.js` 输出；成功体保持原样，不要顺手改。新增端点与"下一次改动该端点"时按 [docs/api-specification.md](api-specification.md) 执行。
 
 ### 服务间通信（安全关键）
 

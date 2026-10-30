@@ -1,5 +1,6 @@
 const AuditLog = require('../models/AuditLog');
 const asyncHandler = require('../middleware/asyncHandler');
+const { buildPageMeta } = require('../utils/pagination');
 
 // @desc    Get audit logs
 // @route   GET /api/audit-logs
@@ -25,5 +26,10 @@ exports.getAuditLogs = asyncHandler(async (req, res) => {
     // Optional: Populate actor info if you have a User model and actorOpenid links to it
     // For now, we just return the raw logs. In a real app, you might want to aggregate with Users.
 
-    res.json({ success: true, items: logs, total });
+    res.json({
+        success: true,
+        items: logs,
+        total,
+        page: buildPageMeta({ page: pageNum, limit: pageSizeNum, total })
+    });
 });

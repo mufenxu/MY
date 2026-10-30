@@ -64,10 +64,12 @@ MY/
 | 任何改动 | 本文件 → [docs/engineering-standards.md](docs/engineering-standards.md) |
 | 改 Android UI / 新增页面 | [apps/android-app/AGENTS.md](apps/android-app/AGENTS.md) |
 | 改服务、接口、数据库、鉴权 | [docs/architecture.md](docs/architecture.md) |
+| 写一个新接口 / 统一错误体 / 错误码 | [docs/api-specification.md](docs/api-specification.md) |
 | 部署、镜像、故障处置 | [docs/operations.md](docs/operations.md)、[docs/single-domain-deployment.md](docs/single-domain-deployment.md) |
 | 发布中心 / 构建产物 | [docs/release-center.md](docs/release-center.md) |
 | 镜像仓库与发布流程 | [docs/aliyun-acr.md](docs/aliyun-acr.md) |
-| 外部项目接入 SSO | [docs/external-project-sso.md](docs/external-project-sso.md)、[docs/core-api-usage.md](docs/core-api-usage.md) |
+| 外部项目接入 SSO | [docs/external-project-sso.md](docs/external-project-sso.md) |
+| 外部项目接入通知 API | [docs/notification-api-usage.md](docs/notification-api-usage.md) |
 | 小程序发布前合规 | `apps/exam-miniapp/README.md`（发布清单） |
 
 ## 需要知道的历史包袱

@@ -6,6 +6,7 @@ const { escapeRegex } = require('../utils/helpers');
 const { clearCache } = require('../middleware/authorizeAccess');
 const { revokeAllRefreshTokens } = require('../services/authService');
 const { acquirePrivilegedMutationLock } = require('../utils/privilegedMutationLock');
+const { buildPageMeta } = require('../utils/pagination');
 const { applyEffectiveAccessToProfile } = require('../utils/platformAccess');
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key);
@@ -57,7 +58,12 @@ exports.getUsers = asyncHandler(async (req, res) => {
             .lean()
     ]);
 
-    res.json({ success: true, items: users, total });
+    res.json({
+        success: true,
+        items: users,
+        total,
+        page: buildPageMeta({ page: pageNum, limit: pageSizeNum, total })
+    });
 });
 
 // @desc    Get current user profile

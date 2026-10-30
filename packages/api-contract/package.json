@@ -1,0 +1,10 @@
+{
+  "name": "@my-platform/api-contract",
+  "version": "0.1.0",
+  "private": true,
+  "description": "接口契约配置：错误码注册表。被 services/* 与 scripts/checks/ 共同读取。",
+  "main": "./index.cjs",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

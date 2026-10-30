@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { checkExternalServices, resolveServiceMode } from '../src/service-targets.mjs';
+import { HEALTH_PATHS, checkExternalServices, checkServiceTarget, resolveServiceMode } from '../src/service-targets.mjs';
 
 test('external service mode requires every configured platform target', () => {
   assert.deepEqual(resolveServiceMode({ PLATFORM_EXTERNAL_SERVICES: 'false' }), {
@@ -58,9 +58,33 @@ test('external readiness probes critical services by default', async () => {
   );
   assert.equal(ready, true);
   assert.deepEqual(urls.sort(), [
-    'http://core:1/health',
-    'http://exam:2/ready',
+    'http://core:1/readyz',
+    'http://exam:2/readyz',
   ]);
+});
+
+test('readiness falls back to the legacy probe path only when it is missing', async () => {
+  // 旧服务没有 /readyz：404 时回落到 /health
+  const legacyUrls = [];
+  const legacyReady = await checkServiceTarget('http://core:1', HEALTH_PATHS.core, {
+    fetchImpl: async (url) => {
+      legacyUrls.push(url.toString());
+      return url.pathname === '/readyz' ? { ok: false, status: 404 } : { ok: true, status: 200 };
+    },
+  });
+  assert.equal(legacyReady, true);
+  assert.deepEqual(legacyUrls, ['http://core:1/readyz', 'http://core:1/health']);
+
+  // 503 表示"进程在但没就绪"，不能被旧路径的 200 掩盖
+  const notReadyUrls = [];
+  const notReady = await checkServiceTarget('http://core:1', HEALTH_PATHS.core, {
+    fetchImpl: async (url) => {
+      notReadyUrls.push(url.toString());
+      return { ok: false, status: 503 };
+    },
+  });
+  assert.equal(notReady, false);
+  assert.deepEqual(notReadyUrls, ['http://core:1/readyz']);
 });
 
 test('external readiness can cover every integrated service', async () => {

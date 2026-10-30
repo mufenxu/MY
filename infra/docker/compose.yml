@@ -459,7 +459,7 @@ services:
       AUTH_SESSION_SECRET: ${IOT_SESSION_SECRET:?Set IOT_SESSION_SECRET}
       PLATFORM_INTERNAL_AUTH_PUBLIC_KEY: ${PLATFORM_INTERNAL_AUTH_PUBLIC_KEY:?Set PLATFORM_INTERNAL_AUTH_PUBLIC_KEY}
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:22102/api/ready').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:22102/readyz').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 10s
       timeout: 5s
       start_period: 30s

@@ -126,8 +126,23 @@ app.use('/public', express.static(path.join(__dirname, 'public'), {
 
 // Routes
 const { globalLimiter } = require('./middleware/rateLimit');
+const { fail } = require('./utils/respond');
 app.use('/api/', globalLimiter);
 app.use('/api', require('./routes'));
+
+const SERVICE_NAME = 'core-api';
+const SERVICE_VERSION = String(
+    process.env.PLATFORM_RELEASE_REVISION || process.env.GIT_SHA || process.env.npm_package_version || 'unknown',
+).slice(0, 64);
+
+// 未知 /api 路径必须回 JSON：Express 默认的 `Cannot GET /api/xxx` 是 text/html，
+// 客户端 response.json() 会直接抛 SyntaxError。
+app.use('/api', (req, res) => fail(res, {
+    status: 404,
+    code: 'ROUTE_NOT_FOUND',
+    message: '接口不存在。',
+    requestId: req.id,
+}));
 
 app.get('/health', (req, res) => {
     const dbState = mongoose.connection.readyState;
@@ -138,6 +153,33 @@ app.get('/health', (req, res) => {
         database: isDbConnected ? 'CONNECTED' : 'DISCONNECTED'
     });
 });
+
+// 存活探针：不查任何依赖，进程能响应就是 200。
+app.get('/livez', (_req, res) => {
+    res.json({ status: 'ok', service: SERVICE_NAME, version: SERVICE_VERSION, uptime: process.uptime() });
+});
+
+// 就绪探针：DB 不可用返回 503，供编排层摘流量。
+app.get('/readyz', (_req, res) => {
+    const ready = isCoreRuntimeReady();
+    res.status(ready ? 200 : 503).json({
+        status: ready ? 'ready' : 'not-ready',
+        service: SERVICE_NAME,
+        version: SERVICE_VERSION,
+        checks: { database: mongoose.connection.readyState === 1 ? 'up' : 'down' },
+    });
+});
+
+app.get('/version', (_req, res) => {
+    res.json({
+        status: 'ok',
+        service: SERVICE_NAME,
+        version: SERVICE_VERSION,
+        deployedAt: process.env.PLATFORM_RELEASE_DEPLOYED_AT || '',
+        node: process.version,
+    });
+});
+
 
 const configuredAdminDist = String(process.env.CORE_ADMIN_DIST || '').trim();
 const adminDist = configuredAdminDist
@@ -166,6 +208,15 @@ if (hasAdminSpa) {
         res.send('Admin Server is running');
     });
 }
+
+// 兜底 404：静态资源与 SPA 回退都已处理完，仍无匹配说明路径不存在。
+// 必须放在 errorHandler 之前，否则会落到 Express 的 HTML 默认页。
+app.use((req, res) => fail(res, {
+    status: 404,
+    code: 'ROUTE_NOT_FOUND',
+    message: '接口不存在。',
+    requestId: req.id,
+}));
 
 // Error Handler
 app.use(errorHandler);

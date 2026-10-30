@@ -29,6 +29,64 @@ const PROXY_CONTEXT = Symbol('platformProxyContext');
 const PROXY_TIMEOUT_MIN_MS = 1_000;
 const PROXY_TIMEOUT_MAX_MS = 120_000;
 const DOWNLOAD_RATE_LIMIT_PER_MINUTE = 20;
+const PLATFORM_SERVICE_NAME = 'platform-api';
+
+// 长耗时端点：AI 题目解析会等上游模型，必须单独放宽代理超时。
+// 之前这串路径直接写死在 proxyRequest 里，改路径就会静默退回默认 15 秒。
+const LONG_RUNNING_PATHS = new Set(['/api/user/ai/question-analysis']);
+
+/**
+ * 网关的服务分发表。
+ *
+ * 新增一个服务前缀只改这一处；`npm test` 里的路由表快照会把它固化下来，
+ * 避免"文档里的路由"和"代码里的 if/else"再次漂移。
+ *
+ * 字段：
+ * - prefix：匹配前缀，按最长前缀优先；
+ * - service：core | exam | campus | iot；
+ * - rewrite：交给 rewriteServicePrefix 的选项；
+ * - transport：'app'（进程内 Express）| 'proxy'（反向代理）；
+ * - longRunning：该条目的长耗时路径，命中后使用 AI 超时。
+ */
+export const SERVICE_ROUTE_TABLE = Object.freeze([
+  { prefix: '/api/core', service: 'core', rewrite: { apiByDefault: true, preserve: ['/uploads', '/public'] } },
+  { prefix: '/api/exam/client', service: 'exam', rewrite: {} },
+  {
+    prefix: '/api/exam',
+    service: 'exam',
+    rewrite: { apiByDefault: true },
+    longRunning: ['/api/user/ai/question-analysis'],
+  },
+  { prefix: '/api/campus', service: 'campus', rewrite: { apiByDefault: true }, transport: 'proxy' },
+  { prefix: '/api/iot', service: 'iot', rewrite: { apiByDefault: true, preserve: ['/api-docs'] }, transport: 'proxy' },
+  { prefix: '/core', service: 'core', rewrite: { apiByDefault: true, preserve: ['/uploads', '/public'] } },
+  { prefix: '/exam', service: 'exam', rewrite: { apiByDefault: true } },
+  { prefix: '/campus', service: 'campus', rewrite: { apiByDefault: true }, transport: 'proxy' },
+  { prefix: '/iot', service: 'iot', rewrite: { apiByDefault: true }, transport: 'proxy' },
+]);
+
+function matchesPrefix(pathname, prefix) {
+  return pathname === prefix || pathname.startsWith(`${prefix}/`);
+}
+
+export function matchServiceRoute(pathname) {
+  let matched = null;
+  for (const entry of SERVICE_ROUTE_TABLE) {
+    if (!matchesPrefix(pathname, entry.prefix)) continue;
+    if (!matched || entry.prefix.length > matched.prefix.length) matched = entry;
+  }
+  return matched;
+}
+
+function writeJson(res, statusCode, body) {
+  if (!res || res.destroyed) return;
+  res.writeHead(statusCode, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Cache-Control': 'no-store',
+  });
+  res.end(JSON.stringify(body));
+}
+
 
 function replayDeviceBody(req) {
   if (!req.deviceRequestBody) return req;
@@ -65,7 +123,7 @@ function rewriteServicePrefix(req, prefix, { apiByDefault = false, preserve = []
   let pathname = requestUrl.pathname.slice(prefix.length) || '/';
 
   if (apiByDefault) {
-    const preserved = ['/api', '/health', '/healthz', '/version', '/ws', '/favicon', ...preserve];
+    const preserved = ['/api', '/health', '/healthz', '/livez', '/readyz', '/version', '/ws', '/favicon', ...preserve];
     if (!preserved.some((candidate) => pathname === candidate || pathname.startsWith(`${candidate}/`))) {
       pathname = `/api${pathname.startsWith('/') ? pathname : `/${pathname}`}`;
     }
@@ -276,6 +334,8 @@ export function createPlatformRouter({
   proxyTimeoutMs = 15_000,
   recordProxyMetric = () => {},
   recordDownloadMetric = () => {},
+  readinessCheck = async () => true,
+  serviceVersion = '',
 }) {
   const hostSets = {
     core: parseHosts(coreHosts),
@@ -285,6 +345,16 @@ export function createPlatformRouter({
     mqtt: parseHosts(mqttHosts),
   };
   const upstreamTimeout = boundedProxyTimeout(proxyTimeoutMs);
+  const serviceBindings = {
+    core: { target: coreTarget, app: coreApp },
+    exam: { target: examTarget, app: examApp },
+    campus: { target: campusTarget, app: null },
+    iot: { target: mqttTarget, app: null },
+    notify: { target: notifyTarget, app: notifyApp },
+  };
+  const resolvedVersion = String(
+    serviceVersion || process.env.PLATFORM_RELEASE_REVISION || process.env.GIT_SHA || 'unknown',
+  ).slice(0, 64);
   const assistantConfig = readAiAssistantConfig();
   const examAiTimeout = Math.max(upstreamTimeout, assistantConfig.timeoutMs + 10_000);
   const assistantLimiter = createAssistantRateLimiter({ limit: assistantConfig.rateLimitPerMinute });
@@ -361,15 +431,29 @@ export function createPlatformRouter({
     writeProxyError(res, error);
   });
 
-  function proxyRequest(req, res, target, service) {
+  function resolveProxyTimeout({ service, method, pathname, route }) {
+    if (route && route.longRunning && route.longRunning.includes(pathname) && method === 'POST') {
+      return examAiTimeout;
+    }
+    if (!route && service === 'exam' && method === 'POST' && LONG_RUNNING_PATHS.has(pathname)) {
+      return examAiTimeout;
+    }
+    return upstreamTimeout;
+  }
+
+  function proxyRequest(req, res, target, service, route = null) {
     if (!target) {
       res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ error: '内部服务未配置。', code: 'UPSTREAM_NOT_CONFIGURED' }));
       return;
     }
     const pathname = new URL(req.url || '/', 'http://platform.internal').pathname;
-    const timeoutMs = service === 'exam' && req.method === 'POST' && pathname === '/api/user/ai/question-analysis'
-      ? examAiTimeout : upstreamTimeout;
+    const timeoutMs = resolveProxyTimeout({
+      service,
+      method: req.method,
+      pathname,
+      route,
+    });
     req[PROXY_CONTEXT] = {
       finished: false,
       service,
@@ -391,8 +475,8 @@ export function createPlatformRouter({
     });
   }
 
-  function dispatchApp(req, res, app, target, service) {
-    if (target) return proxyRequest(req, res, target, service);
+  function dispatchApp(req, res, app, target, service, route = null) {
+    if (target) return proxyRequest(req, res, target, service, route);
     if (typeof app === 'function') return app(replayDeviceBody(req), res);
     return proxyRequest(req, res, '', service);
   }
@@ -551,6 +635,36 @@ export function createPlatformRouter({
     if (hostSets.campus.has(host)) return proxyRequest(req, res, campusTarget, 'campus');
     if (hostSets.mqtt.has(host)) return proxyRequest(req, res, mqttTarget, 'iot');
 
+    // 网关自己的探针。之前这三个路径由门户应用代答（响应体 service 是 admin-console），
+    // 编排层无法判断"网关进程活着但下游全挂"的状态。
+    if (requestUrl.pathname === '/livez') {
+      writeJson(res, 200, { status: 'ok', service: PLATFORM_SERVICE_NAME, version: resolvedVersion });
+      return;
+    }
+    if (requestUrl.pathname === '/readyz' || requestUrl.pathname === '/healthz') {
+      let ready = false;
+      try {
+        ready = Boolean(await readinessCheck());
+      } catch {
+        ready = false;
+      }
+      writeJson(res, ready ? 200 : 503, {
+        status: ready ? 'ready' : 'not-ready',
+        service: PLATFORM_SERVICE_NAME,
+        version: resolvedVersion,
+      });
+      return;
+    }
+    if (requestUrl.pathname === '/version') {
+      writeJson(res, 200, {
+        status: 'ok',
+        service: PLATFORM_SERVICE_NAME,
+        version: resolvedVersion,
+        node: process.version,
+      });
+      return;
+    }
+
     if (['/apps/core', '/apps/exam', '/apps/campus', '/apps/iot'].includes(requestUrl.pathname)) {
       res.writeHead(308, {
         Location: `${requestUrl.pathname}/${requestUrl.search}`,
@@ -577,18 +691,8 @@ export function createPlatformRouter({
       return proxyRequest(req, res, mqttTarget, 'iot');
     }
 
-    if (requestUrl.pathname === '/api/core' || requestUrl.pathname.startsWith('/api/core/')) {
-      rewriteServicePrefix(req, '/api/core', { apiByDefault: true, preserve: ['/uploads', '/public'] });
-      return dispatchApp(req, res, coreApp, coreTarget, 'core');
-    }
-    if (requestUrl.pathname === '/api/exam/client' || requestUrl.pathname.startsWith('/api/exam/client/')) {
-      rewriteServicePrefix(req, '/api/exam/client');
-      return dispatchApp(req, res, examApp, examTarget, 'exam');
-    }
-    if (requestUrl.pathname === '/api/exam' || requestUrl.pathname.startsWith('/api/exam/')) {
-      rewriteServicePrefix(req, '/api/exam', { apiByDefault: true });
-      return dispatchApp(req, res, examApp, examTarget, 'exam');
-    }
+    // 通知服务有历史包袱：/api/notify 精确命中要改写成 /notify，/api/app 需要一次额外授权，
+    // 这两条保持手写；其余服务前缀走声明式分发。
     if (requestUrl.pathname === '/api/app' || requestUrl.pathname.startsWith('/api/app/')) {
       if (!await authorizeManagedApp(req, res, 'notify', '/api')) return;
       return dispatchApp(req, res, notifyApp, notifyTarget, 'notify');
@@ -601,13 +705,9 @@ export function createPlatformRouter({
       }
       return dispatchApp(req, res, notifyApp, notifyTarget, 'notify');
     }
-    if (requestUrl.pathname === '/api/campus' || requestUrl.pathname.startsWith('/api/campus/')) {
-      rewriteServicePrefix(req, '/api/campus', { apiByDefault: true });
-      return proxyRequest(req, res, campusTarget, 'campus');
-    }
-    if (requestUrl.pathname === '/api/iot' || requestUrl.pathname.startsWith('/api/iot/')) {
-      rewriteServicePrefix(req, '/api/iot', { apiByDefault: true, preserve: ['/api-docs'] });
-      return proxyRequest(req, res, mqttTarget, 'iot');
+    if (requestUrl.pathname === '/notify-service' || requestUrl.pathname.startsWith('/notify-service/')) {
+      rewriteServicePrefix(req, '/notify-service');
+      return dispatchApp(req, res, notifyApp, notifyTarget, 'notify');
     }
     if (requestUrl.pathname === '/api/assistant/chat') {
       return handleAssistantChat(req, res);
@@ -616,25 +716,14 @@ export function createPlatformRouter({
       return handleDownloadParse(req, res, requestUrl);
     }
 
-    if (requestUrl.pathname === '/core' || requestUrl.pathname.startsWith('/core/')) {
-      rewriteServicePrefix(req, '/core', { apiByDefault: true, preserve: ['/uploads', '/public'] });
-      return dispatchApp(req, res, coreApp, coreTarget, 'core');
-    }
-    if (requestUrl.pathname === '/exam' || requestUrl.pathname.startsWith('/exam/')) {
-      rewriteServicePrefix(req, '/exam', { apiByDefault: true });
-      return dispatchApp(req, res, examApp, examTarget, 'exam');
-    }
-    if (requestUrl.pathname === '/notify-service' || requestUrl.pathname.startsWith('/notify-service/')) {
-      rewriteServicePrefix(req, '/notify-service');
-      return dispatchApp(req, res, notifyApp, notifyTarget, 'notify');
-    }
-    if (requestUrl.pathname === '/campus' || requestUrl.pathname.startsWith('/campus/')) {
-      rewriteServicePrefix(req, '/campus', { apiByDefault: true });
-      return proxyRequest(req, res, campusTarget, 'campus');
-    }
-    if (requestUrl.pathname === '/iot' || requestUrl.pathname.startsWith('/iot/')) {
-      rewriteServicePrefix(req, '/iot', { apiByDefault: true });
-      return proxyRequest(req, res, mqttTarget, 'iot');
+    const route = matchServiceRoute(requestUrl.pathname);
+    if (route) {
+      const binding = serviceBindings[route.service] || { target: '', app: null };
+      rewriteServicePrefix(req, route.prefix, route.rewrite);
+      if (route.transport === 'proxy') {
+        return proxyRequest(req, res, binding.target, route.service, route);
+      }
+      return dispatchApp(req, res, binding.app, binding.target, route.service, route);
     }
 
     if (

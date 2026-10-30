@@ -10,12 +10,14 @@ import { loadConfig } from '../../../apps/admin-console/src/config.js';
 import { parseCookies } from '../../../apps/admin-console/src/auth.js';
 import { createTestDevice } from '../../../apps/admin-console/test/helpers/native-device.js';
 import {
+  SERVICE_ROUTE_TABLE,
   boundedProxyTimeout,
   createOfficialWebsiteApp,
   createPlatformRouter,
   isHashedStaticAsset,
   managedSocketAllowed,
   managedWriteAllowed,
+  matchServiceRoute,
   normalizeProxyError,
 } from '../src/router.mjs';
 
@@ -622,4 +624,64 @@ test('download parsing rejects internal targets after authentication', async () 
     { outcome: metrics[0].outcome, errorKind: metrics[0].errorKind, statusClass: metrics[0].statusClass },
     { outcome: 'error', errorKind: 'BLOCKED_TARGET', statusClass: '4xx' },
   );
+});
+test('service route table is the single source of gateway prefixes', () => {
+  assert.deepEqual(
+    SERVICE_ROUTE_TABLE.map((entry) => entry.prefix),
+    ['/api/core', '/api/exam/client', '/api/exam', '/api/campus', '/api/iot', '/core', '/exam', '/campus', '/iot'],
+  );
+  // 最长前缀优先：/api/exam/client 不能被 /api/exam 抢走
+  assert.equal(matchServiceRoute('/api/exam/client/exams').prefix, '/api/exam/client');
+  assert.equal(matchServiceRoute('/api/exam/client').prefix, '/api/exam/client');
+  assert.equal(matchServiceRoute('/api/exam/users').prefix, '/api/exam');
+  assert.equal(matchServiceRoute('/api/core').prefix, '/api/core');
+  assert.equal(matchServiceRoute('/api/corefoo'), null);
+  assert.equal(matchServiceRoute('/api/notify'), null);
+  assert.deepEqual(
+    SERVICE_ROUTE_TABLE.find((entry) => entry.prefix === '/api/exam').longRunning,
+    ['/api/user/ai/question-analysis'],
+  );
+});
+
+test('health probe paths are not rewritten into /api/...', async () => {
+  const router = createPlatformRouter({
+    portalApp: echoApp('portal'),
+    coreApp: echoApp('core'),
+    examApp: echoApp('exam'),
+  });
+
+  await withServer(router, async (port) => {
+    const readyz = await request(port, '/api/core/readyz');
+    assert.deepEqual(readyz.body, { name: 'core', url: '/readyz' });
+    const livez = await request(port, '/api/exam/livez');
+    assert.deepEqual(livez.body, { name: 'exam', url: '/livez' });
+    const version = await request(port, '/api/core/version');
+    assert.deepEqual(version.body, { name: 'core', url: '/version' });
+  });
+});
+
+test('gateway exposes its own livez/readyz/version probes', async () => {
+  const router = createPlatformRouter({
+    portalApp: echoApp('portal'),
+    readinessCheck: async () => false,
+    serviceVersion: 'test-revision',
+  });
+
+  await withServer(router, async (port) => {
+    const live = await request(port, '/livez');
+    assert.equal(live.status, 200);
+    assert.deepEqual(live.body, { status: 'ok', service: 'platform-api', version: 'test-revision' });
+
+    const notReady = await request(port, '/readyz');
+    assert.equal(notReady.status, 503);
+    assert.equal(notReady.body.status, 'not-ready');
+    assert.equal(notReady.body.service, 'platform-api');
+
+    const version = await request(port, '/version');
+    assert.equal(version.status, 200);
+    assert.equal(version.body.version, 'test-revision');
+
+    const healthz = await request(port, '/healthz');
+    assert.equal(healthz.status, 503);
+  });
 });

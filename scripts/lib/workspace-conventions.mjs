@@ -23,6 +23,7 @@ export const PACKAGE_NAME_EXEMPTIONS = new Set(['examples/external-sso-express']
 export const CHECK_SCRIPT_EXEMPTIONS = new Map([
   ['packages/platform-auth', 'validated directly by the root check:packages step'],
   ['packages/platform-browser-runtime', 'validated directly by the root check:packages step'],
+  ['packages/api-contract', 'validated directly by the root check:contract step'],
   ['automation/ct8-automation', 'GitHub-Actions-only automation; no installable runtime artifact'],
 ]);
 

@@ -73,6 +73,7 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 COPY --chown=node:node packages/platform-auth/ ./packages/platform-auth/
+COPY --chown=node:node packages/api-contract/ ./packages/api-contract/
 COPY --chown=node:node services/platform-api/ ./services/platform-api/
 COPY --from=platform-api-deps --chown=node:node /build/services/platform-api/node_modules ./services/platform-api/node_modules
 COPY --chown=node:node services/core-api/ ./services/core-api/
@@ -97,6 +98,6 @@ WORKDIR /app/services/platform-api
 EXPOSE 22100
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD ["node", "-e", "fetch('http://127.0.0.1:22100/api/readyz').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
+  CMD ["node", "-e", "fetch('http://127.0.0.1:22100/readyz').then((res) => process.exit(res.ok ? 0 : 1)).catch(() => process.exit(1))"]
 
 CMD ["node", "src/server.mjs"]

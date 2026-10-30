@@ -5,6 +5,7 @@ const mxPlatform = require('../utils/mxPlatform');
 const logger = require('../utils/logger');
 const { encrypt } = require('../utils/crypto');
 const { parsePagination } = require('../utils/pagination');
+const { fail } = require('../utils/respond');
 
 // 转义正则表达式特殊字符，防止 ReDoS 攻击
 function escapeRegex(string) {
@@ -67,7 +68,7 @@ exports.adminRefreshProgress = async (req, res) => {
         const { orderIds } = req.body;
         
         if (!Array.isArray(orderIds) || orderIds.length === 0) {
-            return res.json({ code: 400, message: "请选择需要刷新的订单" });
+            return fail(res, { status: 400, code: 'INVALID_PARAMETER', message: '请选择需要刷新的订单' });
         }
         if (orderIds.length > 100) {
             return res.status(400).json({ code: 400, message: '单次最多刷新 100 条订单' });

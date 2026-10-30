@@ -27,12 +27,22 @@ export function resolveServiceMode(env = process.env) {
   return { external, targets };
 }
 
-export async function checkServiceTarget(
-  target,
-  pathname,
-  { fetchImpl = globalThis.fetch, timeoutMs = 2_000 } = {},
-) {
-  if (!target || typeof fetchImpl !== 'function') return false;
+/**
+ * 每个单元的探针路径：**优先新路径，路径不存在时回落旧路径**。
+ *
+ * 只在 404 时回落（旧服务没有 /readyz），503 必须如实判定为"不就绪"，
+ * 否则滚动发布期间会拿旧路径的 200 掩盖新路径的 503。
+ */
+export const HEALTH_PATHS = {
+  core: ['/readyz', '/health'],
+  exam: ['/readyz', '/ready'],
+  campus: ['/readyz', '/api/ready'],
+  iot: ['/readyz', '/api/ready'],
+  notify: ['/readyz', '/healthz'],
+};
+
+async function probe(target, pathname, { fetchImpl = globalThis.fetch, timeoutMs = 2_000 } = {}) {
+  if (!target || typeof fetchImpl !== 'function') return { ok: false, status: 0 };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   timer.unref?.();
@@ -45,12 +55,23 @@ export async function checkServiceTarget(
     if (response.body && typeof response.body.cancel === 'function') {
       await response.body.cancel().catch(() => {});
     }
-    return healthy;
+    return { ok: healthy, status: Number(response.status) || 0 };
   } catch (error) {
-    return false;
+    return { ok: false, status: 0 };
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function checkServiceTarget(target, pathnameOrPaths, options = {}) {
+  const paths = Array.isArray(pathnameOrPaths) ? pathnameOrPaths : [pathnameOrPaths];
+  for (const pathname of paths) {
+    const result = await probe(target, pathname, options);
+    if (result.ok) return true;
+    // 只有"该路径不存在"才值得继续回落；连接失败 / 503 都直接判定为不可用。
+    if (result.status !== 404) return false;
+  }
+  return false;
 }
 
 export async function checkExternalServices(targets, options = {}) {
@@ -58,15 +79,8 @@ export async function checkExternalServices(targets, options = {}) {
     requiredServices = ['core', 'exam'],
     ...checkOptions
   } = options;
-  const healthPaths = {
-    core: '/health',
-    exam: '/ready',
-    campus: '/api/ready',
-    iot: '/api/ready',
-    notify: '/healthz',
-  };
   const checks = await Promise.all(requiredServices.map((service) => (
-    checkServiceTarget(targets[service], healthPaths[service], checkOptions)
+    checkServiceTarget(targets[service], HEALTH_PATHS[service] || '/readyz', checkOptions)
   )));
   return checks.every(Boolean);
 }

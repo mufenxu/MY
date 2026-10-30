@@ -14,6 +14,10 @@ const requestLogger = require('./middleware/requestLogger');
 const { NotFoundError } = require('./utils/errors');
 const { readinessHandler } = require('./runtimeState');
 
+const EXAM_SERVICE_VERSION = String(
+    process.env.PLATFORM_RELEASE_REVISION || process.env.GIT_SHA || '2.0.0',
+).slice(0, 64);
+
 const app = express();
 app.set('trust proxy', config.trustProxy);
 app.disable('x-powered-by');
@@ -161,10 +165,22 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/manage', manageRoutes);
 app.use('/api/console', consoleRoutes);
 
+// 健康三端点：/livez 不查依赖，/readyz 反映依赖就绪，/version 供发布核对。
+// /ready 保留为别名（网关在滚动发布期间会回落旧路径）。
+app.get('/livez', (req, res) => {
+    res.json({ status: 'ok', service: 'exam-api', version: EXAM_SERVICE_VERSION });
+});
+app.get('/readyz', readinessHandler);
 app.get('/ready', readinessHandler);
 
 app.get('/version', (req, res) => {
-    res.json({ version: '2.0.0', status: 'public-ready', timestamp: Date.now() });
+    res.json({
+        version: '2.0.0',
+        revision: EXAM_SERVICE_VERSION,
+        service: 'exam-api',
+        status: 'public-ready',
+        timestamp: Date.now(),
+    });
 });
 
 // Avoid auth middleware turning the browser's favicon probe into a 401.
