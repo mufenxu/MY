@@ -33,6 +33,7 @@ import {
   htmlErrorMessage
 } from "./src/lib/cas-protocol.js";
 import { normalizeAllowedSchoolUrl } from "./src/lib/school-url.js";
+import { rememberSchoolAccount, resolveSchoolAccount } from "./src/lib/school-account.js";
 import { verifyPlatformSso } from "./src/lib/platform-sso.js";
 import { platformRoleAllowsRequest } from "./src/lib/platform-role.js";
 import { invalidateRequestMemo, requestMemo, setRequestMemo } from "./src/lib/request-memo.js";
@@ -57,6 +58,7 @@ import {
   hostOf,
   loadRelaxedDispatcher
 } from "./src/lib/upstream-tls.js";
+import { loadProxyDispatcher, normalizeProxyUrl, redactProxyUrl } from "./src/lib/upstream-proxy.js";
 import { createCampusRepository } from "./src/storage/campus-repository.js";
 import { handleCampusCoreRoutes } from "./src/routes/campus-core-routes.js";
 import { handleChaoxingRoutes } from "./src/routes/chaoxing-routes.js";
@@ -149,6 +151,9 @@ const MAX_CONCURRENT_UPSTREAM_REQUESTS = Number(process.env.HGU_MAX_CONCURRENT_U
 // 学校内网/网关常驻自签名证书。默认允许在证书类错误时对 *.hgu.edu.cn 降级重试；
 // 设为 1 则严格校验，证书不合法直接失败。
 const UPSTREAM_TLS_STRICT = parseBooleanEnv(process.env.HGU_UPSTREAM_TLS_STRICT, false);
+// 学校把统一身份认证等系统撤出公网后，可在校园网内跑一个 HTTP CONNECT 中转，
+// 让本服务的学校域名请求经它转发。留空即完全保持原有直连行为。
+const UPSTREAM_PROXY = normalizeProxyUrl(process.env.HGU_UPSTREAM_PROXY);
 const API_REQUESTS_PER_MINUTE = Number(process.env.HGU_API_REQUESTS_PER_MINUTE || 180);
 const SCHOOL_LOGIN_MAX_ATTEMPTS = Number(process.env.HGU_SCHOOL_LOGIN_MAX_ATTEMPTS || 5);
 const EXTRA_ALLOWED_SCHOOL_HOSTS = new Set(
@@ -1560,7 +1565,11 @@ function storedSessionSummary(jar) {
   const libroom = libroomSessionSummary(jar);
   const librarySeat = librarySeatSessionSummary(jar);
   const hasStoredSession = Boolean(cas.connected || energy.connected || campus.connected || academic.connected || portal.connected || libroom.connected || libroom.lastError || librarySeat.connected || librarySeat.lastError);
-  const schoolAccount = normalizeSchoolLoginAccount(jar.meta?.schoolAccount || jar.meta?.loginUsername);
+  // 短信登录的学号回填可能失败，这里允许用已保存的能耗账号兜底，
+  // 否则会话会被前端一直判定为「旧的学校会话、学号未确认」。
+  const schoolAccount = resolveSchoolAccount(jar.meta, {
+    connected: Boolean(energy.connected || cas.connected)
+  });
   const primaryRefreshableSessions = [energy, campus, academic];
   const globalLoginSessions = [energy, academic, libroom, librarySeat];
   // 单项服务失败不能推翻仍有效的 CAS 票据；各功能可以继续用 TGC 换取新票据。
@@ -1680,6 +1689,16 @@ async function sessionStatus({ refresh = true } = {}) {
     await refreshStoredSessionsIfNeeded(jar);
   }
   const stored = storedSessionSummary(jar);
+  // 历史会话可能只有能耗账号、没有学号字段，这里补写一次让它彻底自愈；
+  // 补写后 storedSessionSummary 不再走兜底，也就不会重复写库。
+  if (normalizeSchoolLoginAccount(stored.schoolAccount) && !normalizeSchoolLoginAccount(jar.meta?.schoolAccount)) {
+    jar.meta ||= {};
+    jar.meta.schoolAccount = stored.schoolAccount;
+    jar.meta.schoolAccountSource ||= "energy-account";
+    await saveSessionJar(jar).catch((error) => {
+      logger.warn("school_account_backfill_failed", { userId: currentUserId(), message: error?.message || "" });
+    });
+  }
   const envCookie = readEnvCookie();
   return {
     ...stored,
@@ -1720,13 +1739,20 @@ const reportRelaxedTls = createRelaxedTlsReporter();
 
 // 调用方必须先用 assertAllowedSchoolUrl 校验过 url，因此降级只可能作用于校方域名。
 // 证书正常的请求仍走标准校验，这里不改变任何默认安全策略。
+// 未配置中转时返回 null，调用方退回原生直连；配置后所有学校域名请求都经代理转发。
+async function resolveUpstreamDispatcher({ relaxed }) {
+  if (UPSTREAM_PROXY) return loadProxyDispatcher(UPSTREAM_PROXY, { rejectUnauthorized: !relaxed });
+  return relaxed ? loadRelaxedDispatcher() : null;
+}
+
 async function fetchUpstream(url, options) {
+  const strictDispatcher = await resolveUpstreamDispatcher({ relaxed: false });
   try {
-    return await fetch(url, options);
+    return await fetch(url, strictDispatcher ? { ...options, dispatcher: strictDispatcher } : options);
   } catch (error) {
     const certificateCode = certificateFailureCode(error);
     if (!certificateCode || UPSTREAM_TLS_STRICT || options?.signal?.aborted) throw error;
-    const dispatcher = await loadRelaxedDispatcher();
+    const dispatcher = await resolveUpstreamDispatcher({ relaxed: true });
     if (!dispatcher) throw error;
     const host = hostOf(url);
     if (reportRelaxedTls(host)) {
@@ -2065,9 +2091,7 @@ async function finalizeCasLogin({ jar, schoolAccount, password = "", rememberMe 
     jar.meta.ownerName = view.ownerName || null;
     jar.meta.lastValidatedAt = new Date().toISOString();
     // 短信验证码登录时调用方拿不到学号，登录成功后再用上游返回的账号补齐。
-    if (!jar.meta.schoolAccount && view.account) {
-      jar.meta.schoolAccount = normalizeSchoolLoginAccount(view.account);
-    }
+    rememberSchoolAccount(jar, view);
   }
   await activateCampusSessions(jar, { username: schoolAccount, password, rememberMe }).catch((error) => {
     jar.meta.campus ||= {};
@@ -2544,6 +2568,13 @@ async function getViewData(jar, { retryEmpty = true } = {}) {
   }
   if (!view || !view.account) {
     throw new HttpError(401, "能耗平台没有返回房间信息，会话可能已过期，请重新登录学校账号。");
+  }
+  // 短信验证码登录只能在这里补学号；补到就立刻落盘，避免「登录成功但学号未确认」
+  // 一直挂到下次手动重登。只在确实发生变化时写一次。
+  if (rememberSchoolAccount(targetJar, view)) {
+    await saveSessionJar(targetJar).catch((error) => {
+      logger.warn("school_account_backfill_failed", { userId: currentUserId(), message: error?.message || "" });
+    });
   }
   return view;
 }
@@ -3375,6 +3406,12 @@ server.on("clientError", (error, socket) => {
 server.listen(PORT, HOST, () => {
   const address = server.address();
   logger.info("service_started", { host: HOST, port: typeof address === "object" ? address?.port : PORT });
+  if (UPSTREAM_PROXY) {
+    logger.info("upstream_proxy_enabled", {
+      proxy: redactProxyUrl(UPSTREAM_PROXY),
+      hint: "学校域名请求将经该中转转发；留空 HGU_UPSTREAM_PROXY 可恢复直连"
+    });
+  }
   startAcademicAutoRefresh();
   startAcademicReminderScheduler();
   startLibroomAutoReservationScheduler();

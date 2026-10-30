@@ -53,11 +53,23 @@ server.js    学校系统连接器、业务编排和 API 路由
 
 打开网页后，先使用本系统账号登录；进入工作台后，再在“连接学校账号”里输入统一身份认证账号密码。后端会模拟 CAS 登录，并自动连接能耗、校园一卡通、生活用水、公寓管理和教务课表。项目只保存学校返回的会话 Cookie / Token，不保存学校密码。
 
-学校 CAS 已对密码登录启用手机短信二次验证，验证码只会下发到用户手机，服务器无法代收。因此“连接学校账号”同时提供**短信验证码登录**：`POST /api/auth/login/sms/send` 由服务器建立 CAS 会话并触发学校下发短信，`POST /api/auth/login/sms/verify` 携带用户输入的验证码完成换票，随后用同一会话零密码激活全部子系统。密码登录若被学校拦在二次验证页，接口返回 `400 CAS_SMS_REQUIRED`，前端会自动展开短信登录通道。短信登录不保存密码，`autoRelogin` 保持关闭，7 天后需要重新验证；`smscode` 待验证会话保存在内存中，有效期 5 分钟、单用户 60 秒发码冷却、错误 5 次作废，进程重启后需重新获取验证码。
+学校 CAS 已对密码登录启用手机短信二次验证，验证码只会下发到用户手机，服务器无法代收。因此“连接学校账号”同时提供**短信验证码登录**：`POST /api/auth/login/sms/send` 由服务器建立 CAS 会话并触发学校下发短信，`POST /api/auth/login/sms/verify` 携带用户输入的验证码完成换票，随后用同一会话零密码激活全部子系统。密码登录若被学校拦在二次验证页，接口返回 `400 CAS_SMS_REQUIRED`，前端会自动展开短信登录通道。短信登录不保存密码，`autoRelogin` 保持关闭，7 天后需要重新验证；`smscode` 待验证会话保存在内存中，有效期 5 分钟、单用户 60 秒发码冷却、错误 5 次作废，进程重启后需重新获取验证码。短信登录的请求里只有手机号，学号/工号只能等登录后由能耗平台的 `viewdata` 反查补齐；补齐成功会立即写入会话，若当时上游临时不可用，`/api/auth/status` 读取时会用已保存的能耗账号兜底并补写，因此前端偶尔出现的「还差学号确认」会在刷新后自动消失，不需要重新登录。
 
 一卡通生活用水平台在同一账号换取新 token 时会立即废弃旧 token，并返回“账号在其他地方登录”。校园余额、用水和住宿连接器共用同一份 UIAS/CAS 会话，`getCampusSummary` 必须保持串行调用，不能改回 `Promise.all` 并发；UWC 请求还会进行有上限的自动会话恢复，前端在最终认证错误时会自动补查一次用水数据。调整校园接口编排后必须运行 `test/auth-recovery.test.js`，并验证首次打开页面无需手动点“查询”即可显示用水码。
 
 学校部分系统（WebVPN、内网网关）会使用自签名证书。这类证书浏览器可能放行，但 Node 的严格校验会拒绝，错误被压成 `fetch failed`，日志里显示 `cause.code = DEPTH_ZERO_SELF_SIGNED_CERT`，很容易被误判成“网络不通”。请求层因此采用「先严格、后降级」：默认仍按标准 CA 校验，只有确认是证书类错误，才对已通过 `*.hgu.edu.cn` 白名单校验的目标降级重试一次，其它域名完全不受影响。每次降级会记录 `upstream_tls_verification_relaxed`，附带对端证书的 subject / issuer / fingerprint256，可据此判断是学校自建 CA 还是链路上的第三方网关。如需强制严格校验，设置 `HGU_UPSTREAM_TLS_STRICT=1`。
+
+学校把统一身份认证等系统撤出公网后，公网 DNS 会把 `cas.hgu.edu.cn`、`my.hgu.edu.cn` 指向 VPN 网关（返回“欢迎访问”的 EasyConnect 门户或 404），而真正的 CAS 只在校园网地址上可达，云服务器直连会被 RST。这种现象和证书问题、页面结构变化都不同，判断依据是：`GET https://cas.hgu.edu.cn/` 的标题是“欢迎访问”且正文含 `EasyConnect`，或 `/cas/login` 返回 Apache 的 `404 Not Found`。此时代码层无法绕过，可配置 `HGU_UPSTREAM_PROXY=http://127.0.0.1:3128` 让学校域名请求经校园网内的 HTTP CONNECT 代理转发（代理可用 `ssh -R` 从校内机器映射到本机端口，TLS 仍为端到端）；留空即保持直连。启动时会记录一条 `upstream_proxy_enabled`（已脱敏，不含代理账号密码）。
+
+中转的具体做法（容器不能直接访问宿主机 127.0.0.1，用 `host.docker.internal`）：
+
+1. 校内机器执行 `npm run relay`，默认监听 `127.0.0.1:3128`，只放行 `hgu.edu.cn` 及其子域。
+2. 云服务器 `/etc/ssh/sshd_config` 增加 `GatewayPorts clientspecified` 并重载 sshd。
+3. 校内机器执行 `ssh -N -R 0.0.0.0:3128:127.0.0.1:3128 root@<云服务器>`。
+4. `.env` 设置 `HGU_UPSTREAM_PROXY=http://host.docker.internal:3128`，重新部署。
+5. 启动日志出现 `upstream_proxy_enabled` 即生效；隧道断开时请求会退回直连并报 `UPSTREAM_UNAVAILABLE`。
+
+这条路径本质是把云服务器的出网流量借道校园网，属于绕过学校对校外访问的限制，使用前请确认符合学校网络管理规定；更正规的做法是让网络中心恢复 CAS 的公网发布，或把这台服务器加入免认证名单。
 
 `campus_app` MongoDB 数据库会按系统账号隔离保存学校会话、一卡通临时 Token 或个人课表缓存。学校 Cookie/Token 会使用 AES-256-GCM 加密后入库；生产环境必须配置并长期备份独立的 `HGU_DATA_ENCRYPTION_KEY`。请勿提交或公开分享数据库和密钥。
 

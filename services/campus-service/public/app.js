@@ -2588,8 +2588,9 @@ function schoolAuthProblem(auth = {}) {
   if (auth.source !== "env" && !hasSchoolAccount) {
     return {
       type: "unverified",
-      title: "需要重新登录确认学号",
-      message: "这里有一份旧的学校会话，但没有记录登录学号/工号。请重新登录一次学校账号，系统会保存正确的学号。"
+      // 短信登录只有手机号，学号要等上游返回后才补得上。
+      title: "还差学号确认",
+      message: "学校会话已建立，但这次登录没带回学号/工号，系统会自动补齐；长时间不变请用密码重新登录。"
     };
   }
   if (expired) {
