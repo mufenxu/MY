@@ -27,6 +27,7 @@ import { hashPassword, isValidUsername, normalizeUsername, verifyPassword } from
 import { createSensitiveJsonCodec, deriveDataEncryptionKey } from "./src/lib/sensitive-json.js";
 import {
   casEncryptPassword as encryptCasPassword,
+  describeLoginPage,
   extractFormAction,
   extractInputValue,
   htmlErrorMessage
@@ -1854,17 +1855,53 @@ async function followRedirectsWithJar(startUrl, jar, options = {}) {
 
 const casSmsPending = createSmsPendingStore();
 
+// CAS 登录页是浏览器导航请求。出口的 WAF/IPS（如深信服 AF）会按请求特征判定爬虫，
+// 缺少导航类请求头时可能直接返回拦截页，而不是登录页。
 const CAS_LOGIN_HEADERS = Object.freeze({
-  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+  accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+  "cache-control": "max-age=0",
+  "sec-ch-ua": `"Microsoft Edge";v="150", "Chromium";v="150", "Not_A Brand";v="24"`,
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": `"Windows"`,
+  "sec-fetch-dest": "document",
+  "sec-fetch-mode": "navigate",
+  "sec-fetch-site": "none",
+  "sec-fetch-user": "?1",
+  "upgrade-insecure-requests": "1"
 });
 
 const CAS_SMS_REQUIRED_MESSAGE = "学校账号已启用短信二次验证，服务器无法代收验证码。请改用「短信验证码登录」完成连接。";
+
+// 校园出口常见深信服（Sangfor）SSL 解密网关。当它把请求改写为自己的上网认证页时，
+// 表面现象和「CAS 页面结构变化」一模一样，但处置方式完全不同，必须分开报。
+const GATEWAY_PAGE_MARKERS = ["Sangfor", "深信服", "上网认证", "上网行为", "准入"];
+
+function throwCasLoginPageError(html, stage) {
+  const descriptor = describeLoginPage(html);
+  logger.warn("cas_login_page_unexpected", { stage, ...descriptor });
+  const intercepted = descriptor.markers.some((marker) => GATEWAY_PAGE_MARKERS.includes(marker));
+  throw new HttpError(
+    502,
+    intercepted
+      ? "服务器出口的网关返回了上网认证页，不是学校登录页。请先让这台服务器完成上网认证，或联系网络中心放行该服务器。"
+      : "未找到学校登录令牌 execution，登录页结构可能已变化。",
+    {
+      stage,
+      markers: descriptor.markers,
+      title: descriptor.title,
+      hint: intercepted
+        ? "日志 cas_login_page_unexpected 中的 certificate.issuer/markers 可确认网关归属"
+        : "请对照日志 cas_login_page_unexpected 的 title 与 sample 判断实际返回内容"
+    },
+    intercepted ? "CAS_LOGIN_INTERCEPTED_BY_GATEWAY" : "CAS_LOGIN_PAGE_CHANGED"
+  );
+}
 
 async function loginCasService({ jar, username, password, rememberMe = true, serviceUrl }) {
   const loginUrl = `${CAS_ORIGIN}/cas/login?service=${encodeURIComponent(serviceUrl)}`;
   const loginPage = await fetchWithJar(loginUrl, {
     jar,
-    headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" }
+    headers: CAS_LOGIN_HEADERS
   });
 
   if (loginPage.status >= 300 && loginPage.status < 400) {
@@ -1873,7 +1910,7 @@ async function loginCasService({ jar, username, password, rememberMe = true, ser
     if (!location) throw new HttpError(401, "CAS 未返回服务跳转地址，登录失败。");
     return followRedirectsWithJar(new URL(location, loginUrl).href, jar, {
       method: "GET",
-      headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" }
+      headers: CAS_LOGIN_HEADERS
     });
   }
 
@@ -1889,9 +1926,7 @@ async function loginCasService({ jar, username, password, rememberMe = true, ser
   }
 
   const execution = extractInputValue(html, "execution");
-  if (!execution) {
-    throw new HttpError(502, "未找到 CAS 登录令牌 execution，登录页结构可能已变化。");
-  }
+  if (!execution) throwCasLoginPageError(html, "cas_password_login");
 
   const action = new URL(extractFormAction(html, serviceUrl), loginUrl).href;
   const form = new URLSearchParams();
@@ -1908,10 +1943,11 @@ async function loginCasService({ jar, username, password, rememberMe = true, ser
     jar,
     method: "POST",
     headers: {
-      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      ...CAS_LOGIN_HEADERS,
       "content-type": "application/x-www-form-urlencoded",
       origin: CAS_ORIGIN,
-      referer: loginUrl
+      referer: loginUrl,
+      "sec-fetch-site": "same-origin"
     },
     body: form.toString()
   });
@@ -1932,7 +1968,7 @@ async function loginCasService({ jar, username, password, rememberMe = true, ser
 
   return followRedirectsWithJar(new URL(location, action).href, jar, {
     method: "GET",
-    headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" }
+    headers: CAS_LOGIN_HEADERS
   });
 }
 
@@ -1940,7 +1976,7 @@ async function getCasTicketRedirect({ jar, username, password, rememberMe = true
   let loginUrl = casLoginUrlWithService(loginBaseUrl, serviceUrl, CAS_ORIGIN);
   let loginPage = await fetchWithJar(loginUrl, {
     jar,
-    headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" }
+    headers: CAS_LOGIN_HEADERS
   });
 
   for (let i = 0; loginPage.status >= 300 && loginPage.status < 400 && i < 4; i += 1) {
@@ -1952,7 +1988,7 @@ async function getCasTicketRedirect({ jar, username, password, rememberMe = true
     loginUrl = redirectUrl;
     loginPage = await fetchWithJar(loginUrl, {
       jar,
-      headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" }
+      headers: CAS_LOGIN_HEADERS
     });
   }
 
@@ -1965,9 +2001,7 @@ async function getCasTicketRedirect({ jar, username, password, rememberMe = true
   }
 
   const execution = extractInputValue(html, "execution");
-  if (!execution) {
-    throw new HttpError(502, "未找到 CAS 登录令牌 execution，登录页结构可能已变化。");
-  }
+  if (!execution) throwCasLoginPageError(html, "cas_ticket_redirect");
 
   const action = new URL(extractFormAction(html, serviceUrl), loginUrl).href;
   const form = new URLSearchParams();
@@ -1984,10 +2018,11 @@ async function getCasTicketRedirect({ jar, username, password, rememberMe = true
     jar,
     method: "POST",
     headers: {
-      accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      ...CAS_LOGIN_HEADERS,
       "content-type": "application/x-www-form-urlencoded",
       origin: CAS_ORIGIN,
-      referer: loginUrl
+      referer: loginUrl,
+      "sec-fetch-site": "same-origin"
     },
     body: form.toString()
   });
@@ -2092,18 +2127,21 @@ async function beginCasSmsLogin({ phone, serviceUrl = SERVICE_URL }) {
 
   const jar = emptyJar();
   const loginUrl = casLoginUrlWithService(`${CAS_ORIGIN}/cas/login`, serviceUrl, CAS_ORIGIN);
-  const page = await fetchWithJar(loginUrl, { jar, headers: CAS_LOGIN_HEADERS });
+  let page = await fetchWithJar(loginUrl, { jar, headers: CAS_LOGIN_HEADERS });
+  // 出口网关（如深信服）有时先把请求 302 到自己的认证页再放行，
+  // 这里跟随一次，让后续解析仍然针对真正的 CAS 页面。
+  if (page.status >= 300 && page.status < 400) {
+    const location = page.headers.get("location");
+    await discardUpstreamResponse(page).catch(() => {});
+    if (!location) {
+      throw new HttpError(401, "学校登录页未返回跳转地址，请稍后重试。", null, "CAS_LOGIN_REDIRECT_MISSING");
+    }
+    page = await fetchWithJar(new URL(location, loginUrl).href, { jar, headers: CAS_LOGIN_HEADERS });
+  }
   const html = await readUpstreamText(page);
 
   const execution = extractInputValue(html, "execution");
-  if (!execution) {
-    throw new HttpError(
-      502,
-      "未找到学校登录令牌 execution，登录页结构可能已变化。",
-      { endpoint: "/cas/login" },
-      "CAS_LOGIN_PAGE_CHANGED"
-    );
-  }
+  if (!execution) throwCasLoginPageError(html, "cas_sms_login");
   const action = new URL(extractFormAction(html, serviceUrl), loginUrl).href;
 
   const smsResponse = await fetchWithJar(casSmsSendUrl(CAS_ORIGIN), {
