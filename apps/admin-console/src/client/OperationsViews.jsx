@@ -33,7 +33,6 @@ import {
   Settings2,
   ShieldCheck,
   UserRoundCheck,
-  Wrench,
   XCircle,
 } from 'lucide-react';
 import { requestJson } from './api.js';
@@ -972,111 +971,6 @@ export function SecurityAuditView({ session, onLogout }) {
         </div>
       ) : null}
       </div>
-    </section>
-  );
-}
-
-export function SettingsDiagnosticsView({ session }) {
-  const [data, setData] = useState(null);
-  const [draft, setDraft] = useState(null);
-  const [diagnostics, setDiagnostics] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState('');
-  const [message, setMessage] = useState('');
-  const [maintenance, setMaintenance] = useState({ serviceId: 'all', duration: 60, reason: '' });
-  const canSave = roleAtLeast(session.user?.role, 'operator');
-  const canDiagnose = roleAtLeast(session.user?.role, 'operator');
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const result = await requestJson('/api/operations/settings');
-      setData(result);
-      setDraft(result.settings);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-  useEffect(() => { load(); }, [load]);
-
-  async function save() {
-    setSaving(true);
-    setError('');
-    setMessage('');
-    try {
-      const result = await requestJson('/api/operations/settings', {
-        method: 'PUT',
-        body: JSON.stringify({ settings: draft, summary: '更新监控、告警与灾备运行参数' }),
-      });
-      setMessage(`变更提案已提交（${result.change.id}），审批通过后生效`);
-    } catch (requestError) {
-      setError(requestError.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function addMaintenance() {
-    const startsAt = new Date();
-    const endsAt = new Date(startsAt.getTime() + Number(maintenance.duration) * 60000);
-    setDraft({
-      ...draft,
-      maintenanceWindows: [...(draft.maintenanceWindows || []), {
-        id: crypto.randomUUID(), serviceId: maintenance.serviceId, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), reason: maintenance.reason || '计划维护', createdBy: session.user?.username,
-      }],
-    });
-    setMaintenance({ ...maintenance, reason: '' });
-  }
-
-  async function runDiagnostics() {
-    setRunning(true);
-    setError('');
-    try { setDiagnostics(await requestJson('/api/diagnostics/run', { method: 'POST' })); } catch (requestError) { setError(requestError.message); } finally { setRunning(false); }
-  }
-
-  if (loading && !draft) return <section className="page-view ops-page"><LoadingBlock label="正在读取运行设置" /></section>;
-  return (
-    <section className="page-view ops-page" aria-label="系统设置与诊断">
-      <div className="ops-toolbar"><span className="integration-state ready"><i />配置不包含任何敏感值，修改需经过审批</span>{canSave && <button className="primary-button compact" type="button" onClick={save} disabled={saving}>{saving ? <LoaderCircle className="spin" size={17} /> : <Save size={17} />}提交变更审批</button>}</div>
-      <Feedback error={error} message={message} />
-      <div className="settings-layout">
-        <section className="ops-panel settings-section">
-          <header><div><span>监控与告警</span><h3>采集和事件阈值</h3></div><Settings2 size={20} /></header>
-          <div className="settings-grid">
-            <label className="toggle-field"><span><strong>企业微信告警</strong><small>事件产生和恢复时推送</small></span><input type="checkbox" checked={draft.alertingEnabled} disabled={!canSave} onChange={(event) => setDraft({ ...draft, alertingEnabled: event.target.checked })} /></label>
-            <div className="settings-control-field"><span>监控间隔</span><SelectControl ariaLabel="监控间隔" disabled={!canSave} value={draft.monitorIntervalMs} onChange={(value) => setDraft({ ...draft, monitorIntervalMs: value })} options={[{ value: 10000, label: '10 秒' }, { value: 30000, label: '30 秒' }, { value: 60000, label: '1 分钟' }, { value: 300000, label: '5 分钟' }]} /></div>
-            <label><span>连续失败次数</span><input type="number" min="1" max="10" disabled={!canSave} value={draft.failureThreshold} onChange={(event) => setDraft({ ...draft, failureThreshold: Number(event.target.value) })} /></label>
-            <label><span>连续恢复次数</span><input type="number" min="1" max="10" disabled={!canSave} value={draft.recoveryThreshold} onChange={(event) => setDraft({ ...draft, recoveryThreshold: Number(event.target.value) })} /></label>
-            <label><span>健康检查延迟阈值（ms）</span><input type="number" min="100" max="30000" disabled={!canSave} value={draft.serviceLatencyThresholdMs} onChange={(event) => setDraft({ ...draft, serviceLatencyThresholdMs: Number(event.target.value) })} /></label>
-            <label><span>网关 P95 阈值（ms）</span><input type="number" min="100" max="120000" disabled={!canSave} value={draft.proxyP95ThresholdMs} onChange={(event) => setDraft({ ...draft, proxyP95ThresholdMs: Number(event.target.value) })} /></label>
-            <label><span>网关 5xx 阈值（%）</span><input type="number" min="1" max="100" disabled={!canSave} value={draft.proxyErrorRatePercent} onChange={(event) => setDraft({ ...draft, proxyErrorRatePercent: Number(event.target.value) })} /></label>
-            <label><span>磁盘使用率阈值（%）</span><input type="number" min="50" max="99" disabled={!canSave} value={draft.diskUsageThresholdPercent} onChange={(event) => setDraft({ ...draft, diskUsageThresholdPercent: Number(event.target.value) })} /></label>
-          </div>
-        </section>
-        <section className="ops-panel settings-section">
-          <header><div><span>灾备策略</span><h3>RPO 与自动备份</h3></div><DatabaseBackup size={20} /></header>
-          <div className="settings-grid">
-            <label className="toggle-field"><span><strong>每日自动备份</strong><small>由内网备份执行器运行</small></span><input type="checkbox" checked={draft.backupSchedule.enabled} disabled={!canSave} onChange={(event) => setDraft({ ...draft, backupSchedule: { ...draft.backupSchedule, enabled: event.target.checked } })} /></label>
-            <label><span>执行时间</span><input type="time" disabled={!canSave} value={draft.backupSchedule.time} onChange={(event) => setDraft({ ...draft, backupSchedule: { ...draft.backupSchedule, time: event.target.value } })} /></label>
-            <label><span>RPO 目标（小时）</span><input type="number" min="1" max="720" disabled={!canSave} value={draft.backupRpoHours} onChange={(event) => setDraft({ ...draft, backupRpoHours: Number(event.target.value) })} /></label>
-          </div>
-        </section>
-      </div>
-      <section className="ops-panel maintenance-panel">
-        <header><div><span>告警抑制</span><h3>维护窗口</h3></div><Wrench size={20} /></header>
-        {canSave && <div className="maintenance-form"><SelectControl ariaLabel="维护服务" value={maintenance.serviceId} onChange={(value) => setMaintenance({ ...maintenance, serviceId: value })} options={[{ value: 'all', label: '全部服务' }, ...data.services.map((service) => ({ value: service.id, label: service.shortName || service.name }))]} /><SelectControl ariaLabel="维护时长" value={maintenance.duration} onChange={(value) => setMaintenance({ ...maintenance, duration: value })} options={[{ value: 30, label: '30 分钟' }, { value: 60, label: '1 小时' }, { value: 120, label: '2 小时' }, { value: 240, label: '4 小时' }]} /><input value={maintenance.reason} maxLength={200} placeholder="维护原因" onChange={(event) => setMaintenance({ ...maintenance, reason: event.target.value })} /><button type="button" onClick={addMaintenance}><Clock3 size={16} />添加</button></div>}
-        <div className="maintenance-list">{(draft.maintenanceWindows || []).length ? draft.maintenanceWindows.map((window) => <div key={window.id}><span><strong>{window.serviceId === 'all' ? '全部服务' : data.services.find((service) => service.id === window.serviceId)?.shortName || window.serviceId}</strong><small>{window.reason}</small></span><span>{formatDateTime(window.startsAt)} 至 {formatDateTime(window.endsAt)}</span>{canSave && <button type="button" aria-label="移除维护窗口" onClick={() => setDraft({ ...draft, maintenanceWindows: draft.maintenanceWindows.filter((item) => item.id !== window.id) })}><XCircle size={17} /></button>}</div>) : <div className="ops-empty compact">暂无维护窗口</div>}</div>
-      </section>
-      <section className="ops-panel diagnostics-panel">
-        <header><div><span>一键排查</span><h3>系统诊断</h3></div>{canDiagnose && <button className="primary-button compact" type="button" onClick={runDiagnostics} disabled={running}>{running ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />}运行诊断</button>}</header>
-        <p>检查服务健康、运维数据库、平台就绪状态、备份执行器、通知服务和发布集成，不读取或返回任何凭据。</p>
-        {diagnostics && <div className="diagnostics-grid">{diagnostics.checks.map((check) => <div key={check.id} className={check.status}><span>{check.status === 'passed' ? <CheckCircle2 size={18} /> : check.status === 'skipped' ? <Clock3 size={18} /> : <XCircle size={18} />}</span><div><strong>{check.id}</strong><small>{check.status === 'passed' ? '检查通过' : check.status === 'skipped' ? '未配置，已跳过' : typeof check.detail === 'string' ? check.detail : '需要处理'}</small></div></div>)}</div>}
-      </section>
     </section>
   );
 }

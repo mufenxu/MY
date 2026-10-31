@@ -9,6 +9,7 @@ import {
   GitPullRequest,
   History,
   LoaderCircle,
+  Plus,
   RefreshCw,
   RotateCcw,
   Route,
@@ -195,7 +196,27 @@ const CHANGE_STATUS = {
   pending: '待审批', applying: '应用中', applied: '已应用', rejected: '已拒绝', conflicted: '版本冲突', failed: '应用失败',
 };
 
-export function ConfigurationView({ session, targetEntityId = '' }) {
+const CHANGE_TONE = {
+  pending: 'tone-info', applying: 'tone-info', applied: 'tone-ok', rejected: 'tone-danger', conflicted: 'tone-danger', failed: 'tone-danger',
+};
+
+const MAINTENANCE_DURATIONS = [
+  { value: 30, label: '30 分钟' },
+  { value: 60, label: '1 小时' },
+  { value: 120, label: '2 小时' },
+  { value: 240, label: '4 小时' },
+];
+
+const MINUTE_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
+  month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+});
+
+function formatMinute(value) {
+  const date = new Date(value || '');
+  return Number.isNaN(date.getTime()) ? '--' : MINUTE_FORMATTER.format(date);
+}
+
+export function ConfigurationView({ session, targetEntityId = '', services = [] }) {
   const [overview, setOverview] = useState(null);
   const [draft, setDraft] = useState(null);
   const [summary, setSummary] = useState('');
@@ -204,6 +225,7 @@ export function ConfigurationView({ session, targetEntityId = '' }) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [confirmation, setConfirmation] = useState(null);
+  const [maintenance, setMaintenance] = useState({ serviceId: 'all', duration: 60, reason: '' });
   const canPropose = hasRole(session.user?.role, 'operator');
   const canApprove = hasRole(session.user?.role, 'super_admin');
   const username = session.user?.username;
@@ -235,6 +257,36 @@ export function ConfigurationView({ session, targetEntityId = '' }) {
 
   function updateField(key, value) {
     setDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function serviceLabel(id) {
+    if (id === 'all') return '全部服务';
+    const service = services.find((item) => item.id === id);
+    return service?.shortName || service?.name || id;
+  }
+
+  function addMaintenanceWindow() {
+    const startsAt = new Date();
+    const endsAt = new Date(startsAt.getTime() + Number(maintenance.duration) * 60000);
+    setDraft((current) => ({
+      ...current,
+      maintenanceWindows: [...(current?.maintenanceWindows || []), {
+        id: crypto.randomUUID(),
+        serviceId: maintenance.serviceId,
+        startsAt: startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+        reason: maintenance.reason.trim() || '计划维护',
+        createdBy: username,
+      }],
+    }));
+    setMaintenance((current) => ({ ...current, reason: '' }));
+  }
+
+  function removeMaintenanceWindow(id) {
+    setDraft((current) => ({
+      ...current,
+      maintenanceWindows: (current?.maintenanceWindows || []).filter((window) => window.id !== id),
+    }));
   }
 
   async function propose(event) {
@@ -272,59 +324,130 @@ export function ConfigurationView({ session, targetEntityId = '' }) {
     } finally { setBusy(false); }
   }
 
-  if (loading && !overview) return <div className="ops-loading"><LoaderCircle className="spin" size={18} />正在读取配置版本...</div>;
+  if (loading && !overview) {
+    return <section className="page-view"><div className="loading-inline"><LoaderCircle className="spin" size={16} />正在读取配置版本...</div></section>;
+  }
+
+  const changes = overview?.changes || [];
+  const versions = overview?.versions || [];
+  const windows = draft?.maintenanceWindows || [];
 
   return (
-    <section className="platform-control-view configuration-view">
+    <section className="page-view view-stack" aria-label="运行设置">
       <Feedback message={message} error={error} />
-      <form className="configuration-editor" onSubmit={propose}>
-        <div className="section-bar"><div><h3>运行参数</h3><span>{overview?.twoPersonApproval ? '已启用双人审批，提案人不能自行批准' : '单人模式，可由当前管理员完成审批'}</span></div><span className="version-badge"><History size={16} />当前 v{overview?.currentVersion || 1}</span></div>
-        <label className="configuration-toggle">
-          <span><strong>启用告警</strong><small>关闭后仍保留监控数据，但不创建新告警。</small></span>
+      <form className="panel config-form" onSubmit={propose}>
+        <div className="section-bar">
+          <div>
+            <h3>运行参数</h3>
+            <span>{overview?.twoPersonApproval ? '双人审批已启用，提案人不能自行批准' : '单人模式，可由当前管理员完成审批'}</span>
+          </div>
+          <span className="tag tone-info"><History size={12} />当前 v{overview?.currentVersion || 1}</span>
+        </div>
+        <label className="config-toggle">
+          <span><strong>启用告警</strong><small>关闭后仍保留监控数据，但不会创建新告警。</small></span>
           <input type="checkbox" checked={Boolean(draft?.alertingEnabled)} disabled={!canPropose || busy} onChange={(event) => updateField('alertingEnabled', event.target.checked)} />
         </label>
-        <div className="configuration-fields">
+        <div className="config-grid">
           {CONFIG_FIELDS.map((field) => (
-            <label key={field.key}><span>{field.label}<small>{field.unit}</small></span><input type="number" min={field.min} max={field.max} value={draft?.[field.key] ?? ''} disabled={!canPropose || busy} onChange={(event) => updateField(field.key, Number(event.target.value))} /></label>
+            <label className="config-field" key={field.key}>
+              <span>{field.label}<small>{field.unit}</small></span>
+              <input type="number" min={field.min} max={field.max} value={draft?.[field.key] ?? ''} disabled={!canPropose || busy} onChange={(event) => updateField(field.key, Number(event.target.value))} />
+            </label>
           ))}
         </div>
-        <div className="configuration-submit">
-          <label><span>变更摘要</span><textarea maxLength={200} required value={summary} disabled={!canPropose || busy} placeholder="说明修改目的、影响与观察项" onChange={(event) => setSummary(event.target.value)} /></label>
+
+        <div className="config-subsection">
+          <div className="section-bar">
+            <div><h3>维护窗口</h3><span>窗口期内不产生新告警，与运行参数一并提交审批</span></div>
+            <span className="panel-meta">{windows.length} 个窗口</span>
+          </div>
+          <div className="config-window-editor">
+            <SelectControl ariaLabel="维护服务" disabled={!canPropose || busy} value={maintenance.serviceId} onChange={(value) => setMaintenance((current) => ({ ...current, serviceId: value }))} options={[{ value: 'all', label: '全部服务' }, ...services.map((service) => ({ value: service.id, label: service.shortName || service.name }))]} />
+            <SelectControl ariaLabel="维护时长" disabled={!canPropose || busy} value={maintenance.duration} onChange={(value) => setMaintenance((current) => ({ ...current, duration: value }))} options={MAINTENANCE_DURATIONS} />
+            <input aria-label="维护原因" value={maintenance.reason} maxLength={200} placeholder="维护原因（可选）" disabled={!canPropose || busy} onChange={(event) => setMaintenance((current) => ({ ...current, reason: event.target.value }))} />
+            <button className="btn btn-secondary btn-sm" type="button" disabled={!canPropose || busy} onClick={addMaintenanceWindow}><Plus size={14} />添加</button>
+          </div>
+          {windows.length > 0 ? (
+            <div className="config-windows">
+              {windows.map((window) => (
+                <div className="config-window" key={window.id}>
+                  <span className="config-window-copy">
+                    <strong>{serviceLabel(window.serviceId)}</strong>
+                    <small>{window.reason}</small>
+                  </span>
+                  <span className="config-window-time">{formatMinute(window.startsAt)} 至 {formatMinute(window.endsAt)}</span>
+                  <button className="icon-action" type="button" aria-label={`移除 ${serviceLabel(window.serviceId)} 的维护窗口`} disabled={!canPropose || busy} onClick={() => removeMaintenanceWindow(window.id)}><XCircle size={15} /></button>
+                </div>
+              ))}
+            </div>
+          ) : <p className="config-hint">尚未添加维护窗口。计划维护前在此添加，避免告警噪声。</p>}
+        </div>
+
+        <div className="config-submit">
+          <label>
+            <span>变更摘要</span>
+            <textarea maxLength={200} required value={summary} disabled={!canPropose || busy} placeholder="说明修改目的、影响与观察项" onChange={(event) => setSummary(event.target.value)} />
+          </label>
           <button className="primary-button" type="submit" disabled={!canPropose || busy || !summary.trim()}><GitPullRequest size={16} />提交审批</button>
         </div>
       </form>
 
-      <section className="configuration-history">
-        <div className="section-bar"><div><h3>变更提案</h3><span>最近 {overview?.changes?.length || 0} 条</span></div></div>
-        {(overview?.changes || []).length === 0 ? <div className="ops-empty compact">暂无配置提案。</div> : (
-          <div className="configuration-list">
-            {overview.changes.map((change) => {
-              const selfApprovalBlocked = overview.twoPersonApproval && change.createdBy === username;
-              return (
-                <article className={targetEntityId === change.id ? 'targeted-entity' : ''} data-configuration-entity-id={change.id} key={change.id}>
-                  <div className="configuration-record-main"><span className={`change-status ${change.status}`}>{CHANGE_STATUS[change.status] || change.status}</span><div><strong>{change.summary}</strong><small>{change.kind === 'rollback' ? `回滚提案 · 目标 v${change.targetVersion}` : '参数变更'} · {change.createdBy} · {formatDateTime(change.createdAt)}</small></div></div>
-                  <div className="changed-keys">{(change.changedKeys || []).map((key) => <code key={key}>{key}</code>)}</div>
-                  {change.status === 'pending' && canApprove && (
-                    <div className="record-actions">
-                      <button type="button" className="secondary-action compact" disabled={busy || selfApprovalBlocked} title={selfApprovalBlocked ? '双人审批要求由另一位管理员批准' : '批准并应用'} onClick={() => setConfirmation({ type: 'approve', change })}><ShieldCheck size={15} />批准</button>
-                      <button type="button" className="secondary-action compact danger" disabled={busy} onClick={() => setConfirmation({ type: 'reject', change })}><XCircle size={15} />拒绝</button>
-                    </div>
-                  )}
-                </article>
-              );
-            })}
+      <div className="split">
+        <section className="panel panel-flush">
+          <div className="panel-head">
+            <div className="panel-title"><GitPullRequest size={15} />变更提案</div>
+            <span className="panel-meta">最近 {changes.length} 条</span>
           </div>
-        )}
-      </section>
+          {changes.length > 0 ? (
+            <div className="config-list">
+              {changes.map((change) => {
+                const selfApprovalBlocked = overview?.twoPersonApproval && change.createdBy === username;
+                return (
+                  <article className={`config-item ${targetEntityId === change.id ? 'is-targeted' : ''}`.trim()} data-configuration-entity-id={change.id} key={change.id}>
+                    <div className="config-item-copy">
+                      <div className="config-item-head">
+                        <span className={`tag ${CHANGE_TONE[change.status] || ''}`.trim()}>{CHANGE_STATUS[change.status] || change.status}</span>
+                        <strong>{change.summary}</strong>
+                      </div>
+                      <small>{change.kind === 'rollback' ? `回滚提案 · 目标 v${change.targetVersion}` : '参数变更'} · {change.createdBy} · {formatDateTime(change.createdAt)}</small>
+                      {(change.changedKeys || []).length > 0 && (
+                        <div className="config-keys">{(change.changedKeys || []).map((key) => <code key={key}>{key}</code>)}</div>
+                      )}
+                    </div>
+                    {change.status === 'pending' && canApprove && (
+                      <div className="inline-actions">
+                        <button type="button" className="btn btn-secondary btn-sm" disabled={busy || selfApprovalBlocked} title={selfApprovalBlocked ? '双人审批要求由另一位管理员批准' : '批准并应用'} onClick={() => setConfirmation({ type: 'approve', change })}><ShieldCheck size={14} />批准</button>
+                        <button type="button" className="btn btn-text btn-sm is-danger" disabled={busy} onClick={() => setConfirmation({ type: 'reject', change })}><XCircle size={14} />拒绝</button>
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+          ) : <div className="config-empty">暂无配置提案，提交运行参数或维护窗口后会出现在这里</div>}
+        </section>
 
-      <section className="configuration-history">
-        <div className="section-bar"><div><h3>版本历史</h3><span>回滚同样需要创建并审批提案</span></div></div>
-        <div className="version-list">
-          {(overview?.versions || []).map((version) => (
-            <div key={version.version}><span className="version-number">v{version.version}</span><div><strong>{version.summary || '初始配置基线'}</strong><small>{version.createdBy || 'system'} · {formatDateTime(version.createdAt)}</small></div>{version.version !== overview.currentVersion && <button type="button" className="icon-action" title={`创建回滚到 v${version.version} 的提案`} aria-label={`回滚到版本 ${version.version}`} disabled={!canPropose || busy} onClick={() => setConfirmation({ type: 'rollback', version })}><RotateCcw size={16} /></button>}</div>
-          ))}
-        </div>
-      </section>
+        <aside className="panel panel-flush">
+          <div className="panel-head">
+            <div className="panel-title"><History size={15} />版本历史</div>
+            <span className="panel-meta">回滚同样需要审批</span>
+          </div>
+          <div className="version-list">
+            {versions.map((version) => (
+              <div className="version-row" key={version.version}>
+                <span className="version-tag">v{version.version}</span>
+                <span className="version-copy">
+                  <strong>{version.summary === 'Initial configuration baseline' ? '初始配置基线' : (version.summary || '初始配置基线')}</strong>
+                  <small>{version.createdBy || 'system'} · {formatDateTime(version.createdAt)}</small>
+                </span>
+                {version.version === overview?.currentVersion
+                  ? <span className="tag tone-ok">当前</span>
+                  : <button type="button" className="icon-action" title={`创建回滚到 v${version.version} 的提案`} aria-label={`回滚到版本 ${version.version}`} disabled={!canPropose || busy} onClick={() => setConfirmation({ type: 'rollback', version })}><RotateCcw size={15} /></button>}
+              </div>
+            ))}
+          </div>
+        </aside>
+      </div>
       <ConfirmDialog
         open={Boolean(confirmation)}
         title={confirmation?.type === 'approve' ? '批准并应用配置？' : confirmation?.type === 'reject' ? '拒绝配置提案？' : `创建回滚到 v${confirmation?.version?.version} 的提案？`}

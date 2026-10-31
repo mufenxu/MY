@@ -41,7 +41,6 @@ const IncidentsView = lazyNamed(loadOperationsViews, 'IncidentsView');
 const MonitoringView = lazyNamed(loadOperationsViews, 'MonitoringView');
 const ReleasesView = lazyNamed(loadOperationsViews, 'ReleasesView');
 const SecurityAuditView = lazyNamed(loadOperationsViews, 'SecurityAuditView');
-const SettingsDiagnosticsView = lazyNamed(loadOperationsViews, 'SettingsDiagnosticsView');
 
 const VIEW_MODULE_LOADERS = {
   notification: loadNotificationView,
@@ -70,7 +69,7 @@ const VIEW_META = {
   backup: { title: '备份恢复', subtitle: '保存、归档并恢复重要数据' },
   releases: { title: '更新记录', subtitle: '查看各服务版本更新与发布结果' },
   tasks: { title: '待办任务', subtitle: '查看需要处理的任务与审批' },
-  configuration: { title: '运行设置', subtitle: '调整运行参数与版本信息' },
+  configuration: { title: '运行设置', subtitle: '调整运行参数、维护窗口与版本审批' },
   diagnostics: { title: '连接检查', subtitle: '检查服务连接、密钥与依赖' },
   security: { title: '安全设置', subtitle: '登录方式、二次验证与操作记录' },
 };
@@ -660,7 +659,7 @@ export function Dashboard({ session, onLogout }) {
                     )}
                     {activeFilter === 'releases' && <ReleasesView session={session} targetEntityId={activeEntity} />}
                     {activeFilter === 'tasks' && <TaskCenterView onNavigate={navigateToView} targetEntityId={activeEntity} />}
-                    {activeFilter === 'configuration' && <><ConfigurationView session={session} targetEntityId={activeEntity} /><SettingsDiagnosticsView session={session} /></>}
+                    {activeFilter === 'configuration' && <ConfigurationView session={session} targetEntityId={activeEntity} services={services} />}
                     {activeFilter === 'diagnostics' && <DiagnosticsView services={services} session={session} targetEntityId={activeEntity} />}
                     {activeFilter === 'security' && <SecurityAuditView session={session} onLogout={onLogout} />}
                     </div>

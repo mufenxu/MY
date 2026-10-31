@@ -589,3 +589,72 @@
   }
 }
 
+/* ── 配置中心：参数网格与维护窗口在窄屏重排 ─────────────────────── */
+@media (max-width: 1024px) {
+  .config-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .config-window-editor {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .config-window-editor > input,
+  .config-window-editor > .btn {
+    grid-column: 1 / -1;
+  }
+
+  .config-window-editor > .btn {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 768px) {
+  .config-form {
+    padding: 14px;
+  }
+
+  .config-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .config-item > .inline-actions {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 640px) {
+  .config-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .config-window-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .config-window-editor > input {
+    grid-column: auto;
+  }
+
+  .config-window-editor > .btn {
+    width: auto;
+    justify-self: start;
+  }
+
+  .config-window {
+    grid-template-columns: minmax(0, 1fr) 30px;
+  }
+
+  .config-window-time {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .config-submit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .config-submit .primary-button {
+    width: 100%;
+  }
+}

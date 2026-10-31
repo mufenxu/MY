@@ -828,8 +828,19 @@
 }
 
 .section-bar {
-  gap: 14px;
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
   margin-bottom: 12px;
+}
+
+.section-bar > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
 }
 
 .section-bar > div > span {

@@ -965,3 +965,324 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ── 配置中心：运行参数 / 维护窗口 / 审批记录 ─────────────────── */
+.config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px 18px;
+}
+
+.config-form > .section-bar {
+  margin-bottom: 0;
+}
+
+.config-toggle {
+  display: flex;
+  min-height: 56px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--groove-bg);
+}
+
+.config-toggle > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.config-toggle strong {
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.config-toggle small {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.config-toggle input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--blue);
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.config-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.config-field > span {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.config-field > span small {
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.config-field input,
+.config-window-editor input,
+.config-submit textarea {
+  width: 100%;
+  min-width: 0;
+  height: var(--control-h);
+  padding: 0 10px;
+  outline: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  background: var(--input-bg);
+  box-shadow: var(--edge);
+  font: inherit;
+  font-size: 12.5px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.config-field input:focus,
+.config-window-editor input:focus,
+.config-submit textarea:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-soft);
+}
+
+.config-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+}
+
+.config-window-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.8fr) minmax(0, 1.5fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-windows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.config-window {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 30px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-solid);
+}
+
+.config-window-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.config-window-copy strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.config-window-copy small {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-window-time {
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.config-hint {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+}
+
+.config-submit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+}
+
+.config-submit label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.config-submit textarea {
+  height: auto;
+  min-height: 64px;
+  padding: 8px 10px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+/* 变更提案 */
+.config-list,
+.version-list {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+
+.config-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 11px var(--cell-px);
+  border-bottom: 1px solid var(--line);
+}
+
+.config-item:last-child,
+.version-row:last-child {
+  border-bottom: 0;
+}
+
+.config-item.is-targeted {
+  background: var(--blue-soft);
+  box-shadow: inset 2px 0 0 var(--blue);
+}
+
+.config-item-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.config-item-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-item-head strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.config-item-copy > small {
+  color: var(--ink-soft);
+  font-size: 10.5px;
+}
+
+.config-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 1px;
+}
+
+.config-keys code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  color: var(--ink-muted);
+  background: rgba(var(--shade), 0.06);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+:root[data-theme="dark"] .config-keys code {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.config-empty {
+  display: flex;
+  min-height: 88px;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* 版本历史 */
+.version-row {  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px var(--cell-px);
+  border-bottom: 1px solid var(--line);
+}
+
+.version-tag {
+  color: var(--blue);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.version-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.version-copy strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.version-copy small {
+  color: var(--ink-faint);
+  font-size: 10px;
+}
+

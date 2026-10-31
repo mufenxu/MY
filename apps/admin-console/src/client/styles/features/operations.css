@@ -1351,33 +1351,6 @@
   .account-row > button { grid-column: 2; }
 }
 
-.settings-section,
-.maintenance-panel,
-.diagnostics-panel {
-  padding: 20px;
-}
-
-.settings-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.settings-grid label > span {
-  color: var(--text);
-}
-
-.settings-grid .toggle-field {
-  grid-column: 1 / -1;
-  min-height: 58px;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px;
-  background: var(--panel-muted);
-  border-radius: 8px;
-}
-
 .toggle-field > span {
   display: flex;
   flex-direction: column;
@@ -1386,67 +1359,6 @@
 
 .toggle-field small { color: var(--muted); font-size: 9px; font-weight: 500; }
 .toggle-field input { width: 18px; height: 18px; }
-
-.maintenance-form {
-  display: grid;
-  grid-template-columns: 160px 130px minmax(180px, 1fr) auto;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.maintenance-list > div {
-  grid-template-columns: minmax(180px, 1fr) auto 30px;
-}
-
-.maintenance-list > div > span:nth-child(2) {
-  color: var(--muted);
-  font-size: 9px;
-}
-
-.maintenance-list button {
-  color: var(--red);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-}
-
-.diagnostics-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.diagnostics-grid > div {
-  display: flex;
-  min-width: 0;
-  min-height: 62px;
-  align-items: center;
-  gap: 9px;
-  padding: 10px;
-  color: var(--green);
-  background: var(--green-soft);
-  border-radius: 8px;
-}
-
-.diagnostics-grid > div.failed {
-  color: var(--red);
-  background: var(--red-soft);
-}
-
-.diagnostics-grid > div.skipped {
-  color: var(--muted);
-  background: var(--panel-muted);
-}
-
-.diagnostics-grid > div > div {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.diagnostics-grid strong { color: var(--ink); font-size: 10px; }
-.diagnostics-grid small { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 
 .backup-quality-strip {
   display: grid;
