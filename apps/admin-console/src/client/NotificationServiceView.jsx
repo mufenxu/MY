@@ -173,35 +173,36 @@ function targetLabel(delivery) {
   return `${prefix} ${value || '--'}`;
 }
 
-function DeliveryState({ value }) {
-  const meta = {
-    success: { label: '成功', icon: CheckCircle2 },
-    failed: { label: '失败', icon: XCircle },
-    pending: { label: '发送中', icon: Clock3 },
-  }[value] || { label: value || '--', icon: CircleAlert };
-  const Icon = meta.icon;
-  return <span className={`notify-state notify-state-${value || 'unknown'}`}><Icon size={14} />{meta.label}</span>;
+const DELIVERY_META = {
+  success: { label: '成功', tone: 'ok' },
+  failed: { label: '失败', tone: 'danger' },
+  pending: { label: '发送中', tone: 'info' },
+};
+
+function DeliveryTag({ value }) {
+  const meta = DELIVERY_META[value] || { label: value || '--', tone: 'neutral' };
+  return <span className={`tag tone-${meta.tone}`}>{meta.label}</span>;
 }
 
-function AppReadState({ readAt }) {
-  const value = readAt ? 'success' : 'pending';
-  const meta = readAt
-    ? { label: '已读', icon: CheckCircle2 }
-    : { label: '未读', icon: CircleAlert };
-  const Icon = meta.icon;
-  return <span className={`notify-state notify-state-${value}`}><Icon size={14} />{meta.label}</span>;
+function ReadTag({ readAt }) {
+  return <span className={`tag tone-${readAt ? 'ok' : 'neutral'}`}>{readAt ? '已读' : '未读'}</span>;
 }
 
 function Feedback({ error, message }) {
   if (!error && !message) return null;
-  return <div className={`ops-feedback ${error ? 'error' : ''}`} role={error ? 'alert' : 'status'}>{error ? <CircleAlert size={17} /> : <CheckCircle2 size={17} />}<span>{error || message}</span></div>;
+  return (
+    <div className={`alert ${error ? 'is-error' : 'is-ok'}`} role={error ? 'alert' : 'status'}>
+      {error ? <CircleAlert size={15} /> : <CheckCircle2 size={15} />}
+      <span>{error || message}</span>
+    </div>
+  );
 }
 
-function ConfigurationState({ ready, label, detail }) {
+function StatusRow({ ready, label, detail }) {
   return (
-    <div className={`notify-config-row ${ready ? 'ready' : 'missing'}`}>
-      <span>{ready ? <CheckCircle2 size={17} /> : <CircleAlert size={17} />}</span>
-      <div><strong>{label}</strong><small>{detail}</small></div>
+    <div className={`status-row ${ready ? 'is-ok' : 'is-warn'}`}>
+      <span className="status-row-icon" aria-hidden="true">{ready ? <CheckCircle2 size={14} /> : <CircleAlert size={14} />}</span>
+      <span className="cell-stack"><strong>{label}</strong><small>{detail}</small></span>
     </div>
   );
 }
@@ -568,389 +569,613 @@ export default function NotificationServiceView({ session }) {
                 : `${form.touser.trim()} · ${typeLabel(form.msgType)}`;
 
   return (
-    <section className="page-view notify-page" aria-label="统一通知服务控制中心">
-      <div className="notify-toolbar">
-        <SegmentedTabs
-          ariaLabel="通知服务视图"
-          idPrefix="notify-primary-tab"
-          panelId="notify-view-panel"
-          items={[
-            { id: 'overview', label: '概览' },
-            { id: 'records', label: '发送' },
-            { id: 'app', label: 'App 通知' },
-            { id: 'cmcc', label: '新消息' },
-            { id: 'jobs', label: '编排' },
-            { id: 'preferences', label: '接收偏好' },
-            { id: 'api', label: 'API 接入' },
-          ]}
-          value={primaryTab}
-          onChange={setTab}
-        />
-        {tab !== 'api' && <button className="btn btn-secondary btn-sm" type="button" title="刷新通知数据" aria-label="刷新通知数据" disabled={refreshing} onClick={() => load({ quiet: true })}><RefreshCw className={refreshing ? 'spin' : ''} size={15} />刷新</button>}
-      </div>
-      {['records', 'test'].includes(tab) && <SegmentedTabs className="notify-context-tabs" ariaLabel="发送视图" idPrefix="notify-send-tab" panelId="notify-view-panel" items={[{ id: 'records', label: '发送记录' }, { id: 'test', label: '发送测试' }]} value={tab} onChange={setTab} />}
-      {['jobs', 'templates'].includes(tab) && <SegmentedTabs className="notify-context-tabs" ariaLabel="编排视图" idPrefix="notify-orchestration-tab" panelId="notify-view-panel" items={[{ id: 'jobs', label: '计划任务' }, { id: 'templates', label: '消息模板' }]} value={tab} onChange={setTab} />}
-      {['cmcc', 'cmccInbox', 'cmccMedia', 'cmccCommands'].includes(tab) && <SegmentedTabs className="notify-context-tabs" ariaLabel="新消息视图" idPrefix="notify-cmcc-tab" panelId="notify-view-panel" items={[{ id: 'cmcc', label: '通道与文本' }, { id: 'cmccInbox', label: '上行消息' }, { id: 'cmccMedia', label: '富媒体' }, { id: 'cmccCommands', label: '指令规则' }]} value={tab} onChange={setTab} />}
-      <Feedback error={error} message={message} />
-
-      <div className="notify-view-panel" id="notify-view-panel" role="tabpanel" aria-labelledby={panelLabelledBy}>
-
-      {tab === 'overview' && (
-        <>
-          <div className="ops-kpis notify-kpis">
-            <article><Activity size={21} /><div><span>24 小时成功率</span><strong>{history.successRate == null ? '--' : `${history.successRate}%`}</strong><small>{history.total || 0} 次发送</small></div></article>
-            <article><CheckCircle2 size={21} /><div><span>发送成功</span><strong>{history.success || 0}</strong><small>最近 24 小时</small></div></article>
-            <article><CircleAlert size={21} /><div><span>发送失败</span><strong>{history.failed || 0}</strong><small>{history.pending || 0} 次处理中</small></div></article>
-            <article><Clock3 size={21} /><div><span>P95 耗时</span><strong>{history.p95DurationMs == null ? '--' : history.p95DurationMs}</strong><small>{history.p95DurationMs == null ? '暂无数据' : '毫秒'}</small></div></article>
-          </div>
-          <div className="notify-overview-grid">
-            <section className="ops-panel notify-config-panel">
-              <header><div><span>连接状态</span><h3>通道与存储</h3></div><ServerCog size={20} /></header>
-              <div className="notify-config-list">
-                <ConfigurationState ready={overview?.configured} label="通知服务" detail={overview?.configured ? '管理连接已建立' : '尚未配置管理连接'} />
-                <ConfigurationState ready={overview?.storageHealthy} label="发送台账" detail={overview?.storageHealthy ? `保留 ${overview.retentionDays} 天` : '存储连接异常'} />
-                <ConfigurationState ready={overview?.wecom?.corpIdConfigured && overview?.wecom?.secretConfigured} label="企业微信应用" detail={overview?.wecom?.agentId ? `AgentId ${overview.wecom.agentId}` : '应用凭据未配置'} />
-                <ConfigurationState ready={Boolean(cmcc.configured && cmccStatus.ready)} label="中国移动新消息" detail={cmcc.configured ? `${cmcc.recipientMasked || '--'} · ${cmccStatus.ready ? '连接就绪' : '未连接'}` : '凭据未配置'} />
-                <ConfigurationState ready={true} label="Android App 收件箱" detail={`${appOverview.total || 0} 条通知 · ${appOverview.unread || 0} 条未读`} />
-                <ConfigurationState ready={appDevices.total > 0} label="App 设备注册" detail={`${appDevices.total || 0} 台设备 · ${appDevices.pushReady || 0} 台可推送 · ${appDevices.pollOnly || 0} 台轮询`} />
-                <ConfigurationState ready={true} label="敏感数据" detail="服务端托管" />
-              </div>
-            </section>
-            <section className="ops-panel notify-recent-panel">
-              <header><div><span>最近活动</span><h3>最新发送</h3></div><BellRing size={20} /></header>
-              <div className="notify-recent-list">
-                {recent.length ? recent.map((delivery) => (
-                  <button type="button" key={delivery.id} onClick={() => setTab('records')}>
-                    <DeliveryState value={delivery.status} />
-                    <span><strong>{targetLabel(delivery)}</strong><small>{callerLabel(delivery.caller)} · {formatDateTime(delivery.startedAt)}</small></span>
-                  </button>
-                )) : <div className="ops-empty compact">暂无发送记录</div>}
-              </div>
-            </section>
-          </div>
-          <div className="notify-channel-grid">
-            <button className="notify-channel-card" type="button" onClick={() => setTab('records')}>
-              <span><Send size={18} /></span>
-              <div><strong>企业微信通知</strong><small>{overview?.wecom?.agentId ? `AgentId ${overview.wecom.agentId}` : '应用凭据未配置'} · 查看发送台账</small></div>
-            </button>
-            <button className="notify-channel-card" type="button" onClick={() => setTab('app')}>
-              <span><Smartphone size={18} /></span>
-              <div><strong>Android App 通知</strong><small>{appDevices.total || 0} 台设备 · {appOverview.unread || 0} 条未读 · 打开收件箱</small></div>
-            </button>
-            <button className="notify-channel-card" type="button" onClick={() => setTab('preferences')}>
-              <span><UserRound size={18} /></span>
-              <div><strong>接收偏好</strong><small>平台用户免打扰与接收开关统一维护</small></div>
-            </button>
-            <button className="notify-channel-card" type="button" onClick={() => setTab('cmcc')}>
-              <span><Zap size={18} /></span>
-              <div><strong>中国移动新消息</strong><small>{cmcc.configured ? `${cmcc.recipientMasked || '--'} · ${cmccStatus.ready ? '连接就绪' : '未连接'}` : '通道未配置'} · 控制与测试</small></div>
-            </button>
-          </div>
-        </>
-      )}
-
-      {tab === 'records' && (
-        <section className="ops-panel notify-records-panel">
-          <header className="notify-records-header">
-            <div><span>发送台账</span><h3>{deliveries.total} 条记录</h3></div>
-            <div className="notify-filters">
-              <SelectControl ariaLabel="按发送状态筛选" value={filters.status} onChange={(value) => updateFilter('status', value)} options={STATUS_OPTIONS} />
-              <SelectControl ariaLabel="按调用方筛选" value={filters.caller} onChange={(value) => updateFilter('caller', value)} options={CALLER_OPTIONS} />
-              <SelectControl ariaLabel="按消息类型筛选" value={filters.msgType} onChange={(value) => updateFilter('msgType', value)} options={TYPE_OPTIONS} />
-              <SelectControl ariaLabel="按发送目标筛选" value={filters.targetType} onChange={(value) => updateFilter('targetType', value)} options={TARGET_OPTIONS} />
+    <section className="page-view" aria-label="统一通知服务控制中心">
+      <div className="view-stack">
+        <div className="toolbar notify-tabs">
+          <SegmentedTabs
+            ariaLabel="通知服务视图"
+            idPrefix="notify-primary-tab"
+            panelId="notify-view-panel"
+            items={[
+              { id: 'overview', label: '概览' },
+              { id: 'records', label: '发送' },
+              { id: 'app', label: 'App 通知' },
+              { id: 'cmcc', label: '新消息' },
+              { id: 'jobs', label: '编排' },
+              { id: 'preferences', label: '接收偏好' },
+              { id: 'api', label: 'API 接入' },
+            ]}
+            value={primaryTab}
+            onChange={setTab}
+          />
+          {tab !== 'api' && (
+            <div className="toolbar-end">
+              <button className="btn btn-secondary btn-sm" type="button" title="刷新通知数据" aria-label="刷新通知数据" disabled={refreshing} onClick={() => load({ quiet: true })}>
+                <RefreshCw className={refreshing ? 'spin' : ''} size={15} />刷新
+              </button>
             </div>
-          </header>
-          <div className="notify-table">
-            <div className="notify-table-head"><span>时间</span><span>结果</span><span>调用方</span><span>类型</span><span>发送目标</span><span>耗时</span><span /></div>
-            <div className="notify-table-body">
+          )}
+        </div>
+        {['records', 'test'].includes(tab) && <SegmentedTabs className="segmented notify-context-tabs" ariaLabel="发送视图" idPrefix="notify-send-tab" panelId="notify-view-panel" items={[{ id: 'records', label: '发送记录' }, { id: 'test', label: '发送测试' }]} value={tab} onChange={setTab} />}
+        {['jobs', 'templates'].includes(tab) && <SegmentedTabs className="segmented notify-context-tabs" ariaLabel="编排视图" idPrefix="notify-orchestration-tab" panelId="notify-view-panel" items={[{ id: 'jobs', label: '计划任务' }, { id: 'templates', label: '消息模板' }]} value={tab} onChange={setTab} />}
+        {['cmcc', 'cmccInbox', 'cmccMedia', 'cmccCommands'].includes(tab) && <SegmentedTabs className="segmented notify-context-tabs" ariaLabel="新消息视图" idPrefix="notify-cmcc-tab" panelId="notify-view-panel" items={[{ id: 'cmcc', label: '通道与文本' }, { id: 'cmccInbox', label: '上行消息' }, { id: 'cmccMedia', label: '富媒体' }, { id: 'cmccCommands', label: '指令规则' }]} value={tab} onChange={setTab} />}
+        <Feedback error={error} message={message} />
+
+        <div className="notify-view-panel" id="notify-view-panel" role="tabpanel" aria-labelledby={panelLabelledBy}>
+
+        {tab === 'overview' && (
+          <>
+            <div className="stat-strip">
+              <article className="stat-card">
+                <span className="stat-icon tone-info"><Activity size={17} /></span>
+                <div>
+                  <span className="stat-label">24 小时成功率</span>
+                  <strong className="stat-figure">{history.successRate == null ? '--' : `${history.successRate}%`}</strong>
+                  <small className="stat-foot">{history.total || 0} 次发送</small>
+                </div>
+              </article>
+              <article className="stat-card">
+                <span className="stat-icon tone-ok"><CheckCircle2 size={17} /></span>
+                <div>
+                  <span className="stat-label">发送成功</span>
+                  <strong className="stat-figure">{history.success || 0}</strong>
+                  <small className="stat-foot">最近 24 小时</small>
+                </div>
+              </article>
+              <article className="stat-card">
+                <span className="stat-icon tone-warn"><CircleAlert size={17} /></span>
+                <div>
+                  <span className="stat-label">发送失败</span>
+                  <strong className="stat-figure">{history.failed || 0}</strong>
+                  <small className="stat-foot">{history.pending || 0} 次处理中</small>
+                </div>
+              </article>
+              <article className="stat-card">
+                <span className="stat-icon tone-violet"><Clock3 size={17} /></span>
+                <div>
+                  <span className="stat-label">P95 耗时</span>
+                  <strong className="stat-figure">{history.p95DurationMs == null ? '--' : history.p95DurationMs}</strong>
+                  <small className="stat-foot">{history.p95DurationMs == null ? '暂无数据' : '毫秒'}</small>
+                </div>
+              </article>
+            </div>
+
+            <div className="split">
+              <section className="panel">
+                <div className="panel-head">
+                  <div className="panel-title"><ServerCog size={15} aria-hidden="true" />通道与存储</div>
+                  <span className="panel-meta">连接状态</span>
+                </div>
+                <div className="panel-body">
+                  <div className="status-list">
+                    <StatusRow ready={overview?.configured} label="通知服务" detail={overview?.configured ? '管理连接已建立' : '尚未配置管理连接'} />
+                    <StatusRow ready={overview?.storageHealthy} label="发送台账" detail={overview?.storageHealthy ? `保留 ${overview.retentionDays} 天` : '存储连接异常'} />
+                    <StatusRow ready={overview?.wecom?.corpIdConfigured && overview?.wecom?.secretConfigured} label="企业微信应用" detail={overview?.wecom?.agentId ? `AgentId ${overview.wecom.agentId}` : '应用凭据未配置'} />
+                    <StatusRow ready={Boolean(cmcc.configured && cmccStatus.ready)} label="中国移动新消息" detail={cmcc.configured ? `${cmcc.recipientMasked || '--'} · ${cmccStatus.ready ? '连接就绪' : '未连接'}` : '凭据未配置'} />
+                    <StatusRow ready={true} label="Android App 收件箱" detail={`${appOverview.total || 0} 条通知 · ${appOverview.unread || 0} 条未读`} />
+                    <StatusRow ready={appDevices.total > 0} label="App 设备注册" detail={`${appDevices.total || 0} 台设备 · ${appDevices.pushReady || 0} 台可推送 · ${appDevices.pollOnly || 0} 台轮询`} />
+                    <StatusRow ready={true} label="敏感数据" detail="服务端托管" />
+                  </div>
+                </div>
+              </section>
+
+              <aside className="split-side">
+                <section className="panel panel-flush">
+                  <div className="panel-head">
+                    <div className="panel-title"><BellRing size={15} aria-hidden="true" />最新发送</div>
+                    <span className="panel-meta">最近活动</span>
+                  </div>
+                  <div className="data-list">
+                    {recent.length ? recent.map((delivery) => (
+                      <button className="data-row col-recent" type="button" key={delivery.id} onClick={() => setTab('records')}>
+                        <DeliveryTag value={delivery.status} />
+                        <span className="cell-stack">
+                          <strong>{targetLabel(delivery)}</strong>
+                          <small>{callerLabel(delivery.caller)} · {formatDateTime(delivery.startedAt)}</small>
+                        </span>
+                      </button>
+                    )) : <div className="data-list-empty"><span>暂无发送记录</span></div>}
+                  </div>
+                </section>
+              </aside>
+            </div>
+
+            <div className="notify-channel-grid">
+              <button className="channel-card" type="button" onClick={() => setTab('records')}>
+                <span className="stat-icon tone-info"><Send size={15} /></span>
+                <span className="cell-stack"><strong>企业微信通知</strong><small>{overview?.wecom?.agentId ? `AgentId ${overview.wecom.agentId}` : '应用凭据未配置'} · 查看发送台账</small></span>
+              </button>
+              <button className="channel-card" type="button" onClick={() => setTab('app')}>
+                <span className="stat-icon tone-violet"><Smartphone size={15} /></span>
+                <span className="cell-stack"><strong>Android App 通知</strong><small>{appDevices.total || 0} 台设备 · {appOverview.unread || 0} 条未读 · 打开收件箱</small></span>
+              </button>
+              <button className="channel-card" type="button" onClick={() => setTab('preferences')}>
+                <span className="stat-icon tone-ok"><UserRound size={15} /></span>
+                <span className="cell-stack"><strong>接收偏好</strong><small>平台用户免打扰与接收开关统一维护</small></span>
+              </button>
+              <button className="channel-card" type="button" onClick={() => setTab('cmcc')}>
+                <span className="stat-icon tone-warn"><Zap size={15} /></span>
+                <span className="cell-stack"><strong>中国移动新消息</strong><small>{cmcc.configured ? `${cmcc.recipientMasked || '--'} · ${cmccStatus.ready ? '连接就绪' : '未连接'}` : '通道未配置'} · 控制与测试</small></span>
+              </button>
+            </div>
+          </>
+        )}
+
+        {tab === 'records' && (
+          <section className="panel panel-flush">
+            <div className="panel-head">
+              <div className="panel-title"><Send size={15} aria-hidden="true" />发送台账<span className="panel-meta">{deliveries.total} 条</span></div>
+              <div className="notify-filters">
+                <SelectControl ariaLabel="按发送状态筛选" value={filters.status} onChange={(value) => updateFilter('status', value)} options={STATUS_OPTIONS} />
+                <SelectControl ariaLabel="按调用方筛选" value={filters.caller} onChange={(value) => updateFilter('caller', value)} options={CALLER_OPTIONS} />
+                <SelectControl ariaLabel="按消息类型筛选" value={filters.msgType} onChange={(value) => updateFilter('msgType', value)} options={TYPE_OPTIONS} />
+                <SelectControl ariaLabel="按发送目标筛选" value={filters.targetType} onChange={(value) => updateFilter('targetType', value)} options={TARGET_OPTIONS} />
+              </div>
+            </div>
+            <div className="data-list">
+              <div className="data-head col-delivery" aria-hidden="true">
+                <span>时间</span><span>结果</span><span>调用方</span><span>类型</span><span>发送目标</span><span className="cell-num">耗时</span><span />
+              </div>
               {deliveries.items.length ? deliveries.items.map((delivery) => (
-                <div className="notify-table-row" key={delivery.id}>
-                  <span className="notify-time">{formatDateTime(delivery.startedAt)}</span>
-                  <DeliveryState value={delivery.status} />
-                  <span>{callerLabel(delivery.caller)}</span>
-                  <span>{typeLabel(delivery.msgType)}</span>
-                  <span className="notify-target"><strong>{targetLabel(delivery)}</strong>{delivery.errorMessage && <small title={delivery.errorMessage}>{delivery.wecomCode ? `企业微信 ${delivery.wecomCode}` : delivery.errorCode}</small>}</span>
-                  <span>{Number.isFinite(delivery.durationMs) ? `${delivery.durationMs} ms` : '--'}</span>
-                  <button className="icon-button notify-retry" type="button" title={delivery.retryable && delivery.status === 'failed' ? '重试此通知' : '此记录不可重试'} aria-label="重试此通知" disabled={!canOperate || !delivery.retryable || delivery.status !== 'failed'} onClick={() => setPendingAction({ type: 'retry', delivery })}><RotateCcw size={16} /></button>
+                <div className="data-row col-delivery" key={delivery.id}>
+                  <span className="panel-meta">{formatDateTime(delivery.startedAt)}</span>
+                  <DeliveryTag value={delivery.status} />
+                  <span className="cell-truncate">{callerLabel(delivery.caller)}</span>
+                  <span className="cell-truncate">{typeLabel(delivery.msgType)}</span>
+                  <span className="cell-stack">
+                    <strong>{targetLabel(delivery)}</strong>
+                    {delivery.errorMessage && <small title={delivery.errorMessage}>{delivery.wecomCode ? `企业微信 ${delivery.wecomCode}` : delivery.errorCode}</small>}
+                  </span>
+                  <span className="cell-num">{Number.isFinite(delivery.durationMs) ? `${delivery.durationMs} ms` : '--'}</span>
+                  <button className="icon-action" type="button" title={delivery.retryable && delivery.status === 'failed' ? '重试此通知' : '此记录不可重试'} aria-label="重试此通知" disabled={!canOperate || !delivery.retryable || delivery.status !== 'failed'} onClick={() => setPendingAction({ type: 'retry', delivery })}><RotateCcw size={15} /></button>
                 </div>
-              )) : <div className="ops-empty">当前筛选条件下没有发送记录</div>}
+              )) : <div className="data-list-empty"><span>当前筛选条件下没有发送记录</span></div>}
             </div>
-          </div>
-          <footer className="notify-pagination"><span>第 {deliveries.page} / {totalPages} 页</span><div><button type="button" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>上一页</button><button type="button" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>下一页</button></div></footer>
-        </section>
-      )}
-
-      {tab === 'app' && (
-        <div className="notify-app-layout">
-          <section className="ops-panel notify-app-panel">
-            <header className="notify-records-header">
-              <div><span>Android App</span><h3>{appScopeLabel}收件箱</h3></div>
-              <div className="notify-app-filter">
-                <SelectControl ariaLabel="App 通知查看用户" value={appFilter} options={appFilterOptions} onChange={setAppFilter} />
-                <button className="secondary-action compact" type="button" disabled={refreshing} onClick={applyAppFilter}>读取</button>
+            <footer className="table-foot">
+              <span className="panel-meta">第 {deliveries.page} / {totalPages} 页</span>
+              <div className="inline-actions">
+                <button className="btn btn-secondary btn-sm" type="button" disabled={page <= 1} onClick={() => setPage((current) => Math.max(1, current - 1))}>上一页</button>
+                <button className="btn btn-secondary btn-sm" type="button" disabled={page >= totalPages} onClick={() => setPage((current) => Math.min(totalPages, current + 1))}>下一页</button>
               </div>
-            </header>
-            <div className="ops-kpis notify-app-kpis">
-              <article><Inbox size={21} /><div><span>收件箱通知</span><strong>{appOverview.total || 0}</strong><small>{appScopeLabel}</small></div></article>
-              <article><BellRing size={21} /><div><span>未读通知</span><strong>{appOverview.unread || 0}</strong><small>App 内提醒</small></div></article>
-              <article><Smartphone size={21} /><div><span>注册设备</span><strong>{appDevices.total || 0}</strong><small>{appDevices.pushReady || 0} 台可推送</small></div></article>
-              <article><Clock3 size={21} /><div><span>最近在线</span><strong>{formatDateTime(appDevices.lastSeenAt).split(' ')[0]}</strong><small>{formatDateTime(appDevices.lastSeenAt)}</small></div></article>
-            </div>
-            <div className="notify-app-list">
-              {appItems.length ? appItems.map((item) => (
-                <article className="notify-app-row" key={`${item.recipientId || 'app'}-${item.id}`}>
-                  <AppReadState readAt={item.readAt} />
-                  <div className="notify-app-row-main">
-                    <strong>{item.title || item.category || item.id}</strong>
-                    <small>{item.summary || item.category || '无摘要'}</small>
-                  </div>
-                  <div className="notify-app-meta">
-                    <span>{item.recipientId || appOverview.userId || '--'}</span>
-                    <span>{priorityLabel(item.priority)} · {item.category || '--'} · {formatDateTime(item.createdAt)}</span>
-                  </div>
-                </article>
-              )) : <div className="ops-empty">当前范围没有 App 通知</div>}
-            </div>
+            </footer>
           </section>
-          <section className="ops-panel notify-app-side">
-            <header><div><span>设备能力</span><h3>App 通道状态</h3></div><Smartphone size={20} /></header>
-            <div className="notify-config-list">
-              <ConfigurationState ready={appDevices.total > 0} label="设备注册" detail={`${appDevices.total || 0} 台有效设备`} />
-              <ConfigurationState ready={appDevices.pushReady > 0} label="原生推送" detail={`${appDevices.pushReady || 0} 台设备具备推送令牌`} />
-              <ConfigurationState ready={appDevices.pollOnly > 0} label="轮询兜底" detail={`${appDevices.pollOnly || 0} 台设备使用 App 内收件箱轮询`} />
-            </div>
-            <button className="primary-button notify-send-button" type="button" disabled={!defaultAppUserId} onClick={() => { setForm((current) => ({ ...current, channel: 'app', appUserId: defaultAppUserId })); setTab('test'); }}><Send size={17} />发送 App 测试</button>
-          </section>
-        </div>
-      )}
+        )}
 
-      {tab === 'cmcc' && (
-        <div className="notify-test-layout">
-          <section className="ops-panel notify-test-form">
-            <header><div><span>中国移动新消息</span><h3>通道状态</h3></div><Zap size={20} /></header>
-            <div className="notify-config-list">
-              <ConfigurationState ready={Boolean(cmcc.configured)} label="通道凭据" detail={cmcc.configured ? `接收号码 ${cmcc.recipientMasked}` : '未配置 CMCC_API_KEY 与 CMCC_RECIPIENT'} />
-              <ConfigurationState ready={Boolean(cmcc.wsUrl)} label="网关地址" detail={cmcc.wsUrl || '未配置'} />
-              <ConfigurationState ready={Boolean(cmccStatus.ready)} label="WebSocket 连接" detail={cmccStatus.ready ? '已认证，可发送' : cmccStatus.connected ? '已连接，等待认证' : '未连接'} />
-              <ConfigurationState ready={!cmccStatus.lastError} label="最近错误" detail={cmccStatus.lastError ? `${cmccStatus.lastError.code} · ${formatDateTime(cmccStatus.lastError.at)}` : '暂无'} />
-            </div>
-            <div className="notify-cmcc-stats">
-              <span>已提交 {cmccStats.sent || 0}</span>
-              <span>富媒体 {cmccStats.mediaSent || 0}</span>
-              <span>上行 {cmccStats.received || 0}</span>
-              <span>失败 {cmccStats.failed || 0}</span>
-              <span>重连 {cmccStats.reconnects || 0}</span>
-            </div>
-            <button className="secondary-action" type="button" disabled={!canOperate || !cmcc.configured || submitting} onClick={() => setPendingAction({ type: 'cmcc-probe' })}><ShieldCheck size={17} />连接自检</button>
-            <button className="secondary-action" type="button" disabled={!canOperate} onClick={() => setTab('cmccInbox')}><Inbox size={17} />上行消息 {cmccInbound.total ? `(${cmccInbound.total})` : ''}</button>
-            <button className="secondary-action" type="button" disabled={!canOperate} onClick={() => setTab('cmccMedia')}><ImageIcon size={17} />富媒体发送</button>
-            <button className="secondary-action" type="button" disabled={!canOperate} onClick={() => setTab('cmccCommands')}><Terminal size={17} />指令规则</button>
-            <button className="secondary-action" type="button" disabled={!canOperate} onClick={() => { updateFilter('targetType', 'phone'); setTab('records'); }}><FileText size={17} />查看发送记录</button>
-          </section>
-          <section className="ops-panel notify-test-form">
-            <header><div><span>下行测试</span><h3>发送新消息</h3></div><Send size={20} /></header>
-            <label><span>接收号码</span><input value={cmcc.recipientMasked || '未配置'} readOnly /></label>
-            <label><span>消息标题</span><input value={form.cmccTitle} maxLength={60} placeholder="留空则只发送正文" onChange={(event) => setForm({ ...form, cmccTitle: event.target.value })} /><small>{form.cmccTitle.trim() ? '标题与正文各自成行下发' : '已留空：只发送正文'}</small></label>
-            <label><span>消息内容</span><textarea rows={8} maxLength={2048} value={form.cmccContent} placeholder="输入测试内容，将转为纯文本发送" onChange={(event) => setForm({ ...form, cmccContent: event.target.value })} /><small>{form.cmccContent.length} / 2048 字符</small></label>
-            <button className="primary-button notify-send-button" type="button" disabled={!canOperate || !cmcc.configured || !form.cmccContent.trim() || submitting} onClick={() => setPendingAction({ type: 'cmcc-test' })}><Send size={17} />发送测试</button>
-            <div className="notify-cmcc-notes">
-              <span>文本下行</span>
-              <ul>
-                <li>文本帧支持指定接收号码，未指定时优先回复最近一次上行会话</li>
-                <li>内容会先剥离 Markdown 标记，超过 2048 字按网关上限截断</li>
-                <li>网关不回投递回执，成功仅代表已提交到网关</li>
-                <li>固定测试号码为 CMCC_RECIPIENT，控制台不提供改号能力</li>
-              </ul>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {tab === 'cmccInbox' && (
-        <div className="notify-orchestration-layout">
-          <section className="ops-panel notify-test-form">
-            <header><div><span>上行接收</span><h3>手机上行消息</h3></div><Inbox size={20} /></header>
-            <label><span>上行类型</span><SelectControl ariaLabel="上行消息类型" value={cmccFilters.mediaType} options={CMCC_MEDIA_FILTER_OPTIONS} onChange={(value) => setCmccFilters({ ...cmccFilters, mediaType: value })} /></label>
-            <label><span>自动回复</span><SelectControl ariaLabel="自动回复状态" value={cmccFilters.replyStatus} options={CMCC_REPLY_STATUS_OPTIONS} onChange={(value) => setCmccFilters({ ...cmccFilters, replyStatus: value })} /></label>
-            <div className="notify-cmcc-stats">
-              <span>共 {cmccInbound.total || 0} 条</span>
-              <span>24 小时 {cmccInbound.last24h || 0} 条</span>
-              <span>已自动回复 {cmccInbound.replied || 0} 条</span>
-            </div>
-            <ConfigurationState ready={cmccSessionActive} label="上行会话" detail={cmccSessionActive ? `最近发送方 ${cmccTargetMasked}` : '尚未收到上行消息'} />
-            <ConfigurationState ready={Boolean(cmcc.configured && cmcc.replyEnabled)} label="指令自动回复" detail={cmcc.configured ? (cmcc.replyEnabled ? '已开启' : '已通过 CMCC_REPLY_ENABLED 关闭') : '通道未配置'} />
-            <div className="notify-cmcc-notes">
-              <span>说明</span>
-              <ul>
-                <li>网关通过 WebSocket 直接推送上行文本与富媒体，无需额外配置回调地址</li>
-                <li>需要服务常驻连接；断线后客户端按退避策略自动重连</li>
-                <li>上行富媒体只记录网关给出的 mediaUrl，控制台不会下载到本地</li>
-              </ul>
-            </div>
-          </section>
-          <section className="ops-panel notify-jobs-panel">
-            <header><div><span>上行记录</span><h3>{cmccMessages.total || 0} 条</h3></div><MessageSquare size={20} /></header>
-            <div className="notify-template-list">
-              {cmccMessages.items?.length ? cmccMessages.items.map((item) => {
-                const replyMeta = cmccReplyStatusMeta(item.replyStatus);
-                return (
-                  <div key={item.id} className="notify-template-row notify-cmcc-message">
-                    <div>
-                      <strong>{maskPhoneValue(item.from) || '未知号码'} · {item.mediaType ? cmccMediaLabel(item.mediaType) : '文本'}</strong>
-                      <small>{formatDateTime(item.receivedAt)}{item.mediaFileName ? ` · ${item.mediaFileName}` : ''}</small>
-                      <p>{item.content || (item.mediaUrl ? `媒体地址 ${item.mediaUrl}` : '无文本内容')}</p>
-                      {item.replyContent ? <small>自动回复：{item.replyContent}</small> : null}
-                      {item.replyError ? <small>回复失败：{item.replyError}</small> : null}
+        {tab === 'app' && (
+          <div className="split notify-app-layout">
+            <div className="split-main">
+              <section className="panel panel-flush">
+                <div className="panel-head">
+                  <div className="panel-title"><Smartphone size={15} aria-hidden="true" />{appScopeLabel}收件箱</div>
+                  <div className="notify-filters">
+                    <SelectControl ariaLabel="App 通知查看用户" value={appFilter} options={appFilterOptions} onChange={setAppFilter} />
+                    <button className="btn btn-secondary btn-sm" type="button" disabled={refreshing} onClick={applyAppFilter}>读取</button>
+                  </div>
+                </div>
+                <div className="data-list">
+                  <div className="data-head col-app" aria-hidden="true"><span>状态</span><span>通知</span><span>接收范围</span></div>
+                  {appItems.length ? appItems.map((item) => (
+                    <div className="data-row col-app" key={`${item.recipientId || 'app'}-${item.id}`}>
+                      <ReadTag readAt={item.readAt} />
+                      <span className="cell-stack">
+                        <strong>{item.title || item.category || item.id}</strong>
+                        <small>{item.summary || item.category || '无摘要'}</small>
+                      </span>
+                      <span className="cell-stack">
+                        <strong>{item.recipientId || appOverview.userId || '--'}</strong>
+                        <small>{priorityLabel(item.priority)} · {item.category || '--'} · {formatDateTime(item.createdAt)}</small>
+                      </span>
                     </div>
-                    <span className={`notify-state notify-state-${replyMeta.state}`}>{replyMeta.label}</span>
-                  </div>
-                );
-              }) : <div className="ops-empty">暂无上行消息，可让手机向该通道发送一条短信或富媒体消息</div>}
-            </div>
-          </section>
-        </div>
-      )}
-
-      {tab === 'cmccMedia' && (
-        <div className="notify-test-layout">
-          <section className="ops-panel notify-test-form">
-            <header><div><span>富媒体下行</span><h3>发送图片 / 音频 / 视频 / 文件</h3></div><ImageIcon size={20} /></header>
-            <label><span>媒体类型</span><SelectControl ariaLabel="富媒体类型" value={cmccMediaForm.mediaType} options={CMCC_MEDIA_OPTIONS} onChange={(value) => setCmccMediaForm({ ...cmccMediaForm, mediaType: value })} /></label>
-            <label><span>媒体地址</span><input value={cmccMediaForm.mediaUrl} maxLength={2048} placeholder="https:// 可公网访问的素材地址" onChange={(event) => setCmccMediaForm({ ...cmccMediaForm, mediaUrl: event.target.value, fileBase64: '', fileName: '' })} /></label>
-            <label><span>或上传本地文件</span><input type="file" onChange={handleCmccFile} /><small>{cmccMediaForm.fileName ? `已选择 ${cmccMediaForm.fileName}${cmccMediaForm.mimeType ? ` · ${cmccMediaForm.mimeType}` : ''}` : '单文件上限 6MB，上传后由网关返回 mediaUrl'}</small></label>
-            <label><span>文字说明</span><textarea rows={4} maxLength={1024} value={cmccMediaForm.content} placeholder="随媒体一起下发的纯文本说明，可留空" onChange={(event) => setCmccMediaForm({ ...cmccMediaForm, content: event.target.value })} /></label>
-            <button className="primary-button notify-send-button" type="button" disabled={!canOperate || !cmcc.configured || submitting || (!cmccMediaForm.mediaUrl.trim() && !cmccMediaForm.fileBase64)} onClick={sendCmccMedia}><Upload size={17} />发送富媒体</button>
-            <div className="notify-cmcc-notes">
-              <span>能力与限制</span>
-              <ul>
-                <li>网关富媒体帧没有 to 字段，只会投递给最近一次上行会话</li>
-                <li>当前投递目标：{cmccTargetMasked || '--'}{cmccSessionActive ? '（最近上行发送方）' : '（固定号码，尚未收到上行消息）'}</li>
-                <li>上传走网关 POST {'{uploadUrl}'}/upload，成功码 10200，返回 data 即 mediaUrl</li>
-                <li>通道不提供按钮、卡片、菜单与快捷回复，交互只能靠文本指令</li>
-              </ul>
-            </div>
-          </section>
-          <section className="ops-panel notify-test-form">
-            <header><div><span>富媒体记录</span><h3>最近下发</h3></div><ImageIcon size={20} /></header>
-            <div className="notify-template-list">
-              {deliveries.items.filter((item) => ['image', 'audio', 'video', 'file'].includes(item.msgType)).slice(0, 6).map((item) => (
-                <div key={item.id} className="notify-template-row notify-cmcc-message">
-                  <div>
-                    <strong>{typeLabel(item.msgType)} → {targetLabel(item)}</strong>
-                    <small>{formatDateTime(item.startedAt)}</small>
-                  </div>
-                  <DeliveryState value={item.status} />
+                  )) : <div className="data-list-empty"><span>当前范围没有 App 通知</span></div>}
                 </div>
-              ))}
-              {!deliveries.items.some((item) => ['image', 'audio', 'video', 'file'].includes(item.msgType)) && <div className="ops-empty">暂无富媒体发送记录</div>}
+              </section>
             </div>
-          </section>
-        </div>
-      )}
-
-      {tab === 'cmccCommands' && (
-        <div className="notify-orchestration-layout">
-          <section className="ops-panel notify-test-form">
-            <header><div><span>短信指令</span><h3>{cmccCommandForm.key ? '编辑指令规则' : '新建指令规则'}</h3></div><Terminal size={20} /></header>
-            <label><span>规则标识</span><input value={cmccCommandForm.key} maxLength={64} disabled={Boolean(cmccCommands.some((item) => item.key === cmccCommandForm.key))} onChange={(event) => setCmccCommandForm({ ...cmccCommandForm, key: event.target.value })} /></label>
-            <label><span>指令名称</span><input value={cmccCommandForm.name} maxLength={80} onChange={(event) => setCmccCommandForm({ ...cmccCommandForm, name: event.target.value })} /></label>
-            <label><span>说明</span><input value={cmccCommandForm.description} maxLength={160} placeholder="会出现在 /help 帮助回复中" onChange={(event) => setCmccCommandForm({ ...cmccCommandForm, description: event.target.value })} /></label>
-            <label><span>匹配方式</span><SelectControl ariaLabel="指令匹配方式" value={cmccCommandForm.matchType} options={CMCC_COMMAND_MATCH_OPTIONS} onChange={(value) => setCmccCommandForm({ ...cmccCommandForm, matchType: value })} /></label>
-            <label><span>触发内容</span><input value={cmccCommandForm.pattern} maxLength={160} placeholder="例如 /status 或 查询" onChange={(event) => setCmccCommandForm({ ...cmccCommandForm, pattern: event.target.value })} /></label>
-            <label><span>自动回复</span><textarea rows={6} maxLength={2048} value={cmccCommandForm.reply} placeholder="支持 {{from}}、{{text}}、{{date}} 占位符" onChange={(event) => setCmccCommandForm({ ...cmccCommandForm, reply: event.target.value })} /><small>{cmccCommandForm.reply.length} / 2048 字符</small></label>
-            <label className="notify-inline-check"><input type="checkbox" checked={cmccCommandForm.enabled} onChange={(event) => setCmccCommandForm({ ...cmccCommandForm, enabled: event.target.checked })} /><span>启用规则</span></label>
-            <button className="primary-button" type="button" disabled={!canManageCommands || !cmccCommandForm.key.trim() || !cmccCommandForm.name.trim() || !cmccCommandForm.pattern.trim() || !cmccCommandForm.reply.trim() || submitting} onClick={saveCmccCommand}><Save size={17} />保存指令</button>
-            {!canManageCommands && <div className="notify-cmcc-notes"><span>权限</span><ul><li>指令规则会触发自动外发，因此仅超级管理员可维护</li></ul></div>}
-          </section>
-          <section className="ops-panel notify-jobs-panel">
-            <header><div><span>指令库</span><h3>{cmccCommands.length} 条规则</h3></div><Terminal size={20} /></header>
-            <div className="notify-template-list">
-              {cmccCommands.length ? cmccCommands.map((command) => (
-                <div key={command.key} className="notify-template-row">
-                  <button type="button" onClick={() => setCmccCommandForm({ ...EMPTY_CMCC_COMMAND_FORM, ...command })}><strong>{command.name}</strong><small>{command.key} · {cmccMatchTypeLabel(command.matchType)} · {command.pattern}</small></button>
-                  <span>{command.enabled ? '启用' : '停用'}</span>
-                  <button className="icon-button" type="button" title="删除指令规则" disabled={!canManageCommands} onClick={() => setPendingAction({ type: 'delete-cmcc-command', command })}><X size={16} /></button>
+            <aside className="split-side">
+              <section className="panel">
+                <div className="panel-head">
+                  <div className="panel-title"><Smartphone size={15} aria-hidden="true" />App 通道状态</div>
+                  <span className="panel-meta">设备能力</span>
                 </div>
-              )) : <div className="ops-empty">暂无指令规则，未命中规则时手机发送 /help 可获取帮助文本</div>}
+                <div className="panel-body">
+                  <div className="status-list">
+                    <StatusRow ready={appDevices.total > 0} label="设备注册" detail={`${appDevices.total || 0} 台有效设备`} />
+                    <StatusRow ready={appDevices.pushReady > 0} label="原生推送" detail={`${appDevices.pushReady || 0} 台设备具备推送令牌`} />
+                    <StatusRow ready={appDevices.pollOnly > 0} label="轮询兜底" detail={`${appDevices.pollOnly || 0} 台设备使用 App 内收件箱轮询`} />
+                  </div>
+                  <button className="btn btn-primary btn-block notify-send-button" type="button" disabled={!defaultAppUserId} onClick={() => { setForm((current) => ({ ...current, channel: 'app', appUserId: defaultAppUserId })); setTab('test'); }}><Send size={15} />发送 App 测试</button>
+                </div>
+              </section>
+            </aside>
+          </div>
+        )}
+
+        {tab === 'cmcc' && (
+          <div className="split">
+            <section className="panel">
+              <div className="panel-head">
+                <div className="panel-title"><Zap size={15} aria-hidden="true" />通道状态</div>
+                <span className={`tag tone-${cmccStatus.ready ? 'ok' : cmcc.configured ? 'warn' : 'neutral'}`}>{cmccStatus.ready ? '连接就绪' : cmcc.configured ? '未连接' : '未配置'}</span>
+              </div>
+              <div className="panel-body">
+                <div className="status-list">
+                  <StatusRow ready={Boolean(cmcc.configured)} label="通道凭据" detail={cmcc.configured ? `接收号码 ${cmcc.recipientMasked}` : '未配置 CMCC_API_KEY 与 CMCC_RECIPIENT'} />
+                  <StatusRow ready={Boolean(cmcc.wsUrl)} label="网关地址" detail={cmcc.wsUrl || '未配置'} />
+                  <StatusRow ready={Boolean(cmccStatus.ready)} label="WebSocket 连接" detail={cmccStatus.ready ? '已认证，可发送' : cmccStatus.connected ? '已连接，等待认证' : '未连接'} />
+                  <StatusRow ready={!cmccStatus.lastError} label="最近错误" detail={cmccStatus.lastError ? `${cmccStatus.lastError.code} · ${formatDateTime(cmccStatus.lastError.at)}` : '暂无'} />
+                </div>
+                <div className="stat-chips">
+                  <span>已提交 <strong>{cmccStats.sent || 0}</strong></span>
+                  <span>富媒体 <strong>{cmccStats.mediaSent || 0}</strong></span>
+                  <span>上行 <strong>{cmccStats.received || 0}</strong></span>
+                  <span>失败 <strong>{cmccStats.failed || 0}</strong></span>
+                  <span>重连 <strong>{cmccStats.reconnects || 0}</strong></span>
+                </div>
+                <div className="inline-actions">
+                  <button className="btn btn-secondary btn-sm" type="button" disabled={!canOperate || !cmcc.configured || submitting} onClick={() => setPendingAction({ type: 'cmcc-probe' })}><ShieldCheck size={15} />连接自检</button>
+                  <button className="btn btn-secondary btn-sm" type="button" disabled={!canOperate} onClick={() => setTab('cmccInbox')}><Inbox size={15} />上行消息 {cmccInbound.total ? `(${cmccInbound.total})` : ''}</button>
+                  <button className="btn btn-secondary btn-sm" type="button" disabled={!canOperate} onClick={() => setTab('cmccMedia')}><ImageIcon size={15} />富媒体发送</button>
+                  <button className="btn btn-secondary btn-sm" type="button" disabled={!canOperate} onClick={() => setTab('cmccCommands')}><Terminal size={15} />指令规则</button>
+                  <button className="btn btn-secondary btn-sm" type="button" disabled={!canOperate} onClick={() => { updateFilter('targetType', 'phone'); setTab('records'); }}><FileText size={15} />查看发送记录</button>
+                </div>
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="panel-head">
+                <div className="panel-title"><Send size={15} aria-hidden="true" />发送新消息</div>
+                <span className="panel-meta">下行测试</span>
+              </div>
+              <div className="panel-body">
+                <div className="form-stack">
+                  <label className="config-field"><span>接收号码</span><input value={cmcc.recipientMasked || '未配置'} readOnly /></label>
+                  <label className="config-field">
+                    <span>消息标题</span>
+                    <input value={form.cmccTitle} maxLength={60} placeholder="留空则只发送正文" onChange={(event) => setForm({ ...form, cmccTitle: event.target.value })} />
+                    <small>{form.cmccTitle.trim() ? '标题与正文各自成行下发' : '已留空：只发送正文'}</small>
+                  </label>
+                  <label className="config-field">
+                    <span>消息内容</span>
+                    <textarea rows={7} maxLength={2048} value={form.cmccContent} placeholder="输入测试内容，将转为纯文本发送" onChange={(event) => setForm({ ...form, cmccContent: event.target.value })} />
+                    <small>{form.cmccContent.length} / 2048 字符</small>
+                  </label>
+                </div>
+                <button className="btn btn-primary btn-block notify-send-button" type="button" disabled={!canOperate || !cmcc.configured || !form.cmccContent.trim() || submitting} onClick={() => setPendingAction({ type: 'cmcc-test' })}><Send size={15} />发送测试</button>
+                <div className="note-block">
+                  <span>文本下行</span>
+                  <ul>
+                    <li>文本帧支持指定接收号码，未指定时优先回复最近一次上行会话</li>
+                    <li>内容会先剥离 Markdown 标记，超过 2048 字按网关上限截断</li>
+                    <li>网关不回投递回执，成功仅代表已提交到网关</li>
+                    <li>固定测试号码为 CMCC_RECIPIENT，控制台不提供改号能力</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {tab === 'cmccInbox' && (
+          <div className="split">
+            <section className="panel">
+              <div className="panel-head">
+                <div className="panel-title"><Inbox size={15} aria-hidden="true" />手机上行消息</div>
+                <span className="panel-meta">上行接收</span>
+              </div>
+              <div className="panel-body">
+                <div className="form-stack">
+                  <div className="config-field"><span>上行类型</span><SelectControl ariaLabel="上行消息类型" value={cmccFilters.mediaType} options={CMCC_MEDIA_FILTER_OPTIONS} onChange={(value) => setCmccFilters({ ...cmccFilters, mediaType: value })} /></div>
+                  <div className="config-field"><span>自动回复</span><SelectControl ariaLabel="自动回复状态" value={cmccFilters.replyStatus} options={CMCC_REPLY_STATUS_OPTIONS} onChange={(value) => setCmccFilters({ ...cmccFilters, replyStatus: value })} /></div>
+                </div>
+                <div className="stat-chips">
+                  <span>共 <strong>{cmccInbound.total || 0}</strong> 条</span>
+                  <span>24 小时 <strong>{cmccInbound.last24h || 0}</strong> 条</span>
+                  <span>已自动回复 <strong>{cmccInbound.replied || 0}</strong> 条</span>
+                </div>
+                <div className="status-list">
+                  <StatusRow ready={cmccSessionActive} label="上行会话" detail={cmccSessionActive ? `最近发送方 ${cmccTargetMasked}` : '尚未收到上行消息'} />
+                  <StatusRow ready={Boolean(cmcc.configured && cmcc.replyEnabled)} label="指令自动回复" detail={cmcc.configured ? (cmcc.replyEnabled ? '已开启' : '已通过 CMCC_REPLY_ENABLED 关闭') : '通道未配置'} />
+                </div>
+                <div className="note-block">
+                  <span>说明</span>
+                  <ul>
+                    <li>网关通过 WebSocket 直接推送上行文本与富媒体，无需额外配置回调地址</li>
+                    <li>需要服务常驻连接；断线后客户端按退避策略自动重连</li>
+                    <li>上行富媒体只记录网关给出的 mediaUrl，控制台不会下载到本地</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section className="panel panel-flush">
+              <div className="panel-head">
+                <div className="panel-title"><MessageSquare size={15} aria-hidden="true" />上行记录</div>
+                <span className="panel-meta">{cmccMessages.total || 0} 条</span>
+              </div>
+              <div className="data-list">
+                {cmccMessages.items?.length ? cmccMessages.items.map((item) => {
+                  const replyMeta = cmccReplyStatusMeta(item.replyStatus);
+                  return (
+                    <div className="data-row col-inbox" key={item.id}>
+                      <span className="cell-stack">
+                        <strong>{maskPhoneValue(item.from) || '未知号码'} · {item.mediaType ? cmccMediaLabel(item.mediaType) : '文本'}</strong>
+                        <small>{formatDateTime(item.receivedAt)}{item.mediaFileName ? ` · ${item.mediaFileName}` : ''}</small>
+                        <small className="cell-body">{item.content || (item.mediaUrl ? `媒体地址 ${item.mediaUrl}` : '无文本内容')}</small>
+                        {item.replyContent ? <small>自动回复：{item.replyContent}</small> : null}
+                        {item.replyError ? <small>回复失败：{item.replyError}</small> : null}
+                      </span>
+                      <span className={`tag tone-${replyMeta.state === 'success' ? 'ok' : replyMeta.state === 'failed' ? 'danger' : 'neutral'}`}>{replyMeta.label}</span>
+                    </div>
+                  );
+                }) : <div className="data-list-empty"><span>暂无上行消息，可让手机向该通道发送一条短信或富媒体消息</span></div>}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {tab === 'cmccMedia' && (
+          <div className="split">
+            <section className="panel">
+              <div className="panel-head">
+                <div className="panel-title"><ImageIcon size={15} aria-hidden="true" />发送富媒体</div>
+                <span className="panel-meta">图片 / 音频 / 视频 / 文件</span>
+              </div>
+              <div className="panel-body">
+                <div className="form-stack">
+                  <div className="config-field"><span>媒体类型</span><SelectControl ariaLabel="富媒体类型" value={cmccMediaForm.mediaType} options={CMCC_MEDIA_OPTIONS} onChange={(value) => setCmccMediaForm({ ...cmccMediaForm, mediaType: value })} /></div>
+                  <label className="config-field"><span>媒体地址</span><input value={cmccMediaForm.mediaUrl} maxLength={2048} placeholder="https:// 可公网访问的素材地址" onChange={(event) => setCmccMediaForm({ ...cmccMediaForm, mediaUrl: event.target.value, fileBase64: '', fileName: '' })} /></label>
+                  <label className="config-field">
+                    <span>或上传本地文件</span>
+                    <input type="file" onChange={handleCmccFile} />
+                    <small>{cmccMediaForm.fileName ? `已选择 ${cmccMediaForm.fileName}${cmccMediaForm.mimeType ? ` · ${cmccMediaForm.mimeType}` : ''}` : '单文件上限 6MB，上传后由网关返回 mediaUrl'}</small>
+                  </label>
+                  <label className="config-field"><span>文字说明</span><textarea rows={4} maxLength={1024} value={cmccMediaForm.content} placeholder="随媒体一起下发的纯文本说明，可留空" onChange={(event) => setCmccMediaForm({ ...cmccMediaForm, content: event.target.value })} /></label>
+                </div>
+                <button className="btn btn-primary btn-block notify-send-button" type="button" disabled={!canOperate || !cmcc.configured || submitting || (!cmccMediaForm.mediaUrl.trim() && !cmccMediaForm.fileBase64)} onClick={sendCmccMedia}><Upload size={15} />发送富媒体</button>
+                <div className="note-block">
+                  <span>能力与限制</span>
+                  <ul>
+                    <li>网关富媒体帧没有 to 字段，只会投递给最近一次上行会话</li>
+                    <li>当前投递目标：{cmccTargetMasked || '--'}{cmccSessionActive ? '（最近上行发送方）' : '（固定号码，尚未收到上行消息）'}</li>
+                    <li>上传走网关 POST {'{uploadUrl}'}/upload，成功码 10200，返回 data 即 mediaUrl</li>
+                    <li>通道不提供按钮、卡片、菜单与快捷回复，交互只能靠文本指令</li>
+                  </ul>
+                </div>
+              </div>
+            </section>
+
+            <section className="panel panel-flush">
+              <div className="panel-head">
+                <div className="panel-title"><ImageIcon size={15} aria-hidden="true" />最近下发</div>
+                <span className="panel-meta">富媒体记录</span>
+              </div>
+              <div className="data-list">
+                {deliveries.items.filter((item) => ['image', 'audio', 'video', 'file'].includes(item.msgType)).slice(0, 6).map((item) => (
+                  <div className="data-row col-media" key={item.id}>
+                    <span className="cell-stack">
+                      <strong>{typeLabel(item.msgType)} → {targetLabel(item)}</strong>
+                      <small>{formatDateTime(item.startedAt)}</small>
+                    </span>
+                    <DeliveryTag value={item.status} />
+                  </div>
+                ))}
+                {!deliveries.items.some((item) => ['image', 'audio', 'video', 'file'].includes(item.msgType)) && <div className="data-list-empty"><span>暂无富媒体发送记录</span></div>}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {tab === 'cmccCommands' && (
+          <div className="split">
+            <section className="panel">
+              <div className="panel-head">
+                <div className="panel-title"><Terminal size={15} aria-hidden="true" />{cmccCommandForm.key ? '编辑指令规则' : '新建指令规则'}</div>
+                <span className="panel-meta">短信指令</span>
+              </div>
+              <div className="panel-body">
+                <div className="form-stack">
+                  <label className="config-field"><span>规则标识</span><input value={cmccCommandForm.key} maxLength={64} disabled={Boolean(cmccCommands.some((item) => item.key === cmccCommandForm.key))} onChange={(event) => setCmccCommandForm({ ...cmccCommandForm, key: event.target.value })} /></label>
+                  <label className="config-field"><span>指令名称</span><input value={cmccCommandForm.name} maxLength={80} onChange={(event) => setCmccCommandForm({ ...cmccCommandForm, name: event.target.value })} /></label>
+                  <label className="config-field"><span>说明</span><input value={cmccCommandForm.description} maxLength={160} placeholder="会出现在 /help 帮助回复中" onChange={(event) => setCmccCommandForm({ ...cmccCommandForm, description: event.target.value })} /></label>
+                  <div className="config-field"><span>匹配方式</span><SelectControl ariaLabel="指令匹配方式" value={cmccCommandForm.matchType} options={CMCC_COMMAND_MATCH_OPTIONS} onChange={(value) => setCmccCommandForm({ ...cmccCommandForm, matchType: value })} /></div>
+                  <label className="config-field"><span>触发内容</span><input value={cmccCommandForm.pattern} maxLength={160} placeholder="例如 /status 或 查询" onChange={(event) => setCmccCommandForm({ ...cmccCommandForm, pattern: event.target.value })} /></label>
+                  <label className="config-field">
+                    <span>自动回复</span>
+                    <textarea rows={5} maxLength={2048} value={cmccCommandForm.reply} placeholder="支持 {{from}}、{{text}}、{{date}} 占位符" onChange={(event) => setCmccCommandForm({ ...cmccCommandForm, reply: event.target.value })} />
+                    <small>{cmccCommandForm.reply.length} / 2048 字符</small>
+                  </label>
+                  <label className="config-toggle">
+                    <span><strong>启用规则</strong><small>关闭后不参与自动回复匹配</small></span>
+                    <input type="checkbox" checked={cmccCommandForm.enabled} onChange={(event) => setCmccCommandForm({ ...cmccCommandForm, enabled: event.target.checked })} />
+                  </label>
+                </div>
+                <button className="btn btn-primary btn-block notify-send-button" type="button" disabled={!canManageCommands || !cmccCommandForm.key.trim() || !cmccCommandForm.name.trim() || !cmccCommandForm.pattern.trim() || !cmccCommandForm.reply.trim() || submitting} onClick={saveCmccCommand}><Save size={15} />保存指令</button>
+                {!canManageCommands && (
+                  <div className="note-block"><span>权限</span><ul><li>指令规则会触发自动外发，因此仅超级管理员可维护</li></ul></div>
+                )}
+              </div>
+            </section>
+
+            <section className="panel panel-flush">
+              <div className="panel-head">
+                <div className="panel-title"><Terminal size={15} aria-hidden="true" />指令库</div>
+                <span className="panel-meta">{cmccCommands.length} 条规则</span>
+              </div>
+              <div className="data-list">
+                {cmccCommands.length ? cmccCommands.map((command) => (
+                  <div className="data-row col-template" key={command.key}>
+                    <button className="row-pick" type="button" onClick={() => setCmccCommandForm({ ...EMPTY_CMCC_COMMAND_FORM, ...command })}>
+                      <strong>{command.name}</strong>
+                      <small>{command.key} · {cmccMatchTypeLabel(command.matchType)} · {command.pattern}</small>
+                    </button>
+                    <span className={`tag tone-${command.enabled ? 'ok' : 'neutral'}`}>{command.enabled ? '启用' : '停用'}</span>
+                    <button className="icon-action danger" type="button" title="删除指令规则" aria-label={`删除指令规则 ${command.name}`} disabled={!canManageCommands} onClick={() => setPendingAction({ type: 'delete-cmcc-command', command })}><X size={15} /></button>
+                  </div>
+                )) : <div className="data-list-empty"><span>暂无指令规则，未命中规则时手机发送 /help 可获取帮助文本</span></div>}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {tab === 'test' && (
+          <div className="split">
+            <section className="panel">
+              <div className="panel-head">
+                <div className="panel-title"><ShieldCheck size={15} aria-hidden="true" />发送测试通知</div>
+                <span className="panel-meta">单用户验证</span>
+              </div>
+              <div className="panel-body">
+                <div className="form-stack">
+                  <div className="config-field"><span>通知渠道</span><SelectControl ariaLabel="测试通知渠道" value={form.channel} onChange={(value) => setForm({ ...form, channel: value, content: form.content.slice(0, value === 'app' ? 500 : form.msgType === 'markdown' ? 4096 : 2048) })} options={TEST_CHANNEL_OPTIONS} /></div>
+                  {!isAppTest && <div className="config-field"><span>消息类型</span><SelectControl ariaLabel="测试消息类型" value={form.msgType} onChange={(value) => setForm({ ...form, msgType: value, content: form.content.slice(0, value === 'markdown' ? 4096 : 2048) })} options={TYPE_OPTIONS.filter((option) => ['text', 'markdown'].includes(option.value))} /></div>}
+                  {isAppTest
+                    ? (
+                      <>
+                        <div className="config-field"><span>接收用户</span><SelectControl ariaLabel="App 通知接收用户" value={form.appUserId} options={appUserOptions} onChange={(value) => setForm({ ...form, appUserId: value })} /></div>
+                        <label className="config-field"><span>通知标题</span><input value={form.appTitle} maxLength={120} onChange={(event) => setForm({ ...form, appTitle: event.target.value })} /></label>
+                        <div className="config-field"><span>优先级</span><SelectControl ariaLabel="App 通知优先级" value={form.appPriority} onChange={(value) => setForm({ ...form, appPriority: value })} options={APP_PRIORITY_OPTIONS} /></div>
+                      </>
+                    )
+                    : (
+                      <label className="config-field">
+                        <span>企业微信用户 ID</span>
+                        <span className="input-shell"><UserRound size={15} aria-hidden="true" /><input value={form.touser} maxLength={64} autoComplete="off" placeholder="例如 zhangsan" onChange={(event) => setForm({ ...form, touser: event.target.value })} /></span>
+                      </label>
+                    )}
+                  <label className="config-field">
+                    <span>消息内容</span>
+                    <textarea value={form.content} maxLength={contentLimit} rows={8} placeholder="输入测试消息" onChange={(event) => setForm({ ...form, content: event.target.value })} />
+                    <small>{form.content.length} / {contentLimit}</small>
+                  </label>
+                </div>
+                <button className="btn btn-primary btn-block notify-send-button" type="button" disabled={!canSubmitTest} onClick={() => setPendingAction({ type: 'test' })}><Send size={15} />发送测试</button>
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="panel-head">
+                <div className="panel-title">{isAppTest ? <Smartphone size={15} aria-hidden="true" /> : <Send size={15} aria-hidden="true" />}消息预览</div>
+                <span className="panel-meta">{isAppTest ? 'Android App' : '企业微信'}</span>
+              </div>
+              <div className="panel-body">
+                <div className="message-preview">
+                  <span>{isAppTest ? `${priorityLabel(form.appPriority)} · App 收件箱卡片` : form.msgType === 'markdown' ? 'Markdown（仅企业微信）' : '文本消息（兼容微信）'}</span>
+                  {isAppTest && <strong>{form.appTitle.trim() || 'Android App 通知测试'}</strong>}
+                  <pre>{preview}</pre>
+                  <small>发送给 {isAppTest ? form.appUserId.trim() || '未选择平台用户' : form.touser.trim() || '未选择用户'}</small>
+                </div>
+              </div>
+            </section>
+          </div>
+        )}
+
+        {tab === 'jobs' && (
+          <div className="split">
+            <section className="panel">
+              <div className="panel-head">
+                <div className="panel-title"><CalendarClock size={15} aria-hidden="true" />安排通知</div>
+                <span className="panel-meta">编排</span>
+              </div>
+              <div className="panel-body">
+                <div className="form-stack">
+                  <div className="config-field"><span>消息模板</span><SelectControl ariaLabel="消息模板" value={jobForm.templateKey} onChange={(value) => setJobForm({ ...jobForm, templateKey: value })} options={[{ value: '', label: '选择模板' }, ...templates.filter((item) => item.enabled).map((item) => ({ value: item.key, label: item.name }))]} /></div>
+                  <label className="config-field"><span>企业微信用户 ID</span><input value={jobForm.touser} maxLength={64} onChange={(event) => setJobForm({ ...jobForm, touser: event.target.value })} /></label>
+                  <label className="config-field"><span>计划时间</span><input type="datetime-local" value={jobForm.scheduledAt} onChange={(event) => setJobForm({ ...jobForm, scheduledAt: event.target.value })} /></label>
+                  <label className="config-field"><span>去重键</span><input value={jobForm.dedupeKey} maxLength={160} onChange={(event) => setJobForm({ ...jobForm, dedupeKey: event.target.value })} /></label>
+                  <label className="config-field"><span>模板变量 JSON</span><textarea rows={5} value={jobForm.variables} onChange={(event) => setJobForm({ ...jobForm, variables: event.target.value })} /></label>
+                </div>
+                <button className="btn btn-primary btn-block notify-send-button" type="button" disabled={!canOperate || !jobForm.templateKey || !jobForm.touser.trim() || submitting} onClick={scheduleJob}><CalendarClock size={15} />创建任务</button>
+              </div>
+            </section>
+
+            <section className="panel panel-flush">
+              <div className="panel-head">
+                <div className="panel-title"><Activity size={15} aria-hidden="true" />任务队列</div>
+                <span className="panel-meta">{jobs.total || 0} 个任务</span>
+              </div>
+              <div className="data-list">
+                {jobs.items?.length ? jobs.items.map((job) => (
+                  <div className="data-row col-template" key={job.id}>
+                    <span className="cell-stack">
+                      <strong>{job.templateKey || typeLabel(job.msgType)}</strong>
+                      <small>{targetLabel(job)} · {formatDateTime(job.scheduledAt)}</small>
+                    </span>
+                    <span className={`tag tone-${['scheduled', 'retrying', 'queued'].includes(job.status) ? 'info' : job.status === 'failed' ? 'danger' : 'ok'}`}>{job.status}</span>
+                    <button className="icon-action danger" type="button" title="取消任务" aria-label="取消任务" disabled={!canOperate || !['scheduled', 'retrying'].includes(job.status)} onClick={() => setPendingAction({ type: 'cancel-job', job })}><X size={15} /></button>
+                  </div>
+                )) : <div className="data-list-empty"><span>暂无计划任务</span></div>}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {tab === 'templates' && (
+          <div className="split">
+            <section className="panel">
+              <div className="panel-head">
+                <div className="panel-title"><FileText size={15} aria-hidden="true" />编辑消息模板</div>
+                <span className="panel-meta">模板</span>
+              </div>
+              <div className="panel-body">
+                <div className="form-stack">
+                  <label className="config-field"><span>模板标识</span><input value={templateForm.key} maxLength={80} disabled={Boolean(templates.some((item) => item.key === templateForm.key))} onChange={(event) => setTemplateForm({ ...templateForm, key: event.target.value })} /></label>
+                  <label className="config-field"><span>显示名称</span><input value={templateForm.name} maxLength={100} onChange={(event) => setTemplateForm({ ...templateForm, name: event.target.value })} /></label>
+                  <div className="config-field"><span>消息类型</span><SelectControl ariaLabel="模板消息类型" value={templateForm.msgType} onChange={(value) => setTemplateForm({ ...templateForm, msgType: value })} options={TYPE_OPTIONS.filter((item) => ['text', 'markdown'].includes(item.value))} /></div>
+                  <label className="config-field"><span>内容</span><textarea rows={8} value={templateForm.content} maxLength={4096} onChange={(event) => setTemplateForm({ ...templateForm, content: event.target.value })} /></label>
+                  <label className="config-toggle">
+                    <span><strong>启用模板</strong><small>停用后不可用于计划任务</small></span>
+                    <input type="checkbox" checked={templateForm.enabled} onChange={(event) => setTemplateForm({ ...templateForm, enabled: event.target.checked })} />
+                  </label>
+                </div>
+                <button className="btn btn-primary btn-block notify-send-button" type="button" disabled={session.user?.role !== 'super_admin' || !templateForm.key.trim() || !templateForm.name.trim() || !templateForm.content.trim() || submitting} onClick={saveTemplate}><Save size={15} />保存模板</button>
+              </div>
+            </section>
+
+            <section className="panel panel-flush">
+              <div className="panel-head">
+                <div className="panel-title"><FileText size={15} aria-hidden="true" />模板库</div>
+                <span className="panel-meta">{templates.length} 个模板</span>
+              </div>
+              <div className="data-list">
+                {templates.length ? templates.map((template) => (
+                  <div className="data-row col-template" key={template.key}>
+                    <button className="row-pick" type="button" onClick={() => setTemplateForm({ ...template })}>
+                      <strong>{template.name}</strong>
+                      <small>{template.key} · {typeLabel(template.msgType)}</small>
+                    </button>
+                    <span className={`tag tone-${template.enabled ? 'ok' : 'neutral'}`}>{template.enabled ? '启用' : '停用'}</span>
+                    <button className="icon-action danger" type="button" title="删除模板" aria-label={`删除模板 ${template.name}`} disabled={session.user?.role !== 'super_admin'} onClick={() => setPendingAction({ type: 'delete-template', template })}><X size={15} /></button>
+                  </div>
+                )) : <div className="data-list-empty"><span>暂无模板</span></div>}
+              </div>
+            </section>
+          </div>
+        )}
+
+        {tab === 'preferences' && (
+          <section className="panel">
+            <div className="panel-head">
+              <div className="panel-title"><UserRound size={15} aria-hidden="true" />接收偏好与免打扰</div>
+              <span className="panel-meta">用户策略</span>
+            </div>
+            <div className="panel-body">
+              <div className="preference-form">
+                <label className="config-field"><span>平台用户 ID</span><input value={preferenceForm.targetId} maxLength={64} onChange={(event) => setPreferenceForm({ ...preferenceForm, targetId: event.target.value })} /></label>
+                <button className="btn btn-secondary" type="button" disabled={!canOperate || !preferenceForm.targetId.trim()} onClick={loadPreference}>读取</button>
+                <label className="config-toggle">
+                  <span><strong>允许接收</strong><small>关闭后不再下发任何通知</small></span>
+                  <input type="checkbox" checked={preferenceForm.enabled} onChange={(event) => setPreferenceForm({ ...preferenceForm, enabled: event.target.checked })} />
+                </label>
+                <label className="config-field"><span>免打扰开始</span><input type="time" value={preferenceForm.quietStart} onChange={(event) => setPreferenceForm({ ...preferenceForm, quietStart: event.target.value })} /></label>
+                <label className="config-field"><span>免打扰结束</span><input type="time" value={preferenceForm.quietEnd} onChange={(event) => setPreferenceForm({ ...preferenceForm, quietEnd: event.target.value })} /></label>
+                <button className="btn btn-primary" type="button" disabled={!canOperate || !preferenceForm.targetId.trim() || submitting} onClick={savePreference}><Save size={15} />保存偏好</button>
+              </div>
             </div>
           </section>
+        )}
+
+        {tab === 'api' && <NotificationApiAccess session={session} onError={setError} onMessage={setMessage} />}
+
         </div>
-      )}
-      {tab === 'test' && (
-        <div className="notify-test-layout">
-          <section className="ops-panel notify-test-form">
-            <header><div><span>单用户验证</span><h3>发送测试通知</h3></div><ShieldCheck size={20} /></header>
-            <label><span>通知渠道</span><SelectControl ariaLabel="测试通知渠道" value={form.channel} onChange={(value) => setForm({ ...form, channel: value, content: form.content.slice(0, value === 'app' ? 500 : form.msgType === 'markdown' ? 4096 : 2048) })} options={TEST_CHANNEL_OPTIONS} /></label>
-            {!isAppTest && <label><span>消息类型</span><SelectControl ariaLabel="测试消息类型" value={form.msgType} onChange={(value) => setForm({ ...form, msgType: value, content: form.content.slice(0, value === 'markdown' ? 4096 : 2048) })} options={TYPE_OPTIONS.filter((option) => ['text', 'markdown'].includes(option.value))} /></label>}
-            {isAppTest
-              ? (
-                <>
-                  <label><span>接收用户</span><SelectControl ariaLabel="App 通知接收用户" value={form.appUserId} options={appUserOptions} onChange={(value) => setForm({ ...form, appUserId: value })} /></label>
-                  <label><span>通知标题</span><input value={form.appTitle} maxLength={120} onChange={(event) => setForm({ ...form, appTitle: event.target.value })} /></label>
-                  <label><span>优先级</span><SelectControl ariaLabel="App 通知优先级" value={form.appPriority} onChange={(value) => setForm({ ...form, appPriority: value })} options={APP_PRIORITY_OPTIONS} /></label>
-                </>
-              )
-              : <label><span>企业微信用户 ID</span><div className="notify-input-wrap"><UserRound size={17} /><input value={form.touser} maxLength={64} autoComplete="off" placeholder="例如 zhangsan" onChange={(event) => setForm({ ...form, touser: event.target.value })} /></div></label>}
-            <label><span>消息内容</span><textarea value={form.content} maxLength={contentLimit} rows={9} placeholder="输入测试消息" onChange={(event) => setForm({ ...form, content: event.target.value })} /><small>{form.content.length} / {contentLimit}</small></label>
-            <button className="primary-button notify-send-button" type="button" disabled={!canSubmitTest} onClick={() => setPendingAction({ type: 'test' })}><Send size={17} />发送测试</button>
-          </section>
-          <section className="ops-panel notify-preview-panel">
-            <header><div><span>{isAppTest ? 'Android App' : '企业微信'}</span><h3>消息预览</h3></div>{isAppTest ? <Smartphone size={20} /> : <Send size={20} />}</header>
-            <div className="notify-message-preview">
-              <span>{isAppTest ? `${priorityLabel(form.appPriority)} · App 收件箱卡片` : form.msgType === 'markdown' ? 'Markdown（仅企业微信）' : '文本消息（兼容微信）'}</span>
-              {isAppTest && <strong>{form.appTitle.trim() || 'Android App 通知测试'}</strong>}
-              <pre>{preview}</pre>
-              <small>发送给 {isAppTest ? form.appUserId.trim() || '未选择平台用户' : form.touser.trim() || '未选择用户'}</small>
-            </div>
-          </section>
-        </div>
-      )}
-
-      {tab === 'jobs' && (
-        <div className="notify-orchestration-layout">
-          <section className="ops-panel notify-test-form">
-            <header><div><span>编排</span><h3>安排通知</h3></div><CalendarClock size={20} /></header>
-            <label><span>消息模板</span><SelectControl ariaLabel="消息模板" value={jobForm.templateKey} onChange={(value) => setJobForm({ ...jobForm, templateKey: value })} options={[{ value: '', label: '选择模板' }, ...templates.filter((item) => item.enabled).map((item) => ({ value: item.key, label: item.name }))]} /></label>
-            <label><span>企业微信用户 ID</span><input value={jobForm.touser} maxLength={64} onChange={(event) => setJobForm({ ...jobForm, touser: event.target.value })} /></label>
-            <label><span>计划时间</span><input type="datetime-local" value={jobForm.scheduledAt} onChange={(event) => setJobForm({ ...jobForm, scheduledAt: event.target.value })} /></label>
-            <label><span>去重键</span><input value={jobForm.dedupeKey} maxLength={160} onChange={(event) => setJobForm({ ...jobForm, dedupeKey: event.target.value })} /></label>
-            <label><span>模板变量 JSON</span><textarea rows={5} value={jobForm.variables} onChange={(event) => setJobForm({ ...jobForm, variables: event.target.value })} /></label>
-            <button className="primary-button" type="button" disabled={!canOperate || !jobForm.templateKey || !jobForm.touser.trim() || submitting} onClick={scheduleJob}><CalendarClock size={17} />创建任务</button>
-          </section>
-          <section className="ops-panel notify-jobs-panel">
-            <header><div><span>任务队列</span><h3>{jobs.total || 0} 个任务</h3></div><Activity size={20} /></header>
-            <div className="notify-template-list">{jobs.items?.length ? jobs.items.map((job) => <div key={job.id} className="notify-template-row"><div><strong>{job.templateKey || typeLabel(job.msgType)}</strong><small>{targetLabel(job)} · {formatDateTime(job.scheduledAt)}</small></div><span className={`notify-state notify-state-${job.status}`}>{job.status}</span><button className="icon-button" type="button" title="取消任务" disabled={!canOperate || !['scheduled', 'retrying'].includes(job.status)} onClick={() => setPendingAction({ type: 'cancel-job', job })}><X size={16} /></button></div>) : <div className="ops-empty">暂无计划任务</div>}</div>
-          </section>
-        </div>
-      )}
-
-      {tab === 'templates' && (
-        <div className="notify-orchestration-layout">
-          <section className="ops-panel notify-test-form">
-            <header><div><span>模板</span><h3>编辑消息模板</h3></div><FileText size={20} /></header>
-            <label><span>模板标识</span><input value={templateForm.key} maxLength={80} disabled={Boolean(templates.some((item) => item.key === templateForm.key))} onChange={(event) => setTemplateForm({ ...templateForm, key: event.target.value })} /></label>
-            <label><span>显示名称</span><input value={templateForm.name} maxLength={100} onChange={(event) => setTemplateForm({ ...templateForm, name: event.target.value })} /></label>
-            <label><span>消息类型</span><SelectControl ariaLabel="模板消息类型" value={templateForm.msgType} onChange={(value) => setTemplateForm({ ...templateForm, msgType: value })} options={TYPE_OPTIONS.filter((item) => ['text', 'markdown'].includes(item.value))} /></label>
-            <label><span>内容</span><textarea rows={8} value={templateForm.content} maxLength={4096} onChange={(event) => setTemplateForm({ ...templateForm, content: event.target.value })} /></label>
-            <label className="notify-inline-check"><input type="checkbox" checked={templateForm.enabled} onChange={(event) => setTemplateForm({ ...templateForm, enabled: event.target.checked })} /><span>启用模板</span></label>
-            <button className="primary-button" type="button" disabled={session.user?.role !== 'super_admin' || !templateForm.key.trim() || !templateForm.name.trim() || !templateForm.content.trim() || submitting} onClick={saveTemplate}><Save size={17} />保存模板</button>
-          </section>
-          <section className="ops-panel notify-jobs-panel">
-            <header><div><span>模板库</span><h3>{templates.length} 个模板</h3></div><FileText size={20} /></header>
-            <div className="notify-template-list">{templates.length ? templates.map((template) => <div key={template.key} className="notify-template-row"><button type="button" onClick={() => setTemplateForm({ ...template })}><strong>{template.name}</strong><small>{template.key} · {typeLabel(template.msgType)}</small></button><span>{template.enabled ? '启用' : '停用'}</span><button className="icon-button" type="button" title="删除模板" disabled={session.user?.role !== 'super_admin'} onClick={() => setPendingAction({ type: 'delete-template', template })}><X size={16} /></button></div>) : <div className="ops-empty">暂无模板</div>}</div>
-          </section>
-        </div>
-      )}
-
-      {tab === 'preferences' && (
-        <section className="ops-panel notify-preference-panel">
-          <header><div><span>用户策略</span><h3>接收偏好与免打扰</h3></div><UserRound size={20} /></header>
-          <div className="notify-preference-form"><label><span>平台用户 ID</span><input value={preferenceForm.targetId} maxLength={64} onChange={(event) => setPreferenceForm({ ...preferenceForm, targetId: event.target.value })} /></label><button className="secondary-action" type="button" disabled={!canOperate || !preferenceForm.targetId.trim()} onClick={loadPreference}>读取</button><label className="notify-inline-check"><input type="checkbox" checked={preferenceForm.enabled} onChange={(event) => setPreferenceForm({ ...preferenceForm, enabled: event.target.checked })} /><span>允许接收</span></label><label><span>免打扰开始</span><input type="time" value={preferenceForm.quietStart} onChange={(event) => setPreferenceForm({ ...preferenceForm, quietStart: event.target.value })} /></label><label><span>免打扰结束</span><input type="time" value={preferenceForm.quietEnd} onChange={(event) => setPreferenceForm({ ...preferenceForm, quietEnd: event.target.value })} /></label><button className="primary-button" type="button" disabled={!canOperate || !preferenceForm.targetId.trim() || submitting} onClick={savePreference}><Save size={17} />保存偏好</button></div>
-        </section>
-      )}
-
-      {tab === 'api' && <NotificationApiAccess session={session} onError={setError} onMessage={setMessage} />}
-
       </div>
       <ConfirmDialog
         open={Boolean(pendingAction)}

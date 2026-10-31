@@ -571,8 +571,12 @@
 .ops-segmented button {
   position: relative;
   z-index: 1;
+  display: inline-flex;
   height: 26px;
   min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   padding: 0 11px;
   border: 0;
   border-radius: 7px;
