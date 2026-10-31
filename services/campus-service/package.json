@@ -28,7 +28,7 @@
     "@my-platform/platform-auth": "file:../../packages/platform-auth",
     "bwip-js": "^4.11.2",
     "cheerio": "^1.2.0",
-    "mongodb": "^7.5.0",
+    "mongodb": "^7.7.0",
     "qrcode": "^1.5.4",
     "sm-crypto": "^0.5.3"
   },
