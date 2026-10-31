@@ -2393,3 +2393,201 @@ a.data-row:hover .capability-open {
   }
 
 }
+
+/* ── 待办任务：统一任务列表 ───────────────────────────────────── */
+.col-task {
+  grid-template-columns: minmax(0, 1.6fr) 104px 108px 118px 40px;
+}
+
+/* ── 连接检查：链路结果与系统自检 ─────────────────────────────── */
+.trace-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.trace-record {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-solid);
+}
+
+.trace-record > header {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.trace-record > header > div {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.trace-record > header strong {
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.trace-id {
+  min-width: 0;
+  padding: 1px 5px;
+  overflow-wrap: anywhere;
+  border-radius: 5px;
+  color: var(--ink-muted);
+  background: rgba(var(--shade), 0.06);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+:root[data-theme="dark"] .trace-id {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.trace-stages {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 11px;
+}
+
+.trace-stage {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.trace-stage > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.trace-stage strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 640;
+}
+
+.trace-stage small {
+  color: var(--ink-soft);
+  font-size: 10.5px;
+}
+
+.trace-stage > i {
+  position: absolute;
+  top: 9px;
+  right: -10px;
+  width: 8px;
+  border-top: 1px solid var(--line-strong);
+}
+
+.stage-marker {
+  display: inline-flex;
+  flex: none;
+  color: var(--leaf-text);
+}
+
+.trace-stage.is-failed .stage-marker {
+  color: var(--red-text);
+}
+
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.check-card {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid rgba(92, 148, 26, 0.2);
+  border-radius: var(--r-sm);
+  color: var(--leaf-text);
+  background: var(--lime-soft);
+}
+
+.check-card > span {
+  display: inline-flex;
+  flex: none;
+}
+
+.check-card > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.check-card strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 640;
+}
+
+.check-card small {
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.check-card.is-failed {
+  border-color: rgba(198, 62, 62, 0.24);
+  color: var(--red-text);
+  background: var(--red-soft);
+}
+
+.check-card.is-skipped {
+  border-color: var(--line);
+  color: var(--ink-soft);
+  background: var(--groove-bg);
+}
+
+@media (max-width: 980px) {
+  .col-task {
+    grid-template-columns: minmax(0, 1.4fr) 96px 108px 36px;
+  }
+
+  .col-task > :nth-child(3) {
+    display: none;
+  }
+
+  .trace-stages {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .trace-stage > i {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .col-task {
+    grid-template-columns: minmax(0, 1fr) 88px 32px;
+  }
+
+  .col-task > :nth-child(3),
+  .col-task > :nth-child(4) {
+    display: none;
+  }
+
+  .trace-record > header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

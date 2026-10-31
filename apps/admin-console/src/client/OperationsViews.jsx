@@ -418,7 +418,7 @@ export function IncidentsView({ session, targetEntityId = '', onNavigate }) {
         <div className="stat-card"><span className="stat-icon tone-ok"><CheckCircle2 size={17} /></span><div><span className="panel-meta">已恢复</span><strong className="stat-figure">{incidents.filter((item) => item.status === 'resolved').length}</strong><small className="panel-meta">自动或手动关闭</small></div></div>
       </div>
       <div className="split">
-        <section className="panel panel-flush incident-list-panel">
+        <section className="panel panel-flush">
           <div className="panel-head">
             <div className="panel-title"><BellRing size={15} />事件列表</div>
             <span className="panel-meta">{incidents.length} 条记录</span>
@@ -442,7 +442,7 @@ export function IncidentsView({ session, targetEntityId = '', onNavigate }) {
             </div>
           ) : <EmptyState title="当前没有事件" detail="所有服务状态都在预期范围内" />}
         </section>
-        <aside className="panel split-side incident-detail-panel">
+        <aside className="panel split-side">
           {selected ? (
             <>
               <div className="detail-head">

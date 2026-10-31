@@ -43,20 +43,20 @@ function formatDateTime(value) {
 function Feedback({ message, error }) {
   if (!message && !error) return null;
   return (
-    <div className={`ops-feedback ${error ? 'error' : ''}`} role={error ? 'alert' : 'status'}>
-      {error ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}
+    <div className={`alert ${error ? 'is-error' : 'is-ok'}`} role={error ? 'alert' : 'status'}>
+      {error ? <AlertTriangle size={15} /> : <CheckCircle2 size={15} />}
       <span>{error || message}</span>
     </div>
   );
 }
 
 const TASK_STATUS = {
-  pending: { label: '等待执行', className: 'pending', icon: Clock3 },
-  running: { label: '执行中', className: 'running', icon: LoaderCircle },
-  succeeded: { label: '已完成', className: 'succeeded', icon: CheckCircle2 },
-  failed: { label: '失败', className: 'failed', icon: XCircle },
-  cancelled: { label: '已取消', className: 'cancelled', icon: XCircle },
-  action_required: { label: '需要处理', className: 'attention', icon: AlertTriangle },
+  pending: { label: '等待执行', tone: '', icon: Clock3 },
+  running: { label: '执行中', tone: 'info', icon: LoaderCircle },
+  succeeded: { label: '已完成', tone: 'ok', icon: CheckCircle2 },
+  failed: { label: '失败', tone: 'danger', icon: XCircle },
+  cancelled: { label: '已取消', tone: '', icon: XCircle },
+  action_required: { label: '需要处理', tone: 'warn', icon: AlertTriangle },
 };
 
 const TASK_SOURCE = {
@@ -116,15 +116,9 @@ export function TaskCenterView({ onNavigate, targetEntityId = '' }) {
   const attentionCount = (counts.failed || 0) + (counts.action_required || 0);
 
   return (
-    <section className="platform-control-view task-center-view">
+    <section className="page-view view-stack" aria-label="待办任务">
       <Feedback error={error} />
-      <div className="control-kpis" aria-label="任务统计">
-        <article><FileClock size={19} /><span>任务总数<strong>{data?.tasks?.length || 0}</strong></span></article>
-        <article><Activity size={19} /><span>正在处理<strong>{activeCount}</strong></span></article>
-        <article className={attentionCount ? 'attention' : ''}><AlertTriangle size={19} /><span>需要关注<strong>{attentionCount}</strong></span></article>
-        <article><CheckCircle2 size={19} /><span>已完成<strong>{counts.succeeded || 0}</strong></span></article>
-      </div>
-      <div className="control-toolbar">
+      <div className="toolbar">
         <SelectControl
           value={statusFilter}
           ariaLabel="按任务状态筛选"
@@ -143,40 +137,56 @@ export function TaskCenterView({ onNavigate, targetEntityId = '' }) {
             ...Object.entries(TASK_SOURCE).map(([value, label]) => ({ value, label })),
           ]}
         />
-        <span>{tasks.length} 条结果 · {formatDateTime(data?.generatedAt)}</span>
-        <button className="secondary-action compact" type="button" disabled={refreshing} onClick={() => load(true)}>
-          <RefreshCw className={refreshing ? 'spin' : ''} size={16} />刷新
-        </button>
+        <div className="toolbar-end">
+          <span className="toolbar-hint">{tasks.length} 条结果 · {formatDateTime(data?.generatedAt)}</span>
+          <button className="btn btn-secondary btn-sm" type="button" disabled={refreshing} onClick={() => load(true)}>
+            <RefreshCw className={refreshing ? 'spin' : ''} size={15} />刷新
+          </button>
+        </div>
       </div>
-      {loading ? (
-        <div className="ops-loading"><LoaderCircle className="spin" size={18} />正在聚合任务...</div>
-      ) : tasks.length === 0 ? (
-        <div className="ops-empty">当前筛选条件下没有任务。</div>
-      ) : (
-        <div className="control-table" role="table" aria-label="统一任务列表">
-          <div className="control-table-head" role="row">
-            <span>任务</span><span>状态</span><span>发起人</span><span>更新时间</span><span aria-label="操作" />
-          </div>
+      <div className="stat-strip">
+        <div className="stat-card"><span className="stat-icon tone-info"><FileClock size={17} /></span><div><span className="panel-meta">任务总数</span><strong className="stat-figure">{data?.tasks?.length || 0}</strong><small className="panel-meta">跨服务聚合</small></div></div>
+        <div className="stat-card"><span className="stat-icon tone-violet"><Activity size={17} /></span><div><span className="panel-meta">正在处理</span><strong className="stat-figure">{activeCount}</strong><small className="panel-meta">等待或执行中</small></div></div>
+        <div className="stat-card"><span className="stat-icon tone-warn"><AlertTriangle size={17} /></span><div><span className="panel-meta">需要关注</span><strong className="stat-figure">{attentionCount}</strong><small className="panel-meta">失败或需人工介入</small></div></div>
+        <div className="stat-card"><span className="stat-icon tone-ok"><CheckCircle2 size={17} /></span><div><span className="panel-meta">已完成</span><strong className="stat-figure">{counts.succeeded || 0}</strong><small className="panel-meta">最近一次成功</small></div></div>
+      </div>
+      <section className="panel panel-flush">
+        <div className="panel-head">
+          <div className="panel-title"><FileClock size={15} />统一任务列表</div>
+          <span className="panel-meta">{tasks.length} 条</span>
+        </div>
+        <div className="data-list">
+          <div className="data-head col-task"><span>任务</span><span>状态</span><span>发起人</span><span>更新时间</span><span /></div>
+          {loading && !data && <div className="data-list-empty"><LoaderCircle className="spin" size={16} /> 正在聚合任务…</div>}
           {tasks.map((task) => {
             const meta = TASK_STATUS[task.status] || TASK_STATUS.pending;
             const StatusIcon = meta.icon;
+            const targeted = task.sourceId === targetEntityId || task.id === targetEntityId;
             return (
-              <div className={`control-table-row task-row ${(task.sourceId === targetEntityId || task.id === targetEntityId) ? 'targeted-entity' : ''}`} data-task-entity-id={task.sourceId || task.id} role="row" key={task.id}>
-                <div><strong>{task.title}</strong><small>{TASK_SOURCE[task.source] || task.source}{task.detail ? ` · ${task.detail}` : ''}</small></div>
-                <span className={`control-status ${meta.className}`}><StatusIcon className={task.status === 'running' ? 'spin' : ''} size={14} />{meta.label}</span>
-                <span>{task.requestedBy || '--'}</span>
-                <time dateTime={task.updatedAt || undefined}>{formatDateTime(task.updatedAt)}</time>
-                <button type="button" className="icon-action" title="打开关联模块" aria-label={`打开${task.title}`} onClick={() => onNavigate(task.view, { entity: task.sourceId || task.id })}><ArrowRight size={17} /></button>
+              <div className={`data-row col-task${targeted ? ' is-targeted' : ''}`} data-task-entity-id={task.sourceId || task.id} role="row" key={task.id}>
+                <span className="cell-stack"><strong>{task.title}</strong><small>{TASK_SOURCE[task.source] || task.source}{task.detail ? ` · ${task.detail}` : ''}</small></span>
+                <span><span className={`tag${meta.tone ? ` tone-${meta.tone}` : ''}`}><StatusIcon className={task.status === 'running' ? 'spin' : ''} size={13} />{meta.label}</span></span>
+                <span className="cell-soft">{task.requestedBy || '--'}</span>
+                <span className="cell-mono">{formatDateTime(task.updatedAt)}</span>
+                <span className="row-actions">
+                  <button type="button" className="icon-action" title="打开关联模块" aria-label={`打开${task.title}`} onClick={() => onNavigate(task.view, { entity: task.sourceId || task.id })}><ArrowRight size={16} /></button>
+                </span>
               </div>
             );
           })}
+          {!loading && tasks.length === 0 && <div className="data-list-empty"><EmptyState title="当前筛选条件下没有任务" detail="调整筛选条件，或等待后台任务产生" /></div>}
         </div>
-      )}
-      <div className="source-health" aria-label="任务数据源状态">
-        {(data?.sources || []).map((source) => (
-          <span key={source.id} className={source.available ? 'available' : 'unavailable'}><i />{TASK_SOURCE[source.id] || (source.id === 'release' ? '发布中心' : source.id)}</span>
-        ))}
-      </div>
+        {(data?.sources || []).length > 0 && (
+          <div className="table-foot">
+            <span className="panel-meta">数据源</span>
+            <div className="inline-actions">
+              {(data?.sources || []).map((source) => (
+                <span key={source.id} className={`tag ${source.available ? 'tone-ok' : 'tone-danger'}`}><i className="tag-dot" />{TASK_SOURCE[source.id] || (source.id === 'release' ? '发布中心' : source.id)}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
     </section>
   );
 }
@@ -388,7 +398,7 @@ export function ConfigurationView({ session, targetEntityId = '', services = [] 
             <span>变更摘要</span>
             <textarea maxLength={200} required value={summary} disabled={!canPropose || busy} placeholder="说明修改目的、影响与观察项" onChange={(event) => setSummary(event.target.value)} />
           </label>
-          <button className="primary-button" type="submit" disabled={!canPropose || busy || !summary.trim()}><GitPullRequest size={16} />提交审批</button>
+          <button className="btn btn-primary" type="submit" disabled={!canPropose || busy || !summary.trim()}><GitPullRequest size={16} />提交审批</button>
         </div>
       </form>
 
@@ -464,12 +474,12 @@ export function ConfigurationView({ session, targetEntityId = '', services = [] 
 }
 
 const DIAGNOSIS_META = {
-  end_to_end_healthy: { label: '端到端正常', className: 'healthy' },
-  service_reachable: { label: '服务可达', className: 'healthy' },
-  gateway_or_public_route_failure: { label: '公网网关或路由异常', className: 'failed' },
-  monitor_route_mismatch: { label: '监控路由不一致', className: 'attention' },
-  service_or_dependency_failure: { label: '服务或依赖异常', className: 'failed' },
-  service_unavailable: { label: '服务不可用', className: 'failed' },
+  end_to_end_healthy: { label: '端到端正常', tone: 'ok' },
+  service_reachable: { label: '服务可达', tone: 'ok' },
+  gateway_or_public_route_failure: { label: '公网网关或路由异常', tone: 'danger' },
+  monitor_route_mismatch: { label: '监控路由不一致', tone: 'warn' },
+  service_or_dependency_failure: { label: '服务或依赖异常', tone: 'danger' },
+  service_unavailable: { label: '服务不可用', tone: 'danger' },
 };
 
 export function DiagnosticsView({ services, session, targetEntityId = '' }) {
@@ -503,7 +513,7 @@ export function DiagnosticsView({ services, session, targetEntityId = '' }) {
   }
 
   return (
-    <section className="platform-control-view diagnostics-view">
+    <section className="page-view view-stack" aria-label="连接检查">
       <Feedback error={error} />
       <section className="panel">
         <div className="panel-head">
@@ -526,33 +536,55 @@ export function DiagnosticsView({ services, session, targetEntityId = '' }) {
       )}
 
       {traceResult && (
-        <section className="trace-results">
-          <div className="section-bar"><div><h3>链路结果</h3><span>{traceResult.summary.healthy}/{traceResult.summary.total} 条链路正常 · {formatDateTime(traceResult.finishedAt)}</span></div></div>
-          {traceResult.traces.map((trace) => {
-            const diagnosis = DIAGNOSIS_META[trace.diagnosis] || { label: trace.diagnosis, className: 'attention' };
-            return (
-              <article className="trace-record" key={trace.requestId}>
-                <header><div><strong>{trace.serviceName}</strong><code>{trace.requestId}</code></div><span className={`control-status ${diagnosis.className}`}>{diagnosis.label}</span></header>
-                <div className="trace-stages">
-                  {trace.stages.map((stage, index) => (
-                    <div className={`trace-stage ${stage.state}`} key={stage.id}>
-                      <span className="stage-marker">{stage.state === 'passed' ? <CheckCircle2 size={16} /> : <XCircle size={16} />}</span>
-                      <div><strong>{stage.label}</strong><small>{stage.httpStatus ? `HTTP ${stage.httpStatus} · ` : ''}{stage.latencyMs} ms{stage.error ? ` · ${stage.error}` : ''}</small>{stage.requestId && <code>{stage.requestId}</code>}</div>
-                      {index < trace.stages.length - 1 && <i aria-hidden="true" />}
-                    </div>
-                  ))}
-                </div>
-              </article>
-            );
-          })}
+        <section className="panel">
+          <div className="panel-head">
+            <div className="panel-title"><Activity size={15} />链路结果</div>
+            <span className="panel-meta">{traceResult.summary.healthy}/{traceResult.summary.total} 条链路正常 · {formatDateTime(traceResult.finishedAt)}</span>
+          </div>
+          <div className="panel-body trace-body">
+            {traceResult.traces.map((trace) => {
+              const diagnosis = DIAGNOSIS_META[trace.diagnosis] || { label: trace.diagnosis, tone: 'warn' };
+              return (
+                <article className="trace-record" key={trace.requestId}>
+                  <header>
+                    <div><strong>{trace.serviceName}</strong><code className="trace-id">{trace.requestId}</code></div>
+                    <span className={`tag tone-${diagnosis.tone}`}>{diagnosis.label}</span>
+                  </header>
+                  <div className="trace-stages">
+                    {trace.stages.map((stage, index) => (
+                      <div className={`trace-stage is-${stage.state}`} key={stage.id}>
+                        <span className="stage-marker">{stage.state === 'passed' ? <CheckCircle2 size={16} /> : <XCircle size={16} />}</span>
+                        <div>
+                          <strong>{stage.label}</strong>
+                          <small>{stage.httpStatus ? `HTTP ${stage.httpStatus} · ` : ''}{stage.latencyMs} ms{stage.error ? ` · ${stage.error}` : ''}</small>
+                          {stage.requestId && <code className="trace-id">{stage.requestId}</code>}
+                        </div>
+                        {index < trace.stages.length - 1 && <i aria-hidden="true" />}
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         </section>
       )}
 
       {systemResult && (
-        <section className="system-check-results">
-          <div className="section-bar"><div><h3>系统自检</h3><span>{formatDateTime(systemResult.checkedAt || systemResult.generatedAt)}</span></div></div>
-          <div className="system-check-grid">
-            {(systemResult.checks || []).map((check) => <div key={check.id} className={check.status}><span>{check.status === 'passed' ? <CheckCircle2 size={17} /> : check.status === 'skipped' ? <Clock3 size={17} /> : <XCircle size={17} />}</span><div><strong>{check.label || check.id}</strong><small>{check.message || check.detail || check.status}</small></div></div>)}
+        <section className="panel">
+          <div className="panel-head">
+            <div className="panel-title"><ShieldCheck size={15} />系统自检</div>
+            <span className="panel-meta">{formatDateTime(systemResult.checkedAt || systemResult.generatedAt)}</span>
+          </div>
+          <div className="panel-body">
+            <div className="check-grid">
+              {(systemResult.checks || []).map((check) => (
+                <div key={check.id} className={`check-card is-${check.status}`}>
+                  <span>{check.status === 'passed' ? <CheckCircle2 size={17} /> : check.status === 'skipped' ? <Clock3 size={17} /> : <XCircle size={17} />}</span>
+                  <div><strong>{check.label || check.id}</strong><small>{check.message || check.detail || check.status}</small></div>
+                </div>
+              ))}
+            </div>
           </div>
         </section>
       )}
