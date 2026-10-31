@@ -57,6 +57,11 @@ const STATE_SHORT = {
 const INCIDENT_LABELS = { open: '待处理', acknowledged: '已确认', resolved: '已恢复' };
 const ROLE_LABELS = { viewer: '只读管理员', operator: '运维管理员', super_admin: '超级管理员' };
 const RELEASE_TONE = { success: 'ok', failure: 'danger', queued: 'info', running: 'info', unknown: 'neutral' };
+const SERVICE_BINDINGS = [
+  { id: 'core', label: 'Core 业务账号', short: 'Core' },
+  { id: 'exam', label: '考试业务账号', short: '考试' },
+  { id: 'campus', label: '校园业务账号', short: '校园' },
+];
 const BACKUP_STORAGE_PROVIDERS = [
   { value: 'r2', label: 'Cloudflare R2' },
   { value: 'aws-s3', label: 'AWS S3' },
@@ -155,6 +160,10 @@ function shortValue(value, length = 12) {
 
 function roleAtLeast(role, required) {
   return ({ viewer: 1, operator: 2, super_admin: 3 }[role] || 0) >= ({ viewer: 1, operator: 2, super_admin: 3 }[required] || 0);
+}
+
+function serviceShortLabel(service) {
+  return SERVICE_BINDINGS.find((item) => item.id === service)?.short || service;
 }
 
 function Feedback({ error, message }) {
@@ -949,6 +958,8 @@ export function SecurityAuditView({ session, onLogout }) {
   const totpEnabled = Boolean(sessionData?.security?.totpEnabled);
   const sensitiveReady = Boolean(reauthenticatedUntil) || Boolean(credentials.password && (!totpEnabled || credentials.totp.length === 6));
   const failures = events.filter((event) => event.outcome === 'failure').length;
+  const sessions = sessionData?.sessions || [];
+  const canRevokeSession = (item) => canManageAccounts || item.subject === session.user?.username;
   return (
     <section className="page-view view-stack" aria-label="账号与安全">
       <div className="toolbar">
@@ -959,15 +970,16 @@ export function SecurityAuditView({ session, onLogout }) {
       </div>
       <Feedback error={error} message={message} />
       {(tab === 'authenticators' || tab === 'accounts') && passkeys.length > 0 && (
-        <div className="toolbar">
-          <button className="btn btn-secondary btn-sm" type="button" disabled={submitting} onClick={reauthenticateWithPasskey}><Fingerprint size={15} />使用 Passkey 确认身份</button>
-          {reauthenticatedUntil > 0 && <span className="toolbar-hint" role="status">身份已确认，当前密码和动态验证码可留空</span>}
+        <div className="alert is-info">
+          <Fingerprint size={15} />
+          <span>{reauthenticatedUntil > 0 ? '身份已确认，五分钟内可执行账号安全操作，当前密码和动态验证码可留空。' : `已添加 ${passkeys.length} 个设备快捷登录，可用 Passkey 代替密码与动态验证码确认身份。`}</span>
+          <button className="btn btn-secondary btn-sm" type="button" disabled={submitting} onClick={reauthenticateWithPasskey}><Fingerprint size={14} />用 Passkey 确认身份</button>
         </div>
       )}
       <div className="stat-strip">
-        <div className="stat-card"><span className="stat-icon tone-info"><ShieldCheck size={17} /></span><div><span className="panel-meta">当前账号</span><strong className="stat-figure">{session.user?.username || 'admin'}</strong><small className="panel-meta">个人管理员</small></div></div>
+        <div className="stat-card"><span className="stat-icon tone-info"><ShieldCheck size={17} /></span><div><span className="panel-meta">当前账号</span><strong className="stat-figure">{session.user?.username || 'admin'}</strong><small className="panel-meta">{ROLE_LABELS[session.user?.role] || '个人管理员'}</small></div></div>
         <div className="stat-card"><span className="stat-icon tone-ok"><KeyRound size={17} /></span><div><span className="panel-meta">登录保护</span><strong className="stat-figure">{totpEnabled ? '已开启' : '未开启'}</strong><small className="panel-meta">{totpEnabled ? `剩余 ${sessionData?.security?.recoveryCodesRemaining || 0} 个恢复码` : '建议开启动态验证'}</small></div></div>
-        <div className="stat-card"><span className="stat-icon tone-violet"><UserRoundCheck size={17} /></span><div><span className="panel-meta">登录设备</span><strong className="stat-figure">{sessionData?.sessions?.length || 0}</strong><small className="panel-meta">可让陌生设备退出</small></div></div>
+        <div className="stat-card"><span className="stat-icon tone-violet"><UserRoundCheck size={17} /></span><div><span className="panel-meta">登录设备</span><strong className="stat-figure">{sessions.length}</strong><small className="panel-meta">可让陌生设备退出</small></div></div>
         <div className="stat-card"><span className="stat-icon tone-warn"><XCircle size={17} /></span><div><span className="panel-meta">失败操作</span><strong className="stat-figure">{failures}</strong><small className="panel-meta">最近 200 条记录</small></div></div>
       </div>
       <div id="security-view-panel" role="tabpanel" aria-labelledby={`security-view-tab-${tab}`} aria-busy={loading}>
@@ -983,7 +995,7 @@ export function SecurityAuditView({ session, onLogout }) {
               <div className="data-row col-audit" key={event.id}>
                 <span className="cell-mono">{formatDateTime(event.occurredAt)}</span>
                 <span className="cell-stack"><strong>{ACTION_LABELS[event.action] || event.action}</strong></span>
-                <span className="panel-meta">{event.actor}</span>
+                <span className="cell-soft">{event.actor}</span>
                 <span className="cell-stack"><strong>{event.targetId || event.targetType}</strong><small>{event.requestId || event.details?.errorKind || ''}</small></span>
                 <span className="cell-mono">{event.ip || '--'}</span>
                 <span><span className={`tag tone-${event.outcome === 'success' ? 'ok' : 'danger'}`}>{event.outcome === 'success' ? '成功' : '失败'}</span></span>
@@ -993,52 +1005,246 @@ export function SecurityAuditView({ session, onLogout }) {
           </div>
         </section>
       ) : tab === 'sessions' ? (
-        <section className="ops-panel session-list">
-          <button className="secondary-action" type="button" disabled={submitting} onClick={() => runSensitive(async () => { await requestJson('/api/security/sessions', { method: 'DELETE' }); setMessage('其他设备已退出。'); })}>退出我的其他设备</button>
-          {(sessionData?.sessions || []).map((item) => <div className="session-row" key={item.nonce}><span className={item.nonce === sessionData.currentNonce ? 'current' : ''}><UserRoundCheck size={18} /></span><span><strong>{item.subject} · {ROLE_LABELS[item.role] || item.role}</strong><small>{item.ip || '未知 IP'} · {item.userAgent || '未知客户端'}</small></span><span><strong>{item.nonce === sessionData.currentNonce ? '当前会话' : formatRelative(item.createdAt)}</strong><small>空闲到期 {formatDateTime(item.idleExpiresAt || item.expiresAt)}</small></span>{(canManageAccounts || item.subject === session.user?.username) && <button type="button" disabled={submitting} onClick={() => revoke(item.nonce)}><XCircle size={16} />下线</button>}</div>)}
+        <section className="panel panel-flush">
+          <div className="panel-head">
+            <div className="panel-title"><UserRoundCheck size={15} />登录设备</div>
+            <div className="panel-tools">
+              <span className="panel-meta">{sessions.length} 个活跃会话</span>
+              <button className="btn btn-secondary btn-sm" type="button" disabled={submitting} onClick={() => runSensitive(async () => { await requestJson('/api/security/sessions', { method: 'DELETE' }); setMessage('其他设备已退出。'); })}>退出我的其他设备</button>
+            </div>
+          </div>
+          <div className="data-list">
+            <div className="data-head col-session"><span>会话主体</span><span>来源</span><span>创建时间</span><span>空闲到期</span><span>状态</span><span /></div>
+            {sessions.map((item) => {
+              const isCurrent = item.nonce === sessionData.currentNonce;
+              return (
+                <div className="data-row col-session" key={item.nonce}>
+                  <span className="cell-stack"><strong>{item.subject}</strong><small>{ROLE_LABELS[item.role] || item.role}</small></span>
+                  <span className="cell-stack"><strong>{item.ip || '未知 IP'}</strong><small>{item.userAgent || '未知客户端'}</small></span>
+                  <span className="cell-mono">{formatRelative(item.createdAt)}</span>
+                  <span className="cell-mono">{formatDateTime(item.idleExpiresAt || item.expiresAt)}</span>
+                  <span>{isCurrent ? <span className="tag tone-ok">当前会话</span> : <span className="tag">活跃</span>}</span>
+                  <span className="row-actions">{canRevokeSession(item) && <button className="btn btn-text is-danger" type="button" disabled={submitting} onClick={() => revoke(item.nonce)}>下线</button>}</span>
+                </div>
+              );
+            })}
+            {sessions.length === 0 && <div className="data-list-empty"><EmptyState title="暂无活跃会话" detail="登录过的设备会显示在这里" /></div>}
+          </div>
         </section>
       ) : tab === 'accounts' && canManageAccounts ? (
-        <div className="security-auth-layout">
-          <section className="ops-panel security-auth-panel">
-            <div className="ops-section-heading"><span><UserRoundCheck size={18} /></span><div><strong>{editingAccount ? `编辑 ${editingAccount}` : '创建平台账号'}</strong><small>业务绑定填写对应系统中已有的账号；留空表示不允许通过平台登录该系统</small></div></div>
-            <form className="ops-inline-form" onSubmit={saveAccount}>
-              <label>平台账号<input value={accountDraft.username} disabled={Boolean(editingAccount)} maxLength={64} required onChange={(event) => setAccountDraft({ ...accountDraft, username: event.target.value })} /></label>
-              <label>角色<SelectControl ariaLabel="平台账号角色" value={accountDraft.role} options={Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))} onChange={(role) => setAccountDraft({ ...accountDraft, role })} /></label>
-              {!editingAccount && <label>初始密码<input type="password" autoComplete="new-password" minLength={15} maxLength={256} required value={accountDraft.newPassword} onChange={(event) => setAccountDraft({ ...accountDraft, newPassword: event.target.value })} /></label>}
-              {editingAccount && <label>账号状态<SelectControl ariaLabel="账号状态" value={accountDraft.active ? 'active' : 'disabled'} options={[{ value: 'active', label: '启用' }, { value: 'disabled', label: '停用' }]} onChange={(value) => setAccountDraft({ ...accountDraft, active: value === 'active' })} /></label>}
-              {[['core', 'Core 业务账号'], ['exam', '考试业务账号'], ['campus', '校园业务账号']].map(([service, label]) => <label key={service}>{label}<input value={accountDraft.serviceBindings[service] || ''} maxLength={128} onChange={(event) => setAccountDraft({ ...accountDraft, serviceBindings: { ...accountDraft.serviceBindings, [service]: event.target.value } })} /></label>)}
-              <label>当前管理员密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>
-              {totpEnabled && <label>当前动态验证码<input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}
-              <button className="primary-button" type="submit" disabled={submitting || !sensitiveReady}><Save size={17} />{editingAccount ? '保存账号' : '创建账号'}</button>
-              {editingAccount && <button className="secondary-action" type="button" onClick={() => { setEditingAccount(null); setAccountDraft({ username: '', role: 'viewer', active: true, newPassword: '', serviceBindings: {} }); }}>取消编辑</button>}
-            </form>
-          </section>
-          <section className="ops-panel security-auth-panel">
-            {accounts.map((account) => <div className="session-row" key={account.id}><span><UserRoundCheck size={18} /></span><span><strong>{account.username} · {ROLE_LABELS[account.role] || account.role}</strong><small>{account.active ? '已启用' : '已停用'} · 已绑定 {Object.keys(account.serviceBindings || {}).length} 个业务系统</small></span><button type="button" disabled={submitting} onClick={() => { setEditingAccount(account.username); setAccountDraft({ username: account.username, role: account.role, active: account.active, newPassword: '', serviceBindings: account.serviceBindings || {} }); }}>编辑</button><button type="button" disabled={submitting || !sensitiveReady || !account.active} onClick={() => issueAccountRecovery(account.username)}>签发恢复链接</button></div>)}
-            {recoveryGrant && <div className="ops-inline-form"><label>{recoveryGrant.username} 的一次性恢复链接<input readOnly type="text" autoComplete="off" value={`${window.location.origin}/console#recover=${encodeURIComponent(recoveryGrant.recoveryToken)}`} /></label><p>请妥善交给账号本人。有效期至 {formatDateTime(recoveryGrant.expiresAt)}，使用后会退出该账号所有设备并重置登录保护。</p><button className="secondary-action" type="button" onClick={() => setRecoveryGrant(null)}>关闭并清除链接</button></div>}
-          </section>
+        <div className="split">
+          <div className="split-main">
+            <section className="panel panel-flush">
+              <div className="panel-head">
+                <div className="panel-title"><UserRoundCheck size={15} />平台账号</div>
+                <span className="panel-meta">{accounts.length} 个账号</span>
+              </div>
+              <div className="data-list">
+                <div className="data-head col-account"><span>账号</span><span>角色</span><span>业务绑定</span><span>状态</span><span /></div>
+                {accounts.map((account) => {
+                  const bindings = Object.entries(account.serviceBindings || {}).filter(([, value]) => Boolean(value));
+                  return (
+                    <div className={`data-row col-account${editingAccount === account.username ? ' is-selected' : ''}`} key={account.id}>
+                      <span className="cell-stack"><strong>{account.username}</strong><small>已绑定 {bindings.length} 个业务系统</small></span>
+                      <span><span className="tag tone-info">{ROLE_LABELS[account.role] || account.role}</span></span>
+                      <span className="cell-scopes">{bindings.length === 0 ? <small className="cell-soft">未绑定</small> : bindings.map(([service]) => <span className="code-chip" key={service}>{serviceShortLabel(service)}</span>)}</span>
+                      <span>{account.active ? <span className="tag tone-ok">启用</span> : <span className="tag">停用</span>}</span>
+                      <span className="row-actions">
+                        <button className="btn btn-text" type="button" disabled={submitting} onClick={() => { setEditingAccount(account.username); setAccountDraft({ username: account.username, role: account.role, active: account.active, newPassword: '', serviceBindings: account.serviceBindings || {} }); }}>编辑</button>
+                        <button className="btn btn-text" type="button" disabled={submitting || !sensitiveReady || !account.active} onClick={() => issueAccountRecovery(account.username)}>恢复链接</button>
+                      </span>
+                    </div>
+                  );
+                })}
+                {accounts.length === 0 && <div className="data-list-empty"><EmptyState title="暂无平台账号" detail="在右侧创建第一个平台账号" /></div>}
+              </div>
+              {recoveryGrant && (
+                <div className="panel-body recovery-grant">
+                  <div className="note-block">
+                    <span>{recoveryGrant.username} 的一次性恢复链接</span>
+                    <label className="config-field">
+                      <input readOnly type="text" autoComplete="off" value={`${window.location.origin}/console#recover=${encodeURIComponent(recoveryGrant.recoveryToken)}`} onFocus={(event) => event.target.select()} />
+                    </label>
+                    <p className="config-hint">请妥善交给账号本人。有效期至 {formatDateTime(recoveryGrant.expiresAt)}，使用后会退出该账号所有设备并重置登录保护。</p>
+                    <div className="inline-actions">
+                      <button className="btn btn-secondary btn-sm" type="button" onClick={() => setRecoveryGrant(null)}>关闭并清除链接</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
+          <div className="split-side">
+            <section className="panel">
+              <div className="panel-head">
+                <div className="panel-title"><KeyRound size={15} />{editingAccount ? `编辑 ${editingAccount}` : '创建平台账号'}</div>
+                {editingAccount && <button className="btn btn-ghost btn-sm" type="button" onClick={() => { setEditingAccount(null); setAccountDraft({ username: '', role: 'viewer', active: true, newPassword: '', serviceBindings: {} }); }}>取消编辑</button>}
+              </div>
+              <form className="config-form" onSubmit={saveAccount}>
+                <p className="config-hint">业务绑定填写对应系统中已有的账号；留空表示不允许通过平台登录该系统。</p>
+                <label className="config-field">
+                  <span>平台账号</span>
+                  <input value={accountDraft.username} disabled={Boolean(editingAccount)} maxLength={64} required onChange={(event) => setAccountDraft({ ...accountDraft, username: event.target.value })} />
+                </label>
+                <div className="config-field">
+                  <span>角色</span>
+                  <SelectControl ariaLabel="平台账号角色" value={accountDraft.role} options={Object.entries(ROLE_LABELS).map(([value, label]) => ({ value, label }))} onChange={(role) => setAccountDraft({ ...accountDraft, role })} />
+                </div>
+                {!editingAccount && (
+                  <label className="config-field">
+                    <span>初始密码 <small>至少 15 位</small></span>
+                    <input type="password" autoComplete="new-password" minLength={15} maxLength={256} required value={accountDraft.newPassword} onChange={(event) => setAccountDraft({ ...accountDraft, newPassword: event.target.value })} />
+                  </label>
+                )}
+                {editingAccount && (
+                  <div className="config-field">
+                    <span>账号状态</span>
+                    <SelectControl ariaLabel="账号状态" value={accountDraft.active ? 'active' : 'disabled'} options={[{ value: 'active', label: '启用' }, { value: 'disabled', label: '停用' }]} onChange={(value) => setAccountDraft({ ...accountDraft, active: value === 'active' })} />
+                  </div>
+                )}
+                {SERVICE_BINDINGS.map((binding) => (
+                  <label className="config-field" key={binding.id}>
+                    <span>{binding.label}</span>
+                    <input value={accountDraft.serviceBindings[binding.id] || ''} maxLength={128} onChange={(event) => setAccountDraft({ ...accountDraft, serviceBindings: { ...accountDraft.serviceBindings, [binding.id]: event.target.value } })} />
+                  </label>
+                ))}
+                <div className="config-subsection">
+                  <div className="form-row-2">
+                    <label className="config-field">
+                      <span>当前管理员密码</span>
+                      <input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} />
+                    </label>
+                    {totpEnabled && (
+                      <label className="config-field">
+                        <span>动态验证码</span>
+                        <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} />
+                      </label>
+                    )}
+                  </div>
+                  <button className="btn btn-primary btn-block" type="submit" disabled={submitting || !sensitiveReady}><Save size={15} />{editingAccount ? '保存账号' : '创建账号'}</button>
+                </div>
+              </form>
+            </section>
+          </div>
         </div>
       ) : tab === 'authenticators' ? (
-        <div className="security-auth-layout">
-          <section className="ops-panel security-auth-panel">
-            <div className="ops-section-heading"><span><KeyRound size={18} /></span><div><strong>动态验证</strong><small>{totpEnabled ? '已启用' : '未启用'}</small></div></div>
-            {!enrollment && <div className="ops-inline-form"><label>当前密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>{totpEnabled && <label>当前动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}<button className="primary-button" type="button" disabled={submitting || !sensitiveReady} onClick={beginTotpEnrollment}><KeyRound size={17} />{totpEnabled ? '重新绑定' : '绑定动态验证码'}</button></div>}
-            {enrollment && <div className="totp-enrollment"><img src={enrollment.qrDataUrl} alt="TOTP 二维码" /><code>{enrollment.secret}</code><div className="ops-inline-form"><label>动态验证码<input inputMode="numeric" maxLength={6} value={enrollmentCode} onChange={(event) => setEnrollmentCode(event.target.value.replace(/\D/g, ''))} /></label><button className="primary-button" type="button" disabled={submitting || enrollmentCode.length !== 6} onClick={confirmTotpEnrollment}><Check size={17} />确认绑定</button></div></div>}
-            {recoveryCodes.length > 0 && <div className="recovery-code-grid">{recoveryCodes.map((code) => <code key={code}>{code}</code>)}</div>}
-            {totpEnabled && !enrollment && <div className="security-auth-actions">
-              <button className="secondary-action" type="button" disabled={submitting || !sensitiveReady} onClick={regenerateRecoveryCodes}><RefreshCw size={16} />重置恢复码</button>
-              <button className="danger-action" type="button" disabled={submitting || !sensitiveReady || (session.mfaRequired && passkeys.length === 0)} onClick={disableTotp}><XCircle size={16} />停用动态验证码</button>
-            </div>}
+        <div className="view-stack">
+          <section className="panel">
+            <div className="panel-head">
+              <div className="panel-title"><KeyRound size={15} />动态验证</div>
+              {totpEnabled ? <span className="tag tone-ok">已启用</span> : <span className="tag">未启用</span>}
+            </div>
+            <div className="panel-body">
+              {!enrollment && (
+                <div className="field-row">
+                  <label className="config-field">
+                    <span>当前密码</span>
+                    <input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} />
+                  </label>
+                  {totpEnabled && (
+                    <label className="config-field">
+                      <span>动态验证码</span>
+                      <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} />
+                    </label>
+                  )}
+                </div>
+              )}
+              {enrollment && (
+                <div className="totp-enroll">
+                  <img className="totp-qr" src={enrollment.qrDataUrl} alt="TOTP 二维码" />
+                  <div className="totp-enroll-body">
+                    <p className="panel-meta">用验证器 App 扫码添加，或手动输入下方密钥。</p>
+                    <code className="code-chip">{enrollment.secret}</code>
+                    <div className="field-row">
+                      <label className="config-field">
+                        <span>动态验证码</span>
+                        <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={enrollmentCode} onChange={(event) => setEnrollmentCode(event.target.value.replace(/\D/g, ''))} />
+                      </label>
+                      <button className="btn btn-primary btn-sm" type="button" disabled={submitting || enrollmentCode.length !== 6} onClick={confirmTotpEnrollment}><Check size={15} />确认绑定</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {recoveryCodes.length > 0 && (
+                <>
+                  <p className="config-hint codes-hint">恢复码仅显示一次，请立即抄写保存</p>
+                  <div className="code-grid">{recoveryCodes.map((code) => <code key={code}>{code}</code>)}</div>
+                </>
+              )}
+              {!enrollment && (
+                <div className="form-actions">
+                  <button className="btn btn-primary btn-sm" type="button" disabled={submitting || !sensitiveReady} onClick={beginTotpEnrollment}><KeyRound size={15} />{totpEnabled ? '重新绑定' : '绑定动态验证码'}</button>
+                  {totpEnabled && <button className="btn btn-secondary btn-sm" type="button" disabled={submitting || !sensitiveReady} onClick={regenerateRecoveryCodes}><RefreshCw size={15} />重置恢复码</button>}
+                  {totpEnabled && <button className="btn btn-danger btn-sm" type="button" disabled={submitting || !sensitiveReady || (session.mfaRequired && passkeys.length === 0)} onClick={disableTotp}><XCircle size={15} />停用动态验证码</button>}
+                </div>
+              )}
+            </div>
           </section>
-          <section className="ops-panel security-auth-panel">
-            <div className="ops-section-heading"><span><Fingerprint size={18} /></span><div><strong>设备快捷登录</strong><small>已添加 {passkeys.length} 个设备</small></div></div>
-            <div className="ops-inline-form"><label>设备名称<input value={passkeyName} maxLength={64} onChange={(event) => setPasskeyName(event.target.value)} /></label><label>当前密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>{totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}<button className="primary-button" type="button" disabled={submitting || !sensitiveReady} onClick={registerPasskey}><Fingerprint size={17} />添加快捷登录</button></div>
-            <div className="passkey-list">{passkeys.map((item) => <div className="session-row" key={item.id}><span><Fingerprint size={18} /></span><span><strong>{item.name || '快捷登录'}</strong><small>{item.deviceType || '登录设备'} · {formatDateTime(item.createdAt)}</small></span><button type="button" onClick={() => runSensitive(async () => { await requestJson(`/api/security/passkeys/${encodeURIComponent(item.id)}`, { method: 'DELETE', body: sensitiveBody() }); setMessage('快捷登录已删除'); })}><XCircle size={16} />删除</button></div>)}</div>
-          </section>
-          <section className="ops-panel security-auth-panel">
-            <div className="ops-section-heading"><span><LockKeyhole size={18} /></span><div><strong>登录密码</strong><small>修改后所有会话下线</small></div></div>
-            <div className="ops-inline-form"><label>新密码<input type="password" minLength={15} maxLength={256} autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></label><label>当前密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>{totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}<button className="primary-button" type="button" disabled={submitting || newPassword.length < 15 || !sensitiveReady} onClick={changePassword}><Save size={17} />修改密码</button></div>
-          </section>
+          <div className="grid-2">
+            <section className="panel">
+              <div className="panel-head">
+                <div className="panel-title"><Fingerprint size={15} />设备快捷登录</div>
+                <span className="panel-meta">已添加 {passkeys.length} 个</span>
+              </div>
+              <div className="panel-body">
+                <div className="field-row">
+                  <label className="config-field">
+                    <span>设备名称</span>
+                    <input value={passkeyName} maxLength={64} placeholder="例如 办公笔记本指纹" onChange={(event) => setPasskeyName(event.target.value)} />
+                  </label>
+                  <label className="config-field">
+                    <span>当前密码</span>
+                    <input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} />
+                  </label>
+                  {totpEnabled && (
+                    <label className="config-field">
+                      <span>动态验证码</span>
+                      <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} />
+                    </label>
+                  )}
+                </div>
+                <div className="form-actions">
+                  <button className="btn btn-primary btn-sm" type="button" disabled={submitting || !sensitiveReady} onClick={registerPasskey}><Fingerprint size={15} />添加快捷登录</button>
+                </div>
+                <div className="data-list passkey-list">
+                  {passkeys.map((item) => (
+                    <div className="data-row col-passkey" key={item.id}>
+                      <span className="cell-stack"><strong>{item.name || '快捷登录'}</strong><small>{item.deviceType || '登录设备'} · {formatDateTime(item.createdAt)}</small></span>
+                      <span className="row-actions"><button className="btn btn-text is-danger" type="button" disabled={submitting} onClick={() => runSensitive(async () => { await requestJson(`/api/security/passkeys/${encodeURIComponent(item.id)}`, { method: 'DELETE', body: sensitiveBody() }); setMessage('快捷登录已删除'); })}>删除</button></span>
+                    </div>
+                  ))}
+                  {passkeys.length === 0 && <div className="data-list-empty"><EmptyState title="还没有快捷登录" detail="添加后可用设备指纹或锁屏快速确认身份" /></div>}
+                </div>
+              </div>
+            </section>
+            <section className="panel">
+              <div className="panel-head">
+                <div className="panel-title"><LockKeyhole size={15} />登录密码</div>
+                <span className="panel-meta">修改后所有会话下线</span>
+              </div>
+              <div className="panel-body">
+                <div className="field-row">
+                  <label className="config-field">
+                    <span>新密码 <small>至少 15 位</small></span>
+                    <input type="password" minLength={15} maxLength={256} autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                  </label>
+                  <label className="config-field">
+                    <span>当前密码</span>
+                    <input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} />
+                  </label>
+                  {totpEnabled && (
+                    <label className="config-field">
+                      <span>动态验证码</span>
+                      <input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} />
+                    </label>
+                  )}
+                </div>
+                <div className="form-actions">
+                  <button className="btn btn-primary btn-sm" type="button" disabled={submitting || newPassword.length < 15 || !sensitiveReady} onClick={changePassword}><Save size={15} />修改密码</button>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
       ) : null}
       </div>
