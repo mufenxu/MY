@@ -51,6 +51,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -84,14 +85,20 @@ import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import cn.pxyb.mycontrol.util.authenticateDevice
 import java.io.File
 import java.util.UUID
+import kotlin.coroutines.resume
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import cn.pxyb.mycontrol.ui.components.feedback.AppLinearProgressIndicator
+
+private val webIoScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -437,7 +444,13 @@ class PlatformWebActivity : ComponentActivity() {
             wv.destroy()
         }
         webViewInstance = null
-        uploadCacheDirectory.deleteRecursively()
+        val uploadsDirectory = uploadCacheDirectory
+        val pendingWork = lifecycleScope.coroutineContext[Job]
+        webIoScope.launch {
+            // 活动销毁会取消这些任务；等待复制任务退出后再清理文件。
+            pendingWork?.join()
+            uploadsDirectory.deleteRecursively()
+        }
         if (isFinishing) {
             listOf(EXTRA_AUTO_LOGIN_USERNAME, EXTRA_AUTO_LOGIN_PASSWORD, EXTRA_INITIAL_COOKIE_URLS, EXTRA_INITIAL_COOKIE_VALUES)
                 .forEach(intent::removeExtra)
@@ -517,7 +530,6 @@ private fun PlatformWebScreen(
     var webView by remember { mutableStateOf<WebView?>(null) }
     var pageLoading by remember { mutableStateOf(true) }
     var loadProgress by remember { mutableFloatStateOf(0f) }
-    var canGoBack by remember { mutableStateOf(false) }
     var restoredInitialHash by remember { mutableStateOf(false) }
     var pageError by remember { mutableStateOf<String?>(null) }
     var retryUrl by remember { mutableStateOf<String?>(null) }
@@ -525,6 +537,7 @@ private fun PlatformWebScreen(
     val webBackground = MaterialTheme.colorScheme.background.toArgb()
     val webTextZoom = (LocalDensity.current.fontScale * 100).roundToInt()
     val density = LocalDensity.current
+    val pageScope = rememberCoroutineScope()
     var loginFooterHeight by remember { mutableStateOf(0.dp) }
 
     BackHandler {
@@ -572,10 +585,6 @@ private fun PlatformWebScreen(
                         CookieManager.getInstance().let { cm ->
                             cm.setAcceptCookie(true)
                             cm.setAcceptThirdPartyCookies(this, false)
-                            initialCookies.forEach { cookie ->
-                                cm.setCookie(cookie.url, cookie.value)
-                            }
-                            cm.flush()
                         }
 
                         settings.apply {
@@ -614,14 +623,12 @@ private fun PlatformWebScreen(
                                 loadProgress = 0f
                                 pageError = null
                                 retryUrl = null
-                                canGoBack = view?.canGoBack() == true
                             }
 
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 super.onPageFinished(view, url)
                                 if (pageError != null) {
                                     pageLoading = false
-                                    canGoBack = view?.canGoBack() == true
                                     return
                                 }
                                 view?.let(webDownloadSupport::connectImageDownloadPort)
@@ -637,7 +644,6 @@ private fun PlatformWebScreen(
                                     )
                                 }
                                 pageLoading = false
-                                canGoBack = view?.canGoBack() == true
                             }
 
                             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -684,13 +690,29 @@ private fun PlatformWebScreen(
                                 if (newProgress >= 100) {
                                     pageLoading = false
                                 }
-                                canGoBack = view?.canGoBack() == true
                             }
                         }
 
                         webView = this
                         onWebViewCreated(this)
-                        loadUrl(initialUrl)
+                        if (initialCookies.isEmpty()) {
+                            loadUrl(initialUrl)
+                        } else {
+                            val browser = this
+                            pageScope.launch {
+                                val cookieManager = CookieManager.getInstance()
+                                initialCookies.forEach { cookie ->
+                                    suspendCancellableCoroutine<Unit> { continuation ->
+                                        cookieManager.setCookie(cookie.url, cookie.value) {
+                                            continuation.resume(Unit)
+                                        }
+                                    }
+                                }
+                                // Cookie 已写入内存即可访问页面，持久化不阻塞界面。
+                                webIoScope.launch { cookieManager.flush() }
+                                browser.loadUrl(initialUrl)
+                            }
+                        }
                     }
                 },
             )
@@ -729,7 +751,7 @@ private fun PlatformWebScreen(
                 }
             }
             AnimatedVisibility(
-                visible = pageError == null && pageLoading && loadProgress < 1f,
+                visible = pageError == null && pageLoading,
                 enter = fadeIn(),
                 exit = fadeOut(),
                 modifier = Modifier.align(Alignment.TopCenter),

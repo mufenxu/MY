@@ -102,8 +102,13 @@ internal class PlatformWebDownloadSupport(
             override fun onMessage(port: WebMessagePort, message: WebMessage) {
                 val raw = message.data ?: return
                 if (raw.length > MAX_DATA_URL_LENGTH + 1024) return
-                val payload = runCatching { JSONObject(raw) }.getOrNull() ?: return
-                acceptImageDownload(origin, payload.optString("dataUrl"), payload.optString("fileName"))
+                activity.lifecycleScope.launch {
+                    val payload = withContext(Dispatchers.Default) {
+                        runCatching { JSONObject(raw) }.getOrNull()
+                    } ?: return@launch
+                    if (imageDownloadPort !== port) return@launch
+                    acceptImageDownload(origin, payload.optString("dataUrl"), payload.optString("fileName"))
+                }
             }
         })
         // Transfer the capability only to the trusted top frame, never to every iframe as a JS interface would.
