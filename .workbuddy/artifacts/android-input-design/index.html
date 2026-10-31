@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>输入框重设计方案 · MYControl Android</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", Roboto, sans-serif;
+    background: #0e1116;
+    color: #e8edf5;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.6;
+  }
+  .page { max-width: 1240px; margin: 0 auto; padding: 40px 24px 96px; }
+
+  /* ---------- 页头 ---------- */
+  header.top { margin-bottom: 32px; }
+  .kicker {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    color: #7e93ad; font-weight: 600; margin-bottom: 14px;
+  }
+  .kicker::before { content: ""; width: 22px; height: 2px; background: #3b82f6; border-radius: 2px; }
+  h1 { font-size: 30px; line-height: 1.25; margin: 0 0 10px; font-weight: 700; letter-spacing: -.01em; }
+  .sub { color: #9fb0c6; font-size: 14px; max-width: 720px; margin: 0; }
+  .sub b { color: #dbe6f4; font-weight: 600; }
+
+  /* ---------- 导航 ---------- */
+  nav.tabs {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; gap: 8px; flex-wrap: wrap;
+    padding: 14px 0; margin: 26px 0 8px;
+    background: linear-gradient(#0e1116 62%, rgba(14,17,22,0));
+  }
+  nav.tabs a {
+    font-size: 13px; font-weight: 600; text-decoration: none;
+    color: #b9c8da; background: #182029; border: 1px solid #26303c;
+    padding: 8px 14px; border-radius: 999px; transition: .16s;
+  }
+  nav.tabs a:hover { color: #fff; border-color: #3b82f6; background: #1b2a3d; }
+
+  /* ---------- 区块 ---------- */
+  section.plan { margin-top: 44px; scroll-margin-top: 76px; }
+  .sec-head { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
+  .tag {
+    flex: none; width: 34px; height: 34px; border-radius: 11px;
+    display: grid; place-items: center; font-weight: 700; font-size: 15px;
+    background: #1d3a5c; color: #8fc2ff; border: 1px solid #2b5a86;
+  }
+  .sec-head h2 { font-size: 19px; margin: 0 0 2px; font-weight: 650; }
+  .sec-head p { margin: 0; font-size: 13px; color: #93a5bb; max-width: 760px; }
+  .sec-head .en { color: #647989; font-weight: 400; font-size: 13px; }
+
+  .screens { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; }
+
+  /* ---------- 手机外壳 ---------- */
+  .phone {
+    width: 360px; border-radius: 30px; padding: 14px 16px 20px;
+    border: 1px solid #2a333f; position: relative; overflow: hidden;
+    transition: background .2s;
+  }
+  .phone[data-theme="light"] {
+    --bg: #F2F4F8;
+    --surface: #FFFFFF;
+    --text: #20262D;
+    --muted: #606C79;
+    --mutedSoft: rgba(96,108,121,.72);
+    --primary: #2563EB;
+    --onPrimary: #FFFFFF;
+    --primarySoft: rgba(37,99,235,.10);
+    --outline: #E2E6EB;
+    --field: #EDF0F6;
+    --error: #B91C1C;
+    --errorSoft: rgba(185,28,28,.10);
+    --caret: #2563EB;
+    background: var(--bg);
+    box-shadow: 0 24px 60px -28px rgba(0,0,0,.9);
+  }
+  .phone[data-theme="dark"] {
+    --bg: #101419;
+    --surface: #1B222B;
+    --text: #E9EDF3;
+    --muted: #B5BFCB;
+    --mutedSoft: rgba(181,191,203,.72);
+    --primary: #9FCBFF;
+    --onPrimary: #12212F;
+    --primarySoft: rgba(159,203,255,.13);
+    --outline: #35404D;
+    --field: #293340;
+    --error: #FCA5A5;
+    --errorSoft: rgba(252,165,165,.12);
+    --caret: #9FCBFF;
+    background: var(--bg);
+    box-shadow: 0 24px 60px -28px rgba(0,0,0,1);
+  }
+  .phone .statusbar {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 10.5px; color: var(--muted); padding: 2px 4px 12px; letter-spacing: .02em;
+  }
+  .phone .statusbar .dots { display: flex; gap: 3px; align-items: center; }
+  .phone .statusbar .dots i { width: 3px; height: 3px; border-radius: 50%; background: var(--muted); display: block; opacity: .7; }
+  .phone .ptitle { font-size: 15px; font-weight: 650; color: var(--text); margin: 0 0 3px 4px; }
+  .phone .psub { font-size: 11.5px; color: var(--muted); margin: 0 0 16px 4px; }
+  .phone .body { display: flex; flex-direction: column; gap: 14px; }
+
+  /* ---------- 通用字段骨架 ---------- */
+  .field { display: flex; flex-direction: column; gap: 7px; }
+  .flabel {
+    font-size: 11.5px; font-weight: 600; letter-spacing: .01em;
+    color: var(--muted); padding: 0 4px; display: flex; align-items: center; gap: 5px;
+  }
+  .flabel .req { color: var(--error); }
+  .ctl {
+    display: flex; align-items: center; gap: 10px;
+    transition: background .18s ease, box-shadow .18s ease, border-color .18s ease;
+  }
+  .ctl .val { font-size: 15px; color: var(--text); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: .01em; }
+  .ctl .ph { font-size: 15px; color: var(--mutedSoft); flex: 1; }
+  .ctl .val.mask { letter-spacing: .18em; }
+  .ctl .ico { flex: none; display: grid; place-items: center; color: var(--muted); }
+  .ctl .ico svg { width: 19px; height: 19px; display: block; }
+  .ctl.errtxt .val { color: var(--error); }
+  .caret {
+    width: 2px; height: 20px; border-radius: 1px; background: var(--caret);
+    margin-left: -2px; animation: blink 1.05s steps(1, end) infinite;
+  }
+  @keyframes blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+  .clr { flex: none; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--mutedSoft); color: var(--bg); }
+  .clr svg { width: 11px; height: 11px; }
+  .helper { font-size: 11.5px; color: var(--error); padding: 0 4px; display: flex; gap: 5px; align-items: center; }
+  .helper svg { width: 12px; height: 12px; flex: none; }
+  .helper.neutral { color: var(--muted); }
+  .multi .val { white-space: normal; line-height: 1.5; }
+
+  /* ---------- A 填充胶囊 ---------- */
+  .v-a .ctl { background: var(--field); border-radius: 999px; height: 54px; padding: 0 20px; }
+  .v-a .ctl.focus { box-shadow: inset 0 0 0 2px var(--primary); background: var(--surface); }
+  .v-a .ctl.error { box-shadow: inset 0 0 0 1.5px var(--error); }
+  .v-a .ctl.off { opacity: .45; }
+  .v-a .ctl.multi { border-radius: 26px; height: auto; min-height: 92px; padding: 15px 20px; align-items: flex-start; }
+  .v-a .ctl.multi .val, .v-a .ctl.multi .ph { padding-top: 1px; }
+
+  /* ---------- B 柔和描边 ---------- */
+  .v-b .ctl { background: var(--surface); border: 1px solid var(--outline); border-radius: 14px; height: 54px; padding: 0 16px; }
+  .v-b .ctl.focus { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primarySoft); }
+  .v-b .ctl.error { border-color: var(--error); box-shadow: 0 0 0 4px var(--errorSoft); }
+  .v-b .ctl.off { opacity: .5; background: var(--field); }
+  .v-b .ctl.multi { border-radius: 14px; height: auto; min-height: 92px; padding: 14px 16px; align-items: flex-start; }
+
+  /* ---------- C 浮动标签 ---------- */
+  .v-c .field { gap: 0; }
+  .v-c .flabel {
+    position: relative; z-index: 2; margin: 0 0 -7.5px 12px; padding: 0 6px;
+    background: var(--bg); width: fit-content; font-size: 11px; font-weight: 600;
+    line-height: 15px; border-radius: 4px;
+  }
+  .v-c .ctl { background: transparent; border: 1px solid var(--outline); border-radius: 18px; height: 56px; padding: 0 16px; }
+  .v-c .ctl.focus { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primarySoft); }
+  .v-c .ctl.error { border-color: var(--error); box-shadow: 0 0 0 4px var(--errorSoft); }
+  .v-c .ctl.off { opacity: .5; }
+  .v-c .ctl.multi { height: auto; min-height: 92px; padding: 14px 16px; align-items: flex-start; }
+  .v-c .flabel.focus { color: var(--primary); }
+  .v-c .flabel.error { color: var(--error); }
+
+  /* ---------- D 图标槽 ---------- */
+  .v-d .ctl { background: var(--field); border: 1.5px solid transparent; border-radius: 16px; height: 58px; padding: 6px; gap: 12px; }
+  .v-d .slot { flex: none; width: 44px; height: 44px; border-radius: 11px; background: var(--primarySoft); color: var(--primary); display: grid; place-items: center; transition: .18s; }
+  .v-d .slot svg { width: 20px; height: 20px; }
+  .v-d .ctl .val, .v-d .ctl .ph { padding-right: 4px; }
+  .v-d .ctl .tail { padding-right: 10px; }
+  .v-d .ctl.focus { background: var(--surface); border-color: var(--primary); box-shadow: 0 0 0 4px var(--primarySoft); }
+  .v-d .ctl.focus .slot { background: var(--primary); color: var(--onPrimary); }
+  .v-d .ctl.error { border-color: var(--error); background: var(--surface); }
+  .v-d .ctl.error .slot { background: var(--errorSoft); color: var(--error); }
+  .v-d .ctl.off { opacity: .5; }
+  .v-d .ctl.multi { height: auto; min-height: 96px; padding: 6px; align-items: flex-start; }
+  .v-d .ctl.multi .slot { height: 32px; }
+  .v-d .ctl.multi .val, .v-d .ctl.multi .ph { padding-top: 9px; }
+
+  /* ---------- 搜索框（各方案一致落地） ---------- */
+  .searchbar { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 16px; }
+  .v-a .searchbar, .v-d .searchbar { background: var(--field); border-radius: 999px; }
+  .v-b .searchbar { background: var(--surface); border: 1px solid var(--outline); border-radius: 14px; }
+  .v-c .searchbar { background: var(--surface); border: 1px solid var(--outline); border-radius: 999px; }
+  .v-a .searchbar.focus, .v-d .searchbar.focus { box-shadow: inset 0 0 0 2px var(--primary); background: var(--surface); }
+  .v-b .searchbar.focus, .v-c .searchbar.focus { border-color: var(--primary); box-shadow: 0 0 0 4px var(--primarySoft); }
+  .searchbar .val { font-size: 14px; color: var(--text); flex: 1; }
+  .searchbar .ph { font-size: 14px; color: var(--mutedSoft); flex: 1; }
+  .searchbar .ico { color: var(--muted); }
+  .searchbar .ico svg { width: 18px; height: 18px; }
+  .searchbar .ico.lead { color: var(--primary); }
+
+  /* ---------- 现状对照 ---------- */
+  .nowrap { display: flex; gap: 26px; flex-wrap: wrap; }
+  .note {
+    border-left: 2px solid #3b82f6; padding: 2px 0 2px 14px; margin: 6px 0 0;
+    font-size: 13px; color: #9fb0c6; max-width: 760px;
+  }
+  .note b { color: #dbe6f4; }
+
+  /* ---------- 表格 ---------- */
+  table.cmp { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+  table.cmp th, table.cmp td { text-align: left; padding: 11px 14px; border-bottom: 1px solid #222b36; vertical-align: top; }
+  table.cmp th { color: #8ba0b8; font-weight: 600; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+  table.cmp td:first-child { color: #dbe6f4; font-weight: 600; white-space: nowrap; }
+  table.cmp td { color: #9fb0c6; }
+  table.cmp tr:last-child td { border-bottom: none; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .pill.good { background: rgba(16,185,129,.14); color: #6ee7b7; }
+  .pill.mid { background: rgba(245,158,11,.14); color: #fcd34d; }
+
+  footer.end { margin-top: 56px; padding-top: 22px; border-top: 1px solid #222b36; font-size: 12.5px; color: #6b7f96; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <div class="kicker">MYControl · Android · Design Review</div>
+    <h1>输入框重设计 · 4 个方案</h1>
+    <p class="sub">
+      每套方案都在<b>浅色与深色</b>下各渲染一屏，包含 6 种真实状态：空值占位、密码掩码、聚焦输入中、
+      校验错误、多行备注、搜索栏。配色全部取自项目 <b>Color.kt / Theme.kt</b> 的令牌，不是随手编的颜色。
+    </p>
+  </header>
+
+  <nav class="tabs">
+    <a href="#now">现状对照</a>
+    <a href="#a">A 填充胶囊</a>
+    <a href="#b">B 柔和描边</a>
+    <a href="#c">C 浮动标签</a>
+    <a href="#d">D 图标槽</a>
+    <a href="#cmp">决策对照表</a>
+  </nav>
+
+  <section class="plan" id="now">
+    <div class="sec-head">
+      <div class="tag" style="background:#3a2129;border-color:#5f2f3a;color:#fca5a5">现</div>
+      <div>
+        <h2>现状：全圆角胶囊 + 2dp 阴影</h2>
+        <p>1px 透明边框 + 阴影 + RoundedCornerShape(50)。问题在于：默认态没有任何边界，靠阴影撑形状，看起来像一颗"按钮"；只有聚焦时才突然出现一圈 1dp 蓝边，视觉跳变明显。</p>
+      </div>
+    </div>
+    <div class="screens">
+      <div class="phone" data-theme="light" data-v="now">
+        <div class="statusbar"><span>11:25</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <p class="ptitle">现状样式</p>
+        <p class="psub">阴影撑形 · 聚焦才出现边框</p>
+        <div class="body" id="screen-now-light"></div>
+      </div>
+      <div class="phone" data-theme="dark" data-v="now">
+        <div class="statusbar"><span>11:25</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <p class="ptitle">现状样式</p>
+        <p class="psub">深色下阴影几乎不可见</p>
+        <div class="body" id="screen-now-dark"></div>
+      </div>
+    </div>
+    <p class="note">深色模式这一屏尤其能说明问题：<b>2dp 阴影在深色底上完全读不出来</b>，输入框和背景糊在一起，只剩一个聚焦蓝边可辨。</p>
+  </section>
+
+  <section class="plan" id="a">
+    <div class="sec-head">
+      <div class="tag">A</div>
+      <div>
+        <h2>填充胶囊 <span class="en">Fill Capsule</span></h2>
+        <p>Material 3 Filled 风格：实色填充、无描边、无阴影，圆角拉满。聚焦时填充变亮并出现 2dp 内描边。最轻、最"现代"，和现有 AppButton 胶囊语言一脉相承。</p>
+      </div>
+    </div>
+    <div class="screens">
+      <div class="phone" data-theme="light" data-v="a">
+        <div class="statusbar"><span>11:25</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <p class="ptitle">账号绑定</p>
+        <p class="psub">方案 A · 浅色</p>
+        <div class="body" id="screen-a-light"></div>
+      </div>
+      <div class="phone" data-theme="dark" data-v="a">
+        <div class="statusbar"><span>11:25</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <p class="ptitle">账号绑定</p>
+        <p class="psub">方案 A · 深色</p>
+        <div class="body" id="screen-a-dark"></div>
+      </div>
+    </div>
+    <p class="note">优点：改动最小（只换 colors/shape/elevation）、和按钮同族、无边框所以没有"描边粗细"的脏边问题。缺点：<b>错误态只能用内描边表达</b>，红框在深色底上略吃力。</p>
+  </section>
+
+  <section class="plan" id="b">
+    <div class="sec-head">
+      <div class="tag">B</div>
+      <div>
+        <h2>柔和描边卡 <span class="en">Soft Outline</span></h2>
+        <p>白底（深色为表面色）+ 常显 1dp 极淡描边 + 14dp 圆角，去掉阴影。聚焦时描边转主色并外扩一层 4dp 柔光晕。边界始终清晰，最稳、最像"表单"。</p>
+      </div>
+    </div>
+    <div class="screens">
+      <div class="phone" data-theme="light" data-v="b">
+        <div class="statusbar"><span>11:25</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <p class="ptitle">账号绑定</p>
+        <p class="psub">方案 B · 浅色</p>
+        <div class="body" id="screen-b-light"></div>
+      </div>
+      <div class="phone" data-theme="dark" data-v="b">
+        <div class="statusbar"><span>11:25</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <p class="ptitle">账号绑定</p>
+        <p class="psub">方案 B · 深色</p>
+        <div class="body" id="screen-b-dark"></div>
+      </div>
+    </div>
+    <p class="note">优点：<b>深浅色都不出错</b>，状态区分最明确（默认灰边 / 聚焦蓝边+光晕 / 错误红边+红光），也最容易通过无障碍对比度检查。缺点：圆角从 50 降到 14，和胶囊按钮不完全同族，需要接受"按钮圆、输入框方"的层次差异。</p>
+  </section>
+
+  <section class="plan" id="c">
+    <div class="sec-head">
+      <div class="tag">C</div>
+      <div>
+        <h2>浮动标签盒 <span class="en">Floating Label</span></h2>
+        <p>标准 M3 Outlined：18dp 圆角，标签从边框上"切"出一块，聚焦转主色。省掉框外那一行标签的垂直空间，信息密度最高，适合表单字段多的页面。</p>
+      </div>
+    </div>
+    <div class="screens">
+      <div class="phone" data-theme="light" data-v="c">
+        <div class="statusbar"><span>11:25</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <p class="ptitle">账号绑定</p>
+        <p class="psub">方案 C · 浅色</p>
+        <div class="body" id="screen-c-light"></div>
+      </div>
+      <div class="phone" data-theme="dark" data-v="c">
+        <div class="statusbar"><span>11:25</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <p class="ptitle">账号绑定</p>
+        <p class="psub">方案 C · 深色</p>
+        <div class="body" id="screen-c-dark"></div>
+      </div>
+    </div>
+    <p class="note">优点：专业感最强、省空间、标签和输入框是一体。缺点：<b>深色下标签要靠背景色"挖洞"，一旦放在 AppPanel 卡片上，挖洞颜色必须跟着面板走</b>（实现时要用 `LocalAppSurfaceColor` 之类传色，否则会出现一块补丁）。</p>
+  </section>
+
+  <section class="plan" id="d">
+    <div class="sec-head">
+      <div class="tag">D</div>
+      <div>
+        <h2>图标槽 <span class="en">Icon Slot</span></h2>
+        <p>16dp 圆角、浅填充，左侧一个 44dp 主色图标槽，聚焦时图标槽填充为实色主色。视觉重心最强，仪式感最足，适合登录、绑定这类"少而重要"的字段。</p>
+      </div>
+    </div>
+    <div class="screens">
+      <div class="phone" data-theme="light" data-v="d">
+        <div class="statusbar"><span>11:25</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <p class="ptitle">账号绑定</p>
+        <p class="psub">方案 D · 浅色</p>
+        <div class="body" id="screen-d-light"></div>
+      </div>
+      <div class="phone" data-theme="dark" data-v="d">
+        <div class="statusbar"><span>11:25</span><span class="dots"><i></i><i></i><i></i></span></div>
+        <p class="ptitle">账号绑定</p>
+        <p class="psub">方案 D · 深色</p>
+        <div class="body" id="screen-d-dark"></div>
+      </div>
+    </div>
+    <p class="note">优点：辨识度高、聚焦反馈最明显（整块图标槽点亮）。缺点：<b>不适合全 App 铺开</b> —— 搜索框、多行备注、无图标的普通输入框用它反而累赘，实际落地时只能"重点表单用它、其余用 A 或 B"。</p>
+  </section>
+
+  <section class="plan" id="cmp">
+    <div class="sec-head">
+      <div class="tag" style="background:#1d3a2c;border-color:#2f5c45;color:#6ee7b7">✓</div>
+      <div>
+        <h2>决策对照表</h2>
+        <p>选定后我只改 `AppTextField.kt` / `AppSearchBar.kt` 两个文件，所有调用方自动生效，不需要逐页面改。</p>
+      </div>
+    </div>
+    <table class="cmp">
+      <thead>
+        <tr><th>方案</th><th>视觉印象</th><th>深浅色一致性</th><th>改动成本</th><th>建议用在</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>A 填充胶囊</td>
+          <td>轻快、年轻、和按钮同族</td>
+          <td><span class="pill mid">中</span> 深色错误态偏弱</td>
+          <td>最低（仅换 colors / shape）</td>
+          <td>全 App 统一默认</td>
+        </tr>
+        <tr>
+          <td>B 柔和描边</td>
+          <td>克制、清晰、像正经表单</td>
+          <td><span class="pill good">高</span></td>
+          <td>低（换 shape / border / elevation）</td>
+          <td>全 App 统一默认</td>
+        </tr>
+        <tr>
+          <td>C 浮动标签</td>
+          <td>专业、紧凑、M3 标准</td>
+          <td><span class="pill mid">中</span> 需处理卡片上的挖洞色</td>
+          <td>中（标签布局要从 Column 移到框内）</td>
+          <td>字段密集的设置/表单页</td>
+        </tr>
+        <tr>
+          <td>D 图标槽</td>
+          <td>仪式感强、辨识度高</td>
+          <td><span class="pill good">高</span></td>
+          <td>中（要新增 slot 结构与图标必填约定）</td>
+          <td>登录 / 绑定等关键表单</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer class="end">
+    预览文件：.workbuddy/artifacts/android-input-design/index.html ·
+    所有颜色取自 Color.kt 令牌（FieldSurface / ContainerLow / OutlineVariant / BrandBlue），未引入新色值。
+  </footer>
+</div>
+
+<script>
+const ICON = {
+  phone: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.8c.7 0 1.3.45 1.5 1.1l.75 2.2c.19.55.03 1.16-.4 1.55l-1.05.9a11.4 11.4 0 0 0 5.15 5.15l.9-1.05c.39-.43 1-.59 1.55-.4l2.2.75c.65.2 1.1.8 1.1 1.5v1.8c0 1.1-.9 2-2 2C9.9 20.2 3.8 14.1 3.8 6.8c0-1.1.9-2 2-2h.7Z"/></svg>',
+  lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.6" y="10.2" width="14.8" height="9.6" rx="3"/><path d="M8.3 10.2V7.6a3.7 3.7 0 0 1 7.4 0v2.6"/><circle cx="12" cy="15" r="1.15" fill="currentColor" stroke="none"/></svg>',
+  shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5 5.2 6.3v5c0 4.3 2.9 7.6 6.8 9 3.9-1.4 6.8-4.7 6.8-9v-5L12 3.5Z"/><path d="m9.3 11.9 1.9 1.9 3.6-3.7"/></svg>',
+  server: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.6" y="4.2" width="16.8" height="6" rx="2"/><rect x="3.6" y="13.8" width="16.8" height="6" rx="2"/><path d="M7.2 7.2h.01M7.2 16.8h.01"/></svg>',
+  note: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.8h7.6l4 4v12.4a1.8 1.8 0 0 1-1.8 1.8H6.5a1.8 1.8 0 0 1-1.8-1.8V5.6a1.8 1.8 0 0 1 1.8-1.8Z"/><path d="M14 3.9v4.1h4.1"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="10.6" cy="10.6" r="6.1"/><path d="m15.2 15.2 4 4"/></svg>',
+  eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 12S6 6.4 12 6.4 21.4 12 21.4 12 18 17.6 12 17.6 2.6 12 2.6 12Z"/><circle cx="12" cy="12" r="2.7"/></svg>',
+  close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>',
+  warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4.6M12 16h.01"/></svg>'
+};
+
+// 六个真实状态
+const FIELDS = [
+  { label: '手机号', icon: 'phone', ph: '请输入 11 位手机号', state: 'idle' },
+  { label: '账号密码', icon: 'lock', value: 'Pxyb@2026', mask: true, state: 'idle', eye: true },
+  { label: '短信验证码', icon: 'shield', value: '8241', state: 'focus', clear: true, helper: '已发送至 138****6021', helperNeutral: true },
+  { label: '服务器地址', icon: 'server', value: 'https://api.mycontrol.top', state: 'error', helper: '域名无法解析，请检查网络或端口' },
+  { label: '备注说明', icon: 'note', ph: '补充用途说明，可留空…', state: 'multi' }
+];
+
+function ctlClass(state) {
+  return state === 'focus' ? 'ctl focus'
+       : state === 'error' ? 'ctl error errtxt'
+       : state === 'multi' ? 'ctl multi'
+       : 'ctl';
+}
+
+function innerA(f) {
+  // A / B / C 共用：图标在左侧，值或占位在中间，尾部眼睛/清除
+  let s = '';
+  if (f.icon) s += `<span class="ico">${ICON[f.icon]}</span>`;
+  if (f.value) {
+    s += `<span class="val${f.mask ? ' mask' : ''}">${f.mask ? '••••••••' : f.value}</span>`;
+    if (f.state === 'focus') s += '<span class="caret"></span>';
+  } else {
+    s += `<span class="ph">${f.ph}</span>`;
+    if (f.state === 'focus') s += '<span class="caret"></span>';
+  }
+  if (f.eye) s += `<span class="ico">${ICON.eye}</span>`;
+  else if (f.clear) s += `<span class="clr">${ICON.close}</span>`;
+  return s;
+}
+
+function innerD(f) {
+  // D：图标独立成槽
+  let s = `<span class="slot">${ICON[f.icon] || ICON.note}</span>`;
+  if (f.value) {
+    s += `<span class="val${f.mask ? ' mask' : ''}">${f.mask ? '••••••••' : f.value}</span>`;
+    if (f.state === 'focus') s += '<span class="caret"></span>';
+  } else {
+    s += `<span class="ph">${f.ph}</span>`;
+    if (f.state === 'focus') s += '<span class="caret"></span>';
+  }
+  s += '<span style="width:6px"></span>';
+  if (f.eye) s += `<span class="ico tail">${ICON.eye}</span>`;
+  else if (f.clear) s += `<span class="clr tail">${ICON.close}</span>`;
+  return s;
+}
+
+function buildField(v, f) {
+  const cls = ctlClass(f.state);
+  const body = v === 'd' ? innerD(f) : innerA(f);
+  const labelCls = 'flabel' + (f.state === 'focus' ? ' focus' : '') + (f.state === 'error' ? ' error' : '');
+  let html = `<div class="field">`;
+  html += `<div class="${labelCls}">${f.label}</div>`;
+  html += `<div class="${cls}">${body}</div>`;
+  if (f.helper) {
+    html += `<div class="helper${f.helperNeutral ? ' neutral' : ''}">${f.helperNeutral ? '' : ICON.warn}${f.helper}</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+function buildSearch(v, state) {
+  return `<div class="searchbar ${state}">
+    <span class="ico lead">${ICON.search}</span>
+    <span class="val">图书馆</span>
+    <span class="clr">${ICON.close}</span>
+  </div>`;
+}
+
+function render(v, theme) {
+  const wrapClass = 'v-' + v;
+  const body = document.getElementById('screen-' + v + '-' + theme);
+  if (!body) return;
+  body.parentElement.classList.add(wrapClass);
+  if (v === 'now') {
+    // 现状复刻：50 圆角 + 阴影 + 透明边框
+    const style = document.createElement('style');
+    style.textContent = `
+      .v-now .ctl { background: var(--surface); border: 1px solid transparent; border-radius: 999px; height: 58px; padding: 0 20px; box-shadow: 0 2px 6px rgba(15,23,42,.16); }
+      .v-now .ctl.focus { border-color: var(--primary); }
+      .v-now .ctl.multi { border-radius: 24px; height: auto; min-height: 92px; padding: 15px 20px; align-items: flex-start; }
+      .v-now .ctl.errtxt { border-color: var(--error); }
+      .v-now .searchbar { background: var(--field); border-radius: 16px; border: 1px solid var(--outline); }
+    `;
+    document.head.appendChild(style);
+  }
+  let html = '';
+  FIELDS.forEach(f => { html += buildField(v, f); });
+  html += buildSearch(v, v === 'now' ? '' : '');
+  body.innerHTML = html;
+}
+
+['light', 'dark'].forEach(t => {
+  ['now', 'a', 'b', 'c', 'd'].forEach(v => render(v, t));
+});
+</script>
+</body>
+</html>

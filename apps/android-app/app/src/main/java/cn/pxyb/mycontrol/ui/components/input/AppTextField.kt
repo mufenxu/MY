@@ -31,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -43,7 +42,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
-/** 圆润胶囊字段，提供外置标签、清空、密码显隐和就地校验提示。 */
+/** 填充胶囊字段：实色填充定形，聚焦转亮并加深主色内描边。提供外置标签、清空、密码显隐和就地校验提示。 */
 @Composable
 fun AppTextField(
     value: String,
@@ -112,9 +111,8 @@ fun AppTextField(
             onValueChange = onValueChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 58.dp)
+                .heightIn(min = 54.dp)
                 .then(if (testTag != null) Modifier.testTag(testTag) else Modifier)
-                .shadow(if (enabled) 2.dp else 0.dp, fieldShape)
                 .semantics {
                     // 标签移到框外后，读屏名称仍需附着在可编辑节点上。
                     if (fieldLabel != null) contentDescription = fieldLabel
@@ -180,14 +178,16 @@ fun AppTextField(
             shape = fieldShape,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                // surfaceVariant 在 Theme.kt 中被映射为 FieldSurface，是字段专用填充色。
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                errorContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = Color.Transparent,
                 disabledBorderColor = Color.Transparent,
                 errorBorderColor = MaterialTheme.colorScheme.error,
-                errorContainerColor = MaterialTheme.colorScheme.surface,
                 cursorColor = MaterialTheme.colorScheme.primary,
+                // 无描边的填充形态：默认与禁用态完全不画线，只有聚焦/错误态才出现描边。
             ),
         )
 

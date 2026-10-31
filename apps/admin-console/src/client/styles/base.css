@@ -1,15 +1,12 @@
-
-
 * {
   box-sizing: border-box;
-  -ms-overflow-style: none;
-  scrollbar-width: none !important;
 }
 
-*::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
+html,
+body {
+  /* 移动端：去掉点击高亮，双击不缩放，滚动手感更接近原生 */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 html {
@@ -18,24 +15,20 @@ html {
   min-width: 320px;
   min-height: 100%;
   overflow: hidden;
-  background: var(--page);
+  background: var(--stage);
 }
 
 body {
-  display: flow-root;
   width: 100%;
   height: 100%;
   min-width: 320px;
   min-height: 0;
   margin: 0;
   overflow: hidden;
-  color: var(--text);
+  color: var(--ink);
   font-size: var(--type-body);
   line-height: 1.5;
-  background-color: var(--page);
-  background-image: radial-gradient(circle at 15% 15%, rgba(240, 245, 255, 0.85) 0%, rgba(250, 252, 255, 0.95) 40%, rgba(244, 246, 250, 0.95) 100%), url('/assets/ops-topography-background.png');
-  background-repeat: repeat;
-  background-size: auto;
+  background-color: var(--stage);
 }
 
 #root {
@@ -45,6 +38,14 @@ body {
   overflow: hidden;
 }
 
-:root[data-theme="dark"] body {
-  background: radial-gradient(circle at 10% 20%, #151b2e 0%, #0c101c 55%, #050811 100%);
+::selection {
+  background: var(--blue-soft);
+}
+
+@media (max-width: 900px) {
+  html,
+  body,
+  #root {
+    overflow: hidden;
+  }
 }

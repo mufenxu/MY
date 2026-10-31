@@ -1,6 +1,5 @@
 package cn.pxyb.mycontrol.ui.components.input
 
-import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,7 +25,7 @@ import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
 
 /**
- * 现代全圆角胶囊搜索栏
+ * 填充胶囊搜索栏，与 [AppTextField] 共用同一套字段材质。
  */
 @Composable
 fun AppSearchBar(
@@ -40,7 +39,6 @@ fun AppSearchBar(
     leadingContent: (@Composable () -> Unit)? = null,
     borderless: Boolean = false,
 ) {
-    val dark = isAppInDarkTheme()
     val focusManager = LocalFocusManager.current
     val haptics = LocalHapticFeedback.current
 
@@ -90,12 +88,12 @@ fun AppSearchBar(
                 onSearch?.invoke(query)
             },
         ),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(50),
         colors = OutlinedTextFieldDefaults.colors(
-            focusedContainerColor = if (borderless) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow,
-            unfocusedContainerColor = if (borderless) Color.Transparent else MaterialTheme.colorScheme.surfaceContainerLow,
+            focusedContainerColor = if (borderless) Color.Transparent else MaterialTheme.colorScheme.surface,
+            unfocusedContainerColor = if (borderless) Color.Transparent else MaterialTheme.colorScheme.surfaceVariant,
             focusedBorderColor = if (borderless) Color.Transparent else MaterialTheme.colorScheme.primary,
-            unfocusedBorderColor = if (borderless) Color.Transparent else if (dark) Color.White.copy(alpha = 0.12f) else MaterialTheme.colorScheme.outlineVariant,
+            unfocusedBorderColor = Color.Transparent,
             cursorColor = MaterialTheme.colorScheme.primary,
         ),
     )

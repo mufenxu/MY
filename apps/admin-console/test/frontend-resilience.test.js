@@ -123,15 +123,15 @@ test('console navigation and segmented tabs preserve browser and keyboard semant
 
   assert.match(app, /window\.history\[replace \? 'replaceState' : 'pushState'\]/);
   assert.match(app, /window\.addEventListener\('popstate'/);
-  assert.match(app, /<SegmentedTabs/);
+  assert.match(readSource('src', 'client', 'OperationsViews.jsx'), /<SegmentedTabs/);
   assert.match(controls, /role="tablist"/);
   assert.match(controls, /role="tab"/);
   assert.match(controls, /tabIndex=\{active \? 0 : -1\}/);
   for (const key of ['ArrowRight', 'ArrowLeft', 'Home', 'End']) {
     assert.match(controls, new RegExp(`event\\.key === '${key}'`));
   }
-  assert.match(styles, /ops-topography-background\.png/);
-  assert.doesNotMatch(styles, /ops-topography-background\.webp/);
+  assert.match(styles, /\.dependency-stage\s*\{/);
+  assert.match(styles, /\.topology-panel\s*\{/);
 });
 
 test('notification nested tabs keep the existing panel spacing and accessible labels', () => {
@@ -171,11 +171,11 @@ test('homepage formal cockpit keeps summary and alert content tied to live obser
   const app = readConsoleSource();
   const styles = readSource('src', 'client', 'styles.css');
 
-  assert.match(app, /className="cockpit-overview-strip" aria-label="全网运行摘要"/);
+  assert.match(app, /className="hero-grid" aria-label="全网运行摘要"/);
   assert.match(app, /const healthyCount = counts\.healthy \?\? 0/);
   assert.match(app, /const incidentCount = operationsSummary\?\.incidents\?\.length \?\? attentionCount/);
-  assert.match(app, /\(operationsSummary\?\.incidents \|\| \[\]\)\.slice\(0, 3\)\.map/);
-  assert.match(app, /className="launcher-card-item"\s+type="button"/s);
+  assert.match(app, /incidents\.slice\(0, 3\)\.map/);
+  assert.match(app, /className="quick-item"\s+type="button"/s);
   assert.match(app, /onOpenConfiguration=\{\(\) => navigateToView\('configuration'\)\}/);
   assert.doesNotMatch(app, /网关响应耗时陡增/);
   assert.match(styles, /\.dependency-service-copy > strong\s*\{[^}]*font-size:\s*12\.5px/s);

@@ -47,9 +47,10 @@ import {
   workflowNameLabel,
 } from './release-presentation.js';
 import { SegmentedTabs, SelectControl } from './UiControls.jsx';
+import { EmptyState, StatusTag } from './Pearl.jsx';
 
-const STATE_LABELS = {
-  healthy: '正常',
+const STATE_SHORT = {
+  healthy: '在线',
   degraded: '异常',
   offline: '离线',
   unmonitored: '未监测',
@@ -159,28 +160,30 @@ function roleAtLeast(role, required) {
 function Feedback({ error, message }) {
   if (!error && !message) return null;
   return (
-    <div className={`ops-feedback ${error ? 'error' : 'success'}`} role={error ? 'alert' : 'status'}>
-      {error ? <CircleAlert size={17} /> : <CheckCircle2 size={17} />}
+    <div className={`alert ${error ? 'is-error' : 'is-ok'}`} role={error ? 'alert' : 'status'}>
+      {error ? <CircleAlert size={15} /> : <CheckCircle2 size={15} />}
       <span>{error || message}</span>
     </div>
   );
 }
 
 function LoadingBlock({ label = '正在加载' }) {
-  return <div className="ops-loading"><LoaderCircle className="spin" size={20} /> {label}</div>;
+  return <div className="loading-inline"><LoaderCircle className="spin" size={17} /> {label}</div>;
 }
 
 function StatePill({ value }) {
-  return <span className={`ops-state state-${value}`}><i />{STATE_LABELS[value] || value || '--'}</span>;
+  if (!value) return <span className="tag">--</span>;
+  return <StatusTag state={value} label={STATE_SHORT[value] || value} />;
 }
 
 function SeverityPill({ value }) {
-  return <span className={`ops-severity severity-${value}`}>{value === 'critical' ? '严重' : value === 'warning' ? '警告' : '提示'}</span>;
+  const tone = value === 'critical' ? 'danger' : value === 'warning' ? 'warn' : 'info';
+  return <span className={`tag tone-${tone}`}>{value === 'critical' ? '严重' : value === 'warning' ? '警告' : '提示'}</span>;
 }
 
 function MonitoringChart({ groups }) {
   const entries = Object.entries(groups).filter(([, samples]) => samples.length).slice(0, 6);
-  if (!entries.length) return <div className="ops-empty">当前时间范围暂无历史样本</div>;
+  if (!entries.length) return <EmptyState title="当前时间范围暂无历史样本" detail="等待服务端继续采集" />;
   const allSamples = entries.flatMap(([, samples]) => samples);
   const timestamps = allSamples.map((sample) => Date.parse(sample.recordedAt)).filter(Number.isFinite);
   const latencies = allSamples.map((sample) => sample.latencyMs).filter(Number.isFinite);
@@ -197,7 +200,7 @@ function MonitoringChart({ groups }) {
   const y = (value) => 212 - (scaleLatency(Math.min(value, maximum)) / scaledMaximum) * 164;
 
   return (
-    <div className="ops-history-chart">
+    <div className="chart-frame">
       <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" role="img" aria-label="服务响应时间历史趋势">
         {[48, 102, 157, 212].map((position) => <line key={position} x1="40" x2="850" y1={position} y2={position} />)}
         {entries.map(([serviceId, samples], index) => {
@@ -208,7 +211,7 @@ function MonitoringChart({ groups }) {
           return points ? <polyline key={serviceId} points={points} style={{ stroke: CHART_COLORS[index] }} /> : null;
         })}
       </svg>
-      <div className="ops-chart-legend">
+      <div className="chart-legend">
         {entries.map(([serviceId], index) => <span key={serviceId}><i style={{ background: CHART_COLORS[index] }} />{serviceId}</span>)}
       </div>
     </div>
@@ -258,12 +261,13 @@ function TrendMonitoringPanel({ services }) {
   const p95Values = summaries.map((item) => item.p95).filter(Number.isFinite);
 
   return (
-    <>
-      <div className="ops-toolbar">
-        <div className="ops-segmented" aria-label="时间范围">
+    <div className="view-stack">
+      <div className="toolbar">
+        <div className="segmented" aria-label="时间范围">
           {[1, 24, 168, 720].map((value) => <button key={value} className={hours === value ? 'active' : ''} type="button" onClick={() => setHours(value)}>{value === 1 ? '1 小时' : value === 24 ? '24 小时' : value === 168 ? '7 天' : '30 天'}</button>)}
         </div>
-        <div className="ops-select-label"><span>服务</span>
+        <div className="toolbar-label">
+          <span>服务</span>
           <SelectControl
             ariaLabel="筛选监控服务"
             value={selected}
@@ -274,39 +278,53 @@ function TrendMonitoringPanel({ services }) {
             ]}
           />
         </div>
-        <button className="secondary-action" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={17} />刷新</button>
+        <div className="toolbar-end">
+          <button className="btn btn-secondary btn-sm" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={15} />刷新</button>
+        </div>
       </div>
       <Feedback error={error} />
-      <div className="ops-kpis">
-        <article><Activity size={20} /><div><span>平均可用率</span><strong>{availability === null ? '--' : `${availability.toFixed(2)}%`}</strong><small>排除维护窗口</small></div></article>
-        <article><Gauge size={20} /><div><span>最高 P95</span><strong>{p95Values.length ? `${Math.max(...p95Values)} ms` : '--'}</strong><small>健康检查响应</small></div></article>
-        <article><History size={20} /><div><span>历史样本</span><strong>{samples.length}</strong><small>{hours === 720 ? '最近 30 天' : `最近 ${hours} 小时`}</small></div></article>
-        <article><ServerCog size={20} /><div><span>监测服务</span><strong>{summaries.length}</strong><small>服务端持续采集</small></div></article>
+      <div className="stat-strip">
+        <div className="stat-card"><span className="stat-icon tone-info"><Activity size={17} /></span><div><span className="panel-meta">平均可用率</span><strong className="stat-figure">{availability === null ? '--' : `${availability.toFixed(2)}%`}</strong><small className="panel-meta">排除维护窗口</small></div></div>
+        <div className="stat-card"><span className="stat-icon tone-violet"><Gauge size={17} /></span><div><span className="panel-meta">最高 P95</span><strong className="stat-figure">{p95Values.length ? `${Math.max(...p95Values)} ms` : '--'}</strong><small className="panel-meta">健康检查响应</small></div></div>
+        <div className="stat-card"><span className="stat-icon tone-ok"><History size={17} /></span><div><span className="panel-meta">历史样本</span><strong className="stat-figure">{samples.length}</strong><small className="panel-meta">{hours === 720 ? '最近 30 天' : `最近 ${hours} 小时`}</small></div></div>
+        <div className="stat-card"><span className="stat-icon tone-info"><ServerCog size={17} /></span><div><span className="panel-meta">监测服务</span><strong className="stat-figure">{summaries.length}</strong><small className="panel-meta">服务端持续采集</small></div></div>
       </div>
-      <section className="ops-panel">
-        <header><div><span>性能趋势</span><h3>真实响应时间序列</h3></div><Gauge size={20} /></header>
-        {loading && samples.length === 0 ? <LoadingBlock label="正在读取历史样本" /> : <MonitoringChart groups={groups} />}
+      <section className="panel">
+        <div className="panel-head">
+          <div className="panel-title"><Gauge size={15} />性能趋势</div>
+          <span className="panel-meta">真实响应时间序列</span>
+        </div>
+        <div className="panel-body">
+          {loading && samples.length === 0 ? <LoadingBlock label="正在读取历史样本" /> : <MonitoringChart groups={groups} />}
+        </div>
       </section>
-      <section className="ops-panel ops-table-panel">
-        <div className="ops-table-head monitoring-table"><span>服务</span><span>当前</span><span>可用率</span><span>P95</span><span>样本</span><span>最近采集</span></div>
-        {summaries.map((item) => (
-          <div className="ops-table-row monitoring-table" key={item.serviceId}>
-            <strong>{services.find((service) => service.id === item.serviceId)?.shortName || item.serviceId}</strong>
-            <StatePill value={item.latest?.state} />
-            <span>{item.availability === null ? '--' : `${item.availability.toFixed(2)}%`}</span>
-            <span>{Number.isFinite(item.p95) ? `${item.p95} ms` : '--'}</span>
-            <span>{item.samples}</span>
-            <span>{formatRelative(item.latest?.recordedAt)}</span>
-          </div>
-        ))}
+      <section className="panel panel-flush">
+        <div className="panel-head">
+          <div className="panel-title"><ServerCog size={15} />服务响应明细</div>
+          <span className="panel-meta">{summaries.length} 个服务</span>
+        </div>
+        <div className="data-list">
+          <div className="data-head col-monitor"><span>服务</span><span>当前</span><span>可用率</span><span>P95</span><span>样本</span><span>最近采集</span></div>
+          {summaries.map((item) => (
+            <div className="data-row col-monitor" key={item.serviceId}>
+              <span className="cell-stack"><strong>{services.find((service) => service.id === item.serviceId)?.shortName || item.serviceId}</strong></span>
+              <StatePill value={item.latest?.state} />
+              <span className="cell-num">{item.availability === null ? '--' : `${item.availability.toFixed(2)}%`}</span>
+              <span className="cell-num">{Number.isFinite(item.p95) ? `${item.p95} ms` : '--'}</span>
+              <span className="cell-num">{item.samples}</span>
+              <span className="panel-meta">{formatRelative(item.latest?.recordedAt)}</span>
+            </div>
+          ))}
+          {summaries.length === 0 && !loading && <div className="data-list-empty"><EmptyState title="暂无监控样本" detail="检查服务健康检查地址是否已接入" /></div>}
+        </div>
       </section>
-    </>
+    </div>
   );
 }
 
 export function MonitoringView({ services }) {
   return (
-    <section className="page-view ops-page" aria-label="运行趋势">
+    <section className="page-view" aria-label="运行趋势">
       <TrendMonitoringPanel services={services} />
     </section>
   );
@@ -374,69 +392,111 @@ export function IncidentsView({ session, targetEntityId = '', onNavigate }) {
   }
 
   return (
-    <section className="page-view ops-page" aria-label="告警事件">
-      <div className="ops-toolbar">
-        <div className="ops-segmented">
+    <section className="page-view view-stack" aria-label="告警事件">
+      <div className="toolbar">
+        <div className="segmented" aria-label="事件筛选">
           {[['active', '待处理'], ['resolved', '已恢复'], ['all', '全部']].map(([value, label]) => <button key={value} className={filter === value ? 'active' : ''} type="button" onClick={() => setFilter(value)}>{label}</button>)}
         </div>
-        <button className="secondary-action" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={17} />刷新</button>
+        <div className="toolbar-end">
+          <button className="btn btn-secondary btn-sm" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={15} />刷新</button>
+        </div>
       </div>
       <Feedback error={error} message={message} />
-      <div className="ops-kpis incident-kpis">
-        <article><BellRing size={20} /><div><span>当前列表</span><strong>{incidents.length}</strong><small>符合筛选条件</small></div></article>
-        <article><AlertTriangle size={20} /><div><span>严重事件</span><strong>{incidents.filter((item) => item.severity === 'critical').length}</strong><small>优先处理</small></div></article>
-        <article><UserRoundCheck size={20} /><div><span>已确认</span><strong>{incidents.filter((item) => item.status === 'acknowledged').length}</strong><small>正在跟进</small></div></article>
-        <article><CheckCircle2 size={20} /><div><span>已恢复</span><strong>{incidents.filter((item) => item.status === 'resolved').length}</strong><small>自动或手动关闭</small></div></article>
+      <div className="stat-strip">
+        <div className="stat-card"><span className="stat-icon tone-info"><BellRing size={17} /></span><div><span className="panel-meta">当前列表</span><strong className="stat-figure">{incidents.length}</strong><small className="panel-meta">符合筛选条件</small></div></div>
+        <div className="stat-card"><span className="stat-icon tone-warn"><AlertTriangle size={17} /></span><div><span className="panel-meta">严重事件</span><strong className="stat-figure">{incidents.filter((item) => item.severity === 'critical').length}</strong><small className="panel-meta">优先处理</small></div></div>
+        <div className="stat-card"><span className="stat-icon tone-violet"><UserRoundCheck size={17} /></span><div><span className="panel-meta">已确认</span><strong className="stat-figure">{incidents.filter((item) => item.status === 'acknowledged').length}</strong><small className="panel-meta">正在跟进</small></div></div>
+        <div className="stat-card"><span className="stat-icon tone-ok"><CheckCircle2 size={17} /></span><div><span className="panel-meta">已恢复</span><strong className="stat-figure">{incidents.filter((item) => item.status === 'resolved').length}</strong><small className="panel-meta">自动或手动关闭</small></div></div>
       </div>
-      <div className="incident-workspace">
-        <section className="ops-panel incident-list-panel">
-          {loading && incidents.length === 0 ? <LoadingBlock label="正在读取事件" /> : incidents.length ? incidents.map((incident) => (
-            <button type="button" className={`incident-list-row ${selectedId === incident.id ? 'selected' : ''}`} data-entity-id={incident.id} key={incident.id} onClick={() => setSelectedId(incident.id)}>
-              <span className={`incident-mark severity-${incident.severity}`}><CircleAlert size={17} /></span>
-              <span><strong>{incident.title}</strong><small>{incident.description}</small></span>
-              <span><SeverityPill value={incident.severity} /><small>{formatRelative(incident.lastSeenAt)}</small></span>
-              <ChevronRight size={16} />
-            </button>
-          )) : <div className="ops-empty">当前没有事件</div>}
+      <div className="split">
+        <section className="panel panel-flush incident-list-panel">
+          <div className="panel-head">
+            <div className="panel-title"><BellRing size={15} />事件列表</div>
+            <span className="panel-meta">{incidents.length} 条记录</span>
+          </div>
+          {loading && incidents.length === 0 ? <LoadingBlock label="正在读取事件" /> : incidents.length ? (
+            <div className="incident-list">
+              {incidents.map((incident) => (
+                <button
+                  type="button"
+                  className={`incident-item ${selectedId === incident.id ? 'is-selected' : ''}`}
+                  data-entity-id={incident.id}
+                  key={incident.id}
+                  onClick={() => setSelectedId(incident.id)}
+                >
+                  <span className={`sev is-${incident.severity}`}><CircleAlert size={14} /></span>
+                  <span className="incident-copy"><strong>{incident.title}</strong><small>{incident.description}</small></span>
+                  <span className="incident-meta"><SeverityPill value={incident.severity} /><small>{formatRelative(incident.lastSeenAt)}</small></span>
+                  <ChevronRight size={14} />
+                </button>
+              ))}
+            </div>
+          ) : <EmptyState title="当前没有事件" detail="所有服务状态都在预期范围内" />}
         </section>
-        <aside className="ops-panel incident-detail-panel">
+        <aside className="panel split-side incident-detail-panel">
           {selected ? (
             <>
-              <header><div><span>{selected.serviceId || selected.source}</span><h3>{selected.title}</h3></div><SeverityPill value={selected.severity} /></header>
-              <p>{selected.description}</p>
-              <dl className="ops-detail-grid">
-                <div><dt>状态</dt><dd>{INCIDENT_LABELS[selected.status] || selected.status}</dd></div>
-                <div><dt>首次发生</dt><dd>{formatDateTime(selected.firstSeenAt)}</dd></div>
-                <div><dt>最近观测</dt><dd>{formatDateTime(selected.lastSeenAt)}</dd></div>
-              </dl>
-              {onNavigate && (
-                <div className="incident-context-actions" aria-label="事件关联工具">
-                  <button type="button" onClick={() => onNavigate('diagnostics', { entity: selected.serviceId || null })}><Play size={15} />运行诊断</button>
-                  <button type="button" onClick={() => onNavigate('releases')}><Rocket size={15} />检查发布</button>
-                  <button type="button" onClick={() => onNavigate('configuration')}><Settings2 size={15} />检查配置</button>
+              <div className="detail-head">
+                <div>
+                  <span className="detail-eyebrow">{selected.serviceId || selected.source || 'incident'}</span>
+                  <h3>{selected.title}</h3>
                 </div>
-              )}
-              <div className="incident-timeline">
-                {(selected.timeline || []).slice(-8).reverse().map((event, index) => <div key={`${event.at}-${index}`}><i /><span><strong>{event.message}</strong><small>{event.actor} · {formatDateTime(event.at)}</small></span></div>)}
+                <SeverityPill value={selected.severity} />
               </div>
-              {canOperate && selected.status !== 'resolved' && (
-                <div className="incident-actions">
-                  <label>处理备注<textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="记录判断和处理结果" /></label>
-                  <div>
-                    <button type="button" onClick={() => act('note')} disabled={Boolean(acting) || !note.trim()}><MessageSquareText size={16} />记录备注</button>
-                    {selected.status === 'open' && <button type="button" onClick={() => act('acknowledge')} disabled={Boolean(acting)}><Check size={16} />确认</button>}
-                    <button type="button" onClick={() => act('mute', { muteMinutes: 60 })} disabled={Boolean(acting)}><Clock3 size={16} />静默 1 小时</button>
-                    <button className="primary-button" type="button" onClick={() => act('resolve')} disabled={Boolean(acting)}>{acting === 'resolve' ? <LoaderCircle className="spin" size={16} /> : <CheckCircle2 size={16} />}关闭事件</button>
+              <div className="detail-body">
+                <p className="detail-desc">{selected.description}</p>
+                <dl className="detail-grid">
+                  <div><dt>状态</dt><dd>{INCIDENT_LABELS[selected.status] || selected.status}</dd></div>
+                  <div><dt>严重度</dt><dd>{selected.severity === 'critical' ? '严重' : selected.severity === 'warning' ? '警告' : '提示'}</dd></div>
+                  <div><dt>首次发生</dt><dd>{formatDateTime(selected.firstSeenAt)}</dd></div>
+                  <div><dt>最近观测</dt><dd>{formatDateTime(selected.lastSeenAt)}</dd></div>
+                </dl>
+                {onNavigate && (
+                  <div className="detail-section">
+                    <span className="detail-section-title">关联工具</span>
+                    <div className="inline-actions">
+                      <button className="btn btn-secondary btn-sm" type="button" onClick={() => onNavigate('diagnostics', { entity: selected.serviceId || null })}><Play size={14} />运行诊断</button>
+                      <button className="btn btn-secondary btn-sm" type="button" onClick={() => onNavigate('releases')}><Rocket size={14} />检查发布</button>
+                      <button className="btn btn-secondary btn-sm" type="button" onClick={() => onNavigate('configuration')}><Settings2 size={14} />检查配置</button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+                {(selected.timeline || []).length > 0 && (
+                  <div className="detail-section">
+                    <span className="detail-section-title">处理时间线</span>
+                    <div className="timeline">
+                      {(selected.timeline || []).slice(-8).reverse().map((event, index) => (
+                        <div className="timeline-row" key={`${event.at}-${index}`}>
+                          <span><strong>{event.message}</strong><small>{event.actor} · {formatDateTime(event.at)}</small></span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {canOperate && selected.status !== 'resolved' && (
+                  <div className="detail-section">
+                    <span className="detail-section-title">处置</span>
+                    <label className="field">
+                      <span className="field-label">处理备注</span>
+                      <textarea value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="记录判断和处理结果" rows={3} />
+                    </label>
+                    <div className="inline-actions">
+                      <button className="btn btn-secondary btn-sm" type="button" onClick={() => act('note')} disabled={Boolean(acting) || !note.trim()}><MessageSquareText size={14} />记录备注</button>
+                      {selected.status === 'open' && <button className="btn btn-secondary btn-sm" type="button" onClick={() => act('acknowledge')} disabled={Boolean(acting)}><Check size={14} />确认</button>}
+                      <button className="btn btn-secondary btn-sm" type="button" onClick={() => act('mute', { muteMinutes: 60 })} disabled={Boolean(acting)}><Clock3 size={14} />静默 1 小时</button>
+                      <button className="btn btn-primary btn-sm" type="button" onClick={() => act('resolve')} disabled={Boolean(acting)}>{acting === 'resolve' ? <LoaderCircle className="spin" size={14} /> : <CheckCircle2 size={14} />}关闭事件</button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </>
-          ) : <div className="ops-empty">选择一个事件查看详情</div>}
+          ) : <EmptyState title="选择一个事件查看详情" detail="左侧列表按最近观测排序" />}
         </aside>
       </div>
     </section>
   );
 }
+
 
 export function ReleasesView({ session, targetEntityId = '' }) {
   const [data, setData] = useState(null);
@@ -820,21 +880,47 @@ export function SecurityAuditView({ session, onLogout }) {
   const sensitiveReady = Boolean(reauthenticatedUntil) || Boolean(credentials.password && (!totpEnabled || credentials.totp.length === 6));
   const failures = events.filter((event) => event.outcome === 'failure').length;
   return (
-    <section className="page-view ops-page" aria-label="账号与安全">
-      <div className="ops-toolbar"><SegmentedTabs ariaLabel="安全设置" idPrefix="security-view-tab" panelId="security-view-panel" items={[{ id: 'audit', label: '操作记录' }, { id: 'sessions', label: '登录设备' }, { id: 'authenticators', label: '登录保护' }, ...(canManageAccounts ? [{ id: 'accounts', label: '平台账号' }] : [])]} value={tab} onChange={setTab} /><button className="secondary-action" type="button" onClick={load}><RefreshCw size={17} />刷新</button></div>
+    <section className="page-view view-stack" aria-label="账号与安全">
+      <div className="toolbar">
+        <SegmentedTabs ariaLabel="安全设置" idPrefix="security-view-tab" panelId="security-view-panel" items={[{ id: 'audit', label: '操作记录' }, { id: 'sessions', label: '登录设备' }, { id: 'authenticators', label: '登录保护' }, ...(canManageAccounts ? [{ id: 'accounts', label: '平台账号' }] : [])]} value={tab} onChange={setTab} />
+        <div className="toolbar-end">
+          <button className="btn btn-secondary btn-sm" type="button" onClick={load}><RefreshCw size={15} />刷新</button>
+        </div>
+      </div>
       <Feedback error={error} message={message} />
-      {(tab === 'authenticators' || tab === 'accounts') && passkeys.length > 0 && <div className="ops-toolbar"><button className="secondary-action" type="button" disabled={submitting} onClick={reauthenticateWithPasskey}><Fingerprint size={17} />使用 Passkey 确认身份</button>{reauthenticatedUntil > 0 && <span role="status">身份已确认，当前密码和动态验证码可留空</span>}</div>}
-      <div className="ops-kpis">
-        <article><ShieldCheck size={20} /><div><span>当前账号</span><strong>{session.user?.username || 'admin'}</strong><small>个人管理员</small></div></article>
-        <article><KeyRound size={20} /><div><span>登录保护</span><strong>{totpEnabled ? '已开启' : '未开启'}</strong><small>{totpEnabled ? `剩余 ${sessionData?.security?.recoveryCodesRemaining || 0} 个恢复码` : '建议开启'}</small></div></article>
-        <article><UserRoundCheck size={20} /><div><span>登录设备</span><strong>{sessionData?.sessions?.length || 0}</strong><small>可让陌生设备退出</small></div></article>
-        <article><XCircle size={20} /><div><span>失败操作</span><strong>{failures}</strong><small>最近 200 条记录</small></div></article>
+      {(tab === 'authenticators' || tab === 'accounts') && passkeys.length > 0 && (
+        <div className="toolbar">
+          <button className="btn btn-secondary btn-sm" type="button" disabled={submitting} onClick={reauthenticateWithPasskey}><Fingerprint size={15} />使用 Passkey 确认身份</button>
+          {reauthenticatedUntil > 0 && <span className="toolbar-hint" role="status">身份已确认，当前密码和动态验证码可留空</span>}
+        </div>
+      )}
+      <div className="stat-strip">
+        <div className="stat-card"><span className="stat-icon tone-info"><ShieldCheck size={17} /></span><div><span className="panel-meta">当前账号</span><strong className="stat-figure">{session.user?.username || 'admin'}</strong><small className="panel-meta">个人管理员</small></div></div>
+        <div className="stat-card"><span className="stat-icon tone-ok"><KeyRound size={17} /></span><div><span className="panel-meta">登录保护</span><strong className="stat-figure">{totpEnabled ? '已开启' : '未开启'}</strong><small className="panel-meta">{totpEnabled ? `剩余 ${sessionData?.security?.recoveryCodesRemaining || 0} 个恢复码` : '建议开启动态验证'}</small></div></div>
+        <div className="stat-card"><span className="stat-icon tone-violet"><UserRoundCheck size={17} /></span><div><span className="panel-meta">登录设备</span><strong className="stat-figure">{sessionData?.sessions?.length || 0}</strong><small className="panel-meta">可让陌生设备退出</small></div></div>
+        <div className="stat-card"><span className="stat-icon tone-warn"><XCircle size={17} /></span><div><span className="panel-meta">失败操作</span><strong className="stat-figure">{failures}</strong><small className="panel-meta">最近 200 条记录</small></div></div>
       </div>
       <div id="security-view-panel" role="tabpanel" aria-labelledby={`security-view-tab-${tab}`} aria-busy={loading}>
       {loading && !sessionData ? <LoadingBlock /> : tab === 'audit' ? (
-        <section className="ops-panel ops-table-panel">
-          <div className="ops-table-head audit-table"><span>时间</span><span>操作</span><span>操作者</span><span>目标</span><span>来源 IP</span><span>结果</span></div>
-          {events.map((event) => <div className="ops-table-row audit-table" key={event.id}><span>{formatDateTime(event.occurredAt)}</span><strong>{ACTION_LABELS[event.action] || event.action}</strong><span>{event.actor}</span><span className="audit-target"><strong>{event.targetId || event.targetType}</strong><small>{event.requestId || event.details?.errorKind || ''}</small></span><span>{event.ip || '--'}</span><span className={`audit-outcome ${event.outcome}`}>{event.outcome === 'success' ? '成功' : '失败'}</span></div>)}
+        <section className="panel panel-flush">
+          <div className="panel-head">
+            <div className="panel-title"><FileClock size={15} />操作记录</div>
+            <span className="panel-meta">{events.length} 条</span>
+          </div>
+          <div className="data-list">
+            <div className="data-head col-audit"><span>时间</span><span>操作</span><span>操作者</span><span>目标</span><span>来源 IP</span><span>结果</span></div>
+            {events.map((event) => (
+              <div className="data-row col-audit" key={event.id}>
+                <span className="cell-mono">{formatDateTime(event.occurredAt)}</span>
+                <span className="cell-stack"><strong>{ACTION_LABELS[event.action] || event.action}</strong></span>
+                <span className="panel-meta">{event.actor}</span>
+                <span className="cell-stack"><strong>{event.targetId || event.targetType}</strong><small>{event.requestId || event.details?.errorKind || ''}</small></span>
+                <span className="cell-mono">{event.ip || '--'}</span>
+                <span><span className={`tag tone-${event.outcome === 'success' ? 'ok' : 'danger'}`}>{event.outcome === 'success' ? '成功' : '失败'}</span></span>
+              </div>
+            ))}
+            {events.length === 0 && <div className="data-list-empty"><EmptyState title="暂无操作记录" detail="管理员的关键操作会记录在这里" /></div>}
+          </div>
         </section>
       ) : tab === 'sessions' ? (
         <section className="ops-panel session-list">

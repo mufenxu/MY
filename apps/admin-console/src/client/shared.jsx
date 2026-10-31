@@ -1,4 +1,5 @@
 import {
+  Activity,
   AppWindow,
   Bell,
   Bot,
@@ -8,6 +9,7 @@ import {
   CircleAlert,
   CircleOff,
   Clock3,
+  ExternalLink,
   GraduationCap,
   LayoutDashboard,
   ListTodo,
@@ -27,6 +29,24 @@ export const NAVIGATION_ICONS = {
   observability: ChartNoAxesCombined,
   execution: ListTodo,
   capabilities: Zap,
+  security: ShieldCheck,
+};
+
+/* 二级导航图标：与分组图标区分，避免同一轨里出现重复图形 */
+export const VIEW_ICONS = {
+  all: LayoutDashboard,
+  miniapp: AppWindow,
+  service: Boxes,
+  'external-apps': ExternalLink,
+  monitoring: ChartNoAxesCombined,
+  incidents: CircleAlert,
+  diagnostics: Activity,
+  tasks: ListTodo,
+  releases: RefreshCw,
+  configuration: Zap,
+  backup: Boxes,
+  notification: Bell,
+  automation: Bot,
   security: ShieldCheck,
 };
 

@@ -1,105 +1,191 @@
 import {
   Activity,
-  Archive,
   AppWindow,
+  Archive,
   ArrowRight,
   ArrowUpRight,
   Boxes,
-  CheckCircle2,
-  ChevronRight,
   CircleAlert,
   LoaderCircle,
-  Network,
   RefreshCw,
   Settings,
   Zap,
 } from 'lucide-react';
 import { HolographicTopology } from './HolographicTopology.jsx';
+import { Metric, Ruler, StatusTag } from './Pearl.jsx';
 import { formatCheckedAt, SERVICE_ICONS, STATE_META, STATE_PRIORITY } from './shared.jsx';
 
-const LAUNCHER_TONES = {
-  core: 'blue',
-  exam: 'cyan',
-  campus: 'amber',
-  mqtt: 'purple',
-  notify: 'green',
-  'ct8-automation': 'slate',
-  platform: 'blue',
-};
+const CHART_WIDTH = 760;
+const CHART_HEIGHT = 196;
+const CHART_PAD = { top: 14, right: 14, bottom: 24, left: 40 };
 
-export function OperationsChart({ services, history = {} }) {
-  const chartServices = services
+function formatClock(value) {
+  if (!value) return '--';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--';
+  return new Intl.DateTimeFormat('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date);
+}
+
+/**
+ * 把各服务的历史采样按时间等分成桶，算出每个桶的全网平均响应。
+ * 没有足够历史时退化为“各服务响应对比”，避免画一条假曲线。
+ */
+function buildLatencySeries(services, history) {
+  const all = [];
+  for (const service of services) {
+    const samples = history?.[service.id]?.samples || [];
+    for (const sample of samples) {
+      const recordedAt = Date.parse(sample.recordedAt);
+      if (Number.isFinite(recordedAt) && Number.isFinite(sample.latencyMs)) {
+        all.push({ recordedAt, latencyMs: sample.latencyMs });
+      }
+    }
+  }
+
+  if (all.length >= 4) {
+    const times = all.map((sample) => sample.recordedAt);
+    const startTime = Math.min(...times);
+    const endTime = Math.max(...times);
+    const span = Math.max(endTime - startTime, 60_000);
+    const bucketCount = 26;
+    const buckets = Array.from({ length: bucketCount }, () => []);
+    for (const sample of all) {
+      const index = Math.min(bucketCount - 1, Math.floor(((sample.recordedAt - startTime) / span) * bucketCount));
+      buckets[index].push(sample.latencyMs);
+    }
+    const points = buckets
+      .map((values, index) => (values.length ? {
+        time: startTime + ((index + 0.5) / bucketCount) * span,
+        value: Math.round(values.reduce((sum, value) => sum + value, 0) / values.length),
+      } : null))
+      .filter(Boolean);
+
+    if (points.length >= 3) {
+      const values = points.map((point) => point.value);
+      return {
+        mode: 'trend',
+        points,
+        startTime,
+        endTime,
+        average: Math.round(values.reduce((sum, value) => sum + value, 0) / values.length),
+        peak: Math.max(...values),
+        lowest: Math.min(...values),
+      };
+    }
+  }
+
+  const compare = services
     .filter((service) => Number.isFinite(service.latencyMs))
-    .slice(0, 6);
-  const items = chartServices.length > 0 ? chartServices : services.slice(0, 6);
-  const values = items.map((service) => service.latencyMs || 0);
-  const fastest = values.length > 0 ? Math.min(...values) : null;
-  const onlineValues = items
-    .filter((service) => !['offline', 'unmonitored'].includes(service.state) && Number.isFinite(service.latencyMs))
-    .map((service) => service.latencyMs);
-  const average = onlineValues.length > 0
-    ? Math.round(onlineValues.reduce((sum, value) => sum + value, 0) / onlineValues.length)
-    : null;
-  const peak = values.length > 0 ? Math.max(...values) : null;
-  const series = items.map((service) => {
-    const persisted = history[service.id]?.samples || [];
-    const samples = persisted.filter((sample) => Number.isFinite(sample.latencyMs));
-    return {
-      service,
-      samples: samples.length ? samples : Number.isFinite(service.latencyMs)
-        ? [{ recordedAt: service.checkedAt || new Date().toISOString(), latencyMs: service.latencyMs }]
-        : [],
-    };
-  });
-  const historyValues = series.flatMap((entry) => entry.samples.map((sample) => sample.latencyMs));
-  const historyTimes = series.flatMap((entry) => entry.samples.map((sample) => Date.parse(sample.recordedAt))).filter(Number.isFinite);
-  const maximum = Math.max(...historyValues, 1);
-  const minimumPositive = Math.min(...historyValues.filter((value) => value > 0), maximum);
-  const useLogScale = maximum / Math.max(minimumPositive, 1) >= 10;
-  const scaleLatency = (value) => useLogScale ? Math.log10(value + 1) : value;
-  const scaledMaximum = scaleLatency(maximum);
-  const startTime = Math.min(...historyTimes, Date.now());
-  const endTime = Math.max(...historyTimes, startTime + 1);
-  const width = 620;
-  const height = 220;
-  const xStart = 28;
-  const xEnd = 592;
-  const xFor = (recordedAt) => xStart + ((Date.parse(recordedAt) - startTime) / (endTime - startTime)) * (xEnd - xStart);
-  const yFor = (latencyMs) => 178 - (scaleLatency(latencyMs) / scaledMaximum) * 116;
-  const colors = ['#2877f7', '#11ad78', '#ff8a00', '#8a45ef', '#d75467', '#13bad6'];
+    .map((service) => ({ id: service.id, name: service.shortName || service.name, latencyMs: service.latencyMs }))
+    .sort((left, right) => right.latencyMs - left.latencyMs);
+
+  return compare.length ? { mode: 'compare', items: compare } : { mode: 'empty' };
+}
+
+export function OperationsChart({ services = [], history = {} }) {
+  const series = buildLatencySeries(services, history);
+
+  if (series.mode === 'empty') {
+    return <div className="trend-empty"><LoaderCircle className="spin" size={17} /> 正在同步服务响应数据</div>;
+  }
+
+  if (series.mode === 'compare') {
+    const maximum = Math.max(...series.items.map((item) => item.latencyMs), 1);
+    return (
+      <div className="compare-chart">
+        {series.items.map((item) => (
+          <div className="compare-row" key={item.id}>
+            <span className="compare-name">{item.name}</span>
+            <span className="compare-track">
+              <i style={{ width: `${Math.max(4, Math.round((item.latencyMs / maximum) * 100))}%` }} />
+            </span>
+            <span className="compare-value">{item.latencyMs} ms</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const plotWidth = CHART_WIDTH - CHART_PAD.left - CHART_PAD.right;
+  const plotHeight = CHART_HEIGHT - CHART_PAD.top - CHART_PAD.bottom;
+  const ceiling = Math.max(series.peak * 1.18, 10);
+  const xFor = (index) => CHART_PAD.left + (series.points.length > 1 ? (index / (series.points.length - 1)) * plotWidth : plotWidth / 2);
+  const yFor = (value) => CHART_PAD.top + plotHeight - (value / ceiling) * plotHeight;
+  const line = series.points.map((point, index) => `${xFor(index).toFixed(1)},${yFor(point.value).toFixed(1)}`).join(' ');
+  const area = `${CHART_PAD.left},${CHART_PAD.top + plotHeight} ${line} ${CHART_PAD.left + plotWidth},${CHART_PAD.top + plotHeight}`;
+  const lastIndex = series.points.length - 1;
 
   return (
-    <div className="operations-chart">
-      <div className="chart-summary" aria-label="响应时间摘要">
-        <span className="fast"><i /> 最快 {fastest === null ? '--' : `${fastest} ms`}</span>
-        <span className="average"><i /> 在线平均 {average === null ? '--' : `${average} ms`}</span>
-        <span className="peak"><i /> 峰值 {peak === null ? '--' : `${peak} ms`}</span>
-      </div>
-      {items.length > 0 ? (
-        <>
-          <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="服务响应与健康状态趋势图">
-            <defs>
-              <linearGradient id="chart-area" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="#23c4df" stopOpacity="0.16" />
-                <stop offset="100%" stopColor="#23c4df" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            {[60, 118, 178].map((y) => <line className="chart-grid-line" key={y} x1="22" x2="598" y1={y} y2={y} />)}
-            {series.map((entry, index) => {
-              const points = entry.samples.map((sample) => `${xFor(sample.recordedAt)},${yFor(sample.latencyMs)}`).join(' ');
-              return points ? <polyline className="chart-line" key={entry.service.id} points={points} style={{ stroke: colors[index] }} /> : null;
-            })}
-          </svg>
-          <div className="chart-service-legend">
-            {series.map((entry, index) => <span key={entry.service.id}><i style={{ background: colors[index] }} />{entry.service.shortName || entry.service.name}</span>)}
-          </div>
-        </>
-      ) : (
-        <div className="chart-empty"><LoaderCircle className="spin" size={18} /> 正在同步服务趋势</div>
-      )}
-    </div>
+    <svg
+      className="trend-chart"
+      viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+      role="img"
+      aria-label={`全网平均响应趋势，平均 ${series.average} 毫秒，峰值 ${series.peak} 毫秒`}
+    >
+      <defs>
+        <linearGradient id="trendArea" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="var(--blue)" stopOpacity="0.18" />
+          <stop offset="100%" stopColor="var(--blue)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {[0, 0.5, 1].map((ratio) => {
+        const y = CHART_PAD.top + plotHeight * ratio;
+        const value = Math.round(ceiling * (1 - ratio));
+        return (
+          <g key={ratio}>
+            <line className="grid-line" x1={CHART_PAD.left} x2={CHART_PAD.left + plotWidth} y1={y} y2={y} />
+            <text className="axis-label" x={CHART_PAD.left - 8} y={y + 3} textAnchor="end">{value}</text>
+          </g>
+        );
+      })}
+
+      <polygon className="series-area" points={area} />
+      <polyline className="series-line" points={line} />
+      <line className="now-line" x1={xFor(lastIndex)} x2={xFor(lastIndex)} y1={CHART_PAD.top} y2={CHART_PAD.top + plotHeight} />
+      <circle className="series-dot" cx={xFor(lastIndex)} cy={yFor(series.points[lastIndex].value)} r="3.4" />
+      <text className="now-label" x={xFor(lastIndex) - 6} y={CHART_PAD.top + 9} textAnchor="end">现在</text>
+      <text className="axis-label" x={CHART_PAD.left} y={CHART_HEIGHT - 6}>{formatClock(series.points[0].time)}</text>
+      <text className="axis-label" x={CHART_PAD.left + plotWidth} y={CHART_HEIGHT - 6} textAnchor="end">{formatClock(series.points[lastIndex].time)}</text>
+    </svg>
   );
 }
+
+function ServiceRow({ service, onOpen }) {
+  const Icon = SERVICE_ICONS[service.id] || AppWindow;
+  const meta = STATE_META[service.state] || STATE_META.unmonitored;
+  const latency = Number.isFinite(service.latencyMs) ? service.latencyMs : null;
+
+  return (
+    <tr>
+      <td>
+        <span className="service-name-cell">
+          <span className="cell-icon" aria-hidden="true"><Icon size={15} /></span>
+          <span>
+            <strong>{service.shortName || service.name}</strong>
+            <small>{service.repositoryPath || service.name}</small>
+          </span>
+        </span>
+      </td>
+      <td><StatusTag state={service.state} label={meta.shortLabel} /></td>
+      <td className="col-num">
+        <span className={`latency-cell ${latency !== null && latency > 1200 ? 'is-slow' : ''}`}>
+          {latency === null ? '--' : `${latency} ms`}
+        </span>
+      </td>
+      <td className="col-num"><span className="code-chip">{service.httpStatus ?? '--'}</span></td>
+      <td><span className="cell-sub">{formatCheckedAt(service.checkedAt)}</span></td>
+      <td className="col-actions">
+        {service.adminUrl ? (
+          <button className="icon-action" type="button" onClick={() => onOpen(service)} aria-label={`进入${service.name}`}>
+            <ArrowUpRight size={15} />
+          </button>
+        ) : <span className="cell-sub">--</span>}
+      </td>
+    </tr>
+  );
+}
+
 export function OverviewView({
   services,
   counts,
@@ -126,266 +212,245 @@ export function OverviewView({
     || left.name.localeCompare(right.name, 'zh-CN')
   ));
 
-  const latencies = services.map((s) => s.latencyMs).filter(Number.isFinite);
+  const latencies = services.map((service) => service.latencyMs).filter(Number.isFinite);
   const avgLatency = latencies.length ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : null;
   const serviceTotal = total || services.length;
   const healthyCount = counts.healthy ?? 0;
+  const incidents = operationsSummary?.incidents || [];
   const incidentCount = operationsSummary?.incidents?.length ?? attentionCount;
   const lastRefreshLabel = refreshedAt ? formatCheckedAt(refreshedAt) : '等待首次同步';
+  const history = operationsSummary?.history || {};
   const overviewState = loading
     ? '正在同步全网状态'
     : incidentCount > 0
       ? '有服务需要看看'
       : '服务运行正常';
+  const openService = (service) => (service.adminUrl ? launchService(service) : onOpenService?.(service));
 
   return (
-    <div className="overview-page modern-executive-cockpit">
-      <section className="cockpit-overview-strip" aria-label="全网运行摘要">
-        <div className="cockpit-overview-primary">
-          <span className="cockpit-overview-icon"><Network size={21} /></span>
-          <span>
-            <strong>{overviewState}</strong>
-            <small>{environmentLabel} · 更新于 {lastRefreshLabel}</small>
-          </span>
-        </div>
-        <div className="cockpit-overview-metric">
-          <span><i className="status-indicator" />服务可用</span>
-          <strong>{healthyCount} / {serviceTotal}</strong>
-          <small>{healthyRate.toFixed(1)}% 当前正常比例</small>
-        </div>
-        <div className="cockpit-overview-metric">
-          <span><Activity size={13} />平均响应</span>
-          <strong>{avgLatency === null ? '--' : `${avgLatency} ms`}</strong>
-          <small>{latencies.length > 0 ? `已检查 ${latencies.length} 个服务` : '暂无响应数据'}</small>
-        </div>
-        <div className="cockpit-overview-metric">
-          <span><CircleAlert size={13} />需要处理</span>
-          <strong className={incidentCount > 0 ? 'has-attention' : ''}>{incidentCount}</strong>
-          <small>{incidentCount > 0 ? '有问题需要处理' : '当前没有需要处理的问题'}</small>
-        </div>
-        <div className="cockpit-overview-metric">
-          <span><CheckCircle2 size={13} />最近检查</span>
-          <strong className="overview-time-value">{lastRefreshLabel}</strong>
-          <small>所有服务的同步时间</small>
-        </div>
-      </section>
-
-      <section className="cockpit-business-matrix" aria-label="核心业务矩阵">
-        <div className="matrix-section-header">
-          <div className="matrix-title-group">
-            <span className="matrix-title-icon"><Boxes size={18} /></span>
+    <>
+      <section className="hero-grid" aria-label="全网运行摘要">
+        <article className="panel hero-card">
+          <div className="hero-top">
             <div>
-              <h3>核心业务服务矩阵</h3>
-              <p>高频业务系统监控与核心子功能快捷直达</p>
+              <span className="page-eyebrow">全网运行摘要</span>
+              <h2 className="hero-title">{overviewState}</h2>
+              <p className="hero-sub">{environmentLabel} · 更新于 {lastRefreshLabel}</p>
+            </div>
+            <div className="hero-actions">
+              <button className="btn btn-secondary btn-sm" type="button" onClick={onRefresh} disabled={refreshing}>
+                <RefreshCw className={refreshing ? 'spin' : ''} size={13} aria-hidden="true" />
+                <span>{refreshing ? '正在刷新' : '立即刷新'}</span>
+              </button>
             </div>
           </div>
-          <button className="icon-text-btn glass-btn" type="button" onClick={onOpenServices} title="查看全部服务">
-            全部应用入口 <ArrowRight size={13} />
-          </button>
-        </div>
-        <div className="matrix-cards-grid">
-          {sortedServices.slice(0, 6).map((srv) => {
-            const ServiceIcon = SERVICE_ICONS[srv.id] || AppWindow;
-            const launcherTone = LAUNCHER_TONES[srv.id] || 'blue';
-            const state = STATE_META[srv.state] || STATE_META.unmonitored;
-            const stateLabel = srv.state === 'unmonitored' ? '未检查' : state.label;
-            const areas = Array.isArray(srv.managementAreas) ? srv.managementAreas : [];
-            const openService = () => (srv.adminUrl ? launchService(srv) : onOpenService?.(srv));
 
-            return (
-              <article key={srv.id} className={`matrix-card tone-${launcherTone} state-${srv.state}`}>
-                <div className="matrix-card-header">
-                  <span className={`matrix-card-icon tone-${launcherTone}`}>
-                    <ServiceIcon size={20} />
-                  </span>
-                  <div className="matrix-card-info">
-                    <h4>{srv.shortName || srv.name}</h4>
-                    <span className="matrix-state-badge">
-                      <i className={`status-indicator state-${srv.state}`} />
-                      {stateLabel}
-                    </span>
-                  </div>
-                  <span className="matrix-latency-pill">
-                    {Number.isFinite(srv.latencyMs) ? `${srv.latencyMs} ms` : '--'}
-                  </span>
-                </div>
-                <p className="matrix-card-desc">{srv.description || '统一服务节点'}</p>
-                {areas.length > 0 && (
-                  <div className="matrix-submodules" aria-label={`${srv.shortName || srv.name}快捷子模块`}>
-                    {areas.slice(0, 3).map((area) => (
-                      <button
-                        key={area.id}
-                        type="button"
-                        className="matrix-submodule-pill"
-                        title={`${area.label} · ${area.description}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          launchService({ ...srv, adminUrl: area.url, shortName: `${srv.shortName || srv.name} · ${area.label}` });
-                        }}
-                      >
-                        <span>{area.label}</span>
-                        <ChevronRight size={11} />
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <div className="matrix-card-footer">
-                  <span className="matrix-check-time">同步于 {formatCheckedAt(srv.checkedAt)}</span>
-                  <button
-                    type="button"
-                    className="matrix-launch-action"
-                    onClick={openService}
-                  >
-                    <span>进入系统</span>
-                    <ArrowUpRight size={14} />
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="cockpit-three-columns">
-        <div className="cockpit-side-col left-col">
-          <article className="cockpit-panel service-launcher-panel">
-            <header className="panel-header space-between">
-              <div className="header-title-group">
-                <Boxes size={16} />
-                <h3>常用服务</h3>
-              </div>
-              <button className="icon-text-btn" type="button" onClick={onOpenServices} title="查看所有服务">
-                查看全部 <ArrowRight size={13} />
-              </button>
-            </header>
-            <div className="service-status-list combined-service-status-list">
-              {sortedServices.length > 0 ? sortedServices.map((srv) => {
-                const ServiceIcon = SERVICE_ICONS[srv.id] || AppWindow;
-                const launcherTone = LAUNCHER_TONES[srv.id] || 'blue';
-                const state = STATE_META[srv.state] || STATE_META.unmonitored;
-                const stateLabel = srv.state === 'unmonitored' ? '未检查' : state.label;
-                const open = () => (srv.adminUrl ? launchService(srv) : onOpenService?.(srv));
-                return (
-                  <button
-                    key={srv.id}
-                    className="launcher-card-item"
-                    type="button"
-                    title={`一键进入【${srv.name}】`}
-                    onClick={open}
-                  >
-                    <span className={`service-status-row-icon launcher-service-icon tone-${launcherTone}`}><ServiceIcon size={15} /></span>
-                    <span className="service-status-row-copy">
-                      <strong>{srv.shortName || srv.name}</strong>
-                      <small><i className={`status-indicator state-${srv.state}`} />{stateLabel} · {formatCheckedAt(srv.checkedAt)}</small>
-                    </span>
-                    <span className="service-status-row-latency">{Number.isFinite(srv.latencyMs) ? `${srv.latencyMs} ms` : '--'}</span>
-                    <ArrowUpRight size={14} />
-                  </button>
-                );
-              }) : (
-                <div className="service-status-empty"><LoaderCircle className="spin" size={18} />正在读取服务状态</div>
-              )}
+          <div className="hero-readout">
+            <div className="metric metric-xl">
+              <span className="metric-label">服务可用</span>
+              <span className="metric-figure">
+                {healthyCount}
+                <span className="metric-unit">/ {serviceTotal}</span>
+              </span>
             </div>
-          </article>
-
-          <article className="cockpit-panel quick-ops-panel">
-            <header className="panel-header">
-              <Zap size={16} />
-              <h3>常用操作</h3>
-            </header>
-            <div className="quick-ops-actions">
-              <button className="quick-ops-btn" type="button" onClick={onRefresh} disabled={refreshing}>
-                <RefreshCw className={refreshing ? 'spin' : ''} size={14} />
-                <span>{refreshing ? '正在刷新服务' : '刷新服务状态'}</span>
-                <ChevronRight size={14} />
-              </button>
-              <button className="quick-ops-btn" type="button" onClick={onOpenServices}>
-                <AppWindow size={14} />
-                <span>打开业务入口</span>
-                <ChevronRight size={14} />
-              </button>
-              <button className="quick-ops-btn" type="button" onClick={onOpenIncidents}>
-                <CircleAlert size={14} />
-                <span>{incidentCount > 0 ? `处理问题 (${incidentCount})` : '查看服务状态'}</span>
-                <ChevronRight size={14} />
-              </button>
-              <button className="quick-ops-btn" type="button" onClick={onOpenBackup}>
-                <Archive size={14} />
-                <span>备份重要数据</span>
-                <ChevronRight size={14} />
-              </button>
-              <button className="quick-ops-btn" type="button" onClick={onOpenConfiguration}>
-                <Settings size={14} />
-                <span>运行参数配置</span>
-                <ChevronRight size={14} />
-              </button>
+            <div className="hero-readout-meta">
+              <StatusTag
+                state={incidentCount > 0 ? 'degraded' : 'healthy'}
+                label={incidentCount > 0 ? `${incidentCount} 项待处理` : '全部服务在线'}
+              />
+              <p>{healthyRate}% 的服务当前正常响应，最近一次同步在 {lastRefreshLabel}。</p>
             </div>
-          </article>
-        </div>
+          </div>
 
-        <div className="cockpit-center-col">
-          <article className="cockpit-panel topology-panel">
-            <HolographicTopology
-              services={services}
-              monitoringEnabled={monitoringEnabled}
-              onToggleMonitoring={() => setMonitoringEnabled((enabled) => !enabled)}
-              onSelectService={launchService}
+          <div className="hero-ruler">
+            <Ruler
+              value={healthyRate}
+              labels={[
+                { text: '0%', at: 0 },
+                { text: `${healthyRate}% 可用`, at: healthyRate },
+                { text: '100%', at: 100 },
+              ]}
             />
-          </article>
-        </div>
+          </div>
 
-        <div className="cockpit-side-col right-col">
-          <article className="cockpit-panel service-summary-panel">
-            <header className="panel-header">
-              <CheckCircle2 size={16} />
-              <h3>服务状态</h3>
-            </header>
-            <div className="service-summary-grid">
-              <div className="service-summary-item healthy">
-                <span><i className="status-indicator" />正常</span>
-                <strong>{healthyCount}</strong>
-              </div>
-              <div className="service-summary-item degraded">
-                <span><i className="status-indicator state-degraded" />响应慢</span>
-                <strong>{counts.degraded ?? 0}</strong>
-              </div>
-              <div className="service-summary-item offline">
-                <span><i className="status-indicator state-offline" />不可用</span>
-                <strong>{counts.offline ?? 0}</strong>
-              </div>
-              <div className="service-summary-item unmonitored">
-                <span><i className="status-indicator state-unmonitored" />待检查</span>
-                <strong>{counts.unmonitored ?? 0}</strong>
-              </div>
+          <div className="hero-status" aria-label="服务状态分布">
+            <span><i className="status-indicator" />正常<b>{healthyCount}</b></span>
+            <span><i className="status-indicator state-degraded" />响应异常<b>{counts.degraded ?? 0}</b></span>
+            <span><i className="status-indicator state-offline" />不可用<b>{counts.offline ?? 0}</b></span>
+            <span><i className="status-indicator state-unmonitored" />未监测<b>{counts.unmonitored ?? 0}</b></span>
+          </div>
+
+          <div className="hero-foot">
+            <Metric
+              size="s"
+              label="平均响应"
+              value={avgLatency === null ? '--' : avgLatency}
+              unit={avgLatency === null ? null : 'ms'}
+              foot={latencies.length > 0 ? `已检查 ${latencies.length} 个服务` : '暂无响应数据'}
+            />
+            <Metric
+              size="s"
+              label="需要处理"
+              value={incidentCount}
+              tone={incidentCount > 0 ? 'attention' : ''}
+              foot={incidentCount > 0 ? '有问题需要处理' : '当前没有待处理'}
+            />
+            <Metric
+              size="s"
+              label="最近检查"
+              value={lastRefreshLabel}
+              foot="所有服务的同步时间"
+            />
+          </div>
+        </article>
+
+        <aside className="hero-side">
+          <div className="spec-plate">
+            <div className="spec-title">Platform Spec</div>
+            <dl className="spec-list">
+              <div className="spec-row"><dt>环境</dt><dd className="is-lime">{environmentLabel}</dd></div>
+              <div className="spec-row"><dt>服务</dt><dd>{serviceTotal} 个已接入</dd></div>
+              <div className="spec-row"><dt>可用率</dt><dd>{healthyRate}%</dd></div>
+              <div className="spec-row"><dt>轮询</dt><dd>{monitoringEnabled ? '自动 · 30 秒' : '已暂停'}</dd></div>
+              <div className="spec-row"><dt>待处理</dt><dd className={incidentCount > 0 ? 'is-red' : ''}>{incidentCount} 项</dd></div>
+            </dl>
+          </div>
+
+          <div className="panel quick-panel">
+            <div className="panel-title"><Zap size={15} aria-hidden="true" />常用操作</div>
+            <div className="quick-list">
+              <button className="quick-item" type="button" onClick={onRefresh} disabled={refreshing}>
+                <RefreshCw className={refreshing ? 'spin' : ''} size={14} aria-hidden="true" />
+                <span>{refreshing ? '正在刷新服务' : '刷新服务状态'}</span>
+                <ArrowRight className="quick-go" size={13} aria-hidden="true" />
+              </button>
+              <button className="quick-item" type="button" onClick={onOpenServices}>
+                <AppWindow size={14} aria-hidden="true" />
+                <span>打开业务入口</span>
+                <ArrowRight className="quick-go" size={13} aria-hidden="true" />
+              </button>
+              <button className="quick-item" type="button" onClick={onOpenIncidents}>
+                <CircleAlert size={14} aria-hidden="true" />
+                <span>{incidentCount > 0 ? `处理问题（${incidentCount}）` : '查看服务状态'}</span>
+                <ArrowRight className="quick-go" size={13} aria-hidden="true" />
+              </button>
+              <button className="quick-item" type="button" onClick={onOpenBackup}>
+                <Archive size={14} aria-hidden="true" />
+                <span>备份重要数据</span>
+                <ArrowRight className="quick-go" size={13} aria-hidden="true" />
+              </button>
+              <button className="quick-item" type="button" onClick={onOpenConfiguration}>
+                <Settings size={14} aria-hidden="true" />
+                <span>运行参数配置</span>
+                <ArrowRight className="quick-go" size={13} aria-hidden="true" />
+              </button>
             </div>
-          </article>
+          </div>
+        </aside>
+      </section>
 
-          <article className="cockpit-panel alerts-panel">
-            <header className="panel-header space-between">
-              <div className="header-title-group">
-                <CircleAlert size={16} />
-                <h3>需要处理</h3>
-              </div>
-              <span className="alerts-badge">{incidentCount > 0 ? `${incidentCount} 项` : '正常'}</span>
-            </header>
-            <div className="alerts-list-body">
-              {(operationsSummary?.incidents || []).slice(0, 3).map((incident) => (
-                <button className="alert-row" type="button" key={incident.id} onClick={onOpenIncidents}>
-                  <span className="a-time">{formatCheckedAt(incident.lastSeenAt || incident.updatedAt || incident.openedAt)}</span>
-                  <span className="a-msg">{incident.title || '运行事件待处理'}</span>
-                  <i className={`a-dot ${['critical', 'high', 'warning'].includes(incident.severity) ? 'warn' : 'ok'}`} />
+      <section className="home-grid">
+        <article className="panel panel-flush">
+          <div className="panel-head">
+            <div className="panel-title">
+              <Boxes size={15} aria-hidden="true" />
+              服务状态
+              <span className="panel-meta">{serviceTotal} 项</span>
+            </div>
+            <button className="btn btn-text btn-sm" type="button" onClick={onOpenServices}>
+              全部服务 <ArrowRight size={13} aria-hidden="true" />
+            </button>
+          </div>
+          {loading && sortedServices.length === 0 ? (
+            <div className="view-loading"><LoaderCircle className="spin" size={18} /> 正在读取服务状态</div>
+          ) : (
+            <div className="table-wrap">
+              <table className="table service-table">
+                <thead>
+                  <tr>
+                    <th>服务</th>
+                    <th>状态</th>
+                    <th className="col-num">响应</th>
+                    <th className="col-num">HTTP</th>
+                    <th>检查</th>
+                    <th className="col-actions"><span className="sr-only">操作</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedServices.slice(0, 6).map((service) => (
+                    <ServiceRow key={service.id} service={service} onOpen={openService} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </article>
+
+        <article className="panel panel-flush incident-panel">
+          <div className="panel-head">
+            <div className="panel-title"><CircleAlert size={15} aria-hidden="true" />需要处理</div>
+            <span className={`tag ${incidentCount > 0 ? 'tone-danger' : 'tone-ok'}`}>
+              {incidentCount > 0 ? `${incidentCount} 项` : '正常'}
+            </span>
+          </div>
+          <div className="incident-list">
+            {incidents.slice(0, 3).map((incident) => {
+              const severity = ['critical', 'high', 'warning'].includes(incident.severity);
+              return (
+                <button className="incident-row" type="button" key={incident.id} onClick={onOpenIncidents}>
+                  <span className="incident-time">{formatClock(incident.lastSeenAt || incident.updatedAt || incident.openedAt)}</span>
+                  <span className="incident-main">
+                    <strong className="incident-title">{incident.title || '运行事件待处理'}</strong>
+                    <span className="incident-meta">
+                      {incident.serviceId || '平台'} · {incident.status === 'acknowledged' ? '已确认' : '待处理'}
+                    </span>
+                  </span>
+                  <i className={`incident-dot ${severity ? 'is-warn' : 'is-ok'}`} aria-hidden="true" />
                 </button>
-              ))}
-              {(operationsSummary?.incidents || []).length === 0 && (
-                <div className="alerts-empty">
-                  {incidentCount > 0 ? <CircleAlert size={18} /> : <CheckCircle2 size={18} />}
-                  {incidentCount > 0 ? '有服务状态异常，请打开服务状态查看' : '当前没有需要处理的问题'}
-                </div>
-              )}
-            </div>
-          </article>
+              );
+            })}
+            {incidents.length === 0 && (
+              <div className="incident-empty">
+                <CircleAlert size={20} aria-hidden="true" />
+                {incidentCount > 0 ? '有服务状态异常，请打开服务状态查看' : '当前没有需要处理的问题'}
+              </div>
+            )}
+          </div>
+          <div className="panel-foot">
+            <button className="btn btn-secondary btn-sm" type="button" onClick={onOpenIncidents}>
+              打开问题处理
+            </button>
+          </div>
+        </article>
+      </section>
+
+      <section className="panel trend-panel" aria-label="响应趋势">
+        <div className="trend-head">
+          <div className="panel-title"><Activity size={15} aria-hidden="true" />响应趋势</div>
+          <div className="trend-summary">
+            <span>平均 <b>{avgLatency === null ? '--' : `${avgLatency} ms`}</b></span>
+            <span>峰值 <b>{latencies.length ? `${Math.max(...latencies)} ms` : '--'}</b></span>
+            <span>检查 <b>{latencies.length} 项</b></span>
+          </div>
+        </div>
+        <div className="trend-body">
+          <OperationsChart services={services} history={history} />
+        </div>
+        <div className="trend-legend">
+          <span className="lg"><i aria-hidden="true" />全网平均响应</span>
+          <span className="lg is-now"><i aria-hidden="true" />当前时刻</span>
+          <span className="muted">按最近采样等分聚合，单位为毫秒</span>
         </div>
       </section>
-    </div>
+
+      <section className="panel topology-panel" aria-label="全网服务链路">
+        <HolographicTopology
+          services={services}
+          monitoringEnabled={monitoringEnabled}
+          onToggleMonitoring={() => setMonitoringEnabled((enabled) => !enabled)}
+          onSelectService={launchService}
+        />
+      </section>
+    </>
   );
 }

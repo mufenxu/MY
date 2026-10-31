@@ -88,8 +88,9 @@ internal fun LoginTextField(
     }
 
     val primaryColor = MaterialTheme.colorScheme.primary
+    // 与 AppTextField 保持同一套字段材质：填充定形，聚焦转亮并出现主色描边。
     val containerBgColor = if (isFocused) {
-        MaterialTheme.colorScheme.surfaceContainerHigh
+        MaterialTheme.colorScheme.surface
     } else {
         MaterialTheme.colorScheme.surfaceVariant
     }
@@ -99,7 +100,7 @@ internal fun LoginTextField(
     } else {
         Color.Transparent
     }
-    val fieldShape = RoundedCornerShape(16.dp)
+    val fieldShape = RoundedCornerShape(50)
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(

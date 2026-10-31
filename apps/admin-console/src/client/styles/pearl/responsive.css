@@ -1,0 +1,561 @@
+/* ============================================================================
+   终端适配层（手机 / 平板）
+   ----------------------------------------------------------------------------
+   本文件是样式链的最后一环，专门承载「真实设备」差异，不参与桌面布局设计：
+     · 触控目标尺寸与手势反馈
+     · iOS 输入框聚焦缩放
+     · 刘海屏 / 底部横条安全区
+     · 平板横竖屏的密度与列数微调
+     · 手机端弹层、表格、页头的重排
+
+   断点约定（桌面优先，全部 max-width）：
+     1180  小笔记本 / 平板横屏（iPad Pro 11" 竖屏 834 之上）
+     1024  平板横屏收窄
+      900  抽屉式导航启动
+      834  iPad Air / Pro 竖屏
+      768  iPad mini / 标准平板竖屏
+      640  大手机横屏 / 折叠屏外屏
+      480  主流手机竖屏
+      360  小屏安卓
+   ========================================================================== */
+
+/* ── 触控设备：取消依赖 hover 的位移与阴影，避免点按残留 ────────────── */
+@media (hover: none) {
+  .btn:hover:not(:disabled),
+  .nav-item:hover,
+  .quick-item:hover,
+  .app-card:hover,
+  .management-link:hover,
+  .incident-item:hover {
+    transform: none;
+  }
+}
+
+/* ── 平板横屏 / 小笔记本：压缩容器留白，保持信息密度 ────────────────── */
+@media (max-width: 1180px) {
+  .page-body {
+    gap: 14px;
+  }
+
+  .hero-card,
+  .trend-panel,
+  .topology-panel {
+    padding-inline: 18px;
+  }
+
+  /* 灾备页三栏在平板宽度下已无法并排，提前收成单栏 */
+  .backup-layout,
+  .backup-offsite-layout,
+  .backup-job-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1024px) {
+  :root {
+    --row-h: 50px;
+  }
+
+  .page-title {
+    font-size: 23px;
+  }
+
+  .page-body {
+    gap: 13px;
+  }
+
+  .stat-strip {
+    gap: 8px;
+  }
+}
+
+/* ── 抽屉导航启动：顶栏与内容贴边，补齐安全区 ──────────────────────── */
+@media (max-width: 900px) {
+  .app-shell {
+    padding:
+      env(safe-area-inset-top)
+      env(safe-area-inset-right)
+      env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
+  }
+
+  .topbar {
+    padding-inline: max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-left));
+  }
+
+  .rail {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .page {
+    padding-inline: max(14px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-left));
+  }
+
+  /* 抽屉打开时锁住背景滚动由 JS 负责，这里只保证遮罩覆盖安全区 */
+  .nav-backdrop {
+    inset:
+      env(safe-area-inset-top)
+      env(safe-area-inset-right)
+      env(safe-area-inset-bottom)
+      env(safe-area-inset-left);
+  }
+
+  /* 兜底：长路径、长 ID 之类的不可断文本不得撑破外壳网格。
+     min-width:0 让每一层都愿意收缩，宽度始终由视口决定。 */
+  .app-frame,
+  .workspace,
+  .content,
+  .page,
+  .page-body,
+  .page-view {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* 旧视图里的窄屏布局由各自的 760/720 断点负责，此处只补容器约束 */
+  .backup-view,
+  .notify-page,
+  .platform-control-view {
+    min-width: 0;
+  }
+
+  /* 触控目标放大到可点按尺寸 */
+  .icon-button,
+  .mobile-menu-button {
+    width: 38px;
+    height: 38px;
+  }
+
+  .btn {
+    min-height: 38px;
+  }
+
+  .btn-sm {
+    min-height: 32px;
+  }
+}
+
+/* ── 平板竖屏：双列收敛，弹层贴近边缘 ──────────────────────────────── */
+@media (max-width: 834px) {
+  :root {
+    --topbar-h: 58px;
+    --row-h: 48px;
+  }
+
+  /* iOS Safari 会在聚焦 <16px 的输入框时自动放大页面，移动端统一抬到 16px；
+     同时把可点区域抬到 40px，满足触控目标下限 */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select {
+    height: 40px;
+  }
+
+  .select-trigger {
+    height: 40px;
+  }
+
+  .page-title {
+    font-size: 21px;
+    letter-spacing: -0.028em;
+  }
+
+  .page-desc {
+    font-size: 12px;
+  }
+
+  .hero-grid,
+  .home-grid,
+  .apps-layout {
+    gap: 12px;
+  }
+
+  .stat-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* 弹窗不再溢出安全区 */
+  .dialog-backdrop {
+    padding: 14px;
+  }
+
+  .modal {
+    max-height: calc(100dvh - 28px);
+  }
+}
+
+/* ── 平板竖屏收窄 / 大手机横屏 ────────────────────────────────────── */
+@media (max-width: 768px) {
+  .page-head {
+    gap: 10px;
+  }
+
+  .page-actions {
+    flex-wrap: wrap;
+  }
+
+  .toolbar {
+    row-gap: 8px;
+  }
+
+  .chart-frame svg {
+    height: 190px;
+  }
+
+  .hero-readout strong {
+    font-size: 27px;
+  }
+}
+
+/* ── 大手机 / 折叠屏外屏：页头竖排，操作按钮占满整行 ────────────────── */
+@media (max-width: 640px) {
+  :root {
+    --topbar-h: 56px;
+    --row-h: 46px;
+    --cell-px: 12px;
+  }
+
+  .page {
+    padding: 14px 12px 26px;
+  }
+
+  .page-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .page-actions {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .page-actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  /* 弹层改为底部贴合，拇指可达 */
+  .dialog-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal,
+  .confirm-dialog {
+    width: 100%;
+    max-width: none;
+    max-height: 88dvh;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .drawer {
+    width: 100%;
+    max-width: none;
+  }
+
+  /* 数据表在手机上允许横向滑动，避免列被压成碎片 */
+  .data-list,
+  .table-wrap,
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  /* 首页服务表按断点降列，优先保留「服务 / 状态 / 响应 / 操作」 */
+  .service-table th:nth-child(4),
+  .service-table td:nth-child(4) {
+    display: none;
+  }
+
+  .service-table {
+    min-width: 0;
+  }
+
+  .chart-frame svg {
+    height: 168px;
+  }
+
+  /* 多标签页在手机上换行陈列，避免横向滑动把后半截藏起来 */
+  .ops-segmented,
+  .notify-context-tabs,
+  .notify-api-subnav {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: auto;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .notify-toolbar {
+    align-items: center;
+  }
+
+  /* 旧规则把标签按钮设成 flex:1 等分，长标签会挤成一团并溢出；
+     这里恢复为内容宽度，让标签栏真正换行 */
+  .notify-toolbar .ops-segmented,
+  .notify-toolbar .notify-context-tabs {
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .notify-toolbar .ops-segmented button,
+  .notify-toolbar .notify-context-tabs button {
+    flex: 0 0 auto;
+    padding-inline: 9px;
+  }
+
+  .ops-segmented > *,
+  .notify-context-tabs > *,
+  .notify-api-subnav > * {
+    flex: 0 0 auto;
+  }
+
+  .ops-segmented button,
+  .notify-context-tabs button,
+  .notify-api-subnav button {
+    height: 28px;
+    padding-inline: 9px;
+    font-size: 11.5px;
+  }
+
+  /* 数据表在手机上降列：保留「主体 + 状态 + 一个关键指标」 */
+  .col-monitor {
+    grid-template-columns: minmax(0, 1fr) 62px 72px;
+  }
+
+  .col-monitor > :nth-child(n + 4) {
+    display: none;
+  }
+
+  .col-audit {
+    grid-template-columns: 84px minmax(0, 1fr) 46px;
+  }
+
+  .col-audit > :nth-child(3),
+  .col-audit > :nth-child(4),
+  .col-audit > :nth-child(5) {
+    display: none;
+  }
+
+  /* 分段控件跟随内容宽度，避免把同行按钮挤到下一行 */
+  .toolbar .segmented {
+    width: auto;
+    flex: 1 1 auto;
+  }
+
+  /* 旧视图的四列 KPI 在手机上收成两列，避免文字被压成竖排 */
+  .backup-kpis,
+  .control-kpis,
+  .automation-kpis,
+  .notify-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .offsite-schedule-controls,
+  .offsite-config-grid,
+  .backup-job-grid,
+  .restore-field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* 备份列表在手机上改用两行卡片布局，表头不再占位 */
+  .backup-table-head {
+    display: none;
+  }
+
+  .backup-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+    min-height: 0;
+    padding: 11px 2px;
+  }
+
+  .metric-value {
+    font-size: 19px;
+  }
+
+  .hero-readout strong {
+    font-size: 24px;
+  }
+}
+
+/* ── 主流手机竖屏 ─────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  :root {
+    --topbar-h: 54px;
+    --row-h: 44px;
+  }
+
+  .app-shell {
+    padding-inline: 0;
+  }
+
+  .page {
+    padding: 12px 10px 24px;
+  }
+
+  .page-eyebrow {
+    font-size: 10px;
+  }
+
+  .page-title {
+    font-size: 19px;
+  }
+
+  .page-body {
+    gap: 11px;
+  }
+
+  /* 卡片内边距整体收紧一档 */
+  .panel,
+  .panel-body,
+  .hero-card,
+  .trend-panel,
+  .topology-panel,
+  .stat-card {
+    padding-inline: 13px;
+  }
+
+  .panel-head {
+    padding: 12px 13px 10px;
+  }
+
+  .hero-grid,
+  .home-grid,
+  .apps-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .stat-strip {
+    gap: 7px;
+  }
+
+  .stat-card strong {
+    font-size: 17px;
+  }
+
+  /* 顶栏只留导航、标题、必要图标：手机上密度切换无实际意义 */
+  .density-toggle {
+    display: none;
+  }
+
+  .topbar-tools {
+    gap: 4px;
+  }
+
+  /* 刻度尺在窄屏只保留当前值标签，避免三个标签互相挤压 */
+  .hero-ruler .ruler-labels > span:first-child,
+  .hero-ruler .ruler-labels > span:last-child {
+    display: none;
+  }
+
+  .hero-ruler .ruler {
+    height: 28px;
+  }
+
+  .segmented {
+    width: 100%;
+  }
+
+  .toolbar .segmented {
+    width: auto;
+    flex: 1 1 auto;
+  }
+
+  .toolbar .select-control {
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 100%;
+  }
+
+  .table th,
+  .table td {
+    padding-inline: 10px;
+  }
+
+  /* 手机上再收一列：只留服务、状态、响应、操作 */
+  .service-table th:nth-child(5),
+  .service-table td:nth-child(5) {
+    display: none;
+  }
+
+  /* 服务名不再显示仓库路径，避免单列撑宽整表 */
+  .service-name-cell small {
+    display: none;
+  }
+
+  .service-name-cell {
+    gap: 7px;
+  }
+
+  .service-name-cell strong {
+    font-size: 12px;
+  }
+
+  .service-table th,
+  .service-table td {
+    padding-inline: 6px;
+  }
+
+  .empty {
+    padding: 28px 16px;
+  }
+}
+
+/* ── 小屏安卓：再收一档，保证 360px 不横向溢出 ─────────────────────── */
+@media (max-width: 360px) {
+  .page {
+    padding-inline: 8px;
+  }
+
+  .page-title {
+    font-size: 18px;
+  }
+
+  .btn {
+    padding-inline: 10px;
+  }
+
+  .stat-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── 手机横屏：压缩纵向留白，优先露出内容 ──────────────────────────── */
+@media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+  .topbar {
+    height: 48px;
+  }
+
+  .page {
+    padding-block: 10px 18px;
+  }
+
+  .page-head {
+    margin-bottom: 10px;
+  }
+
+  .page-desc {
+    display: none;
+  }
+
+  .chart-frame svg {
+    height: 150px;
+  }
+}

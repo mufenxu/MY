@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { requestJson } from './api.js';
 import { PLATFORM_BRAND_ICON } from './brand.js';
+import { EmptyState } from './Pearl.jsx';
 import { ConfirmDialog, SelectControl } from './UiControls.jsx';
 
 const ROLE_LEVELS = { viewer: 1, operator: 2, super_admin: 3 };
@@ -381,12 +382,25 @@ export function DiagnosticsView({ services, session, targetEntityId = '' }) {
   return (
     <section className="platform-control-view diagnostics-view">
       <Feedback error={error} />
-      <section className="diagnostic-launcher">
-        <div><Route size={22} /><span><strong>端到端追踪</strong><small>每次运行会生成独立请求 ID 并记录审计事件。</small></span></div>
-        <SelectControl value={serviceId} ariaLabel="选择诊断服务" disabled={!canRun || Boolean(busy)} onChange={setServiceId} options={[{ value: 'all', label: '全部受监控服务' }, ...monitoredServices.map((service) => ({ value: service.id, label: service.shortName || service.name }))]} />
-        <button className="primary-button" type="button" disabled={!canRun || Boolean(busy)} onClick={runTrace}>{busy === 'trace' ? <LoaderCircle className="spin" size={16} /> : <Activity size={16} />}开始追踪</button>
-        <button className="secondary-action" type="button" disabled={!canRun || Boolean(busy)} onClick={runSystemChecks}>{busy === 'system' ? <LoaderCircle className="spin" size={16} /> : <ShieldCheck size={16} />}系统自检</button>
+      <section className="panel">
+        <div className="panel-head">
+          <div className="panel-title"><Route size={15} />端到端追踪</div>
+          <span className="panel-meta">每次运行会生成独立请求 ID 并记录审计事件</span>
+        </div>
+        <div className="panel-body">
+          <div className="toolbar">
+            <SelectControl value={serviceId} ariaLabel="选择诊断服务" disabled={!canRun || Boolean(busy)} onChange={setServiceId} options={[{ value: 'all', label: '全部受监控服务' }, ...monitoredServices.map((service) => ({ value: service.id, label: service.shortName || service.name }))]} />
+            <div className="toolbar-end">
+              <button className="btn btn-secondary btn-sm" type="button" disabled={!canRun || Boolean(busy)} onClick={runSystemChecks}>{busy === 'system' ? <LoaderCircle className="spin" size={15} /> : <ShieldCheck size={15} />}系统自检</button>
+              <button className="btn btn-primary btn-sm" type="button" disabled={!canRun || Boolean(busy)} onClick={runTrace}>{busy === 'trace' ? <LoaderCircle className="spin" size={15} /> : <Activity size={15} />}开始追踪</button>
+            </div>
+          </div>
+        </div>
       </section>
+
+      {!traceResult && !systemResult && (
+        <EmptyState icon={Route} title="还没有运行过检查" detail="选择服务后开始追踪，结果会按链路节点逐段展开" />
+      )}
 
       {traceResult && (
         <section className="trace-results">

@@ -176,7 +176,7 @@ export function HolographicTopology({ services = [], monitoringEnabled = true, o
             </span>
             <span className={`dependency-gateway-state is-${gatewayState}`}>
               <GatewayStateIcon size={12} />
-              {gatewayMeta.shortLabel}
+              {gatewayState === 'unmonitored' ? '部分未接入' : gatewayMeta.shortLabel}
             </span>
           </div>
         </div>

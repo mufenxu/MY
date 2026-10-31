@@ -34,6 +34,7 @@ import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
 import cn.pxyb.mycontrol.ui.components.input.AppPickerField
+import cn.pxyb.mycontrol.ui.components.input.AppSearchBar
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
 
@@ -73,6 +74,10 @@ private fun ComponentsPreview(dark: Boolean) {
                 }
                 AppTextField(input, { input = it }, label = "申请主题")
                 AppTextField("", {}, label = "联系电话", errorMessage = "请填写联系电话")
+                AppTextField("Pxyb@2026", {}, label = "账号密码", isPassword = true)
+                AppTextField("", {}, label = "备注说明", singleLine = false, minLines = 3, maxLines = 4)
+                AppTextField("api.mycontrol.top", {}, label = "服务器地址", enabled = false)
+                AppSearchBar(input, { input = it })
                 AppPickerField("预约日期", "2026-10-03", {}, icon = Icons.Outlined.CalendarMonth)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     AppButton("确认", {}, modifier = Modifier.weight(1f))

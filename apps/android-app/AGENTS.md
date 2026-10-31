@@ -186,3 +186,36 @@
 - 交互节点优先用 `Modifier.testTag` 定位（已有 `login-username` / `login-password` / `login-factor` / `update-primary`），不要靠中文文案变化就能失效的匹配。
 - 需要提交表单时优先 `performImeAction()` 而不是点按钮：软键盘可能遮挡底部按钮，导致点击被吞掉、用例随机失败。
 
+## 13. 本机验证口径（默认只跑必要项）
+
+产物一律由 GitHub Actions 出，本机**不出包、不打 Release**：
+
+- `android-release.yml` 在 push 到 main 时跑 `assembleRelease`，签名 keystore 是仓库 secrets，本机没有 keystore，打出来的是未签名包，与线上产物无关。
+- `android-ci.yml` 在 PR 时跑 `./gradlew :app:testDebugUnitTest :app:compileDebugKotlin :app:lintDebug :app:assembleDebug`。
+
+所以本机编译的唯一目的是**别推一个明显编不过的提交上去**，不是产出任何东西。
+
+**安卓改动的默认验证（约 20 秒）**
+
+```bash
+npm.cmd run check:android-design                       # 约 0.2 秒，静态规范扫描
+cd apps/android-app && ./gradlew :app:compileDebugKotlin   # 约 20 秒，抓语法/类型/签名错误
+```
+
+**以下都属于"用户明确要求才做"，不要默认跑**：`assembleDebug`（装真机时才需要）、`assembleRelease`（本机无 keystore）、`connectedDebugAndroidTest`（需设备，CI 无设备）、`lintDebug` / `lintRelease`（交给 CI）。
+
+**按改动类型追加的最小项**
+
+| 改动 | 追加命令 |
+| :--- | :--- |
+| 新增或改动 JVM 单测（`app/src/test/**`） | `:app:testDebugUnitTest` |
+| 新增或改动设备侧用例（`app/src/androidTest/**`） | `:app:compileDebugAndroidTestKotlin` |
+| 改 AndroidManifest / 资源 / 权限 / 新增四大组件 / 新增依赖 | `:app:lintDebug`（lint 失败会让 CI 变红，这类改动必须补跑） |
+| 要装到手机上验证 | `:app:assembleDebug` |
+
+**环境与耗时基线**
+
+- JDK 路径已写入用户级环境变量 `JAVA_HOME=D:\My-ruanjian\Android Studio\jbr`，直接 `./gradlew` 即可，不要再手动 `export JAVA_HOME`。
+- Gradle 已开启 configuration-cache。`compileDebugKotlin` 无改动约 10 秒（全命中缓存），改一个叶子文件约 20 秒，改 `AppViewModel` / `AuthenticatedShell` 这类被大量依赖的中枢文件约 35 秒——这是影响扇出的正常代价，不是配置问题。
+- 命令行的编译只是兜底：在 Android Studio 里改动时 IDE 会实时标红，无需再跑编译。
+

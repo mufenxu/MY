@@ -1,19 +1,29 @@
-/* Import order preserves the existing cascade, including the final overrides. */
+/* ============================================================================
+   样式入口
+   ----------------------------------------------------------------------------
+   加载顺序：
+   1. 令牌与基础重置
+   2. 旧视图样式（尚未迁移到珍珠层的业务页：登录 / 通知 / 自动任务 / 灾备 / 运维）
+   3. 珍珠玻璃层（外壳 → 组件 → 视图 → 运维视图）—— 覆盖旧层
+   4. 终端适配层（手机 / 平板）—— 必须最后，确保覆盖所有上游断点
+   ========================================================================== */
 @import "./styles/tokens.css";
 @import "./styles/base.css";
+
+/* ── 旧视图样式（迁移完成后可整文件删除） ── */
+@import "./styles/features/auth.css";
 @import "./styles/features/notifications.css";
-@import "./styles/components/controls.css";
-@import "./styles/shell.css";
-@import "./styles/features/overview.css";
 @import "./styles/features/automation.css";
 @import "./styles/features/backup.css";
-@import "./styles/features/auth.css";
 @import "./styles/features/operations.css";
-@import "./styles/overrides/readability.css";
 @import "./styles/overrides/controls.css";
 @import "./styles/overrides/operations.css";
-@import "./styles/overrides/navigation.css";
-@import "./styles/overrides/shell.css";
-@import "./styles/overrides/overview.css";
-@import "./styles/overrides/applications.css";
-@import "./styles/overrides/responsive.css";
+
+/* ── 珍珠玻璃层 ── */
+@import "./styles/pearl/layout.css";
+@import "./styles/pearl/components.css";
+@import "./styles/pearl/views.css";
+@import "./styles/pearl/ops.css";
+
+/* ── 终端适配层 ── */
+@import "./styles/pearl/responsive.css";

@@ -1,103 +1,491 @@
+/* ==========================================================================
+   设计令牌 · 珍珠玻璃（Pearl Glass）
+   视觉语汇移植自 scaffold-master（MIT）：中性灰绿底、白色珠光材质、
+   深色外框、极细描边、单一蓝色强调 + 柠檬绿状态点。
+   本文件同时保留旧变量名（--panel / --text / --glass-* 等）作为别名，
+   使尚未改写的视图在不改 CSS 的前提下自动落到新色板。
+   ========================================================================== */
+
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
-  color: #0f172a;
-  background: #f8fafc;
+  font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont,
+    "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  color-scheme: light;
 
-  /* 主色调：纯白高透冰霜毛玻璃设计系统 (Apple Vision Glass Pro) */
-  --page: #f8fafc;
-  --shell: #ffffff;
-  --sidebar: rgba(255, 255, 255, 0.75);
-  --sidebar-border: rgba(255, 255, 255, 0.85);
-  --panel: rgba(255, 255, 255, 0.78);
-  --panel-solid: #ffffff;
-  --panel-muted: rgba(241, 245, 249, 0.7);
-  --ink: #0f172a;
-  --text: #334155;
-  --muted: #64748b;
-  --subtle: #94a3b8;
+  /* ── 墨色层次 ───────────────────────────────────────────────── */
+  --ink: #101418;
+  --ink-muted: #596368;
+  --ink-soft: #7e888c;
+  --ink-faint: #99a2a5;
+
+  /* ── 强调色 ─────────────────────────────────────────────────── */
+  --blue: #236de9;
+  --blue-hover: #1d61d5;
+  --blue-soft: rgba(35, 109, 233, 0.1);
+  --blue-glow: rgba(35, 109, 233, 0.22);
+  --lime: #82dd2d;
+  --lime-soft: rgba(130, 221, 45, 0.16);
+  --leaf-text: #3f7a12;
+  --red-swatch: #ff5a50;
+  --red: #d63c33;
+  --red-soft: rgba(255, 90, 80, 0.11);
+  --red-text: #cf3a31;
+  --amber: #b26205;
+  --amber-soft: rgba(202, 138, 24, 0.13);
+  --violet: #6b53c8;
+  --violet-soft: rgba(107, 83, 200, 0.11);
+  --teal: #0f7f8f;
+  --teal-soft: rgba(15, 127, 143, 0.1);
+  --focus: rgba(35, 109, 233, 0.8);
+
+  /* ── 圆角 ───────────────────────────────────────────────────── */
+  --r-xs: 8px;
+  --r-sm: 12px;
+  --r-md: 16px;
+  --r-lg: 20px;
+  --r-xl: 24px;
+
+  /* ── 描边与阴影 ─────────────────────────────────────────────── */
+  --shade: 46, 58, 62;
+  --line: rgba(var(--shade), 0.085);
+  --line-strong: rgba(var(--shade), 0.11);
+  --glass-line: rgba(255, 255, 255, 0.88);
+  --glass-line-soft: rgba(255, 255, 255, 0.7);
+
+  --e1: 0 1px 2px rgba(var(--shade), 0.05), 0 5px 14px rgba(var(--shade), 0.04);
+  --e2: 0 1px 3px rgba(var(--shade), 0.06), 0 12px 30px rgba(var(--shade), 0.055);
+  --e3: 0 2px 6px rgba(var(--shade), 0.07), 0 22px 50px rgba(var(--shade), 0.08);
+  --e-accent: 0 1px 2px rgba(20, 66, 148, 0.28), 0 8px 18px rgba(35, 109, 233, 0.24);
+  --e-accent-hover: 0 1px 2px rgba(20, 66, 148, 0.32), 0 12px 24px rgba(35, 109, 233, 0.3);
+  --e-danger: 0 1px 2px rgba(150, 40, 34, 0.26), 0 8px 18px rgba(255, 90, 80, 0.24);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  --edge-strong: inset 0 1px 0 rgba(255, 255, 255, 0.98);
+
+  /* ── 外壳与材质 ─────────────────────────────────────────────── */
+  --stage: #dfe3e2;
+  --frame: #17191d;
+  --canvas: #f4f6f5;
+  --rail-bg: rgba(250, 251, 250, 0.92);
+  --pill-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.93), rgba(246, 251, 249, 0.62));
+  --pill-inset: inset 0 -1px 0 rgba(105, 122, 128, 0.08);
+  --float-bg: rgba(246, 248, 247, 0.86);
+  --float-inset: inset 0 0 0 1px rgba(120, 132, 135, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --surface: linear-gradient(145deg, rgba(255, 255, 255, 0.97), rgba(249, 252, 251, 0.93));
+  --surface-solid: #fbfcfc;
+  --groove-bg: rgba(225, 231, 229, 0.5);
+  --groove-inset: inset 0 1px 0 rgba(255, 255, 255, 0.46);
+  --input-bg: rgba(255, 255, 255, 0.78);
+  --hover-bg: rgba(var(--shade), 0.045);
+  --press-bg: rgba(var(--shade), 0.075);
+  --overlay: rgba(16, 20, 24, 0.26);
+  --dark-surface: #131619;
+
+  /* ── 字体与标尺 ─────────────────────────────────────────────── */
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --fs-display-xl: 56px;
+  --fs-display-l: 40px;
+  --fs-display-m: 28px;
   --type-caption: 12px;
   --type-label: 13px;
-  --type-body: 14px;
-  --line: rgba(226, 232, 240, 0.8);
-  --line-strong: rgba(203, 213, 225, 0.9);
+  --type-body: 13.5px;
+  --track-eyebrow: 0.14em;
 
-  /* 水晶毛玻璃专属材质变量 */
-  --glass-bg: rgba(255, 255, 255, 0.76);
-  --glass-bg-subtle: rgba(255, 255, 255, 0.52);
-  --glass-bg-hover: rgba(255, 255, 255, 0.92);
-  --glass-border: rgba(255, 255, 255, 0.85);
-  --glass-border-subtle: rgba(226, 232, 240, 0.75);
-  --glass-border-hover: rgba(59, 130, 246, 0.45);
-  --glass-blur: blur(20px);
-  --glass-shadow: 0 10px 30px -5px rgba(24, 39, 75, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.95);
-  --glass-shadow-hover: 0 16px 36px -4px rgba(24, 39, 75, 0.1), inset 0 1px 0 rgba(255, 255, 255, 1);
+  /* ── 仪器化装饰 ─────────────────────────────────────────────── */
+  --hatch-ink: rgba(var(--shade), 0.16);
+  --hatch: repeating-linear-gradient(135deg, var(--hatch-ink) 0 1.5px, transparent 1.5px 6px);
+  --tick: rgba(var(--shade), 0.22);
+  --tick-strong: rgba(var(--shade), 0.5);
+  --plate-bg: rgba(21, 24, 26, 0.9);
+  --plate-line: rgba(255, 255, 255, 0.1);
+  --plate-ink: #f2f5f4;
+  --plate-soft: rgba(255, 255, 255, 0.56);
 
-  --blue: #2563eb;
-  --blue-soft: rgba(37, 99, 235, 0.08);
-  --blue-glow: rgba(37, 99, 235, 0.25);
-  --cyan: #0891b2;
-  --cyan-soft: rgba(8, 145, 178, 0.08);
-  --pink: #db2777;
-  --pink-soft: rgba(219, 39, 119, 0.08);
-  --orange: #ea580c;
-  --orange-soft: rgba(234, 88, 12, 0.08);
-  --green: #10b981;
-  --green-soft: rgba(16, 185, 129, 0.08);
-  --purple: #7c3aed;
-  --purple-soft: rgba(124, 58, 237, 0.08);
-  --red: #ef4444;
-  --red-soft: rgba(239, 68, 68, 0.08);
-  --shadow: 0 14px 38px rgba(15, 23, 42, 0.06);
-  --shadow-soft: 0 4px 16px rgba(15, 23, 42, 0.04);
+  --ambient-a: rgba(130, 221, 45, 0.07);
+  --ambient-b: rgba(35, 109, 233, 0.055);
+  --thread: rgba(var(--shade), 0.2);
+  --thread-active: rgba(35, 109, 233, 0.62);
+  --pulse-halo: rgba(35, 109, 233, 0.18);
+  --node-bg: rgba(255, 255, 255, 0.94);
+
+  --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ── 尺寸 ───────────────────────────────────────────────────── */
+  --rail-w: 236px;
+  --topbar-h: 62px;
+  --frame-w: 8px;
+  --layer-overlay: 200;
+  --layer-toast: 400;
+  --control-h: 34px;
+  --control-h-sm: 29px;
+  --row-h: 52px;
+  --cell-px: 16px;
+
+  /* ══════════════════════════════════════════════════════════════
+     旧变量别名 —— 供尚未改写的视图与既有 CSS 继续工作
+     ══════════════════════════════════════════════════════════════ */
+  --page: var(--stage);
+  --shell: var(--canvas);
+  --sidebar: var(--rail-bg);
+  --sidebar-border: var(--line-strong);
+  --panel: rgba(251, 252, 252, 0.86);
+  --panel-solid: var(--surface-solid);
+  --panel-muted: var(--groove-bg);
+  --text: #3b4449;
+  --muted: var(--ink-muted);
+  --subtle: var(--ink-faint);
+  --cyan: var(--teal);
+  --cyan-soft: var(--teal-soft);
+  --pink: #c9455f;
+  --pink-soft: rgba(201, 69, 95, 0.1);
+  --orange: var(--amber);
+  --orange-soft: var(--amber-soft);
+  --green: var(--leaf-text);
+  --green-soft: var(--lime-soft);
+  --purple: var(--violet);
+  --purple-soft: var(--violet-soft);
+  --shadow: var(--e2);
+  --shadow-soft: var(--e1);
+  --glass-bg: rgba(251, 252, 252, 0.78);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.56);
+  --glass-bg-hover: rgba(255, 255, 255, 0.95);
+  --glass-border: var(--glass-line);
+  --glass-border-subtle: var(--line);
+  --glass-border-hover: rgba(35, 109, 233, 0.42);
+  --glass-blur: blur(22px) saturate(1.12);
+  --glass-shadow: var(--e2), var(--edge);
+  --glass-shadow-hover: var(--e3), var(--edge-strong);
+}
+
+:root[data-density="comfy"] {
+  --row-h: 58px;
+  --cell-px: 18px;
+}
+
+:root[data-density="compact"] {
+  --row-h: 44px;
+  --cell-px: 13px;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  /* 夜间模式：深空黑曜石流光毛玻璃系统 */
-  --page: #080c14;
-  --shell: #0d1322;
-  --sidebar: rgba(13, 19, 34, 0.82);
-  --sidebar-border: rgba(255, 255, 255, 0.1);
-  --panel: rgba(15, 23, 42, 0.75);
-  --panel-solid: #0f172a;
-  --panel-muted: rgba(30, 41, 59, 0.7);
-  --ink: #f8fafc;
-  --text: #cbd5e1;
-  --muted: #94a3b8;
-  --subtle: #64748b;
-  --line: rgba(255, 255, 255, 0.1);
-  --line-strong: rgba(255, 255, 255, 0.18);
 
-  /* 暗夜水晶毛玻璃材质 */
-  --glass-bg: rgba(15, 23, 42, 0.72);
-  --glass-bg-subtle: rgba(255, 255, 255, 0.03);
+  --ink: #eef2f1;
+  --ink-muted: #b0babd;
+  --ink-soft: #8d979a;
+  --ink-faint: #6c7679;
+
+  --blue: #4c8dff;
+  --blue-hover: #3d7ff2;
+  --blue-soft: rgba(76, 141, 255, 0.16);
+  --blue-glow: rgba(76, 141, 255, 0.34);
+  --lime-soft: rgba(130, 221, 45, 0.16);
+  --leaf-text: #9be35a;
+  --red: #ff7a71;
+  --red-soft: rgba(255, 90, 80, 0.16);
+  --red-text: #ff8a82;
+  --amber: #e0a244;
+  --amber-soft: rgba(224, 162, 68, 0.15);
+  --violet: #a993f0;
+  --violet-soft: rgba(169, 147, 240, 0.15);
+  --teal: #58c3d2;
+  --teal-soft: rgba(88, 195, 210, 0.14);
+  --focus: rgba(76, 141, 255, 0.85);
+
+  --shade: 0, 0, 0;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.1);
+  --glass-line: rgba(255, 255, 255, 0.1);
+  --glass-line-soft: rgba(255, 255, 255, 0.07);
+
+  --e1: 0 1px 2px rgba(0, 0, 0, 0.3), 0 5px 14px rgba(0, 0, 0, 0.2);
+  --e2: 0 1px 3px rgba(0, 0, 0, 0.32), 0 12px 30px rgba(0, 0, 0, 0.28);
+  --e3: 0 2px 6px rgba(0, 0, 0, 0.36), 0 22px 50px rgba(0, 0, 0, 0.42);
+  --e-accent: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 18px rgba(76, 141, 255, 0.26);
+  --e-accent-hover: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 24px rgba(76, 141, 255, 0.34);
+  --e-danger: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 18px rgba(255, 90, 80, 0.26);
+  --edge: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --edge-strong: inset 0 1px 0 rgba(255, 255, 255, 0.09);
+
+  --stage: #090b0c;
+  --frame: #000000;
+  --canvas: #121517;
+  --rail-bg: rgba(22, 26, 28, 0.94);
+  --pill-bg: linear-gradient(145deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.05));
+  --pill-inset: inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+  --float-bg: rgba(30, 34, 37, 0.9);
+  --float-inset: inset 0 0 0 1px rgba(255, 255, 255, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --surface: linear-gradient(145deg, rgba(29, 33, 36, 0.98), rgba(25, 29, 31, 0.96));
+  --surface-solid: #1b1f21;
+  --groove-bg: rgba(0, 0, 0, 0.22);
+  --groove-inset: inset 0 1px 2px rgba(0, 0, 0, 0.28);
+  --input-bg: rgba(255, 255, 255, 0.04);
+  --hover-bg: rgba(255, 255, 255, 0.05);
+  --press-bg: rgba(255, 255, 255, 0.08);
+  --overlay: rgba(0, 0, 0, 0.5);
+
+  --hatch-ink: rgba(255, 255, 255, 0.12);
+  --tick: rgba(255, 255, 255, 0.16);
+  --tick-strong: rgba(255, 255, 255, 0.42);
+  --plate-bg: rgba(8, 10, 11, 0.78);
+
+  --ambient-a: rgba(130, 221, 45, 0.05);
+  --ambient-b: rgba(76, 141, 255, 0.07);
+  --thread: rgba(255, 255, 255, 0.16);
+  --thread-active: rgba(110, 160, 255, 0.72);
+  --pulse-halo: rgba(76, 141, 255, 0.28);
+  --node-bg: rgba(32, 37, 40, 0.94);
+
+  --text: #c3cbcd;
+  --page: var(--stage);
+  --shell: var(--canvas);
+  --sidebar: var(--rail-bg);
+  --panel: rgba(27, 31, 33, 0.82);
+  --panel-muted: rgba(255, 255, 255, 0.04);
+  --cyan: var(--teal);
+  --cyan-soft: var(--teal-soft);
+  --pink: #f28ba1;
+  --pink-soft: rgba(242, 139, 161, 0.15);
+  --orange: var(--amber);
+  --orange-soft: var(--amber-soft);
+  --green: var(--leaf-text);
+  --green-soft: var(--lime-soft);
+  --purple: var(--violet);
+  --purple-soft: var(--violet-soft);
+  --glass-bg: rgba(27, 31, 33, 0.78);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.04);
   --glass-bg-hover: rgba(255, 255, 255, 0.07);
-  --glass-border: rgba(255, 255, 255, 0.12);
-  --glass-border-subtle: rgba(255, 255, 255, 0.06);
-  --glass-border-hover: rgba(56, 189, 248, 0.45);
-  --glass-blur: blur(24px);
-  --glass-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  --glass-shadow-hover: 0 18px 48px rgba(0, 0, 0, 0.65), 0 0 20px rgba(56, 189, 248, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
 
-  --blue: #3b82f6;
-  --blue-soft: rgba(59, 130, 246, 0.15);
-  --blue-glow: rgba(59, 130, 246, 0.45);
-  --cyan: #06b6d4;
-  --cyan-soft: rgba(6, 182, 212, 0.15);
-  --pink: #f43f5e;
-  --pink-soft: rgba(244, 63, 94, 0.15);
-  --orange: #f97316;
-  --orange-soft: rgba(249, 115, 22, 0.15);
-  --green: #10b981;
-  --green-soft: rgba(16, 185, 129, 0.15);
-  --purple: #8b5cf6;
-  --purple-soft: rgba(139, 92, 246, 0.15);
-  --red: #f87171;
-  --red-soft: rgba(248, 113, 113, 0.15);
-  --shadow: 0 20px 56px rgba(0, 0, 0, 0.6);
-  --shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.4);
+@property --fill {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
+/* ── 基础重置 ─────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  min-width: 320px;
+  color: var(--ink);
+  background: var(--stage);
+  font-family: inherit;
+  font-size: var(--type-body);
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+img,
+svg {
+  display: block;
+}
+
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+::selection {
+  background: var(--blue-soft);
+}
+
+:focus {
+  outline: none;
+}
+
+/* 按钮基线重置：设计系统统一接管边框与底色 */
+button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.muted {
+  color: var(--ink-muted);
+}
+
+.soft {
+  color: var(--ink-soft);
+}
+
+.faint {
+  color: var(--ink-faint);
+}
+
+.ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── 材质 ─────────────────────────────────────────────────────── */
+.m-rail {
+  background: var(--rail-bg);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+.m-pill {
+  border: 1px solid var(--glass-line);
+  background: var(--pill-bg);
+  box-shadow: var(--e2), var(--edge-strong), var(--pill-inset);
+  backdrop-filter: blur(22px) saturate(1.18);
+  -webkit-backdrop-filter: blur(22px) saturate(1.18);
+}
+
+.m-float {
+  border: 1px solid var(--glass-line);
+  background: var(--float-bg);
+  box-shadow: var(--e3), var(--float-inset);
+  backdrop-filter: blur(28px) saturate(1.08);
+  -webkit-backdrop-filter: blur(28px) saturate(1.08);
+}
+
+.m-surface {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  box-shadow: var(--edge), var(--e1);
+}
+
+.m-groove {
+  border: 1px solid var(--glass-line-soft);
+  background: var(--groove-bg);
+  box-shadow: var(--groove-inset);
+}
+
+/* ── 分区标题（柠檬绿脉冲点） ─────────────────────────────────── */
+.section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.section-label::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--lime);
+  box-shadow: 0 0 0 5px var(--lime-soft);
+  flex: none;
+}
+
+/* ── 滚动条 ───────────────────────────────────────────────────── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(var(--shade), 0.18) transparent;
+}
+
+:root[data-theme="dark"] * {
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(var(--shade), 0.16);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .m-rail,
+  .m-pill,
+  .m-float {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  .m-float,
+  .m-rail {
+    background: var(--surface-solid);
+  }
 }
