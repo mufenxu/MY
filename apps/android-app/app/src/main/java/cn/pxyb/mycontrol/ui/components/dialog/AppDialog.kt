@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -41,7 +40,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -108,8 +106,8 @@ fun AppDialog(
         val view = LocalView.current
         val dark = isAppInDarkTheme()
         val dimAlpha = if (dark) 0.42f else 0.28f
-        SideEffect {
-            val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
+        LaunchedEffect(view, dark) {
+            val window = (view.parent as? DialogWindowProvider)?.window ?: return@LaunchedEffect
             WindowCompat.setDecorFitsSystemWindows(window, false)
             window.setBackgroundDrawable(ColorDrawable(android.graphics.Color.TRANSPARENT))
             window.statusBarColor = android.graphics.Color.TRANSPARENT
@@ -169,7 +167,6 @@ fun AppDialog(
                 },
                 modifier = if (isTablet) {
                     Modifier
-                        .imePadding()
                         .windowInsetsPadding(WindowInsets.safeDrawing)
                         .padding(horizontal = 24.dp, vertical = 20.dp)
                         .clickable(
@@ -179,7 +176,6 @@ fun AppDialog(
                         )
                 } else {
                     Modifier
-                        .imePadding()
                         .windowInsetsPadding(WindowInsets.safeDrawing)
                         .fillMaxWidth()
                         .clickable(

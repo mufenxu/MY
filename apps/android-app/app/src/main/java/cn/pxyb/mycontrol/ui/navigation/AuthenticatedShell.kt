@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -35,6 +36,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -346,8 +349,13 @@ internal fun AuthenticatedShell(
     val layoutDirection = LocalLayoutDirection.current
     val adaptive = LocalAdaptiveWindow.current
     val isTablet = adaptive.isTabletOrExpanded
-    val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    val bottomDockVisible = (isTablet || !isSubScreen) && !keyboardVisible
+    val imeInsets = WindowInsets.ime
+    val density = LocalDensity.current
+    val keyboardVisible by remember(imeInsets, density) {
+        derivedStateOf { imeInsets.getBottom(density) > 0 }
+    }
+    val bottomDockAllowed = isTablet || !isSubScreen
+    val bottomDockVisible = bottomDockAllowed && !keyboardVisible
     var bottomDockHeightPx by remember { mutableIntStateOf(0) }
     val bottomDockHeight = with(LocalDensity.current) { bottomDockHeightPx.toDp() }
     // 底栏液态玻璃取样：内容照常绘制，同时录进图形层供底栏模糊取样。
@@ -420,14 +428,18 @@ internal fun AuthenticatedShell(
                         padding.calculateLeftPadding(layoutDirection)
                     },
                     safeBottom = padding.calculateBottomPadding(),
-                    isSubScreen = isSubScreen || keyboardVisible,
+                    isSubScreen = isSubScreen,
                     isTablet = isTablet,
                 )
-                val contentPadding = PaddingValues(
-                    bottom = if (keyboardVisible) AppPageBottomSpacing else if (bottomDockVisible) {
-                        maxOf(shellInsets.contentBottom, padding.calculateBottomPadding() + bottomDockHeight)
-                    } else shellInsets.contentBottom,
-                )
+                val contentBottom = if (bottomDockAllowed) {
+                    maxOf(shellInsets.contentBottom, padding.calculateBottomPadding() + bottomDockHeight)
+                } else shellInsets.contentBottom
+                // 键盘逐步覆盖底栏留白，避免先撤掉整块占位、再缩小视口造成反向跳动。
+                val contentPadding = remember(contentBottom, imeInsets) {
+                    WindowInsets(bottom = contentBottom)
+                        .exclude(imeInsets)
+                        .union(WindowInsets(bottom = AppPageBottomSpacing))
+                }.asPaddingValues()
                 ProvideAppContentLayout(
                     contentMaxWidth = contentMaxWidthForRoute(currentRoute),
                     modifier = Modifier
@@ -441,15 +453,15 @@ internal fun AuthenticatedShell(
                             top = shellInsets.navigationTop,
                             end = shellInsets.navigationEnd,
                         ))
-                        .imePadding()
-                        .glassBackdropSource(glassBackdrop),
+                        .then(if (bottomDockVisible) Modifier.glassBackdropSource(glassBackdrop) else Modifier),
                 ) {
                 val pageLiftOffset = with(LocalDensity.current) { 14.dp.roundToPx() }
                 val pageExitOffset = with(LocalDensity.current) { 6.dp.roundToPx() }
                 NavHost(
                     navController = navController,
                     startDestination = initialRoute,
-                    modifier = Modifier.fillMaxSize(),
+                    // 键盘只改变页面的测量空间，避免逐帧更新外层共享尺寸并重组导航内容。
+                    modifier = Modifier.fillMaxSize().imePadding(),
                 enterTransition = {
                     if (parentTabForSubScreen(initialState.destination.route, null) == null &&
                         parentTabForSubScreen(targetState.destination.route, null) == null

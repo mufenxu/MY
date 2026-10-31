@@ -5,16 +5,17 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imeAnimationSource
+import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -38,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,11 +48,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.AutofillType
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -70,10 +75,11 @@ import cn.pxyb.mycontrol.ui.feature.account.RecoveryCodesDialog
 import cn.pxyb.mycontrol.ui.theme.AppCardShape
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
+import kotlin.math.roundToInt
 
 internal enum class SecondFactorMode { Totp, RecoveryCode }
 
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun LoginScreen(
     state: AppEntryUiState,
@@ -131,8 +137,14 @@ internal fun LoginScreen(
                 color = shadowColor.copy(alpha = if (dark) 0.32f else 0.09f),
             ),
         )
-    val showFooter = adaptive.heightSizeClass != WindowHeightSizeClass.Compact &&
-        WindowInsets.ime.getBottom(LocalDensity.current) == 0
+    val imeInsets = WindowInsets.ime
+    val imeSource = WindowInsets.imeAnimationSource
+    val imeTarget = WindowInsets.imeAnimationTarget
+    val density = LocalDensity.current
+    val keyboardVisible by remember(imeInsets, density) {
+        derivedStateOf { imeInsets.getBottom(density) > 0 }
+    }
+    val showFooter = adaptive.heightSizeClass != WindowHeightSizeClass.Compact
 
     if (showBotChallenge) LoginBotChallengeDialog(
         onDismiss = { showBotChallenge = false },
@@ -152,7 +164,7 @@ internal fun LoginScreen(
                 .imePadding()
                 .padding(horizontal = if (isExpanded) 40.dp else 24.dp),
         ) {
-            BoxWithConstraints(
+            Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
@@ -335,8 +347,8 @@ internal fun LoginScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .align(Alignment.Center)
                             .verticalScroll(rememberScrollState())
-                            .heightIn(min = maxHeight)
                             .padding(vertical = 24.dp),
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -505,9 +517,30 @@ internal fun LoginScreen(
             }
 
             if (showFooter) {
-                Spacer(Modifier.height(12.dp))
-                LoginFooter()
-                Spacer(Modifier.height(20.dp))
+                Column(
+                    modifier = Modifier
+                        .clipToBounds()
+                        .then(if (keyboardVisible) Modifier.clearAndSetSemantics {} else Modifier)
+                        .layout { measurable, constraints ->
+                            val placeable = measurable.measure(constraints)
+                            val source = imeSource.getBottom(this)
+                            val target = imeTarget.getBottom(this)
+                            val fullHeight = maxOf(source, target)
+                            // 页脚占位跟随系统键盘进度，在测量阶段收起，避免突然换高和额外动画叠加。
+                            val fraction = when {
+                                source > 0 && target > 0 -> 0f
+                                fullHeight > 0 -> (1f - imeInsets.getBottom(this).toFloat() / fullHeight).coerceIn(0f, 1f)
+                                else -> 1f
+                            }
+                            layout(placeable.width, (placeable.height * fraction).roundToInt()) {
+                                placeable.placeRelativeWithLayer(0, 0) { alpha = fraction }
+                            }
+                        },
+                ) {
+                    Spacer(Modifier.height(12.dp))
+                    LoginFooter()
+                    Spacer(Modifier.height(20.dp))
+                }
             }
         }
     }

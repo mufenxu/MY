@@ -60,6 +60,7 @@ import cn.pxyb.mycontrol.ui.components.layout.appContentWidth
 import cn.pxyb.mycontrol.ui.components.layout.appGridItems
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
+import cn.pxyb.mycontrol.ui.components.layout.appPageContentPadding
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -294,8 +295,9 @@ fun MediaDownloadScreen(
             item { Spacer(Modifier.height(80.dp)) }
         }
         AppButton(text = "新建下载", icon = Icons.Outlined.Add, onClick = { openNew() },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(end = AppPageHorizontalPadding,
-                bottom = contentPadding.calculateBottomPadding() + 16.dp))
+            modifier = Modifier.align(Alignment.BottomEnd)
+                .padding(appPageContentPadding(contentPadding, bottomSpacing = 16.dp, topPadding = 0.dp, horizontalPadding = 0.dp))
+                .padding(end = AppPageHorizontalPadding))
     }
     if (showNew) {
         val result = state.target

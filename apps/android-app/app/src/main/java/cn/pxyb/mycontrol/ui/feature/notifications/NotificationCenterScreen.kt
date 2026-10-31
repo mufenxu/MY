@@ -35,8 +35,8 @@ import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import cn.pxyb.mycontrol.ui.components.feedback.GlassShimmerList
 import cn.pxyb.mycontrol.ui.components.input.AppSearchBar
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
-import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
+import cn.pxyb.mycontrol.ui.components.layout.appPageContentPadding
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
 import cn.pxyb.mycontrol.ui.components.layout.AppListDetailMinWidth
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
@@ -271,11 +271,7 @@ fun NotificationCenterScreen(
                 autoDismissDurationMillis = null,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(
-                        start = AppPageHorizontalPadding,
-                        end = AppPageHorizontalPadding,
-                        bottom = contentPadding.calculateBottomPadding() + 12.dp,
-                    ),
+                    .padding(appPageContentPadding(contentPadding, bottomSpacing = 12.dp, topPadding = 0.dp)),
             )
         }
     }

@@ -133,12 +133,15 @@ internal fun appPageContentPadding(
     contentPadding: PaddingValues,
     topSpacing: Dp = AppPageTopSpacing,
     bottomSpacing: Dp = AppPageBottomSpacing,
-): PaddingValues = PaddingValues(
-    start = AppPageHorizontalPadding,
-    end = AppPageHorizontalPadding,
-    top = contentPadding.calculateTopPadding() + topSpacing,
-    bottom = contentPadding.calculateBottomPadding() + bottomSpacing,
-)
+    topPadding: Dp = contentPadding.calculateTopPadding() + topSpacing,
+    horizontalPadding: Dp = AppPageHorizontalPadding,
+): PaddingValues {
+    val fixedPadding = PaddingValues(start = horizontalPadding, end = horizontalPadding, top = topPadding)
+    return object : PaddingValues by fixedPadding {
+        // 键盘内边距由布局读取，避免在组合阶段展开成逐帧变化的 Dp。
+        override fun calculateBottomPadding(): Dp = contentPadding.calculateBottomPadding() + bottomSpacing
+    }
+}
 
 @Composable
 internal fun AppTopBarSurface(
@@ -339,7 +342,7 @@ fun AppSubPage(
             if (body != null) {
                 ProvideAppContentLayout(
                     modifier = Modifier.fillMaxSize()
-                        .padding(bottom = contentPadding.calculateBottomPadding() + AppPageBottomSpacing),
+                        .padding(appPageContentPadding(contentPadding, topPadding = 0.dp, horizontalPadding = 0.dp)),
                 ) { body(topContentPadding) }
             } else PullToRefresh(
                 isRefreshing = refreshing,
@@ -349,9 +352,7 @@ fun AppSubPage(
             ) {
                 LazyColumn(
                     state = listState, modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = AppPageHorizontalPadding, end = AppPageHorizontalPadding,
-                        top = topContentPadding, bottom = contentPadding.calculateBottomPadding() + AppPageBottomSpacing),
+                    contentPadding = appPageContentPadding(contentPadding, topPadding = topContentPadding),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     if (subtitle.isNotBlank()) item(key = "app-page-description", contentType = "description") {
