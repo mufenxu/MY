@@ -443,42 +443,21 @@
   font-weight: 640;
 }
 
-.input-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
+/* 外壳边框与聚焦圈由 pearl 的 .input-wrapper 提供，内层输入框保持透明 */
 .input-icon {
-  position: absolute;
-  left: 13px;
   color: var(--ink-faint);
-  pointer-events: none;
   transition: color 0.16s ease;
 }
 
 .login-form input {
-  width: 100%;
-  height: var(--control-h);
-  padding: 0 13px 0 40px;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--r-sm);
+  flex: 1;
+  min-width: 0;
+  border: 0;
   outline: 0;
   color: var(--ink);
-  background: var(--input-bg);
+  background: transparent;
   font-size: 13px;
   font-weight: 550;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
-}
-
-.login-form input:focus {
-  border-color: var(--blue);
-  background: var(--surface-solid);
-  box-shadow: 0 0 0 3px var(--blue-glow);
-}
-
-.input-wrapper:focus-within .input-icon {
-  color: var(--blue);
 }
 
 .login-form input::placeholder {
@@ -501,8 +480,7 @@
 }
 
 .password-toggle-btn {
-  position: absolute;
-  right: 8px;
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
