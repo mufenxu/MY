@@ -46,6 +46,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.AutofillType
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.onClick
@@ -53,6 +55,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.LoginBotChallengeDialog
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
@@ -65,6 +68,8 @@ import cn.pxyb.mycontrol.ui.feature.account.AccountRecoveryDialog
 import cn.pxyb.mycontrol.ui.feature.account.LoginTotpEnrollment
 import cn.pxyb.mycontrol.ui.feature.account.RecoveryCodesDialog
 import cn.pxyb.mycontrol.ui.theme.AppCardShape
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
+import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 internal enum class SecondFactorMode { Totp, RecoveryCode }
 
@@ -104,6 +109,28 @@ internal fun LoginScreen(
 
     val adaptive = LocalAdaptiveWindow.current
     val isExpanded = adaptive.isExpanded
+    val dark = isAppInDarkTheme()
+    val cardBorder = BorderStroke(1.dp, if (dark) ColorTokens.LoginCardBorderDark else ColorTokens.LoginCardBorderLight)
+    val shadowColor = if (dark) ColorTokens.LoginCardShadowDark else ColorTokens.LoginCardShadowLight
+    val cardShadow = Modifier
+        .dropShadow(
+            shape = AppCardShape,
+            shadow = Shadow(
+                radius = 32.dp,
+                spread = (-12).dp,
+                offset = DpOffset(0.dp, 14.dp),
+                color = shadowColor.copy(alpha = if (dark) 0.52f else 0.20f),
+            ),
+        )
+        .dropShadow(
+            shape = AppCardShape,
+            shadow = Shadow(
+                radius = 8.dp,
+                spread = (-3).dp,
+                offset = DpOffset(0.dp, 3.dp),
+                color = shadowColor.copy(alpha = if (dark) 0.32f else 0.09f),
+            ),
+        )
     val showFooter = adaptive.heightSizeClass != WindowHeightSizeClass.Compact &&
         WindowInsets.ime.getBottom(LocalDensity.current) == 0
 
@@ -152,11 +179,11 @@ internal fun LoginScreen(
                         Surface(
                             modifier = Modifier
                                 .widthIn(max = 440.dp)
-                                .weight(1f),
+                                .weight(1f)
+                                .then(cardShadow),
                             shape = AppCardShape,
                             color = MaterialTheme.colorScheme.surface,
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
-                            shadowElevation = 2.dp,
+                            border = cardBorder,
                         ) {
                             Column(
                                 modifier = Modifier
@@ -321,9 +348,11 @@ internal fun LoginScreen(
                         Surface(
                             modifier = Modifier
                                 .widthIn(max = 440.dp)
-                                .fillMaxWidth(),
+                                .fillMaxWidth()
+                                .then(cardShadow),
                             shape = AppCardShape,
                             color = MaterialTheme.colorScheme.surface,
+                            border = cardBorder,
                             shadowElevation = 0.dp,
                         ) {
                             Column(

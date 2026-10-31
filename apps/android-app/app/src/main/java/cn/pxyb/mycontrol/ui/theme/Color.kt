@@ -79,6 +79,10 @@ object ColorTokens {
     val LoginDotDark = Color(0x366C829E)
     val LoginOutlineLight = Color(0x66B4C5DF)
     val LoginOutlineDark = Color(0x664C6279)
+    val LoginCardBorderLight = Color(0xFFE8EDF3)
+    val LoginCardBorderDark = Color(0xFF3B4653)
+    val LoginCardShadowLight = Color(0xFF1E2F4D)
+    val LoginCardShadowDark = Color(0xFF000000)
 
     val SurfaceSubtle = Color(0xFFF1F5F9)
     val SurfaceDim = Color(0xFFE2E8F0)
