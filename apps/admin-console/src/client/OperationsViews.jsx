@@ -1191,55 +1191,136 @@ export function BackupOffsitePanel({ session, localBackups = [], backupJob = nul
   const providerNeedsAccount = draft.provider === 'r2';
 
   return (
-    <section className="view-card backup-offsite-panel" aria-label="自动备份与外部存储">
-      <header className="section-bar">
-        <div><h3>自动备份与外部存储</h3><span>{config?.configured ? `${config.provider} · ${config.bucket}` : '尚未配置存储目标'}</span></div>
-        <span className={`offsite-health ${config?.healthy === true ? 'healthy' : config?.configured ? 'warning' : 'unknown'}`}>
-          <Cloud size={18} />{config?.healthy === true ? '同步正常' : config?.configured ? '等待检查' : '未配置'}
-        </span>
-      </header>
-      <Feedback error={error} message={message} />
-      {!encryptionReady && <div className="ops-feedback error"><CircleAlert size={17} />备份存储加密密钥未配置</div>}
-      <div className="backup-offsite-layout">
-        <div className="backup-offsite-config" ref={backupOffsiteConfigRef}>
-          <div className="offsite-subsection-head"><span>每日计划</span><FileClock size={18} /></div>
-          <div className="offsite-schedule-controls">
-            <label className="toggle-field"><span><strong>自动备份</strong><small>每日执行</small></span><input type="checkbox" checked={schedule.enabled} disabled={!canOperate || loading} onChange={(event) => setSchedule({ ...schedule, enabled: event.target.checked })} /></label>
-            <label><span>执行时间</span><input type="time" value={schedule.time} disabled={!canOperate || loading} onChange={(event) => setSchedule({ ...schedule, time: event.target.value })} /></label>
-            <div className="offsite-schedule-actions">
-              <button className="secondary-action" type="button" disabled={!canOperate || loading || busy === 'schedule'} onClick={saveSchedule}>{busy === 'schedule' ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />}保存计划</button>
-              <button className="primary-button" type="button" disabled={!canOperate || !canExecuteBackup || !config?.configured || !config?.enabled || loading || busy === 'execute'} onClick={executeBackupNow}>{busy === 'execute' || backupJob?.status === 'running' ? <LoaderCircle className="spin" size={16} /> : <Play size={16} />}{busy === 'execute' || backupJob?.status === 'running' ? '正在执行' : '立即执行'}</button>
+    <section className="panel" aria-label="自动备份与外部存储">
+      <div className="panel-head">
+        <div className="panel-title"><Cloud size={15} aria-hidden="true" />自动备份与外部存储</div>
+        <div className="panel-tools">
+          <span className="panel-meta">{config?.configured ? `${config.provider} · ${config.bucket}` : '尚未配置存储目标'}</span>
+          <span className={`tag tone-${config?.healthy === true ? 'ok' : config?.configured ? 'warn' : 'neutral'}`}>
+            {config?.healthy === true ? '同步正常' : config?.configured ? '等待检查' : '未配置'}
+          </span>
+        </div>
+      </div>
+      <div className="panel-body">
+        <Feedback error={error} message={message} />
+        {!encryptionReady && (
+          <div className="alert is-error"><CircleAlert size={15} /><span>备份存储加密密钥未配置</span></div>
+        )}
+        <div className="offsite-layout">
+          <div className="offsite-config" ref={backupOffsiteConfigRef}>
+            <div className="config-subsection">
+              <div className="section-bar">
+                <div><h3>每日计划</h3><span>自动执行本地全量备份</span></div>
+                <FileClock size={16} aria-hidden="true" />
+              </div>
+              <div className="offsite-schedule">
+                <label className="config-toggle">
+                  <span><strong>自动备份</strong><small>每日执行</small></span>
+                  <input
+                    type="checkbox"
+                    checked={schedule.enabled}
+                    disabled={!canOperate || loading}
+                    onChange={(event) => setSchedule({ ...schedule, enabled: event.target.checked })}
+                  />
+                </label>
+                <label className="config-field">
+                  <span>执行时间</span>
+                  <input
+                    type="time"
+                    value={schedule.time}
+                    disabled={!canOperate || loading}
+                    onChange={(event) => setSchedule({ ...schedule, time: event.target.value })}
+                  />
+                </label>
+                <div className="offsite-actions">
+                  <button className="btn btn-secondary btn-sm" type="button" disabled={!canOperate || loading || busy === 'schedule'} onClick={saveSchedule}>
+                    {busy === 'schedule' ? <LoaderCircle className="spin" size={15} /> : <Save size={15} />}保存计划
+                  </button>
+                  <button className="btn btn-primary btn-sm" type="button" disabled={!canOperate || !canExecuteBackup || !config?.configured || !config?.enabled || loading || busy === 'execute'} onClick={executeBackupNow}>
+                    {busy === 'execute' || backupJob?.status === 'running' ? <LoaderCircle className="spin" size={15} /> : <Play size={15} />}
+                    {busy === 'execute' || backupJob?.status === 'running' ? '正在执行' : '立即执行'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="config-subsection">
+              <div className="section-bar">
+                <div><h3>S3 兼容目标</h3><span>备份完成后自动同步到异地</span></div>
+                <DatabaseBackup size={16} aria-hidden="true" />
+              </div>
+              <div className="config-grid">
+                <label className="config-toggle">
+                  <span><strong>启用异地同步</strong><small>单一目标</small></span>
+                  <input type="checkbox" checked={draft.enabled} disabled={!canManage || loading} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} />
+                </label>
+                <div className="config-field">
+                  <span>存储类型</span>
+                  <SelectControl
+                    ariaLabel="外部存储类型"
+                    disabled={!canManage || loading}
+                    value={draft.provider}
+                    options={BACKUP_STORAGE_PROVIDERS}
+                    onChange={(provider) => setDraft({ ...draft, provider, accountId: '', endpoint: '', region: provider === 'r2' ? 'auto' : 'us-east-1', bucket: '', forcePathStyle: provider === 'minio' })}
+                  />
+                </div>
+                {providerNeedsAccount && <label className="config-field"><span>Cloudflare Account ID</span><input value={draft.accountId} disabled={!canManage} onChange={(event) => setDraft({ ...draft, accountId: event.target.value })} /></label>}
+                {providerNeedsEndpoint && <label className="config-field"><span>Endpoint</span><input type="url" value={draft.endpoint} disabled={!canManage} placeholder="https://s3.example.com" onChange={(event) => setDraft({ ...draft, endpoint: event.target.value })} /></label>}
+                <label className="config-field"><span>Region</span><input value={draft.region} disabled={!canManage || draft.provider === 'r2'} onChange={(event) => setDraft({ ...draft, region: event.target.value })} /></label>
+                <label className="config-field"><span>Bucket</span><input value={draft.bucket} disabled={!canManage} onChange={(event) => setDraft({ ...draft, bucket: event.target.value })} /></label>
+                <label className="config-field"><span>对象前缀</span><input value={draft.prefix} disabled={!canManage} onChange={(event) => setDraft({ ...draft, prefix: event.target.value })} /></label>
+                <label className="config-field"><span>本地保留天数</span><input type="number" min="1" max="14" value={draft.localRetentionDays} disabled={!canManage} onChange={(event) => setDraft({ ...draft, localRetentionDays: Number(event.target.value) })} /></label>
+                <label className="config-field"><span>远端保留天数</span><input type="number" min="1" max="14" value={draft.remoteRetentionDays} disabled={!canManage} onChange={(event) => setDraft({ ...draft, remoteRetentionDays: Number(event.target.value) })} /></label>
+                <label className="config-toggle">
+                  <span><strong>Path Style</strong><small>MinIO 常用</small></span>
+                  <input type="checkbox" checked={draft.forcePathStyle} disabled={!canManage} onChange={(event) => setDraft({ ...draft, forcePathStyle: event.target.checked })} />
+                </label>
+                <label className="config-field"><span>Access Key ID</span><input type="password" autoComplete="new-password" value={secrets.accessKeyId} disabled={!canManage} placeholder={config?.accessKeyIdMasked || 'Access Key ID'} onChange={(event) => setSecrets({ ...secrets, accessKeyId: event.target.value })} /></label>
+                <label className="config-field"><span>Secret Access Key</span><input type="password" autoComplete="new-password" value={secrets.secretAccessKey} disabled={!canManage} placeholder={config?.secretConfigured ? '已保存，留空则不修改' : 'Secret Access Key'} onChange={(event) => setSecrets({ ...secrets, secretAccessKey: event.target.value })} /></label>
+                {!session.authDisabled && <label className="config-field"><span>管理员密码</span><input type="password" autoComplete="current-password" value={secrets.password} disabled={!canManage} onChange={(event) => setSecrets({ ...secrets, password: event.target.value })} /></label>}
+                {!session.authDisabled && session.user?.totpEnabled && <label className="config-field"><span>动态验证码</span><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={secrets.totp} disabled={!canManage} onChange={(event) => setSecrets({ ...secrets, totp: event.target.value.replace(/\D/g, '').slice(0, 6) })} /></label>}
+              </div>
+              {canManage && (
+                <div className="offsite-actions">
+                  <button className="btn btn-secondary btn-sm" type="button" disabled={!config?.configured || !config?.enabled || loading || busy === 'test' || !encryptionReady} onClick={testConnection}>
+                    {busy === 'test' ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}测试已保存配置
+                  </button>
+                  <button className="btn btn-primary btn-sm" type="button" disabled={loading || busy === 'save' || !encryptionReady} onClick={saveConfig}>
+                    {busy === 'save' ? <LoaderCircle className="spin" size={15} /> : <Save size={15} />}保存存储配置
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="offsite-subsection-head"><span>S3 兼容目标</span><DatabaseBackup size={18} /></div>
-          <div className="offsite-config-grid">
-            <label className="toggle-field"><span><strong>启用异地同步</strong><small>单一目标</small></span><input type="checkbox" checked={draft.enabled} disabled={!canManage || loading} onChange={(event) => setDraft({ ...draft, enabled: event.target.checked })} /></label>
-            <div className="settings-control-field"><span>存储类型</span><SelectControl ariaLabel="外部存储类型" disabled={!canManage || loading} value={draft.provider} options={BACKUP_STORAGE_PROVIDERS} onChange={(provider) => setDraft({ ...draft, provider, accountId: '', endpoint: '', region: provider === 'r2' ? 'auto' : 'us-east-1', bucket: '', forcePathStyle: provider === 'minio' })} /></div>
-            {providerNeedsAccount && <label><span>Cloudflare Account ID</span><input value={draft.accountId} disabled={!canManage} onChange={(event) => setDraft({ ...draft, accountId: event.target.value })} /></label>}
-            {providerNeedsEndpoint && <label><span>Endpoint</span><input type="url" value={draft.endpoint} disabled={!canManage} placeholder="https://s3.example.com" onChange={(event) => setDraft({ ...draft, endpoint: event.target.value })} /></label>}
-            <label><span>Region</span><input value={draft.region} disabled={!canManage || draft.provider === 'r2'} onChange={(event) => setDraft({ ...draft, region: event.target.value })} /></label>
-            <label><span>Bucket</span><input value={draft.bucket} disabled={!canManage} onChange={(event) => setDraft({ ...draft, bucket: event.target.value })} /></label>
-            <label><span>对象前缀</span><input value={draft.prefix} disabled={!canManage} onChange={(event) => setDraft({ ...draft, prefix: event.target.value })} /></label>
-            <label><span>本地保留天数</span><input type="number" min="1" max="14" value={draft.localRetentionDays} disabled={!canManage} onChange={(event) => setDraft({ ...draft, localRetentionDays: Number(event.target.value) })} /></label>
-            <label><span>远端保留天数</span><input type="number" min="1" max="14" value={draft.remoteRetentionDays} disabled={!canManage} onChange={(event) => setDraft({ ...draft, remoteRetentionDays: Number(event.target.value) })} /></label>
-            <label className="toggle-field"><span><strong>Path Style</strong><small>MinIO 常用</small></span><input type="checkbox" checked={draft.forcePathStyle} disabled={!canManage} onChange={(event) => setDraft({ ...draft, forcePathStyle: event.target.checked })} /></label>
-            <label><span>Access Key ID</span><input type="password" autoComplete="new-password" value={secrets.accessKeyId} disabled={!canManage} placeholder={config?.accessKeyIdMasked || 'Access Key ID'} onChange={(event) => setSecrets({ ...secrets, accessKeyId: event.target.value })} /></label>
-            <label><span>Secret Access Key</span><input type="password" autoComplete="new-password" value={secrets.secretAccessKey} disabled={!canManage} placeholder={config?.secretConfigured ? '已保存，留空则不修改' : 'Secret Access Key'} onChange={(event) => setSecrets({ ...secrets, secretAccessKey: event.target.value })} /></label>
-            {!session.authDisabled && <label><span>管理员密码</span><input type="password" autoComplete="current-password" value={secrets.password} disabled={!canManage} onChange={(event) => setSecrets({ ...secrets, password: event.target.value })} /></label>}
-            {!session.authDisabled && session.user?.totpEnabled && <label><span>动态验证码</span><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={secrets.totp} disabled={!canManage} onChange={(event) => setSecrets({ ...secrets, totp: event.target.value.replace(/\D/g, '').slice(0, 6) })} /></label>}
-          </div>
-          {canManage && <div className="offsite-config-actions"><button className="secondary-action" type="button" disabled={!config?.configured || !config?.enabled || loading || busy === 'test' || !encryptionReady} onClick={testConnection}>{busy === 'test' ? <LoaderCircle className="spin" size={16} /> : <RefreshCw size={16} />}测试已保存配置</button><button className="primary-button" type="button" disabled={loading || busy === 'save' || !encryptionReady} onClick={saveConfig}>{busy === 'save' ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />}保存存储配置</button></div>}
-        </div>
-
-        <div className="backup-offsite-remote">
-          <div className="offsite-subsection-head"><span>远端备份</span><button className="backup-row-action" type="button" title="刷新远端清单" aria-label="刷新远端清单" onClick={load} disabled={loading}>{loading ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}</button></div>
-          <div className="offsite-backup-list" ref={backupOffsiteListRef}>
-            {loading ? <LoadingBlock label="正在读取远端备份" /> : remoteBackups.length > 0 ? remoteBackups.map((backup) => {
-              const existsLocally = localNames.has(backup.name);
-              const importing = busy === `import:${backup.key}`;
-              return <div className="offsite-backup-row" key={backup.key}><span><strong>{backup.name}</strong><small>{formatDateTime(backup.createdAt)}</small></span><span>{formatBackupBytes(backup.sizeBytes)}</span><span className={existsLocally ? 'healthy' : 'unknown'}>{existsLocally ? '本地已有' : '仅远端'}</span><button className="backup-row-action" type="button" title="拉回本地" aria-label={`拉回远端备份 ${backup.name}`} disabled={!canOperate || existsLocally || importing} onClick={() => importRemote(backup)}>{importing ? <LoaderCircle className="spin" size={15} /> : <Download size={15} />}</button></div>;
-            }) : <div className="ops-empty compact">暂无远端备份</div>}
+          <div className="offsite-remote">
+            <div className="section-bar">
+              <div><h3>远端备份</h3><span>{loading ? '正在读取' : `${remoteBackups.length} 个对象`}</span></div>
+              <button className="icon-action" type="button" title="刷新远端清单" aria-label="刷新远端清单" onClick={load} disabled={loading}>
+                {loading ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}
+              </button>
+            </div>
+            <div className="data-list offsite-remote-list" ref={backupOffsiteListRef}>
+              <div className="data-head col-remote" aria-hidden="true"><span>备份</span><span>大小</span><span>来源</span><span /></div>
+              {loading ? (
+                <div className="loading-inline"><LoaderCircle className="spin" size={16} /> 正在读取远端备份</div>
+              ) : remoteBackups.length === 0 ? (
+                <div className="data-list-empty"><span>暂无远端备份</span></div>
+              ) : remoteBackups.map((backup) => {
+                const existsLocally = localNames.has(backup.name);
+                const importing = busy === `import:${backup.key}`;
+                return (
+                  <div className="data-row col-remote" key={backup.key}>
+                    <span className="cell-stack"><strong>{backup.name}</strong><small>{formatDateTime(backup.createdAt)}</small></span>
+                    <span className="cell-num">{formatBackupBytes(backup.sizeBytes)}</span>
+                    <span className={`tag tone-${existsLocally ? 'ok' : 'neutral'}`}>{existsLocally ? '本地已有' : '仅远端'}</span>
+                    <button className="icon-action" type="button" title="拉回本地" aria-label={`拉回远端备份 ${backup.name}`} disabled={!canOperate || existsLocally || importing} onClick={() => importRemote(backup)}>
+                      {importing ? <LoaderCircle className="spin" size={15} /> : <Download size={15} />}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -1256,10 +1337,22 @@ export function BackupQualityStrip() {
   if (error) return <Feedback error={error} />;
   if (!quality) return null;
   return (
-    <section className="backup-quality-strip" aria-label="灾备质量">
-      <div className={`quality-item ${quality.rpoState}`}><Clock3 size={18} /><span><strong>{quality.ageHours === null ? '暂无' : `${quality.ageHours} 小时`}</strong><small>最近可恢复备份 · RPO {quality.rpoHours}h</small></span></div>
-      <div className={`quality-item ${quality.offsite.healthy === true ? 'healthy' : quality.offsite.configured ? 'warning' : 'unknown'}`}><Cloud size={18} /><span><strong>{quality.offsite.healthy === true ? '同步正常' : quality.offsite.configured ? '同步异常' : '未配置'}</strong><small>异地备份状态</small></span></div>
-      <div className={`quality-item ${quality.schedule.enabled ? 'healthy' : 'unknown'}`}><FileClock size={18} /><span><strong>{quality.schedule.enabled ? `每日 ${quality.schedule.time}` : '手动执行'}</strong><small>自动备份计划</small></span></div>
+    <section className="quality-strip" aria-label="灾备质量">
+      <div className={`quality-item ${quality.rpoState === 'healthy' ? 'is-ok' : quality.rpoState === 'warning' ? 'is-warn' : 'is-danger'}`}>
+        <Clock3 size={14} aria-hidden="true" />
+        <strong>{quality.ageHours === null ? '暂无可用备份' : `${quality.ageHours} 小时`}</strong>
+        <span>最近可恢复 · RPO {quality.rpoHours}h</span>
+      </div>
+      <div className={`quality-item ${quality.offsite.healthy === true ? 'is-ok' : quality.offsite.configured ? 'is-warn' : ''}`}>
+        <Cloud size={14} aria-hidden="true" />
+        <strong>{quality.offsite.healthy === true ? '同步正常' : quality.offsite.configured ? '同步异常' : '未配置异地'}</strong>
+        <span>异地备份</span>
+      </div>
+      <div className={`quality-item ${quality.schedule.enabled ? 'is-ok' : ''}`}>
+        <FileClock size={14} aria-hidden="true" />
+        <strong>{quality.schedule.enabled ? `每日 ${quality.schedule.time}` : '手动执行'}</strong>
+        <span>自动备份计划</span>
+      </div>
     </section>
   );
 }

@@ -208,6 +208,6 @@ test('backup view manages scheduled and S3-compatible offsite backups without ex
   assert.match(operations, /type="password"[^>]+autoComplete="new-password"/);
   assert.match(operations, /accessKeyIdMasked/);
   assert.doesNotMatch(operations, /value=\{config\.(?:accessKeyId|secretAccessKey)\}/);
-  assert.match(styles, /\.backup-offsite-panel/);
-  assert.match(styles, /\.offsite-backup-row/);
+  assert.match(styles, /\.offsite-layout/);
+  assert.match(styles, /\.col-remote/);
 });

@@ -6,10 +6,9 @@ import {
   CalendarClock,
   CheckCircle2,
   CircleAlert,
-  CircleOff,
   Clock3,
-  Database,
   Cpu,
+  Database,
   LoaderCircle,
   Play,
   RefreshCw,
@@ -18,6 +17,7 @@ import {
 } from 'lucide-react';
 import { requestJson } from './api.js';
 import { isPlainInternalNavigation } from './navigation.js';
+import { EmptyState, StatusTag } from './Pearl.jsx';
 
 const CT8_API_BASE = '/apps/core/api/ct8';
 const AUTOMATION_ENDPOINTS = Object.freeze({
@@ -28,12 +28,13 @@ const AUTOMATION_ENDPOINTS = Object.freeze({
   retryingNotifications: '/api/notifications/jobs?status=retrying&page=1&pageSize=1',
 });
 const STATE_META = {
-  healthy: { label: '运行正常', className: 'healthy', icon: CheckCircle2 },
-  degraded: { label: '响应异常', className: 'degraded', icon: CircleAlert },
-  offline: { label: '暂不可用', className: 'offline', icon: CircleOff },
-  unmonitored: { label: '未接入监测', className: 'unmonitored', icon: Clock3 },
-  idle: { label: '未启用', className: 'unmonitored', icon: Clock3 },
+  healthy: { label: '运行正常', className: 'healthy' },
+  degraded: { label: '响应异常', className: 'degraded' },
+  offline: { label: '暂不可用', className: 'offline' },
+  unmonitored: { label: '未接入监测', className: 'unmonitored' },
+  idle: { label: '未启用', className: 'unmonitored' },
 };
+const CAPABILITY_TONE = { blue: 'info', cyan: 'info', purple: 'violet', green: 'ok' };
 
 function formatCheckedAt(value) {
   if (!value) return '尚未检查';
@@ -73,10 +74,18 @@ function getRunStatus(status, conclusion) {
   return { label: '暂无', className: 'unknown' };
 }
 
-function ServiceStatus({ state }) {
-  const meta = STATE_META[state] || STATE_META.unmonitored;
-  const Icon = meta.icon;
-  return <span className={`service-status ${meta.className}`}><Icon size={14} />{meta.label}</span>;
+const RUN_TONE = {
+  running: 'info',
+  success: 'ok',
+  partial: 'warn',
+  failed: 'danger',
+  idle: 'neutral',
+  unknown: 'neutral',
+};
+
+function RunTag({ status, conclusion }) {
+  const meta = getRunStatus(status, conclusion);
+  return <span className={`tag tone-${RUN_TONE[meta.className] || 'neutral'}`}>{meta.label}</span>;
 }
 
 function settledValue(result, key) {
@@ -88,11 +97,11 @@ function settledValue(result, key) {
 function AutomationCapability({ item }) {
   const Icon = item.icon;
   return (
-    <a className="automation-capability" href={item.href}>
-      <span className={`automation-capability-icon ${item.tone}`}><Icon size={19} /></span>
-      <span className="automation-capability-copy"><strong>{item.name}</strong><small>{item.detail}</small></span>
-      <ServiceStatus state={item.state} />
-      <ArrowUpRight className="automation-capability-open" size={15} />
+    <a className="data-row col-capability" href={item.href}>
+      <span className={`stat-icon tone-${CAPABILITY_TONE[item.tone] || 'info'}`} aria-hidden="true"><Icon size={15} /></span>
+      <span className="cell-stack"><strong>{item.name}</strong><small>{item.detail}</small></span>
+      <StatusTag state={item.state} />
+      <ArrowUpRight className="capability-open" size={15} aria-hidden="true" />
     </a>
   );
 }
@@ -100,7 +109,6 @@ function AutomationCapability({ item }) {
 export default function AutomationView({ services, loading, refreshing, onRefresh, onLaunch, session }) {
   const automation = services.find((service) => service.category === 'automation');
   const automationId = automation?.id || '';
-  const meta = STATE_META[automation?.state] || STATE_META.unmonitored;
   const canOperate = ['operator', 'super_admin'].includes(session?.user?.role);
   const [ct8Data, setCt8Data] = useState({ stats: null, status: null, runs: [] });
   const [ct8Loading, setCt8Loading] = useState(true);
@@ -245,91 +253,181 @@ export default function AutomationView({ services, loading, refreshing, onRefres
   const automationRefreshing = refreshing || ct8Refreshing || capabilities.loading;
 
   return (
-    <section className="page-view automation-view" aria-label="自动化中心">
-      <div className="page-actions automation-actions">
-        <button className="secondary-action" type="button" onClick={handleRefresh} disabled={automationRefreshing}>
-          {automationRefreshing ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
-          {automationRefreshing ? '正在同步' : '刷新状态'}
-        </button>
-        <button className="primary-button" type="button" onClick={handleTrigger} disabled={triggerDisabled} title={!canOperate ? '需要操作员权限' : undefined}>
-          {triggering || taskRunning ? <LoaderCircle className="spin" size={17} /> : <Play size={17} />}
-          {taskRunning ? '任务运行中' : '触发任务'}
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="view-loading large"><LoaderCircle className="spin" size={22} /> 正在加载自动化服务</div>
-      ) : automation ? (
-        <>
-          <article className={`automation-hero automation-state-${meta.className}`}>
-            <div className="automation-hero-main">
-              <div className="automation-hero-icon"><Workflow size={29} /></div>
-              <div className="automation-hero-copy"><span>自动化服务</span><h3>{automation.name}</h3><p>{automation.description}</p></div>
-            </div>
-            <div className="automation-hero-tools">
-              <ServiceStatus state={serviceState} />
-              {automation.adminUrl && (
-                <a href={automation.adminUrl} target={automation.adminUrl.startsWith('/') ? undefined : '_blank'} rel={automation.adminUrl.startsWith('/') ? undefined : 'noreferrer'} onClick={handleOpen}>
-                  进入后台 <ArrowUpRight size={16} />
-                </a>
-              )}
-            </div>
-            <div className="automation-hero-metrics">
-              <div className="automation-hero-metric"><span className="automation-metric-icon blue"><Timer size={17} /></span><div className="automation-metric-copy"><span>今日运行</span><strong>{formatCount(stats.todayRuns)}</strong></div></div>
-              <div className="automation-hero-metric"><span className="automation-metric-icon purple"><Activity size={17} /></span><div className="automation-metric-copy"><span>最近结果</span><strong>{latestStatus.label}</strong></div></div>
-              <div className="automation-hero-metric"><span className="automation-metric-icon cyan"><Clock3 size={17} /></span><div className="automation-metric-copy"><span>最近运行</span><strong>{formatDateTime(latestRunTime)}</strong></div></div>
-            </div>
-          </article>
-
-          {(ct8Error || ct8Message) && (
-            <div className={`automation-feedback ${ct8Error ? 'error' : 'success'}`} role={ct8Error ? 'alert' : 'status'}>
-              {ct8Error ? <CircleAlert size={17} /> : <CheckCircle2 size={17} />}<span>{ct8Error || ct8Message}</span>
-            </div>
-          )}
-
-          <section className="view-card automation-capability-panel">
-            <header><div><span className="view-eyebrow">统一视图</span><h3>跨服务自动化</h3></div><Workflow size={21} /></header>
-            {capabilities.loading && capabilities.items.length === 0 ? (
-              <div className="ct8-inline-loading"><LoaderCircle className="spin" size={18} /> 正在汇总自动化状态</div>
-            ) : (
-              <div className="automation-capability-grid">
-                {capabilities.items.map((item) => <AutomationCapability key={item.id} item={item} />)}
-              </div>
+    <section className="page-view" aria-label="自动化中心">
+      <div className="view-stack">
+        <div className="toolbar">
+          <span className="toolbar-label">
+            <Workflow size={14} aria-hidden="true" />
+            自动化服务
+          </span>
+          {automation && <StatusTag state={serviceState} />}
+          <span className="toolbar-hint">
+            {automation ? `${automation.name} · 检查于 ${formatCheckedAt(automation.checkedAt)}` : '尚未注册自动化服务'}
+          </span>
+          <div className="toolbar-end">
+            {automation?.adminUrl && (
+              <a
+                className="btn btn-ghost btn-sm"
+                href={automation.adminUrl}
+                target={automation.adminUrl.startsWith('/') ? undefined : '_blank'}
+                rel={automation.adminUrl.startsWith('/') ? undefined : 'noreferrer'}
+                onClick={handleOpen}
+              >
+                进入后台
+                <ArrowUpRight size={14} />
+              </a>
             )}
-          </section>
-
-          <div className="automation-kpis">
-            <article><span className="kpi-icon blue"><Timer size={20} /></span><div><span>今日运行</span><strong>{formatCount(stats.todayRuns)}</strong><small>GitHub Actions 调度</small></div></article>
-            <article><span className="kpi-icon green"><CheckCircle2 size={20} /></span><div><span>成功节点</span><strong>{formatCount(successHosts)}</strong><small>最近一次结果</small></div></article>
-            <article><span className="kpi-icon orange"><CircleAlert size={20} /></span><div><span>失败节点</span><strong>{formatCount(failedHosts)}</strong><small>最近一次结果</small></div></article>
-            <article><span className="kpi-icon purple"><Activity size={20} /></span><div><span>总节点</span><strong>{formatCount(totalHosts)}</strong><small>最近一次覆盖</small></div></article>
+            <button className="btn btn-secondary btn-sm" type="button" onClick={handleRefresh} disabled={automationRefreshing}>
+              {automationRefreshing ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}
+              {automationRefreshing ? '正在同步' : '刷新状态'}
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
+              type="button"
+              onClick={handleTrigger}
+              disabled={triggerDisabled}
+              title={!canOperate ? '需要操作员权限' : undefined}
+            >
+              {triggering || taskRunning ? <LoaderCircle className="spin" size={15} /> : <Play size={15} />}
+              {taskRunning ? '任务运行中' : '触发任务'}
+            </button>
           </div>
+        </div>
 
-          <div className="automation-layout">
-            <section className="view-card ct8-runs-panel">
-              <header><div><span className="view-eyebrow">历史</span><h3>运行历史</h3></div><Timer size={21} /></header>
-              {ct8Loading ? <div className="ct8-inline-loading"><LoaderCircle className="spin" size={18} /> 正在加载运行记录</div> : ct8Data.runs.length > 0 ? (
-                <div className="ct8-runs-list">{ct8Data.runs.map((run) => {
-                  const runStatus = getRunStatus(run.status, run.workflow_conclusion);
-                  return <div className="ct8-run-row" key={run.run_id || run.id || getRunTime(run)}><div><strong>{run.workflow || 'ssh-login.yml'}</strong><span>{formatRunId(run.run_id || run.id)} · {formatDateTime(getRunTime(run))}</span></div><span className={`ct8-run-status ${runStatus.className}`}>{runStatus.label}</span><span>{formatCount(run.success_count ?? run.stats?.success)}</span><span>{formatCount(run.failed_count ?? run.stats?.failed)}</span></div>;
-                })}</div>
-              ) : <div className="ct8-inline-empty">暂无运行记录</div>}
-            </section>
+        {(ct8Error || ct8Message) && (
+          <div className={`alert ${ct8Error ? 'is-error' : 'is-ok'}`} role={ct8Error ? 'alert' : 'status'}>
+            {ct8Error ? <CircleAlert size={15} /> : <CheckCircle2 size={15} />}
+            <span>{ct8Error || ct8Message}</span>
+          </div>
+        )}
 
-            <div className="automation-side-stack">
-              <section className="view-card ct8-status-panel">
-                <header><div><span className="view-eyebrow">任务</span><h3>当前任务</h3></div>{taskRunning ? <LoaderCircle className="spin" size={21} /> : <Play size={21} />}</header>
-                <div className="ct8-status-grid"><div><span>任务状态</span><strong className={`ct8-run-status ${activeStatus.className}`}>{activeStatus.label}</strong></div><div><span>Workflow</span><strong>{latestWorkflow}</strong></div><div><span>最近 Run ID</span><strong>{formatRunId(latestRun?.run_id || activeTask?.run_id)}</strong></div><div><span>检查时间</span><strong>{formatCheckedAt(automation.checkedAt)}</strong></div></div>
-                {activeTask?.html_url && <a className="ct8-external-link" href={activeTask.html_url} target="_blank" rel="noreferrer">打开 GitHub 运行记录 <ArrowUpRight size={15} /></a>}
-              </section>
-              <section className="view-card observability-panel">
-                <header><div><span className="view-eyebrow">观测</span><h3>接入链路</h3></div><Database size={21} /></header>
-                <ol><li className="done"><span><CheckCircle2 size={17} /></span><div><strong>服务注册</strong><small>已接入统一服务控制台</small></div></li><li className="done"><span><CheckCircle2 size={17} /></span><div><strong>Core API</strong><small>通过平台内部身份访问 CT8 接口</small></div></li><li className={ct8Ready ? 'done' : 'pending'}><span>{ct8Ready ? <CheckCircle2 size={17} /> : <Clock3 size={17} />}</span><div><strong>运行观测</strong><small>{ct8Ready ? '统计与历史已接入' : '等待读取运行数据'}</small></div></li><li className={automation.state === 'unmonitored' ? 'pending' : 'done'}><span>{automation.state === 'unmonitored' ? <Clock3 size={17} /> : <CheckCircle2 size={17} />}</span><div><strong>健康探针</strong><small>{automation.state === 'unmonitored' ? 'GitHub Actions 无独立健康端点' : meta.label}</small></div></li></ol>
-              </section>
+        {loading ? (
+          <div className="loading-inline"><LoaderCircle className="spin" size={17} /> 正在加载自动化服务</div>
+        ) : !automation ? (
+          <EmptyState title="暂无自动化服务" detail="在服务注册表里登记自动化服务后会出现在这里" />
+        ) : (
+          <>
+            <div className="stat-strip">
+              <article className="stat-card">
+                <span className="stat-icon tone-info"><Timer size={17} /></span>
+                <div>
+                  <span className="stat-label">今日运行</span>
+                  <strong className="stat-figure">{formatCount(stats.todayRuns)}</strong>
+                  <small className="stat-foot">GitHub Actions 调度</small>
+                </div>
+              </article>
+              <article className="stat-card">
+                <span className={`stat-icon tone-${RUN_TONE[latestStatus.className] === 'ok' ? 'ok' : latestStatus.className === 'failed' ? 'warn' : 'violet'}`}><Activity size={17} /></span>
+                <div>
+                  <span className="stat-label">最近结果</span>
+                  <strong className="stat-figure">{latestStatus.label}</strong>
+                  <small className="stat-foot">{latestWorkflow}</small>
+                </div>
+              </article>
+              <article className="stat-card">
+                <span className="stat-icon tone-ok"><CheckCircle2 size={17} /></span>
+                <div>
+                  <span className="stat-label">成功节点</span>
+                  <strong className="stat-figure">{formatCount(successHosts)}</strong>
+                  <small className="stat-foot">共 {formatCount(totalHosts)} 个节点</small>
+                </div>
+              </article>
+              <article className="stat-card">
+                <span className="stat-icon tone-warn"><CircleAlert size={17} /></span>
+                <div>
+                  <span className="stat-label">失败节点</span>
+                  <strong className="stat-figure">{formatCount(failedHosts)}</strong>
+                  <small className="stat-foot">最近一次结果</small>
+                </div>
+              </article>
             </div>
-          </div>
-        </>
-      ) : <div className="view-empty">暂无自动化服务</div>}
+
+            <div className="split">
+              <div className="split-main">
+                <section className="panel panel-flush" aria-label="运行历史">
+                  <div className="panel-head">
+                    <div className="panel-title"><Timer size={15} aria-hidden="true" />运行历史</div>
+                    <span className="panel-meta">
+                      {ct8Data.runs.length ? `最近 ${ct8Data.runs.length} 次 · ${latestWorkflow}` : '暂无记录'}
+                    </span>
+                  </div>
+                  <div className="data-list">
+                    <div className="data-head col-run" aria-hidden="true">
+                      <span>工作流</span><span>状态</span><span className="cell-num">成功</span><span className="cell-num">失败</span><span>时间</span>
+                    </div>
+                    {ct8Loading ? (
+                      <div className="loading-inline"><LoaderCircle className="spin" size={16} /> 正在加载运行记录</div>
+                    ) : ct8Data.runs.length === 0 ? (
+                      <div className="data-list-empty"><span>暂无运行记录</span></div>
+                    ) : ct8Data.runs.map((run) => (
+                      <div className="data-row col-run" key={run.run_id || run.id || getRunTime(run)}>
+                        <span className="cell-stack">
+                          <strong>{run.workflow || 'ssh-login.yml'}</strong>
+                          <small>{formatRunId(run.run_id || run.id)}</small>
+                        </span>
+                        <RunTag status={run.status} conclusion={run.workflow_conclusion} />
+                        <span className="cell-num">{formatCount(run.success_count ?? run.stats?.success)}</span>
+                        <span className="cell-num">{formatCount(run.failed_count ?? run.stats?.failed)}</span>
+                        <span className="panel-meta">{formatDateTime(getRunTime(run))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="panel panel-flush" aria-label="跨服务自动化">
+                  <div className="panel-head">
+                    <div className="panel-title"><Workflow size={15} aria-hidden="true" />跨服务自动化</div>
+                    <span className="panel-meta">统一视图 · {capabilities.items.length} 项能力</span>
+                  </div>
+                  <div className="data-list">
+                    {capabilities.loading && capabilities.items.length === 0 ? (
+                      <div className="loading-inline"><LoaderCircle className="spin" size={16} /> 正在汇总自动化状态</div>
+                    ) : capabilities.items.length === 0 ? (
+                      <div className="data-list-empty"><span>暂无自动化能力</span></div>
+                    ) : capabilities.items.map((item) => <AutomationCapability key={item.id} item={item} />)}
+                  </div>
+                </section>
+              </div>
+
+              <aside className="split-side">
+                <section className="panel" aria-label="当前任务">
+                  <div className="panel-head">
+                    <div className="panel-title">{taskRunning ? <LoaderCircle className="spin" size={15} /> : <Play size={15} />}当前任务</div>
+                    <span className="panel-meta">{activeStatus.label}</span>
+                  </div>
+                  <div className="panel-body">
+                    <div className="kv-grid">
+                      <div className="kv"><div className="kv-label">任务状态</div><div className="kv-value">{activeStatus.label}</div></div>
+                      <div className="kv"><div className="kv-label">最近 Run</div><div className="kv-value cell-mono">{formatRunId(latestRun?.run_id || activeTask?.run_id)}</div></div>
+                      <div className="kv"><div className="kv-label">Workflow</div><div className="kv-value cell-mono">{latestWorkflow}</div></div>
+                      <div className="kv"><div className="kv-label">最近运行</div><div className="kv-value">{formatDateTime(latestRunTime)}</div></div>
+                    </div>
+                    {activeTask?.html_url && (
+                      <a className="panel-link" href={activeTask.html_url} target="_blank" rel="noreferrer">
+                        打开 GitHub 运行记录 <ArrowUpRight size={14} />
+                      </a>
+                    )}
+                  </div>
+                </section>
+
+                <section className="panel" aria-label="接入链路">
+                  <div className="panel-head">
+                    <div className="panel-title"><Clock3 size={15} aria-hidden="true" />接入链路</div>
+                  </div>
+                  <div className="panel-body">
+                    <div className="timeline">
+                      <div className="timeline-row"><span><strong>服务注册</strong><small>已接入统一服务控制台</small></span></div>
+                      <div className="timeline-row"><span><strong>Core API</strong><small>通过平台内部身份访问 CT8 接口</small></span></div>
+                      <div className="timeline-row"><span><strong>运行观测</strong><small>{ct8Ready ? '统计与历史已接入' : '等待读取运行数据'}</small></span></div>
+                      <div className="timeline-row"><span><strong>健康探针</strong><small>{automation.state === 'unmonitored' ? 'GitHub Actions 无独立健康端点' : STATE_META[automation.state]?.label || '已接入'}</small></span></div>
+                    </div>
+                  </div>
+                </section>
+              </aside>
+            </div>
+          </>
+        )}
+      </div>
     </section>
   );
 }

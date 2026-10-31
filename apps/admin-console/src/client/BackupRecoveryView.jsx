@@ -15,7 +15,15 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { requestJson } from './api.js';
 import { ConfirmDialog } from './UiControls.jsx';
+import { EmptyState } from './Pearl.jsx';
 import { hasRole, formatDateTime, formatBytes } from './shared.jsx';
+
+const JOB_STATUS_LABEL = {
+  running: '执行中',
+  succeeded: '已完成',
+  failed: '失败',
+  queued: '排队中',
+};
 
 export function BackupRecoveryView({ session, BackupQualityStrip, BackupOffsitePanel }) {
   const [statusData, setStatusData] = useState(null);
@@ -35,8 +43,6 @@ export function BackupRecoveryView({ session, BackupQualityStrip, BackupOffsiteP
   const [confirmation, setConfirmation] = useState(null);
   const [confirmationBusy, setConfirmationBusy] = useState(false);
   const uploadInputRef = useRef(null);
-  const backupListCardRef = useRef(null);
-  const restoreCardRef = useRef(null);
 
   const loadBackupStatus = useCallback(async (force = false, options = {}) => {
     const preserveMissingRunningJob = options.preserveMissingRunningJob !== false;
@@ -87,27 +93,6 @@ export function BackupRecoveryView({ session, BackupQualityStrip, BackupOffsiteP
       return backups.find((backup) => backup.restorable) || backups[0];
     });
   }, [backups]);
-
-  useEffect(() => {
-    const listCard = backupListCardRef.current;
-    const restoreCard = restoreCardRef.current;
-    if (!listCard || !restoreCard) return undefined;
-    const wideLayout = window.matchMedia('(min-width: 1281px)');
-    const syncHeight = () => {
-      listCard.style.maxHeight = wideLayout.matches ? `${restoreCard.offsetHeight}px` : '';
-    };
-    syncHeight();
-    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncHeight) : null;
-    observer?.observe(restoreCard);
-    const onWideLayoutChange = () => syncHeight();
-    if (wideLayout.addEventListener) wideLayout.addEventListener('change', onWideLayoutChange);
-    else if (wideLayout.addListener) wideLayout.addListener(onWideLayoutChange);
-    return () => {
-      observer?.disconnect();
-      if (wideLayout.removeEventListener) wideLayout.removeEventListener('change', onWideLayoutChange);
-      else if (wideLayout.removeListener) wideLayout.removeListener(onWideLayoutChange);
-    };
-  }, []);
 
   useEffect(() => {
     if (!activeJob || activeJob.status !== 'running') return undefined;
@@ -341,226 +326,273 @@ export function BackupRecoveryView({ session, BackupQualityStrip, BackupOffsiteP
   const canManageBackups = hasRole(session.user?.role, 'super_admin');
   const canUseRestore = Boolean(canManageBackups && capabilities.canRestore && selectedBackup?.restorable && !runningJob);
   const executorHealthy = capabilities.canBackup && capabilities.canRestore;
+  const credentialsSatisfied = session.authDisabled
+    || (restorePassword && (!session.user?.totpEnabled || restoreTotp.length === 6));
 
   return (
-    <section className="page-view backup-view" aria-label="数据灾备">
-      <div className="page-actions">
-        <button className="secondary-action" type="button" onClick={() => loadBackupStatus(true)} disabled={refreshing}>
-          {refreshing ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
-          {refreshing ? '正在刷新' : '刷新清单'}
-        </button>
-      </div>
-
-      <BackupQualityStrip />
-
-      <div className="backup-kpis">
-        <article><span className="kpi-icon blue"><Database size={20} /></span><div><span>可用备份</span><strong>{backups.filter((backup) => backup.restorable).length}</strong><small>服务器备份目录</small></div></article>
-        <article><span className="kpi-icon green"><CheckCircle2 size={20} /></span><div><span>执行器</span><strong>{executorHealthy ? '就绪' : '受限'}</strong><small>{capabilities.issues?.join('，') || '可执行备份与恢复'}</small></div></article>
-        <article><span className="kpi-icon orange"><Clock3 size={20} /></span><div><span>最近备份</span><strong>{formatDateTime(latestBackup?.createdAt)}</strong><small>{latestBackup?.name || '暂无归档'}</small></div></article>
-        <article><span className="kpi-icon purple"><ShieldCheck size={20} /></span><div><span>高危操作保护</span><strong>{session.authDisabled ? '确认短语' : session.user?.totpEnabled ? '双重验证' : '密码验证'}</strong><small>下载与恢复均需二次验证</small></div></article>
-      </div>
-
-      {(actionError || actionMessage) && (
-        <div className={`backup-feedback ${actionError ? 'error' : 'success'}`} role="status">
-          {actionError ? <CircleAlert size={17} /> : <CheckCircle2 size={17} />}
-          <span>{actionError || actionMessage}</span>
+    <section className="page-view" aria-label="数据灾备">
+      <div className="view-stack">
+        <div className="toolbar">
+          <span className="toolbar-label"><Database size={14} aria-hidden="true" />备份目录</span>
+          <span className="toolbar-hint">{capabilities.backupRoot || '备份目录未配置'}</span>
+          <div className="toolbar-end">
+            <button className="btn btn-secondary btn-sm" type="button" onClick={() => loadBackupStatus(true)} disabled={refreshing}>
+              {refreshing ? <LoaderCircle className="spin" size={15} /> : <RefreshCw size={15} />}
+              {refreshing ? '正在刷新' : '刷新清单'}
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
+              type="button"
+              onClick={handleStartBackup}
+              disabled={!canOperateBackups || !capabilities.canBackup || Boolean(runningJob)}
+            >
+              {runningJob?.type === 'backup' ? <LoaderCircle className="spin" size={15} /> : <Play size={15} />}
+              {runningJob?.type === 'backup' ? '正在备份' : '立即备份'}
+            </button>
+          </div>
         </div>
-      )}
 
-      <div className="backup-layout">
-        <section className="view-card backup-action-card">
-          <header className="section-bar">
-            <div><h3>创建备份</h3><span>{capabilities.backupRoot || '备份目录未配置'}</span></div>
-            <Database size={21} />
-          </header>
-          <div className="backup-action-copy">
-            <strong>{capabilities.canBackup ? '全量备份已接入' : '备份执行器不可用'}</strong>
-            <span>备份由独立执行器在线创建 MongoDB 归档并复制核心上传文件，不主动停止业务容器。</span>
-          </div>
-          <button
-            className="primary-button backup-primary-action"
-            type="button"
-            onClick={handleStartBackup}
-            disabled={!canOperateBackups || !capabilities.canBackup || Boolean(runningJob)}
-          >
-            {runningJob?.type === 'backup' ? <LoaderCircle className="spin" size={18} /> : <Play size={18} />}
-            {runningJob?.type === 'backup' ? '正在备份' : '立即备份'}
-          </button>
-        </section>
+        <BackupQualityStrip />
 
-        <section className="view-card backup-list-card" aria-label="备份清单" ref={backupListCardRef}>
-          <div className="backup-table-head">
-            <span>备份</span><span>时间</span><span>大小</span><span>状态</span><span>操作</span>
+        <div className="stat-strip">
+          <article className="stat-card">
+            <span className="stat-icon tone-info"><Database size={17} /></span>
+            <div>
+              <span className="stat-label">可用备份</span>
+              <strong className="stat-figure">{backups.filter((backup) => backup.restorable).length}</strong>
+              <small className="stat-foot">共 {backups.length} 个归档</small>
+            </div>
+          </article>
+          <article className="stat-card">
+            <span className={`stat-icon tone-${executorHealthy ? 'ok' : 'warn'}`}><CheckCircle2 size={17} /></span>
+            <div>
+              <span className="stat-label">执行器</span>
+              <strong className="stat-figure">{executorHealthy ? '就绪' : '受限'}</strong>
+              <small className="stat-foot">{capabilities.issues?.join('，') || '可执行备份与恢复'}</small>
+            </div>
+          </article>
+          <article className="stat-card">
+            <span className="stat-icon tone-violet"><Clock3 size={17} /></span>
+            <div>
+              <span className="stat-label">最近备份</span>
+              <strong className="stat-figure stat-figure-sm">{formatDateTime(latestBackup?.createdAt)}</strong>
+              <small className="stat-foot">{latestBackup?.name || '暂无归档'}</small>
+            </div>
+          </article>
+          <article className="stat-card">
+            <span className="stat-icon tone-ok"><ShieldCheck size={17} /></span>
+            <div>
+              <span className="stat-label">高危操作保护</span>
+              <strong className="stat-figure">{session.authDisabled ? '确认短语' : session.user?.totpEnabled ? '双重验证' : '密码验证'}</strong>
+              <small className="stat-foot">下载与恢复均需二次验证</small>
+            </div>
+          </article>
+        </div>
+
+        {(actionError || actionMessage) && (
+          <div className={`alert ${actionError ? 'is-error' : 'is-ok'}`} role="status">
+            {actionError ? <CircleAlert size={15} /> : <CheckCircle2 size={15} />}
+            <span>{actionError || actionMessage}</span>
           </div>
-          <div className="backup-table-body">
-            {loading ? (
-              <div className="view-loading"><LoaderCircle className="spin" size={20} /> 正在加载备份清单</div>
-            ) : backups.length > 0 ? backups.map((backup) => (
-              <div
-                key={backup.name}
-                className={`backup-row ${selectedBackup?.name === backup.name ? 'selected' : ''} ${backup.restorable ? '' : 'invalid'}`}
-                role="button"
-                tabIndex={0}
-                onClick={() => setSelectedBackup(backup)}
-                onKeyDown={(event) => handleBackupRowKeyDown(event, backup)}
-              >
-                <span><strong>{backup.name}</strong><small>{backup.includes?.join(' / ') || '清单不可读'}</small></span>
-                <span>{formatDateTime(backup.createdAt)}</span>
-                <span>{formatBytes(backup.sizeBytes)}</span>
-                <span className={backup.restorable ? 'healthy' : 'degraded'}>{backup.restorable ? '可恢复' : '不可用'}</span>
-                <span className="backup-row-actions">
-                  <button
-                    className="backup-row-action"
-                    type="button"
-                    aria-label={`同步备份 ${backup.name}`}
-                    title="同步到外部存储"
-                    disabled={!canOperateBackups || !statusData?.offsite?.enabled || !backup.restorable || Boolean(runningJob) || syncingBackup === backup.name}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleSyncBackup(backup);
-                    }}
-                  >
-                    {syncingBackup === backup.name ? <LoaderCircle className="spin" size={15} /> : <CloudCog size={15} />}
-                  </button>
-                  <button
-                    className="backup-row-action"
-                    type="button"
-                    aria-label={`下载备份 ${backup.name}`}
-                    title="下载备份"
-                    disabled={!canManageBackups || !backup.restorable || downloadingBackup === backup.name}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleDownloadBackup(backup);
-                    }}
-                  >
-                    {downloadingBackup === backup.name ? <LoaderCircle className="spin" size={15} /> : <Download size={15} />}
-                  </button>
-                  <button
-                    className="backup-row-action danger"
-                    type="button"
-                    aria-label={`删除备份 ${backup.name}`}
-                    title="删除备份"
-                    disabled={!canManageBackups || Boolean(runningJob) || deletingBackup === backup.name}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleDeleteBackup(backup);
-                    }}
-                  >
-                    {deletingBackup === backup.name ? <LoaderCircle className="spin" size={15} /> : <Trash2 size={15} />}
-                  </button>
-                </span>
+        )}
+
+        <div className="split split-wide">
+          <div className="split-main">
+            <section className="panel panel-flush" aria-label="备份清单">
+              <div className="panel-head">
+                <div className="panel-title"><Database size={15} aria-hidden="true" />备份清单</div>
+                <span className="panel-meta">{backups.length} 个归档 · 选中一行作为恢复目标</span>
               </div>
-            )) : (
-              <div className="view-empty">暂无备份归档</div>
+              <div className="data-list">
+                <div className="data-head col-backup" aria-hidden="true">
+                  <span>备份</span><span>时间</span><span>大小</span><span>状态</span><span className="cell-actions">操作</span>
+                </div>
+                {loading ? (
+                  <div className="loading-inline"><LoaderCircle className="spin" size={16} /> 正在加载备份清单</div>
+                ) : backups.length === 0 ? (
+                  <div className="data-list-empty"><span>暂无备份归档</span></div>
+                ) : backups.map((backup) => (
+                  <div
+                    key={backup.name}
+                    className={`data-row col-backup is-selectable ${selectedBackup?.name === backup.name ? 'is-selected' : ''}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedBackup(backup)}
+                    onKeyDown={(event) => handleBackupRowKeyDown(event, backup)}
+                  >
+                    <span className="cell-stack">
+                      <strong>{backup.name}</strong>
+                      <small>{backup.includes?.join(' / ') || '清单不可读'}</small>
+                    </span>
+                    <span className="panel-meta">{formatDateTime(backup.createdAt)}</span>
+                    <span className="cell-num">{formatBytes(backup.sizeBytes)}</span>
+                    <span className={`tag tone-${backup.restorable ? 'ok' : 'danger'}`}>{backup.restorable ? '可恢复' : '不可用'}</span>
+                    <span className="row-actions">
+                      <button
+                        className="icon-action"
+                        type="button"
+                        aria-label={`同步备份 ${backup.name}`}
+                        title="同步到外部存储"
+                        disabled={!canOperateBackups || !statusData?.offsite?.enabled || !backup.restorable || Boolean(runningJob) || syncingBackup === backup.name}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleSyncBackup(backup);
+                        }}
+                      >
+                        {syncingBackup === backup.name ? <LoaderCircle className="spin" size={15} /> : <CloudCog size={15} />}
+                      </button>
+                      <button
+                        className="icon-action"
+                        type="button"
+                        aria-label={`下载备份 ${backup.name}`}
+                        title="下载备份"
+                        disabled={!canManageBackups || !backup.restorable || downloadingBackup === backup.name}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDownloadBackup(backup);
+                        }}
+                      >
+                        {downloadingBackup === backup.name ? <LoaderCircle className="spin" size={15} /> : <Download size={15} />}
+                      </button>
+                      <button
+                        className="icon-action danger"
+                        type="button"
+                        aria-label={`删除备份 ${backup.name}`}
+                        title="删除备份"
+                        disabled={!canManageBackups || Boolean(runningJob) || deletingBackup === backup.name}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDeleteBackup(backup);
+                        }}
+                      >
+                        {deletingBackup === backup.name ? <LoaderCircle className="spin" size={15} /> : <Trash2 size={15} />}
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {latestJob && (
+              <section className="panel" aria-label="最近任务">
+                <div className="panel-head">
+                  <div className="panel-title">
+                    {latestJob.status === 'running' ? <LoaderCircle className="spin" size={15} /> : <CheckCircle2 size={15} />}
+                    最近任务
+                  </div>
+                  <span className={`tag tone-${latestJob.status === 'failed' ? 'danger' : latestJob.status === 'running' ? 'info' : 'ok'}`}>
+                    {latestJob.type === 'backup' ? '备份' : '恢复'} · {JOB_STATUS_LABEL[latestJob.status] || latestJob.status}
+                  </span>
+                </div>
+                <div className="panel-body">
+                  <div className="kv-grid">
+                    <div className="kv"><div className="kv-label">发起人</div><div className="kv-value">{latestJob.requestedBy || 'admin'}</div></div>
+                    <div className="kv"><div className="kv-label">退出码</div><div className="kv-value cell-mono">{latestJob.exitCode ?? '--'}</div></div>
+                    <div className="kv"><div className="kv-label">开始时间</div><div className="kv-value">{formatDateTime(latestJob.startedAt)}</div></div>
+                    <div className="kv"><div className="kv-label">结束时间</div><div className="kv-value">{formatDateTime(latestJob.finishedAt)}</div></div>
+                  </div>
+                  {(latestJob.error || latestJob.stdout || latestJob.stderr) && (
+                    <pre className="code-block backup-job-log">{[
+                      latestJob.error,
+                      !latestJob.error && latestJob.stderr && `stderr:\n${latestJob.stderr}`,
+                      !latestJob.error && latestJob.stdout && `stdout:\n${latestJob.stdout}`,
+                    ].filter(Boolean).join('\n\n')}</pre>
+                  )}
+                </div>
+              </section>
             )}
           </div>
-        </section>
 
-        <aside className="view-card restore-card" ref={restoreCardRef}>
-          <header>
-            <div><span className="view-eyebrow">恢复</span><h3>高危恢复</h3></div>
-            <CircleAlert size={21} />
-          </header>
-          <div className="restore-target">
-            <span>目标备份</span>
-            <strong>{selectedBackup?.name || '未选择'}</strong>
-            <small>{selectedBackup ? formatDateTime(selectedBackup.createdAt) : '请从备份清单选择'}</small>
-          </div>
-          <p className="restore-warning">恢复提交后会先创建当前状态备份，再执行覆写。</p>
-          <input
-            ref={uploadInputRef}
-            className="backup-upload-input"
-            type="file"
-            accept=".tar.gz,.tgz,application/gzip,application/x-gzip"
-            onChange={handleUploadBackup}
-          />
-          <button
-            className="secondary-action backup-upload-action"
-            type="button"
-            disabled={!canOperateBackups || Boolean(runningJob) || uploadingBackup}
-            onClick={() => uploadInputRef.current?.click()}
-          >
-            {uploadingBackup ? <LoaderCircle className="spin" size={17} /> : <Upload size={17} />}
-            {uploadingBackup ? '正在上传' : '上传备份包'}
-          </button>
-          {!session.authDisabled && (
-            <label className="restore-field">
-              <span>管理员密码（下载 / 恢复）</span>
-              <input
-                type="password"
-                autoComplete="current-password"
-                value={restorePassword}
-                onChange={(event) => setRestorePassword(event.target.value)}
-                placeholder="当前平台登录密码"
-              />
-            </label>
-          )}
-          {!session.authDisabled && session.user?.totpEnabled && (
-            <label className="restore-field">
-              <span>动态验证码（下载 / 恢复）</span>
-              <input
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={restoreTotp}
-                onChange={(event) => setRestoreTotp(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="六位验证码"
-              />
-            </label>
-          )}
-          <label className="restore-field">
-            <span>确认短语</span>
-            <input
-              value={confirmText}
-              onChange={(event) => setConfirmText(event.target.value)}
-              placeholder={restoreConfirmText}
-            />
-          </label>
-          <div className="restore-confirm-text">{restoreConfirmText}</div>
-          <button
-            className="danger-button"
-            type="button"
-            disabled={!canUseRestore || confirmText !== restoreConfirmText || (!session.authDisabled && (!restorePassword || (session.user?.totpEnabled && restoreTotp.length !== 6)))}
-            onClick={handleStartRestore}
-          >
-            {runningJob?.type === 'restore' ? <LoaderCircle className="spin" size={18} /> : <ShieldCheck size={18} />}
-            {runningJob?.type === 'restore' ? '正在恢复' : '执行恢复'}
-          </button>
-        </aside>
+          <aside className="split-side">
+            <section className="panel" aria-label="高危恢复">
+              <div className="panel-head">
+                <div className="panel-title"><ShieldCheck size={15} aria-hidden="true" />高危恢复</div>
+                <span className="tag tone-danger">需二次验证</span>
+              </div>
+              <div className="panel-body">
+                <div className="restore-target">
+                  <span className="restore-target-label">目标备份</span>
+                  <strong>{selectedBackup?.name || '未选择'}</strong>
+                  <small>{selectedBackup ? formatDateTime(selectedBackup.createdAt) : '请从备份清单选择'}</small>
+                </div>
+                <p className="restore-warning">恢复提交后会先创建当前状态备份，再执行覆写。</p>
+                <input
+                  ref={uploadInputRef}
+                  className="visually-hidden"
+                  type="file"
+                  accept=".tar.gz,.tgz,application/gzip,application/x-gzip"
+                  onChange={handleUploadBackup}
+                />
+                <button
+                  className="btn btn-secondary btn-block"
+                  type="button"
+                  disabled={!canOperateBackups || Boolean(runningJob) || uploadingBackup}
+                  onClick={() => uploadInputRef.current?.click()}
+                >
+                  {uploadingBackup ? <LoaderCircle className="spin" size={15} /> : <Upload size={15} />}
+                  {uploadingBackup ? '正在上传' : '上传备份包'}
+                </button>
+                <div className="restore-form">
+                  {!session.authDisabled && (
+                    <label className="config-field">
+                      <span>管理员密码（下载 / 恢复）</span>
+                      <input
+                        type="password"
+                        autoComplete="current-password"
+                        value={restorePassword}
+                        onChange={(event) => setRestorePassword(event.target.value)}
+                        placeholder="当前平台登录密码"
+                      />
+                    </label>
+                  )}
+                  {!session.authDisabled && session.user?.totpEnabled && (
+                    <label className="config-field">
+                      <span>动态验证码（下载 / 恢复）</span>
+                      <input
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        value={restoreTotp}
+                        onChange={(event) => setRestoreTotp(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="六位验证码"
+                      />
+                    </label>
+                  )}
+                  <label className="config-field">
+                    <span>确认短语<small>{restoreConfirmText}</small></span>
+                    <input
+                      value={confirmText}
+                      onChange={(event) => setConfirmText(event.target.value)}
+                      placeholder={restoreConfirmText}
+                    />
+                  </label>
+                </div>
+                <button
+                  className="btn btn-danger btn-block restore-submit"
+                  type="button"
+                  disabled={!canUseRestore || confirmText !== restoreConfirmText || !credentialsSatisfied}
+                  onClick={handleStartRestore}
+                >
+                  {runningJob?.type === 'restore' ? <LoaderCircle className="spin" size={15} /> : <ShieldCheck size={15} />}
+                  {runningJob?.type === 'restore' ? '正在恢复' : '执行恢复'}
+                </button>
+              </div>
+            </section>
+          </aside>
+        </div>
+
+        <BackupOffsitePanel
+          session={session}
+          localBackups={backups}
+          backupJob={activeJob}
+          canExecuteBackup={Boolean(capabilities.canBackup && !runningJob)}
+          onExecuteBackup={handleStartBackup}
+          onImported={(backup) => {
+            if (backup) setSelectedBackup(backup);
+            loadBackupStatus(true);
+          }}
+        />
       </div>
 
-      <BackupOffsitePanel
-        session={session}
-        localBackups={backups}
-        backupJob={activeJob}
-        canExecuteBackup={Boolean(capabilities.canBackup && !runningJob)}
-        onExecuteBackup={handleStartBackup}
-        onImported={(backup) => {
-          if (backup) setSelectedBackup(backup);
-          loadBackupStatus(true);
-        }}
-      />
-
-      {latestJob && (
-        <section className={`view-card backup-job-card job-${latestJob.status}`}>
-          <header className="section-bar">
-            <div><h3>最近任务</h3><span>{latestJob.type === 'backup' ? '备份任务' : '恢复任务'} · {latestJob.status}</span></div>
-            {latestJob.status === 'running' ? <LoaderCircle className="spin" size={21} /> : <CheckCircle2 size={21} />}
-          </header>
-          <div className="backup-job-grid">
-            <div><span>发起人</span><strong>{latestJob.requestedBy || 'admin'}</strong></div>
-            <div><span>开始时间</span><strong>{formatDateTime(latestJob.startedAt)}</strong></div>
-            <div><span>结束时间</span><strong>{formatDateTime(latestJob.finishedAt)}</strong></div>
-            <div><span>退出码</span><strong>{latestJob.exitCode ?? '--'}</strong></div>
-          </div>
-          {(latestJob.error || latestJob.stdout || latestJob.stderr) && (
-            <pre className="backup-job-log">{[
-              latestJob.error,
-              !latestJob.error && latestJob.stderr && `stderr:\n${latestJob.stderr}`,
-              !latestJob.error && latestJob.stdout && `stdout:\n${latestJob.stdout}`,
-            ].filter(Boolean).join('\n\n')}</pre>
-          )}
-        </section>
-      )}
       <ConfirmDialog
         open={Boolean(confirmation)}
         tone="danger"
