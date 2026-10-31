@@ -11,8 +11,11 @@ const bannedOrigins = [
   'fonts.gstatic.com',
   'api.dicebear.com',
 ];
+// 入口预算需为依赖补丁留出余量：core-admin 入口当前 232 KiB gzip，
+// 其中 antd + react + react-dom + react-router 打包在同一个 chunk，
+// react-dom 19.2 -> 19.3 一项升级即增加约 8.5 KiB。
 const budgets = {
-  coreEntry: 240 * 1024,
+  coreEntry: 260 * 1024,
   coreDefaultRoute: 365 * 1024,
   coreSettledDefaultRoute: 470 * 1024,
   examEntry: 90 * 1024,
