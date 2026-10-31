@@ -167,11 +167,29 @@ jobs:
 
       - name: Sign in to Aliyun Container Registry
         if: steps.resolve.outputs.targets != ''
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
-        with:
-          registry: ${{ env.ACR_REGISTRY }}
-          username: ${{ secrets.ALIYUN_ACR_USERNAME }}
-          password: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+        env:
+          ACR_USERNAME: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+        run: |
+          set -euo pipefail
+          login_with_retry() {
+            local attempt=1
+            local max_attempts=4
+            local delay_seconds=15
+            local status=0
+            until printf '%s' "${ACR_PASSWORD}" | docker login --username "${ACR_USERNAME}" --password-stdin "${ACR_REGISTRY}"; do
+              status=$?
+              if [ "${attempt}" -ge "${max_attempts}" ]; then
+                echo "Aliyun ACR login failed after ${attempt} attempt(s)." >&2
+                return "${status}"
+              fi
+              echo "Aliyun ACR login failed on attempt ${attempt}/${max_attempts}; retrying in ${delay_seconds}s..." >&2
+              sleep "${delay_seconds}"
+              attempt=$((attempt + 1))
+              delay_seconds=$((delay_seconds * 2))
+            done
+          }
+          login_with_retry
 
       - name: Build and push selected images
         if: steps.resolve.outputs.targets != ''
@@ -331,6 +349,10 @@ jobs:
           path: release-artifacts.tsv
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Sign out of Aliyun Container Registry
+        if: always() && steps.resolve.outputs.targets != ''
+        run: docker logout "${ACR_REGISTRY}" || true
 
       - name: Synchronize final build result with release center
         if: always() && steps.resolve.outputs.release_targets != ''
