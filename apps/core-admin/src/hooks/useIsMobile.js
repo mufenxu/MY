@@ -25,7 +25,7 @@ const useResponsive = () => {
             if (frameId) return;
             frameId = window.requestAnimationFrame(() => {
                 const w = window.innerWidth;
-                setState({
+                setState(previous => previous.screenWidth === w ? previous : {
                     isMobile: w <= 768,
                     isTablet: w > 768 && w <= 1024,
                     isDesktop: w > 1024,

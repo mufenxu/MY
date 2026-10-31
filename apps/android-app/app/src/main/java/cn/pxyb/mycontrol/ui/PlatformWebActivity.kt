@@ -32,13 +32,16 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.imeAnimationSource
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -494,6 +497,7 @@ class PlatformWebActivity : ComponentActivity() {
 }
 
 @SuppressLint("SetJavaScriptEnabled")
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PlatformWebScreen(
     initialUrl: String,
@@ -540,7 +544,8 @@ private fun PlatformWebScreen(
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
-                .imePadding(),
+                // 动画期间保持网页视口高度，结束后更新，避免后台逐帧重排。
+                .windowInsetsPadding(WindowInsets.imeAnimationSource),
         ) {
             // 1. 原生全屏沉浸 WebView 容器
             AndroidView(
@@ -687,8 +692,8 @@ private fun PlatformWebScreen(
                         onWebViewCreated(this)
                         loadUrl(initialUrl)
                     }
-                    },
-                )
+                },
+            )
 
             if (onConfirmLogin != null) {
                 Surface(

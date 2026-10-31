@@ -266,8 +266,11 @@ const MainLayout = () => {
     ];
 
     useEffect(() => {
+        let previousWidth = null;
         const handleResize = () => {
             const width = window.innerWidth;
+            if (width === previousWidth) return;
+            previousWidth = width;
             setViewportWidth(width);
             if (width <= 768) {
                 // 鎵嬫満绔細闅愯棌渚ф爮锛屽惎鐢ㄦ娊灞?

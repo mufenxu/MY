@@ -222,11 +222,20 @@ export function LoginScreen({ onAuthenticated, externalAuth = false }) {
       }));
     }
 
+    const isEditing = () => {
+      const active = document.activeElement;
+      return active?.matches('input, textarea') || active?.isContentEditable;
+    };
+
     const handleResize = () => {
-      width = canvas.width = window.innerWidth;
-      height = canvas.height = window.innerHeight;
+      const nextWidth = window.innerWidth;
+      const nextHeight = window.innerHeight;
+      // 输入时忽略仅高度变化，避免键盘动画反复重建画布。
+      if (nextWidth === width && (nextHeight === height || isEditing())) return;
+      width = canvas.width = nextWidth;
+      height = canvas.height = nextHeight;
       particles = createParticles();
-      if (motionQuery.matches) render(false);
+      if (motionQuery.matches || isEditing()) render(false);
     };
     window.addEventListener('resize', handleResize, { passive: true });
 
@@ -271,7 +280,7 @@ export function LoginScreen({ onAuthenticated, externalAuth = false }) {
     const syncAnimation = () => {
       cancelAnimationFrame(animId);
       animId = 0;
-      if (document.hidden || motionQuery.matches) {
+      if (document.hidden || motionQuery.matches || isEditing()) {
         render(false);
         return;
       }
@@ -279,12 +288,16 @@ export function LoginScreen({ onAuthenticated, externalAuth = false }) {
     };
 
     document.addEventListener('visibilitychange', syncAnimation);
+    document.addEventListener('focusin', syncAnimation);
+    document.addEventListener('focusout', syncAnimation);
     motionQuery.addEventListener('change', syncAnimation);
     syncAnimation();
 
     return () => {
       window.removeEventListener('resize', handleResize);
       document.removeEventListener('visibilitychange', syncAnimation);
+      document.removeEventListener('focusin', syncAnimation);
+      document.removeEventListener('focusout', syncAnimation);
       motionQuery.removeEventListener('change', syncAnimation);
       cancelAnimationFrame(animId);
     };
