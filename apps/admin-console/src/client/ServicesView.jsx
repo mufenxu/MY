@@ -77,6 +77,7 @@ export function ServicesView({ services, loading, onLaunch, targetEntityId = '' 
 
   return (
     <section className="page-view services-view" aria-label="服务运维">
+      <div className="view-stack">
       <div className="stat-strip">
         <article className="stat-card">
           <span className="stat-icon tone-info"><Server size={16} /></span>
@@ -193,6 +194,7 @@ export function ServicesView({ services, loading, onLaunch, targetEntityId = '' 
             </div>
           </article>
         </aside>
+      </div>
       </div>
     </section>
   );
