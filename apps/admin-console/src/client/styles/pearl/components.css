@@ -1985,3 +1985,196 @@
     transform: none;
   }
 }
+
+/* ── 全局检索：命令面板 ───────────────────────────────────────── */
+.command-palette-backdrop {
+  position: fixed;
+  z-index: var(--layer-overlay);
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: min(14vh, 120px) 18px 24px;
+  background: var(--overlay);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.command-palette {
+  display: flex;
+  width: min(680px, 100%);
+  max-height: min(76vh, 680px);
+  min-height: 200px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--glass-line);
+  border-radius: var(--r-xl);
+  background: var(--surface-solid);
+  box-shadow: var(--edge), var(--e3);
+  animation: command-palette-in 180ms var(--ease-premium, ease-out);
+}
+
+@keyframes command-palette-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.99);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.command-palette > header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 8px 12px 8px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.command-palette > header > svg {
+  color: var(--blue);
+}
+
+.command-palette > header input {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+}
+
+.command-palette > header input::placeholder {
+  color: var(--ink-faint);
+}
+
+/* 统一由面板自带的关闭键承担清除，避免原生控件与主题冲突 */
+.command-palette > header input::-webkit-search-cancel-button,
+.command-palette > header input::-webkit-search-decoration {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.command-palette-feedback {
+  padding: 9px 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--leaf-text);
+  background: var(--lime-soft);
+  font-size: 11.5px;
+}
+
+.command-palette-feedback.error {
+  color: var(--red-text);
+  background: var(--red-soft);
+}
+
+.command-palette-results {
+  min-height: 0;
+  padding: 8px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ink-faint) transparent;
+}
+
+.command-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+}
+
+.command-result.active {
+  border-color: var(--line-strong);
+  background: var(--groove-bg);
+}
+
+.command-result-main {
+  display: grid;
+  min-width: 0;
+  min-height: 54px;
+  grid-template-columns: 48px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px 7px 10px;
+  color: inherit;
+  text-align: left;
+}
+
+.command-result-type {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border-radius: 7px;
+  color: var(--blue);
+  background: var(--blue-soft);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.command-result-main > span:nth-child(2) {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.command-result-main strong,
+.command-result-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-result-main strong {
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.command-result-main small {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.command-result-main > svg {
+  flex: none;
+  color: var(--ink-faint);
+}
+
+.command-result-status {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.command-result > .icon-action {
+  opacity: 0.55;
+}
+
+.command-result:hover > .icon-action,
+.command-result.active > .icon-action,
+.command-result > .icon-action:focus-visible {
+  opacity: 1;
+}
+
+.command-palette-empty {
+  display: flex;
+  min-height: 150px;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
