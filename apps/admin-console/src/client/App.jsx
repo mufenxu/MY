@@ -69,6 +69,14 @@ function AuthenticatedApp() {
 
 export default function App() {
   const [recovering, setRecovering] = useState(() => new URLSearchParams(window.location.hash.slice(1)).has('recover'));
+  // 控制台外壳之外的全屏页（登录 / 公开状态）也要跟随已保存的主题
+  useEffect(() => {
+    try {
+      document.documentElement.dataset.theme = window.localStorage.getItem('my-console-theme') || 'light';
+    } catch {
+      // Storage unavailable: keep default light theme.
+    }
+  }, []);
   if (recovering) return <LoginScreen onAuthenticated={() => setRecovering(false)} />;
   if (window.location.pathname === '/console' && new URLSearchParams(window.location.search).has('nativeChallenge')) {
     return <NativeChallengeScreen />;

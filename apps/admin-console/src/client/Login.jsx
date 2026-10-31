@@ -59,7 +59,7 @@ export function QrLoginPanel({ request, busy, error, remainingSeconds, onRefresh
         </div>
       )}
       {(!request || remainingSeconds <= 0 || error) && !busy && (
-        <button className="secondary-action login-passkey-button" type="button" onClick={onRefresh}>
+        <button className="btn btn-secondary login-passkey-button" type="button" onClick={onRefresh}>
           <RefreshCw size={17} />
           刷新二维码
         </button>
@@ -89,7 +89,7 @@ export function NativeChallengeScreen() {
       window.location.replace(`mycontrol-auth://challenge#${new URLSearchParams({ token, state: callbackState })}`);
     }} onError={() => setError('验证暂不可用，请重试。')} onExpire={() => setError('验证已过期，请重试。')} />}
     {error && <p role="alert">{error}</p>}
-    <button className="secondary-action" type="button" onClick={() => { setError(''); setRetry((value) => value + 1); }}>重新加载验证</button>
+    <button className="btn btn-secondary" type="button" onClick={() => { setError(''); setRetry((value) => value + 1); }}>重新加载验证</button>
   </section></main>;
 }
 
@@ -243,7 +243,7 @@ export function LoginScreen({ onAuthenticated, externalAuth = false }) {
 
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(217, 119, 36, ${p.alpha})`;
+        ctx.fillStyle = `rgba(35, 109, 233, ${p.alpha})`;
         ctx.fill();
 
         for (let j = i + 1; j < particles.length; j++) {
@@ -255,7 +255,7 @@ export function LoginScreen({ onAuthenticated, externalAuth = false }) {
             ctx.beginPath();
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(p2.x, p2.y);
-            ctx.strokeStyle = `rgba(217, 119, 36, ${0.14 * (1 - dist / 115)})`;
+            ctx.strokeStyle = `rgba(35, 109, 233, ${0.14 * (1 - dist / 115)})`;
             ctx.lineWidth = 0.65;
             ctx.stroke();
           }
@@ -471,7 +471,7 @@ export function LoginScreen({ onAuthenticated, externalAuth = false }) {
               <label className="input-group"><span>再次输入新密码</span><div className="input-wrapper"><LockKeyhole size={18} className="input-icon" /><input type="password" autoComplete="new-password" value={recoveryConfirmation} onChange={(event) => setRecoveryConfirmation(event.target.value)} required /></div></label>
               <p>恢复后会退出所有设备，并清除原有 Passkey 和动态验证设置。</p>
               {error && <div className="form-error" role="alert"><ShieldAlert size={16} /><span>{error}</span></div>}
-              <button className="primary-button login-button" type="submit" disabled={submitting || !recoveryToken.trim() || password.length < 15 || password !== recoveryConfirmation}>{submitting ? '正在恢复...' : '恢复账号'}</button>
+              <button className="btn btn-primary login-button" type="submit" disabled={submitting || !recoveryToken.trim() || password.length < 15 || password !== recoveryConfirmation}>{submitting ? '正在恢复...' : '恢复账号'}</button>
               <button className="login-mode-link" type="button" disabled={submitting} onClick={() => { handleResetStep(); setRecoveryToken(''); setRecoveryConfirmation(''); setLoginMode('credentials'); }}>返回登录</button>
             </>
           ) : recoveryCodes.length > 0 ? (
@@ -487,7 +487,7 @@ export function LoginScreen({ onAuthenticated, externalAuth = false }) {
                 ))}
               </div>
               <button
-                className="primary-button login-button"
+                className="btn btn-primary login-button"
                 type="button"
                 onClick={() => onAuthenticated(pendingSession)}
               >
@@ -663,7 +663,7 @@ export function LoginScreen({ onAuthenticated, externalAuth = false }) {
               )}
 
               <button
-                className="primary-button login-button glowing-btn"
+                className="btn btn-primary login-button"
                 disabled={
                   submitting ||
                   (Boolean(challenge?.siteKey) && !challengeToken) ||
@@ -688,7 +688,7 @@ export function LoginScreen({ onAuthenticated, externalAuth = false }) {
 
               {!secondFactorRequired && (
                 <><button
-                  className="secondary-action login-passkey-button"
+                  className="btn btn-secondary login-passkey-button"
                   disabled={submitting || (Boolean(challenge?.siteKey) && !challengeToken)}
                   type="button"
                   onClick={handlePasskeyLogin}

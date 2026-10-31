@@ -579,7 +579,7 @@ export function ReleasesView({ session, targetEntityId = '' }) {
     }
   }
 
-  if (loading && !data) return <section className="page-view ops-page"><LoadingBlock label="正在读取发布状态" /></section>;
+  if (loading && !data) return <section className="page-view view-stack"><LoadingBlock label="正在读取发布状态" /></section>;
   const capabilities = data?.capabilities || {};
   const metrics = data?.metrics || {};
   const successRate = metrics.completedBuilds ? Math.round((metrics.successfulBuilds / metrics.completedBuilds) * 100) : null;

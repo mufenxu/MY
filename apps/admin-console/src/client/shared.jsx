@@ -175,7 +175,7 @@ export function SessionUnavailableScreen({ error, onRetry, retrying }) {
       <CircleOff size={32} aria-hidden="true" />
       <strong>管理服务暂时不可用</strong>
       <span>{error?.message || '无法确认当前会话，请稍后重试。'}</span>
-      <button className="primary-button compact" type="button" onClick={onRetry} disabled={retrying}>
+      <button className="btn btn-primary btn-sm" type="button" onClick={onRetry} disabled={retrying}>
         {retrying ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
         {retrying ? '正在重试' : '重新连接'}
       </button>

@@ -2591,3 +2591,302 @@ a.data-row:hover .capability-open {
     align-items: flex-start;
   }
 }
+
+/* ── 公开状态页（独立外页） ────────────────────────────────────── */
+.public-status-page {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  color: var(--ink);
+  background: var(--canvas);
+}
+
+.public-status-header,
+.public-overall-status,
+.public-service-band,
+.public-incident-band,
+.public-status-page > footer,
+.public-status-error,
+.public-status-loading {
+  width: min(900px, calc(100% - 40px));
+  margin-inline: auto;
+}
+
+.public-status-header {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  gap: 11px;
+}
+
+.public-brand-mark {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.public-status-header > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.public-status-header strong {
+  color: var(--ink);
+  font-size: 13.5px;
+}
+
+.public-status-header span {
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.public-overall-status {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 0;
+  border-block: 1px solid var(--line);
+}
+
+.public-overall-status > svg {
+  color: var(--leaf-text);
+}
+
+.public-overall-status.degraded > svg,
+.public-overall-status.unknown > svg {
+  color: var(--amber);
+}
+
+.public-overall-status.outage > svg {
+  color: var(--red-text);
+}
+
+.public-overall-status h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 20px;
+}
+
+.public-overall-status p {
+  margin: 3px 0 0;
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.public-overall-status time {
+  color: var(--ink-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.public-status-error,
+.public-status-loading {
+  display: flex;
+  min-height: 60px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--red-text);
+}
+
+.public-status-loading {
+  color: var(--ink-muted);
+}
+
+.public-service-band,
+.public-incident-band {
+  padding-top: 28px;
+}
+
+.public-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+
+.public-section-heading h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15.5px;
+}
+
+.public-section-heading span {
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.public-service-list {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--e1), var(--edge);
+}
+
+.public-service-list article {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+}
+
+.public-service-list article + article {
+  border-top: 1px solid var(--line);
+}
+
+.public-service-list article > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.public-service-list strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.public-service-list small {
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.public-service-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--leaf-text);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.public-service-state i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.public-service-state.degraded,
+.public-service-state.unknown {
+  color: var(--amber);
+}
+
+.public-service-state.offline {
+  color: var(--red-text);
+}
+
+.public-service-state.unmonitored {
+  color: var(--ink-muted);
+}
+
+.public-no-incidents,
+.public-incident-list {
+  min-height: 62px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--e1), var(--edge);
+}
+
+.public-no-incidents {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 14px;
+  color: var(--leaf-text);
+  font-size: 13px;
+}
+
+.public-incident-list article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  color: var(--red-text);
+}
+
+.public-incident-list article + article {
+  border-top: 1px solid var(--line);
+}
+
+.public-incident-list article > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.public-incident-list strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.public-incident-list small,
+.public-incident-list article > span {
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.public-status-page > footer {
+  display: flex;
+  min-height: 90px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.public-status-page > footer a {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 5px;
+  color: var(--blue);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@media (max-width: 520px) {
+  .public-status-header,
+  .public-overall-status,
+  .public-service-band,
+  .public-incident-band,
+  .public-status-page > footer,
+  .public-status-error,
+  .public-status-loading {
+    width: min(100% - 24px, 900px);
+  }
+
+  .public-brand-mark {
+    width: 44px;
+    height: 44px;
+  }
+
+  .public-overall-status {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .public-overall-status time {
+    grid-column: 2;
+  }
+
+  .public-service-list article {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .public-status-page > footer {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+  }
+}

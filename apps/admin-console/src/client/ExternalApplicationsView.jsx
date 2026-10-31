@@ -288,9 +288,9 @@ export default function ExternalApplicationsView({ session }) {
       <header className="external-applications-header">
         <div><span>身份联邦</span><h2>外部应用</h2><p>统一身份认证，或直接打开任意网站</p></div>
         <div>
-          <a className="secondary-action external-doc-link" href="/docs/external-auth" target="_blank" rel="noreferrer"><BookOpen size={17} />接入文档</a>
-          <button className="secondary-action" type="button" disabled={refreshing} onClick={() => load(true)}><RefreshCw className={refreshing ? 'spin' : ''} size={17} />刷新状态</button>
-          {superAdmin && <button className="primary-button" type="button" onClick={() => setEditor(null)}><Plus size={17} />接入应用</button>}
+          <a className="btn btn-secondary btn-sm" href="/docs/external-auth" target="_blank" rel="noreferrer"><BookOpen size={17} />接入文档</a>
+          <button className="btn btn-secondary btn-sm" type="button" disabled={refreshing} onClick={() => load(true)}><RefreshCw className={refreshing ? 'spin' : ''} size={17} />刷新状态</button>
+          {superAdmin && <button className="btn btn-primary btn-sm" type="button" onClick={() => setEditor(null)}><Plus size={17} />接入应用</button>}
         </div>
       </header>
 
