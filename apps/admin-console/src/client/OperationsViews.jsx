@@ -56,6 +56,7 @@ const STATE_SHORT = {
 };
 const INCIDENT_LABELS = { open: '待处理', acknowledged: '已确认', resolved: '已恢复' };
 const ROLE_LABELS = { viewer: '只读管理员', operator: '运维管理员', super_admin: '超级管理员' };
+const RELEASE_TONE = { success: 'ok', failure: 'danger', queued: 'info', running: 'info', unknown: 'neutral' };
 const BACKUP_STORAGE_PROVIDERS = [
   { value: 'r2', label: 'Cloudflare R2' },
   { value: 'aws-s3', label: 'AWS S3' },
@@ -578,98 +579,168 @@ export function ReleasesView({ session, targetEntityId = '' }) {
   const hiddenHistoryCount = Math.max(0, buildRows.length - RELEASE_HISTORY_COLLAPSED_LIMIT);
   const mode = capabilities.canBuild ? '可构建' : '只读';
   return (
-    <section className="page-view ops-page" aria-label="发布中心">
-      <div className="ops-toolbar">
-        <div className="release-capabilities">
-          <span className={`integration-state ${capabilities.githubConfigured ? 'ready' : ''}`}><i />{capabilities.githubConfigured ? 'GitHub 已连接' : 'GitHub 未配置'}</span>
-          <span className="release-environment"><Cloud size={15} />{environmentLabel(data?.environment)}</span>
-        </div>
-        <div className="release-capabilities">
-          <button className="secondary-action" type="button" onClick={load} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={17} />刷新状态</button>
-        </div>
-      </div>
-      <Feedback error={error || capabilities.issue} message={message} />
-      <div className="ops-kpis">
-        <article><Rocket size={20} /><div><span>平台版本</span><strong>{data?.revision?.slice(0, 12) || '--'}</strong><small>{data?.imageBuiltAt ? `镜像构建 ${formatDateTime(data.imageBuiltAt)}` : '等待镜像版本标识'}</small></div></article>
-        <article><PackageCheck size={20} /><div><span>镜像目标</span><strong>{metrics.configuredComponents || 0}/{data?.components?.length || 0}</strong><small>已配置构建镜像</small></div></article>
-        <article><History size={20} /><div><span>完成构建</span><strong>{metrics.completedBuilds || 0}</strong><small>{metrics.latestRevision ? `最新 ${shortValue(metrics.latestRevision)}` : '暂无成功构建'}</small></div></article>
-        <article><ShieldCheck size={20} /><div><span>操作模式</span><strong>{mode}</strong><small>{successRate === null ? '暂无持久化构建结果' : `最近构建成功率 ${successRate}%`}</small></div></article>
-      </div>
-
-      <section className="ops-panel release-inventory">
-        <header><div><span>构建目标</span><h3>组件镜像与最新产物</h3></div><PackageCheck size={20} /></header>
-        <div className="release-inventory-head"><span>组件</span><span>配置镜像</span><span>最新不可变产物</span><span>构建时间</span><span>状态</span></div>
-        {(data?.components || []).map((component) => {
-          const latestBuild = buildRows.find((build) => build.status === 'succeeded'
-            && build.artifacts?.some((artifact) => artifact.component === component.id));
-          const artifact = latestBuild?.artifacts?.find((item) => item.component === component.id);
-          return (
-            <div className="release-inventory-row" key={component.id}>
-              <span><strong>{component.id}</strong><small>ACR 构建目标</small></span>
-              <span className="release-reference"><strong title={component.image || ''}>{component.image || '未配置'}</strong><small>{component.configured ? '环境配置已声明' : '环境配置缺失'}</small></span>
-              <span className="release-reference"><strong title={artifact?.reference || ''}>{artifact?.reference || '暂无产物'}</strong><small>{artifact?.digest ? shortValue(artifact.digest, 24) : '等待构建回调'}</small></span>
-              <span className="release-lifecycle"><small title={latestBuild?.id || ''}><b>构建</b>{formatDateTime(latestBuild?.completedAt || latestBuild?.updatedAt)}</small></span>
-              <span className={`release-sync ${component.configured ? 'synced' : 'unknown'}`}><i />{component.configured ? '已配置' : '未配置'}</span>
-            </div>
-          );
-        })}
-      </section>
-
-      <section className="ops-panel release-history">
-        <header>
-          <div><span>构建记录</span><h3>构建与产物</h3></div>
-        </header>
-        <div>
-        {buildRows.length > 0 && (
-          <div className="release-history-head" aria-hidden="true">
-            <span /><span>版本 / 任务</span><span>执行人</span><span>执行时间</span><span>耗时 / 同步</span><span>状态</span><span>操作</span>
-          </div>
-        )}
-        {buildRows.length ? visibleBuildRows.map((build) => (
-          <div className={`release-history-row ${targetEntityId === build.id ? 'targeted-entity' : ''}`} data-release-entity-id={build.id} key={build.id}>
-            <span className={`run-state ${releaseStateClass(build.status)}`}><i /></span>
-            <span className="release-run-source"><strong>{shortValue(build.revision || build.id)}</strong><small>{build.observedOnly ? `GitHub 观察 · ${workflowNameLabel(build.name || build.workflow)}` : build.targets?.length ? build.targets.join('、') : workflowNameLabel(build.name || build.workflow)}</small></span>
-            <span className="release-run-actor"><strong>{build.requestedBy || build.workflowRun?.actor || '--'}</strong><small>构建发起人</small></span>
-            <span className="release-run-date"><strong>{formatDateTime(releaseIsActive(build.status) ? build.startedAt || build.createdAt : build.completedAt || build.updatedAt || build.createdAt)}</strong><small>{releaseIsActive(build.status) ? '开始时间' : '完成时间'}</small></span>
-            <span className="release-run-duration">
-              <strong className={releaseIsActive(build.status) ? 'live' : ''}>{releaseIsActive(build.status) ? `${releaseTimingVerb(build.status)} ${releaseDuration(build.startedAt || build.createdAt, null, clockNow)}` : releaseDuration(build.startedAt || build.createdAt, build.completedAt || build.updatedAt)}</strong>
-              <small>{releaseIsActive(build.status) ? `同步 ${releaseDuration(data?.refreshedAt || build.updatedAt, null, clockNow)}前` : '总耗时'}</small>
-            </span>
-            <span className={`release-status status-${releaseStateClass(build.status)}`}>{releaseStatusLabel(build.status)}</span>
-            <span className="release-row-actions">
-              {build.workflowRun?.url && <a href={build.workflowRun.url} target="_blank" rel="noreferrer" aria-label="打开 GitHub 运行记录"><ExternalLink size={15} /></a>}
-              {build.observedOnly && <span className="release-observed-badge">未同步</span>}
-              {!build.observedOnly && build.status === 'succeeded' && !build.artifacts?.length && <span className="release-observed-badge" title="缺少镜像 digest，等待 GitHub 回调或产物恢复">产物未同步</span>}
-            </span>
-          </div>
-        )) : <div className="ops-empty">暂无构建记录</div>}
-        {hiddenHistoryCount > 0 && (
-          <div className="release-history-more">
-            <button type="button" onClick={() => setHistoryExpanded((current) => !current)}>
-              {historyExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-              {historyExpanded ? '收起历史记录' : `展开 ${hiddenHistoryCount} 条历史记录`}
+    <section className="page-view" aria-label="发布中心">
+      <div className="view-stack">
+        <div className="toolbar">
+          <span className="toolbar-label">
+            <span className={`status-dot ${capabilities.githubConfigured ? 'is-ok' : ''}`} aria-hidden="true" />
+            {capabilities.githubConfigured ? 'GitHub 已连接' : 'GitHub 未配置'}
+          </span>
+          <span className="toolbar-hint"><Cloud size={13} aria-hidden="true" />{environmentLabel(data?.environment)}</span>
+          <div className="toolbar-end">
+            <button className="btn btn-secondary btn-sm" type="button" onClick={load} disabled={loading}>
+              <RefreshCw className={loading ? 'spin' : ''} size={15} />刷新状态
             </button>
-            <span>显示 {historyExpanded ? buildRows.length : Math.min(RELEASE_HISTORY_COLLAPSED_LIMIT, buildRows.length)} / {buildRows.length}</span>
           </div>
-        )}
         </div>
-      </section>
+        <Feedback error={error || capabilities.issue} message={message} />
 
-      {roleAtLeast(session.user?.role, 'super_admin') && (
-        <section className="ops-panel protected-operation">
-          <header><div><span>受保护操作</span><h3>重新构建生产镜像</h3></div><LockKeyhole size={20} /></header>
-          {!capabilities.canBuild && <div className="release-disabled-reason"><CircleAlert size={16} /><span>{capabilities.reasons?.build?.join('；') || '构建操作不可用'}</span></div>}
-          <div className="release-targets">
-            {(data?.components || []).map((component) => <label key={component.id}><input type="checkbox" checked={targets.includes(component.id)} onChange={() => toggleTarget(component.id)} /><span>{component.id}</span></label>)}
+        <div className="stat-strip">
+          <article className="stat-card">
+            <span className="stat-icon tone-info"><Rocket size={17} /></span>
+            <div>
+              <span className="stat-label">平台版本</span>
+              <strong className="stat-figure stat-figure-sm">{data?.revision?.slice(0, 12) || '--'}</strong>
+              <small className="stat-foot">{data?.imageBuiltAt ? `镜像构建 ${formatDateTime(data.imageBuiltAt)}` : '等待镜像版本标识'}</small>
+            </div>
+          </article>
+          <article className="stat-card">
+            <span className="stat-icon tone-violet"><PackageCheck size={17} /></span>
+            <div>
+              <span className="stat-label">镜像目标</span>
+              <strong className="stat-figure">{metrics.configuredComponents || 0}/{data?.components?.length || 0}</strong>
+              <small className="stat-foot">已配置构建镜像</small>
+            </div>
+          </article>
+          <article className="stat-card">
+            <span className="stat-icon tone-ok"><History size={17} /></span>
+            <div>
+              <span className="stat-label">完成构建</span>
+              <strong className="stat-figure">{metrics.completedBuilds || 0}</strong>
+              <small className="stat-foot">{metrics.latestRevision ? `最新 ${shortValue(metrics.latestRevision)}` : '暂无成功构建'}</small>
+            </div>
+          </article>
+          <article className="stat-card">
+            <span className="stat-icon tone-warn"><ShieldCheck size={17} /></span>
+            <div>
+              <span className="stat-label">操作模式</span>
+              <strong className="stat-figure">{mode}</strong>
+              <small className="stat-foot">{successRate === null ? '暂无持久化构建结果' : `最近构建成功率 ${successRate}%`}</small>
+            </div>
+          </article>
+        </div>
+
+        <section className="panel panel-flush" aria-label="组件镜像与最新产物">
+          <div className="panel-head">
+            <div className="panel-title"><PackageCheck size={15} aria-hidden="true" />组件镜像与最新产物</div>
+            <span className="panel-meta">构建目标 · {data?.components?.length || 0} 个组件</span>
           </div>
-          <div className="reauth-fields">
-            <label>管理员密码<input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>
-            {session.user?.totpEnabled && <label>动态验证码<input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}
-            <button className="primary-button" type="button" disabled={!capabilities.canBuild || !targets.length || !credentials.password || (session.user?.totpEnabled && credentials.totp.length !== 6) || submitting} onClick={triggerBuild}>{submitting ? <LoaderCircle className="spin" size={17} /> : <Rocket size={17} />}触发构建</button>
+          <div className="data-list">
+            <div className="data-head col-component" aria-hidden="true">
+              <span>组件</span><span>配置镜像</span><span>最新不可变产物</span><span>构建时间</span><span>状态</span>
+            </div>
+            {(data?.components || []).map((component) => {
+              const latestBuild = buildRows.find((build) => build.status === 'succeeded'
+                && build.artifacts?.some((artifact) => artifact.component === component.id));
+              const artifact = latestBuild?.artifacts?.find((item) => item.component === component.id);
+              return (
+                <div className="data-row col-component" key={component.id}>
+                  <span className="cell-stack"><strong>{component.id}</strong><small>ACR 构建目标</small></span>
+                  <span className="cell-stack">
+                    <strong title={component.image || ''}>{component.image || '未配置'}</strong>
+                    <small>{component.configured ? '环境配置已声明' : '环境配置缺失'}</small>
+                  </span>
+                  <span className="cell-stack">
+                    <strong title={artifact?.reference || ''}>{artifact?.reference || '暂无产物'}</strong>
+                    <small>{artifact?.digest ? shortValue(artifact.digest, 24) : '等待构建回调'}</small>
+                  </span>
+                  <span className="panel-meta">{formatDateTime(latestBuild?.completedAt || latestBuild?.updatedAt)}</span>
+                  <span className={`tag tone-${component.configured ? 'ok' : 'neutral'}`}>{component.configured ? '已配置' : '未配置'}</span>
+                </div>
+              );
+            })}
+            {(data?.components || []).length === 0 && <div className="data-list-empty"><span>暂无构建目标</span></div>}
           </div>
         </section>
-      )}
 
+        <section className="panel" aria-label="构建与产物">
+          <div className="panel-head">
+            <div className="panel-title"><History size={15} aria-hidden="true" />构建与产物</div>
+            <span className="panel-meta">{buildRows.length} 条构建记录</span>
+          </div>
+          <div className="panel-body panel-body-flush">
+            {buildRows.length ? (
+              <div className="data-list">
+                <div className="data-head col-build" aria-hidden="true">
+                  <span /><span>版本 / 任务</span><span>执行人</span><span>执行时间</span><span>耗时 / 同步</span><span>状态</span><span>操作</span>
+                </div>
+                {visibleBuildRows.map((build) => (
+                  <div className={`data-row col-build ${targetEntityId === build.id ? 'is-targeted' : ''}`} data-release-entity-id={build.id} key={build.id}>
+                    <span className={`status-dot state-${releaseStateClass(build.status)}`} aria-hidden="true" />
+                    <span className="cell-stack">
+                      <strong>{shortValue(build.revision || build.id)}</strong>
+                      <small>{build.observedOnly ? `GitHub 观察 · ${workflowNameLabel(build.name || build.workflow)}` : build.targets?.length ? build.targets.join('、') : workflowNameLabel(build.name || build.workflow)}</small>
+                    </span>
+                    <span className="cell-stack"><strong>{build.requestedBy || build.workflowRun?.actor || '--'}</strong><small>构建发起人</small></span>
+                    <span className="cell-stack">
+                      <strong>{formatDateTime(releaseIsActive(build.status) ? build.startedAt || build.createdAt : build.completedAt || build.updatedAt || build.createdAt)}</strong>
+                      <small>{releaseIsActive(build.status) ? '开始时间' : '完成时间'}</small>
+                    </span>
+                    <span className="cell-stack">
+                      <strong>{releaseIsActive(build.status) ? `${releaseTimingVerb(build.status)} ${releaseDuration(build.startedAt || build.createdAt, null, clockNow)}` : releaseDuration(build.startedAt || build.createdAt, build.completedAt || build.updatedAt)}</strong>
+                      <small>{releaseIsActive(build.status) ? `同步 ${releaseDuration(data?.refreshedAt || build.updatedAt, null, clockNow)}前` : '总耗时'}</small>
+                    </span>
+                    <span className={`tag tone-${RELEASE_TONE[releaseStateClass(build.status)]}`}>{releaseStatusLabel(build.status)}</span>
+                    <span className="row-actions">
+                      {build.workflowRun?.url && <a className="icon-action" href={build.workflowRun.url} target="_blank" rel="noreferrer" aria-label="打开 GitHub 运行记录" title="打开 GitHub 运行记录"><ExternalLink size={15} /></a>}
+                      {build.observedOnly && <span className="code-chip">未同步</span>}
+                      {!build.observedOnly && build.status === 'succeeded' && !build.artifacts?.length && <span className="code-chip" title="缺少镜像 digest，等待 GitHub 回调或产物恢复">产物未同步</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : <div className="data-list-empty"><span>暂无构建记录</span></div>}
+            {hiddenHistoryCount > 0 && (
+              <div className="table-foot">
+                <button className="btn btn-text" type="button" onClick={() => setHistoryExpanded((current) => !current)}>
+                  {historyExpanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                  {historyExpanded ? '收起历史记录' : `展开 ${hiddenHistoryCount} 条历史记录`}
+                </button>
+                <span className="panel-meta">显示 {historyExpanded ? buildRows.length : Math.min(RELEASE_HISTORY_COLLAPSED_LIMIT, buildRows.length)} / {buildRows.length}</span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {roleAtLeast(session.user?.role, 'super_admin') && (
+          <section className="panel" aria-label="重新构建生产镜像">
+            <div className="panel-head">
+              <div className="panel-title"><LockKeyhole size={15} aria-hidden="true" />重新构建生产镜像</div>
+              <span className="panel-meta">受保护操作</span>
+            </div>
+            <div className="panel-body">
+              {!capabilities.canBuild && (
+                <div className="alert is-error"><CircleAlert size={15} /><span>{capabilities.reasons?.build?.join('；') || '构建操作不可用'}</span></div>
+              )}
+              <div className="scope-grid">
+                {(data?.components || []).map((component) => (
+                  <label className="scope-option" key={component.id}>
+                    <input type="checkbox" checked={targets.includes(component.id)} onChange={() => toggleTarget(component.id)} />
+                    <span className="cell-stack"><strong>{component.id}</strong><small>生产镜像目标</small></span>
+                  </label>
+                ))}
+              </div>
+              <div className="reauth-row">
+                <label className="config-field"><span>管理员密码</span><input type="password" autoComplete="current-password" value={credentials.password} onChange={(event) => setCredentials({ ...credentials, password: event.target.value })} /></label>
+                {session.user?.totpEnabled && <label className="config-field"><span>动态验证码</span><input inputMode="numeric" maxLength={6} value={credentials.totp} onChange={(event) => setCredentials({ ...credentials, totp: event.target.value.replace(/\D/g, '') })} /></label>}
+                <button className="btn btn-primary" type="button" disabled={!capabilities.canBuild || !targets.length || !credentials.password || (session.user?.totpEnabled && credentials.totp.length !== 6) || submitting} onClick={triggerBuild}>
+                  {submitting ? <LoaderCircle className="spin" size={15} /> : <Rocket size={15} />}触发构建
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+      </div>
     </section>
   );
 }

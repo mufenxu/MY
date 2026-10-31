@@ -2245,3 +2245,120 @@ a.data-row:hover .capability-open {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* ── 更新记录：构建目标、构建历史与受保护操作 ─────────────────── */
+.status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--ink-faint);
+}
+
+.status-dot.is-ok,
+.status-dot.state-success {
+  background: var(--lime);
+  box-shadow: 0 0 0 3px var(--lime-soft);
+}
+
+.status-dot.state-failure {
+  background: var(--red-swatch);
+  box-shadow: 0 0 0 3px var(--red-soft);
+}
+
+.status-dot.state-queued {
+  background: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-soft);
+}
+
+.status-dot.state-running {
+  background: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-soft);
+  animation: dot-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+  50% { opacity: 0.45; }
+}
+
+.toolbar-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.col-component {
+  grid-template-columns: 86px minmax(0, 1.2fr) minmax(0, 1.2fr) 130px 74px;
+}
+
+.col-build {
+  grid-template-columns: 12px minmax(0, 1.1fr) 96px 126px 112px 84px 92px;
+}
+
+.panel-body-flush {
+  padding: 0;
+}
+
+.panel-body-flush > .table-foot {
+  border-top: 1px solid var(--line);
+}
+
+.reauth-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.reauth-row .config-field {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.reauth-row .btn {
+  margin-left: auto;
+}
+
+@media (max-width: 1180px) {
+  .col-build {
+    grid-template-columns: 12px minmax(0, 1.1fr) 100px 118px 84px 92px;
+  }
+
+  .col-build > :nth-child(3) {
+    display: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .col-component {
+    grid-template-columns: 80px minmax(0, 1.2fr) minmax(0, 1.2fr) 72px;
+  }
+
+  .col-component > :nth-child(4) {
+    display: none;
+  }
+
+}
+
+@media (max-width: 760px) {
+  .col-component {
+    grid-template-columns: 76px minmax(0, 1fr) 68px;
+  }
+
+  .col-component > :nth-child(3) {
+    display: none;
+  }
+
+  .col-build {
+    grid-template-columns: 12px minmax(0, 1.2fr) 84px 84px;
+  }
+
+  .col-build > :nth-child(4),
+  .col-build > :nth-child(5),
+  .col-build > :nth-child(7) {
+    display: none;
+  }
+
+}
