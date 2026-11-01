@@ -18,7 +18,9 @@ on:
       - config/platform.services.docker.json
       - config/image-build-targets.json
       - packages/platform-auth/**
+      - packages/api-contract/**
       - packages/platform-browser-runtime/**
+      - packages/pearl-tokens/**
       - services/platform-api/**
       - services/core-api/**
       - services/exam-api/**

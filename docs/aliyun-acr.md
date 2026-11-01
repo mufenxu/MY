@@ -58,7 +58,7 @@ Automatic target selection:
 
 | Changed path | Built target |
 | --- | --- |
-| `infra/docker/platform-api.Dockerfile`, `apps/admin-console/**`, `config/platform.services.docker.json`, `services/platform-api/**` | `platform` |
+| `infra/docker/platform-api.Dockerfile`, `apps/admin-console/**`, `apps/official-website/**`, `config/platform.services.docker.json`, `services/platform-api/**` | `platform` |
 | `infra/docker/backup-runner.Dockerfile`, `apps/admin-console/src/backups.js`, backup runner scripts | `backup` |
 | `infra/docker/compose.yml` | `platform` |
 | `infra/docker/core-api.Dockerfile`, `apps/core-admin/**`, `services/core-api/**` | `core` |
@@ -67,7 +67,14 @@ Automatic target selection:
 | `infra/docker/campus-service.Dockerfile`, `services/campus-service/**` | `campus` |
 | `infra/docker/iot-service.Dockerfile`, `services/iot-service/**` | `iot` |
 | `infra/docker/mongodb.Dockerfile`, MongoDB entrypoint/init/user scripts | `mongodb` |
-| `packages/platform-auth/**` | `platform`, `core`, `exam`, `campus`, `iot` |
+| `packages/platform-auth/**` | `platform`, `notification`, `backup`, `campus`, `iot` |
+| `packages/api-contract/**` | `platform`, `notification`, `campus`, `iot` |
+| `packages/platform-browser-runtime/**` | `platform` |
+| `packages/pearl-tokens/**` | `platform` |
+
+Shared packages are copied into the image build stages explicitly, so every `file:` dependency an
+app installs must have a matching `COPY packages/<name>/` before `npm ci`, and every package copied
+into an image must have a rule above. `npm run check:release` enforces both.
 
 For manual rebuilds, open GitHub Actions and run the workflow named `Build and push Aliyun ACR images`.
 

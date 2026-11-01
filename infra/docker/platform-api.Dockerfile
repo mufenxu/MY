@@ -5,6 +5,7 @@ ARG NODE_IMAGE=node:24-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b12
 FROM ${NODE_IMAGE} AS admin-console-build
 WORKDIR /build/apps/admin-console
 COPY packages/platform-auth/ /build/packages/platform-auth/
+COPY packages/pearl-tokens/ /build/packages/pearl-tokens/
 COPY apps/admin-console/package*.json ./
 RUN npm ci --no-audit --no-fund
 COPY apps/admin-console/ ./
@@ -26,6 +27,7 @@ RUN npm ci --omit=dev --no-audit --no-fund
 FROM ${NODE_IMAGE} AS core-admin-build
 WORKDIR /build/apps/core-admin
 COPY packages/platform-browser-runtime/ /build/packages/platform-browser-runtime/
+COPY packages/pearl-tokens/ /build/packages/pearl-tokens/
 COPY apps/core-admin/package*.json ./
 RUN npm ci --no-audit --no-fund
 COPY apps/core-admin/ ./

@@ -54,7 +54,15 @@
       "targets": ["platform", "notification", "backup", "campus", "iot"]
     },
     {
+      "paths": ["packages/api-contract/**"],
+      "targets": ["platform", "notification", "campus", "iot"]
+    },
+    {
       "paths": ["packages/platform-browser-runtime/**"],
+      "targets": ["platform"]
+    },
+    {
+      "paths": ["packages/pearl-tokens/**"],
       "targets": ["platform"]
     }
   ]
