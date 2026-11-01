@@ -47,8 +47,8 @@ test('platform console return stays scoped to verified managed sessions', () => 
   const detail = readSource('src', 'views', 'ExamDetailView.vue');
   const bootstrap = readSource('src', 'main.js');
 
-  assert.match(dashboard, /v-if="IS_PLATFORM_SSO"[\s\S]*?返回统一服务控制台/);
-  assert.match(dashboard, /platform-console-link[\s\S]*?href="\/console"/);
+  assert.match(dashboard, /v-if="IS_PLATFORM_SSO"[\s\S]*?统一控制台/);
+  assert.match(dashboard, /rail-console-link[\s\S]*?href="\/console"/);
   assert.match(detail, /v-if="IS_PLATFORM_SSO"[\s\S]*?returnToPlatformConsole/);
   assert.match(detail, /未保存的修改[\s\S]*?window\.location\.assign\('\/console'\)/);
   assert.match(bootstrap, /link\.href = IS_PLATFORM_SSO \? '\/console'/);

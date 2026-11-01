@@ -1,0 +1,117 @@
+/* ==========================================================================
+   考试后台 · 面板细节
+   工具条内的局部排布、表格在窄屏的滚动处理、题库质量视图的贴合。
+   ========================================================================== */
+
+/* ── 工具条内部 ───────────────────────────────────────────────── */
+.exam-results-toolbar,
+.personal-category-toolbar,
+.feedback-toolbar,
+.learning-ops-toolbar .admin-list-toolbar,
+.question-quality-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.exam-results-total {
+    margin-inline-end: 2px;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    white-space: nowrap;
+}
+
+.exam-filter-select,
+.personal-filter-select,
+.feedback-filter-select {
+    width: 152px;
+}
+
+.personal-study-id-input {
+    width: 132px;
+}
+
+.exam-filter-tag {
+    max-width: 160px;
+}
+
+.batch-danger-button {
+    flex: none;
+}
+
+/* 题库质量 */
+.question-quality-view {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.question-quality-toolbar .el-input,
+.question-quality-toolbar .el-select {
+    flex: 0 0 auto;
+}
+
+/* ── 窄屏：表格横向滚动 + 工具条贴合 ─────────────────────────── */
+@media (max-width: 720px) {
+    .exam-results-toolbar,
+    .personal-category-toolbar,
+    .feedback-toolbar,
+    .question-quality-toolbar {
+        width: 100%;
+    }
+
+    .exam-filter-select,
+    .personal-filter-select,
+    .feedback-filter-select,
+    .personal-study-id-input {
+        flex: 1;
+        min-width: 120px;
+        width: auto;
+    }
+
+    .table-card > .el-card__body {
+        padding-inline: 0;
+    }
+
+    /* 列多时表格内部横滚：右侧渐隐提示还有内容 */
+    .table-card {
+        position: relative;
+    }
+
+    .table-card::after {
+        position: absolute;
+        top: 38px;
+        right: 1px;
+        bottom: 1px;
+        width: 22px;
+        border-radius: 0 var(--r-md) var(--r-md) 0;
+        background: linear-gradient(90deg, transparent, var(--surface-solid) 88%);
+        content: "";
+        pointer-events: none;
+    }
+
+    .exam-results-table,
+    .users-table,
+    .personal-category-table,
+    .feedback-table {
+        min-width: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .list-metric-strip > div {
+        padding: 6px 7px;
+    }
+
+    .list-metric-strip span {
+        font-size: 9.5px;
+        letter-spacing: 0;
+    }
+
+    .list-metric-strip strong {
+        font-size: 13px;
+    }
+}

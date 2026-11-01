@@ -35,11 +35,14 @@ import {
     Location,
     Lock,
     MagicStick,
+    Menu,
+    Moon,
     Plus,
     Refresh,
     Search,
     Share,
     SuccessFilled,
+    Sunny,
     SwitchButton,
     TrendCharts,
     Trophy,
@@ -51,7 +54,6 @@ import {
 import App from './App.vue';
 import router, { preloadDashboardView } from './router';
 import { setupHttpInterceptors } from './utils/setupHttp';
-import './assets/css/interaction-polish.css';
 import { fetchWithTimeout, installExperienceMonitoring, IS_PLATFORM_SSO, redirectToPlatformLogin, reportExperience, resolveAppUrl } from './utils/runtime';
 import { session } from './utils/session';
 import { initTheme } from './utils/theme';
@@ -89,6 +91,9 @@ const icons = {
     Location,
     Lock,
     MagicStick,
+    Menu,
+    Moon,
+    Sunny,
     Plus,
     Refresh,
     Search,

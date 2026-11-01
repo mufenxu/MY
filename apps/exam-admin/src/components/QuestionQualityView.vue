@@ -287,7 +287,9 @@ onBeforeUnmount(() => requestController?.abort());
 <style scoped>
 .question-quality-view {
     display: grid;
-    gap: 16px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    min-width: 0;
 }
 
 .question-quality-toolbar,

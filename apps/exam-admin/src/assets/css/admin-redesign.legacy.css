@@ -1,7 +1,10 @@
+/* 旧版 admin 样式（第四代）。本文件只服务试卷编辑页：
+   所有规则统一挂在 html.exam-detail-scope 下，避免进入编辑页后
+   反向污染已经珍珠化的管理后台。:root 变量保持全局。 */
+
 /* NodeBits-grade admin redesign.
    This file is loaded last and owns the visual shell. */
-
-:root {
+:root{
     --nb-bg: #fdfdfd;
     --nb-fg: #1e2226;
     --nb-card: #ffffff;
@@ -32,12 +35,14 @@
     --border-radius: var(--nb-radius);
 }
 
-* {
+
+html.exam-detail-scope * {
     box-sizing: border-box;
 }
 
-html,
-body {
+
+html.exam-detail-scope,
+html.exam-detail-scope body {
     min-height: 100%;
     height: auto !important;
     overflow-x: hidden !important;
@@ -65,52 +70,58 @@ body {
     color: var(--nb-fg);
 }
 
-body {
+
+html.exam-detail-scope body {
     position: static !important;
     width: auto !important;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
-#app,
-#app > .el-container {
+
+html.exam-detail-scope #app,
+html.exam-detail-scope #app > .el-container {
     min-width: 0;
     height: auto !important;
     min-height: 100vh !important;
     overflow: visible !important;
 }
 
-.el-container {
+
+html.exam-detail-scope .el-container {
     height: auto !important;
     overflow: visible !important;
 }
 
-.mobile-header {
+
+html.exam-detail-scope .mobile-header {
     display: none !important;
 }
 
-.logo-mark img {
+
+html.exam-detail-scope .logo-mark img {
     width: 100%;
     height: 100%;
     display: block;
     object-fit: cover;
     border-radius: inherit;
 }
-
 /* Desktop shell */
-@media (min-width: 769px) {
-    #app > .el-container {
+@media (min-width: 769px){
+    html.exam-detail-scope #app > .el-container {
         flex-direction: column !important;
         height: auto !important;
         min-height: 100vh !important;
         overflow: visible !important;
     }
 
-    #app > .el-container > .el-container {
+
+    html.exam-detail-scope #app > .el-container > .el-container {
         min-height: 0;
         overflow: visible !important;
     }
 
-    .desktop-aside {
+
+    html.exam-detail-scope .desktop-aside {
         position: fixed !important;
         top: 0;
         left: 0;
@@ -134,7 +145,8 @@ body {
         -webkit-backdrop-filter: blur(18px);
     }
 
-    .desktop-aside .logo {
+
+    html.exam-detail-scope .desktop-aside .logo {
         width: max-content;
         height: auto !important;
         margin: 0 !important;
@@ -147,7 +159,8 @@ body {
         white-space: nowrap;
     }
 
-    .desktop-aside .logo-mark {
+
+    html.exam-detail-scope .desktop-aside .logo-mark {
         width: 34px;
         height: 34px;
         border-radius: 12px;
@@ -157,7 +170,8 @@ body {
         box-shadow: 0 10px 24px rgba(50, 117, 180, 0.16);
     }
 
-    .desktop-aside .logo-mark img {
+
+    html.exam-detail-scope .desktop-aside .logo-mark img {
         width: 100%;
         height: 100%;
         display: block;
@@ -165,14 +179,16 @@ body {
         border-radius: inherit;
     }
 
-    .desktop-aside .logo span:last-child {
+
+    html.exam-detail-scope .desktop-aside .logo span:last-child {
         background: linear-gradient(to right, var(--nb-blue), var(--nb-amber), var(--nb-green), var(--nb-pink));
         background-clip: text;
         -webkit-background-clip: text;
         color: transparent;
     }
 
-    .desktop-aside .el-menu {
+
+    html.exam-detail-scope .desktop-aside .el-menu {
         min-width: 0;
         display: flex;
         align-items: center;
@@ -185,11 +201,13 @@ body {
         scrollbar-width: none;
     }
 
-    .desktop-aside .el-menu::-webkit-scrollbar {
+
+    html.exam-detail-scope .desktop-aside .el-menu::-webkit-scrollbar {
         display: none;
     }
 
-    .desktop-aside .el-menu-item {
+
+    html.exam-detail-scope .desktop-aside .el-menu-item {
         height: 38px !important;
         min-width: 0;
         margin: 0 !important;
@@ -208,26 +226,30 @@ body {
         transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
     }
 
-    .desktop-aside .el-menu-item .el-icon {
+
+    html.exam-detail-scope .desktop-aside .el-menu-item .el-icon {
         margin: 0 !important;
         color: inherit !important;
         font-size: 15px;
     }
 
-    .desktop-aside .el-menu-item:hover {
+
+    html.exam-detail-scope .desktop-aside .el-menu-item:hover {
         border-color: var(--nb-border) !important;
         background: var(--nb-soft) !important;
         color: var(--nb-fg) !important;
     }
 
-    .desktop-aside .el-menu-item.is-active {
+
+    html.exam-detail-scope .desktop-aside .el-menu-item.is-active {
         border-color: rgba(50, 117, 180, 0.24) !important;
         background: var(--nb-primary-soft) !important;
         color: var(--nb-primary) !important;
         box-shadow: none !important;
     }
 
-    .desktop-aside .aside-footer {
+
+    html.exam-detail-scope .desktop-aside .aside-footer {
         width: auto !important;
         min-width: 0;
         height: 40px;
@@ -244,7 +266,8 @@ body {
         background: transparent !important;
     }
 
-    .desktop-aside .user-profile-card {
+
+    html.exam-detail-scope .desktop-aside .user-profile-card {
         min-width: 0;
         height: 40px;
         padding: 4px 8px 4px 4px !important;
@@ -263,25 +286,29 @@ body {
         transition: background-color 0.18s ease, border-color 0.18s ease;
     }
 
-    .desktop-aside .user-profile-card:hover,
-    .desktop-aside .user-profile-card:focus {
+
+    html.exam-detail-scope .desktop-aside .user-profile-card:hover,
+html.exam-detail-scope .desktop-aside .user-profile-card:focus {
         border-color: var(--nb-border) !important;
         background: var(--nb-soft) !important;
         outline: none;
     }
 
-    .desktop-aside .user-profile-card .el-avatar {
+
+    html.exam-detail-scope .desktop-aside .user-profile-card .el-avatar {
         width: 32px !important;
         height: 32px !important;
         background: var(--nb-soft) !important;
         color: var(--nb-muted) !important;
     }
 
-    .desktop-aside .user-profile-info {
+
+    html.exam-detail-scope .desktop-aside .user-profile-info {
         min-width: 0;
     }
 
-    .desktop-aside .user-profile-name {
+
+    html.exam-detail-scope .desktop-aside .user-profile-name {
         max-width: 120px;
         overflow: hidden;
         color: var(--nb-fg) !important;
@@ -292,19 +319,23 @@ body {
         white-space: nowrap;
     }
 
-    .desktop-aside .user-profile-status {
+
+    html.exam-detail-scope .desktop-aside .user-profile-status {
         display: none !important;
     }
 
-    .desktop-aside .user-actions {
+
+    html.exam-detail-scope .desktop-aside .user-actions {
         display: none !important;
     }
 
-    .desktop-aside .logout-wrapper {
+
+    html.exam-detail-scope .desktop-aside .logout-wrapper {
         display: none !important;
     }
 
-    .desktop-aside .user-profile-arrow {
+
+    html.exam-detail-scope .desktop-aside .user-profile-arrow {
         margin-left: 2px;
         color: var(--nb-muted);
         font-size: 13px;
@@ -312,7 +343,8 @@ body {
 
 }
 
-body .user-menu-popover {
+
+html.exam-detail-scope body .user-menu-popover {
     min-width: 230px !important;
     padding: 8px !important;
     border: 1px solid var(--nb-border) !important;
@@ -320,19 +352,22 @@ body .user-menu-popover {
     box-shadow: 0 18px 44px rgba(15, 23, 42, 0.14) !important;
 }
 
-.user-menu-panel {
+
+html.exam-detail-scope .user-menu-panel {
     display: flex;
     flex-direction: column;
     gap: 4px;
 }
 
-.user-menu-head {
+
+html.exam-detail-scope .user-menu-head {
     padding: 8px 10px 10px;
     border-bottom: 1px solid var(--nb-border);
     margin-bottom: 4px;
 }
 
-.user-menu-name {
+
+html.exam-detail-scope .user-menu-name {
     overflow: hidden;
     color: var(--nb-fg);
     font-size: 14px;
@@ -342,7 +377,8 @@ body .user-menu-popover {
     white-space: nowrap;
 }
 
-.user-menu-role {
+
+html.exam-detail-scope .user-menu-role {
     margin-top: 2px;
     overflow: hidden;
     color: var(--nb-muted);
@@ -353,7 +389,8 @@ body .user-menu-popover {
     white-space: nowrap;
 }
 
-.user-menu-item {
+
+html.exam-detail-scope .user-menu-item {
     width: 100%;
     height: 38px;
     padding: 0 10px;
@@ -371,33 +408,39 @@ body .user-menu-popover {
     text-align: left;
 }
 
-.user-menu-item:hover,
-.user-menu-item:focus {
+
+html.exam-detail-scope .user-menu-item:hover,
+html.exam-detail-scope .user-menu-item:focus {
     background: var(--nb-soft);
     outline: none;
 }
 
-.user-menu-item .el-icon {
+
+html.exam-detail-scope .user-menu-item .el-icon {
     flex: 0 0 auto;
     color: var(--nb-muted);
     font-size: 16px;
 }
 
-.user-menu-item.is-danger {
+
+html.exam-detail-scope .user-menu-item.is-danger {
     color: #e40014;
 }
 
-.user-menu-item.is-danger:hover,
-.user-menu-item.is-danger:focus {
+
+html.exam-detail-scope .user-menu-item.is-danger:hover,
+html.exam-detail-scope .user-menu-item.is-danger:focus {
     background: #fff0f2;
 }
 
-.user-menu-item.is-danger .el-icon {
+
+html.exam-detail-scope .user-menu-item.is-danger .el-icon {
     color: currentColor;
 }
 
+
 /* Main content */
-.el-main {
+html.exam-detail-scope .el-main {
     width: 100% !important;
     max-width: 1180px !important;
     margin: 0 auto !important;
@@ -410,14 +453,14 @@ body .user-menu-popover {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
 }
-
-@media (min-width: 769px) {
-    .el-main {
+@media (min-width: 769px){
+    html.exam-detail-scope .el-main {
         padding-top: 112px !important;
     }
 }
 
-.page-header {
+
+html.exam-detail-scope .page-header {
     position: static !important;
     padding: 0 !important;
     margin: 0 0 24px !important;
@@ -428,7 +471,8 @@ body .user-menu-popover {
     background: transparent !important;
 }
 
-.page-title {
+
+html.exam-detail-scope .page-title {
     min-width: 0;
     color: var(--nb-fg) !important;
     font-size: clamp(28px, 3vw, 38px) !important;
@@ -437,46 +481,54 @@ body .user-menu-popover {
     letter-spacing: 0 !important;
 }
 
-.breadcrumb-link {
+
+html.exam-detail-scope .breadcrumb-link {
     color: var(--nb-muted) !important;
 }
 
-.breadcrumb-link:hover {
+
+html.exam-detail-scope .breadcrumb-link:hover {
     color: var(--nb-primary) !important;
 }
 
-.breadcrumb-separator {
+
+html.exam-detail-scope .breadcrumb-separator {
     color: var(--nb-border-strong) !important;
 }
 
-.page-header-spacer {
+
+html.exam-detail-scope .page-header-spacer {
     flex: 1 1 auto;
 }
 
-.page-header .el-button,
-.page-header .el-input .el-input__wrapper,
-.page-header .el-select .el-input__wrapper {
+
+html.exam-detail-scope .page-header .el-button,
+html.exam-detail-scope .page-header .el-input .el-input__wrapper,
+html.exam-detail-scope .page-header .el-select .el-input__wrapper {
     height: 38px !important;
     border-radius: 999px !important;
 }
 
-.table-search-input {
+
+html.exam-detail-scope .table-search-input {
     width: 240px !important;
 }
 
+
 /* Cards and dashboard */
-.dashboard-stats-grid {
+html.exam-detail-scope .dashboard-stats-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
     gap: 16px !important;
     margin-bottom: 18px;
 }
 
-.stat-card,
-.chart-section,
-.table-card,
-.category-card,
-.exam-card {
+
+html.exam-detail-scope .stat-card,
+html.exam-detail-scope .chart-section,
+html.exam-detail-scope .table-card,
+html.exam-detail-scope .category-card,
+html.exam-detail-scope .exam-card {
     border: 1px solid rgba(233, 235, 238, 0.96) !important;
     border-radius: 22px !important;
     background: rgba(255, 255, 255, 0.92) !important;
@@ -485,17 +537,19 @@ body .user-menu-popover {
     transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.stat-card:hover,
-.chart-section:hover,
-.table-card:hover,
-.category-card:hover,
-.exam-card:hover {
+
+html.exam-detail-scope .stat-card:hover,
+html.exam-detail-scope .chart-section:hover,
+html.exam-detail-scope .table-card:hover,
+html.exam-detail-scope .category-card:hover,
+html.exam-detail-scope .exam-card:hover {
     transform: translateY(-3px) !important;
     border-color: rgba(50, 117, 180, 0.26) !important;
     box-shadow: var(--nb-shadow-md) !important;
 }
 
-.stat-card {
+
+html.exam-detail-scope .stat-card {
     min-height: 136px !important;
     padding: 22px !important;
     display: flex !important;
@@ -504,11 +558,13 @@ body .user-menu-popover {
     overflow: hidden;
 }
 
-.stat-card::before {
+
+html.exam-detail-scope .stat-card::before {
     display: none !important;
 }
 
-.stat-icon {
+
+html.exam-detail-scope .stat-icon {
     width: 46px !important;
     height: 46px !important;
     flex: 0 0 auto;
@@ -517,31 +573,37 @@ body .user-menu-popover {
     place-items: center;
 }
 
-.stat-card.blue .stat-icon {
+
+html.exam-detail-scope .stat-card.blue .stat-icon {
     color: #39659b !important;
     background: #e8f3ff !important;
 }
 
-.stat-card.green .stat-icon {
+
+html.exam-detail-scope .stat-card.green .stat-icon {
     color: #1d6c5b !important;
     background: #def9f1 !important;
 }
 
-.stat-card.orange .stat-icon {
+
+html.exam-detail-scope .stat-card.orange .stat-icon {
     color: #9e511e !important;
     background: #ffede0 !important;
 }
 
-.stat-card.purple .stat-icon {
+
+html.exam-detail-scope .stat-card.purple .stat-icon {
     color: #715391 !important;
     background: #f6eeff !important;
 }
 
-.stat-info {
+
+html.exam-detail-scope .stat-info {
     min-width: 0;
 }
 
-.stat-value {
+
+html.exam-detail-scope .stat-value {
     color: var(--nb-fg) !important;
     font-size: 32px !important;
     font-weight: 900 !important;
@@ -549,45 +611,52 @@ body .user-menu-popover {
     letter-spacing: 0 !important;
 }
 
-.stat-label {
+
+html.exam-detail-scope .stat-label {
     margin-top: 8px;
     color: var(--nb-muted) !important;
     font-size: 13px;
     font-weight: 800;
 }
 
-.chart-section {
+
+html.exam-detail-scope .chart-section {
     min-height: 390px;
     padding: 24px !important;
 }
 
-.section-title {
+
+html.exam-detail-scope .section-title {
     color: var(--nb-fg) !important;
     font-size: 17px !important;
     font-weight: 850 !important;
 }
 
-.chart-container {
+
+html.exam-detail-scope .chart-container {
     height: 310px !important;
 }
 
+
 /* Category and exam cards */
-.category-cards-grid,
-.exam-cards-grid {
+html.exam-detail-scope .category-cards-grid,
+html.exam-detail-scope .exam-cards-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
     gap: 18px !important;
     margin-top: 0 !important;
 }
 
-.category-card,
-.exam-card {
+
+html.exam-detail-scope .category-card,
+html.exam-detail-scope .exam-card {
     min-height: 210px;
     padding: 22px !important;
     text-align: left !important;
 }
 
-.category-card-icon {
+
+html.exam-detail-scope .category-card-icon {
     width: 46px !important;
     height: 46px !important;
     margin: 0 0 18px !important;
@@ -599,15 +668,17 @@ body .user-menu-popover {
     font-size: 0 !important;
 }
 
-.category-card-icon::before {
+
+html.exam-detail-scope .category-card-icon::before {
     content: "▣";
     color: #39659b;
     font-size: 20px;
     font-weight: 900;
 }
 
-.category-card-title,
-.exam-card-title {
+
+html.exam-detail-scope .category-card-title,
+html.exam-detail-scope .exam-card-title {
     margin-bottom: 12px !important;
     color: var(--nb-fg) !important;
     font-size: 18px !important;
@@ -615,26 +686,30 @@ body .user-menu-popover {
     line-height: 1.35;
 }
 
-.category-card-info {
+
+html.exam-detail-scope .category-card-info {
     margin-bottom: 12px !important;
     color: var(--nb-muted) !important;
     font-size: 14px;
 }
 
-.category-card-info .info-value,
-.exam-card-count .count-number {
+
+html.exam-detail-scope .category-card-info .info-value,
+html.exam-detail-scope .exam-card-count .count-number {
     color: var(--nb-primary) !important;
 }
 
-.category-card-actions,
-.exam-card-actions {
+
+html.exam-detail-scope .category-card-actions,
+html.exam-detail-scope .exam-card-actions {
     margin-top: 18px;
     display: flex;
     justify-content: flex-start !important;
     gap: 8px !important;
 }
 
-.exam-card-header {
+
+html.exam-detail-scope .exam-card-header {
     min-height: 0 !important;
     margin-bottom: 14px !important;
     display: flex;
@@ -642,13 +717,15 @@ body .user-menu-popover {
     gap: 8px;
 }
 
+
 /* Subject cards */
-.category-cards-grid {
+html.exam-detail-scope .category-cards-grid {
     grid-template-columns: repeat(3, minmax(280px, 1fr)) !important;
     gap: 22px !important;
 }
 
-.category-card {
+
+html.exam-detail-scope .category-card {
     position: relative;
     min-height: 228px !important;
     padding: 24px !important;
@@ -660,11 +737,13 @@ body .user-menu-popover {
         linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 255, 0.96) 100%) !important;
 }
 
-.category-card::before {
+
+html.exam-detail-scope .category-card::before {
     display: none !important;
 }
 
-.category-card-top {
+
+html.exam-detail-scope .category-card-top {
     position: relative;
     z-index: 1;
     display: flex;
@@ -674,7 +753,8 @@ body .user-menu-popover {
     margin-bottom: 20px;
 }
 
-.category-card-icon {
+
+html.exam-detail-scope .category-card-icon {
     width: 54px !important;
     height: 54px !important;
     margin: 0 !important;
@@ -688,27 +768,32 @@ body .user-menu-popover {
     font-size: 0 !important;
 }
 
-.category-card-icon::before {
+
+html.exam-detail-scope .category-card-icon::before {
     display: none !important;
 }
 
-.category-card-icon .el-icon {
+
+html.exam-detail-scope .category-card-icon .el-icon {
     font-size: 25px;
 }
 
-.category-card.is-hidden .category-card-icon {
+
+html.exam-detail-scope .category-card.is-hidden .category-card-icon {
     border-color: rgba(123, 135, 148, 0.16) !important;
     background: #eef3f7 !important;
     color: #607086;
 }
 
-.category-card.is-assigned .category-card-icon {
+
+html.exam-detail-scope .category-card.is-assigned .category-card-icon {
     border-color: rgba(199, 120, 24, 0.18) !important;
     background: #fff4df !important;
     color: #a85f0e;
 }
 
-.category-status-tag {
+
+html.exam-detail-scope .category-status-tag {
     width: auto;
     min-width: 86px;
     height: 30px;
@@ -723,7 +808,8 @@ body .user-menu-popover {
     white-space: nowrap;
 }
 
-.category-status-tag .el-tag__content {
+
+html.exam-detail-scope .category-status-tag .el-tag__content {
     width: 100%;
     display: inline-flex;
     align-items: center;
@@ -732,19 +818,22 @@ body .user-menu-popover {
     line-height: 1;
 }
 
-.category-status-tag .el-icon {
+
+html.exam-detail-scope .category-status-tag .el-icon {
     margin-right: 0 !important;
     font-size: 14px;
     line-height: 1;
 }
 
-.category-card-main {
+
+html.exam-detail-scope .category-card-main {
     position: relative;
     z-index: 1;
     min-width: 0;
 }
 
-.category-card-title {
+
+html.exam-detail-scope .category-card-title {
     min-height: 50px;
     margin: 0 0 16px !important;
     display: -webkit-box;
@@ -757,13 +846,15 @@ body .user-menu-popover {
     -webkit-line-clamp: 2;
 }
 
-.category-card-meta {
+
+html.exam-detail-scope .category-card-meta {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
 }
 
-.category-meta-item {
+
+html.exam-detail-scope .category-meta-item {
     min-width: 0;
     padding: 11px 12px;
     border: 1px solid rgba(226, 232, 240, 0.92);
@@ -771,7 +862,8 @@ body .user-menu-popover {
     background: rgba(248, 250, 252, 0.86);
 }
 
-.category-meta-label {
+
+html.exam-detail-scope .category-meta-label {
     display: block;
     margin-bottom: 4px;
     color: #667085;
@@ -780,7 +872,8 @@ body .user-menu-popover {
     line-height: 1.2;
 }
 
-.category-meta-item strong {
+
+html.exam-detail-scope .category-meta-item strong {
     display: block;
     overflow: hidden;
     color: #1b6ef3;
@@ -791,15 +884,18 @@ body .user-menu-popover {
     white-space: nowrap;
 }
 
-.category-card.is-hidden .category-meta-item strong {
+
+html.exam-detail-scope .category-card.is-hidden .category-meta-item strong {
     color: #607086;
 }
 
-.category-card.is-assigned .category-meta-item strong {
+
+html.exam-detail-scope .category-card.is-assigned .category-meta-item strong {
     color: #a85f0e;
 }
 
-.category-card-actions {
+
+html.exam-detail-scope .category-card-actions {
     position: relative;
     z-index: 1;
     margin-top: auto !important;
@@ -811,11 +907,13 @@ body .user-menu-popover {
     border-top: 0;
 }
 
-.category-card.is-assigned .category-card-actions {
+
+html.exam-detail-scope .category-card.is-assigned .category-card-actions {
     grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.category-card-primary-action {
+
+html.exam-detail-scope .category-card-primary-action {
     width: 100%;
     min-width: 0;
     height: 36px !important;
@@ -827,7 +925,8 @@ body .user-menu-popover {
     line-height: 1 !important;
 }
 
-.category-card-primary-action > span {
+
+html.exam-detail-scope .category-card-primary-action > span {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -835,12 +934,14 @@ body .user-menu-popover {
     line-height: 1;
 }
 
-.category-card-primary-action .el-icon {
+
+html.exam-detail-scope .category-card-primary-action .el-icon {
     margin: 0 !important;
     line-height: 1;
 }
 
-.category-icon-action {
+
+html.exam-detail-scope .category-icon-action {
     width: 36px !important;
     height: 36px !important;
     display: inline-flex !important;
@@ -852,40 +953,47 @@ body .user-menu-popover {
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
-.category-icon-action .el-icon {
+
+html.exam-detail-scope .category-icon-action .el-icon {
     margin: 0 !important;
     line-height: 1;
 }
 
-.category-icon-action:hover,
-.category-icon-action:focus {
+
+html.exam-detail-scope .category-icon-action:hover,
+html.exam-detail-scope .category-icon-action:focus {
     border-color: rgba(27, 110, 243, 0.28) !important;
     background: #eef5ff !important;
     color: #1b6ef3 !important;
 }
 
-.category-icon-action.danger {
+
+html.exam-detail-scope .category-icon-action.danger {
     border-color: rgba(255, 220, 220, 0.96) !important;
     color: #d92d20 !important;
 }
 
-.category-icon-action.danger:hover,
-.category-icon-action.danger:focus {
+
+html.exam-detail-scope .category-icon-action.danger:hover,
+html.exam-detail-scope .category-icon-action.danger:focus {
     background: #fff1f1 !important;
     color: #b42318 !important;
 }
 
-.exam-card-count {
+
+html.exam-detail-scope .exam-card-count {
     margin-bottom: 8px !important;
 }
 
-.exam-card-count .count-number {
+
+html.exam-detail-scope .exam-card-count .count-number {
     font-size: 34px !important;
     font-weight: 900 !important;
 }
 
+
 /* Controls */
-.el-button {
+html.exam-detail-scope .el-button {
     height: 36px !important;
     border-radius: 999px !important;
     font-weight: 800 !important;
@@ -893,80 +1001,91 @@ body .user-menu-popover {
     transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 
-.el-button:hover {
+
+html.exam-detail-scope .el-button:hover {
     transform: translateY(-1px);
 }
 
-.el-button--primary {
+
+html.exam-detail-scope .el-button--primary {
     border-color: var(--nb-primary) !important;
     background: var(--nb-primary) !important;
 }
 
-.el-button--primary:hover,
-.el-button--primary:focus,
-.el-button--primary:active {
+
+html.exam-detail-scope .el-button--primary:hover,
+html.exam-detail-scope .el-button--primary:focus,
+html.exam-detail-scope .el-button--primary:active {
     border-color: #265f94 !important;
     background: #265f94 !important;
     color: #ffffff !important;
 }
 
-.el-button--default,
-.el-button.is-plain {
+
+html.exam-detail-scope .el-button--default,
+html.exam-detail-scope .el-button.is-plain {
     border-color: var(--nb-border) !important;
     background: #fff !important;
 }
 
-.el-button--primary.is-plain,
-.category-card-actions .el-button--primary.is-plain,
-.exam-card-actions .el-button--primary.is-plain {
+
+html.exam-detail-scope .el-button--primary.is-plain,
+html.exam-detail-scope .category-card-actions .el-button--primary.is-plain,
+html.exam-detail-scope .exam-card-actions .el-button--primary.is-plain {
     border-color: #d8e8f8 !important;
     background: #ffffff !important;
     color: var(--nb-primary) !important;
 }
 
-.el-button--primary.is-plain:hover,
-.el-button--primary.is-plain:focus,
-.el-button--primary.is-plain:active,
-.category-card-actions .el-button--primary.is-plain:hover,
-.category-card-actions .el-button--primary.is-plain:focus,
-.category-card-actions .el-button--primary.is-plain:active,
-.exam-card-actions .el-button--primary.is-plain:hover,
-.exam-card-actions .el-button--primary.is-plain:focus,
-.exam-card-actions .el-button--primary.is-plain:active {
+
+html.exam-detail-scope .el-button--primary.is-plain:hover,
+html.exam-detail-scope .el-button--primary.is-plain:focus,
+html.exam-detail-scope .el-button--primary.is-plain:active,
+html.exam-detail-scope .category-card-actions .el-button--primary.is-plain:hover,
+html.exam-detail-scope .category-card-actions .el-button--primary.is-plain:focus,
+html.exam-detail-scope .category-card-actions .el-button--primary.is-plain:active,
+html.exam-detail-scope .exam-card-actions .el-button--primary.is-plain:hover,
+html.exam-detail-scope .exam-card-actions .el-button--primary.is-plain:focus,
+html.exam-detail-scope .exam-card-actions .el-button--primary.is-plain:active {
     border-color: rgba(50, 117, 180, 0.32) !important;
     background: var(--nb-primary-soft) !important;
     color: #265f94 !important;
 }
 
-.el-button--danger.is-text,
-.el-button--danger.is-link,
-.el-button--danger.el-button--text {
+
+html.exam-detail-scope .el-button--danger.is-text,
+html.exam-detail-scope .el-button--danger.is-link,
+html.exam-detail-scope .el-button--danger.el-button--text {
     color: #e40014 !important;
 }
 
-html:not(.auth-standalone) .el-input .el-input__wrapper,
-html:not(.auth-standalone) .el-select .el-input__wrapper,
-html:not(.auth-standalone) .el-textarea .el-textarea__inner {
+
+html.exam-detail-scope:not(.auth-standalone) .el-input .el-input__wrapper,
+html.exam-detail-scope:not(.auth-standalone) .el-select .el-input__wrapper,
+html.exam-detail-scope:not(.auth-standalone) .el-textarea .el-textarea__inner {
     border: 1px solid var(--nb-border) !important;
     border-radius: 14px !important;
     background: #fff !important;
     box-shadow: none !important;
 }
 
-html:not(.auth-standalone) .el-input .el-input__wrapper:hover,
-html:not(.auth-standalone) .el-select .el-input__wrapper:hover,
-html:not(.auth-standalone) .el-textarea .el-textarea__inner:hover {
+
+html.exam-detail-scope:not(.auth-standalone) .el-input .el-input__wrapper:hover,
+html.exam-detail-scope:not(.auth-standalone) .el-select .el-input__wrapper:hover,
+html.exam-detail-scope:not(.auth-standalone) .el-textarea .el-textarea__inner:hover {
     border-color: var(--nb-border-strong) !important;
 }
 
-html:not(.auth-standalone) .el-input .el-input__wrapper.is-focus,
-html:not(.auth-standalone) .el-select .el-input__wrapper.is-focus,
-html:not(.auth-standalone) .el-textarea .el-textarea__inner:focus {
+
+html.exam-detail-scope:not(.auth-standalone) .el-input .el-input__wrapper.is-focus,
+html.exam-detail-scope:not(.auth-standalone) .el-select .el-input__wrapper.is-focus,
+html.exam-detail-scope:not(.auth-standalone) .el-textarea .el-textarea__inner:focus {
     border-color: rgba(50, 117, 180, 0.62) !important;
     box-shadow: 0 0 0 4px rgba(50, 117, 180, 0.1) !important;
 }
 
-.el-tag {
+
+html.exam-detail-scope .el-tag {
     height: 24px;
     padding: 0 10px;
     border: 0 !important;
@@ -974,111 +1093,127 @@ html:not(.auth-standalone) .el-textarea .el-textarea__inner:focus {
     font-weight: 800 !important;
 }
 
-.el-tag--success {
+
+html.exam-detail-scope .el-tag--success {
     color: #1d6c5b !important;
     background: #def9f1 !important;
 }
 
-.el-tag--warning {
+
+html.exam-detail-scope .el-tag--warning {
     color: #876114 !important;
     background: #fff3df !important;
 }
 
-.el-tag--info,
-.el-tag--primary {
+
+html.exam-detail-scope .el-tag--info,
+html.exam-detail-scope .el-tag--primary {
     color: #39659b !important;
     background: #e8f3ff !important;
 }
 
+
 /* Tables */
-.table-card {
+html.exam-detail-scope .table-card {
     overflow: hidden;
 }
 
-.table-card .el-card__body {
+
+html.exam-detail-scope .table-card .el-card__body {
     padding: 0 !important;
 }
 
-.el-table {
+
+html.exam-detail-scope .el-table {
     --el-table-header-bg-color: #f8f9fb;
     --el-table-row-hover-bg-color: #f8fafc;
     color: var(--nb-fg);
     font-size: 13px;
 }
 
-.el-table th.el-table__cell {
+
+html.exam-detail-scope .el-table th.el-table__cell {
     height: 46px;
     color: var(--nb-muted) !important;
     background: #f8f9fb !important;
     font-weight: 850 !important;
 }
 
-.el-table td.el-table__cell {
+
+html.exam-detail-scope .el-table td.el-table__cell {
     padding: 12px 0 !important;
     border-bottom-color: var(--nb-border) !important;
 }
 
-.pagination-container {
+
+html.exam-detail-scope .pagination-container {
     padding: 16px 18px !important;
     border-top: 1px solid var(--nb-border);
     background: #fbfcfd !important;
 }
 
-.selection-strip,
-.empty-state {
+
+html.exam-detail-scope .selection-strip,
+html.exam-detail-scope .empty-state {
     border-radius: 20px !important;
 }
 
-.selection-strip {
+
+html.exam-detail-scope .selection-strip {
     border-color: #dcecff !important;
     background: #f8fbff !important;
 }
 
-.empty-state {
+
+html.exam-detail-scope .empty-state {
     border: 1px dashed #d7dce2 !important;
     background: rgba(248, 249, 251, 0.74) !important;
 }
 
+
 /* Dialogs */
-body .el-overlay {
+html.exam-detail-scope body .el-overlay {
     background: rgba(30, 34, 38, 0.42) !important;
     backdrop-filter: blur(5px);
 }
 
-body .el-dialog,
-body .el-overlay .el-overlay-dialog .el-dialog {
+
+html.exam-detail-scope body .el-dialog,
+html.exam-detail-scope body .el-overlay .el-overlay-dialog .el-dialog {
     border: 1px solid rgba(233, 235, 238, 0.92) !important;
     border-radius: 22px !important;
     box-shadow: 0 24px 80px rgba(30, 34, 38, 0.18) !important;
 }
 
-body .el-dialog .el-dialog__title {
+
+html.exam-detail-scope body .el-dialog .el-dialog__title {
     color: var(--nb-fg) !important;
     font-weight: 900 !important;
 }
 
-body .el-dialog .el-dialog__footer .el-button {
+
+html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button {
     border-radius: 999px !important;
 }
-
 /* Mobile */
-@media (max-width: 1200px) {
-    .dashboard-stats-grid {
+@media (max-width: 1200px){
+    html.exam-detail-scope .dashboard-stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
 
-    .category-cards-grid,
-    .exam-cards-grid {
+
+    html.exam-detail-scope .category-cards-grid,
+html.exam-detail-scope .exam-cards-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
 }
-
-@media (max-width: 768px) {
-    .desktop-aside {
+@media (max-width: 768px){
+    html.exam-detail-scope .desktop-aside {
         display: none !important;
     }
 
-    .mobile-header {
+
+    html.exam-detail-scope .mobile-header {
         position: sticky;
         top: 0;
         z-index: 60;
@@ -1090,12 +1225,14 @@ body .el-dialog .el-dialog__footer .el-button {
         -webkit-backdrop-filter: blur(18px);
     }
 
-    .mobile-header .logo {
+
+    html.exam-detail-scope .mobile-header .logo {
         color: var(--nb-fg) !important;
         font-weight: 900;
     }
 
-    .mobile-header .logo-mark {
+
+    html.exam-detail-scope .mobile-header .logo-mark {
         width: 32px;
         height: 32px;
         border-radius: 12px;
@@ -1103,8 +1240,9 @@ body .el-dialog .el-dialog__footer .el-button {
         background: transparent;
     }
 
-    .mobile-header .logo-mark img,
-    .mobile-menu-drawer .logo-mark img {
+
+    html.exam-detail-scope .mobile-header .logo-mark img,
+html.exam-detail-scope .mobile-menu-drawer .logo-mark img {
         width: 100%;
         height: 100%;
         display: block;
@@ -1112,92 +1250,109 @@ body .el-dialog .el-dialog__footer .el-button {
         border-radius: inherit;
     }
 
-    .mobile-header .logo span:last-child {
+
+    html.exam-detail-scope .mobile-header .logo span:last-child {
         background: linear-gradient(to right, var(--nb-blue), var(--nb-amber), var(--nb-green), var(--nb-pink));
         background-clip: text;
         -webkit-background-clip: text;
         color: transparent;
     }
 
-    .mobile-menu-drawer .el-aside {
+
+    html.exam-detail-scope .mobile-menu-drawer .el-aside {
         background: var(--nb-bg) !important;
     }
 
-    .mobile-menu-drawer .logo {
+
+    html.exam-detail-scope .mobile-menu-drawer .logo {
         color: var(--nb-fg) !important;
     }
 
-    .mobile-menu-drawer .el-menu-item {
+
+    html.exam-detail-scope .mobile-menu-drawer .el-menu-item {
         color: var(--nb-muted) !important;
     }
 
-    .mobile-menu-drawer .el-menu-item:hover,
-    .mobile-menu-drawer .el-menu-item.is-active {
+
+    html.exam-detail-scope .mobile-menu-drawer .el-menu-item:hover,
+html.exam-detail-scope .mobile-menu-drawer .el-menu-item.is-active {
         background: var(--nb-soft) !important;
         color: var(--nb-primary) !important;
     }
 
-    .mobile-menu-drawer .aside-footer {
+
+    html.exam-detail-scope .mobile-menu-drawer .aside-footer {
         border-color: var(--nb-border) !important;
         background: var(--nb-soft) !important;
         color: var(--nb-fg) !important;
     }
 
-    .el-main {
+
+    html.exam-detail-scope .el-main {
         width: 100% !important;
         padding: 24px 16px 48px !important;
     }
 
-    .page-header {
+
+    html.exam-detail-scope .page-header {
         align-items: flex-start;
         flex-direction: column;
     }
 
-    .page-title {
+
+    html.exam-detail-scope .page-title {
         width: 100%;
         font-size: 28px !important;
     }
 
-    .page-header .el-button,
-    .page-header .el-input,
-    .page-header .el-select,
-    .table-search-input {
+
+    html.exam-detail-scope .page-header .el-button,
+html.exam-detail-scope .page-header .el-input,
+html.exam-detail-scope .page-header .el-select,
+html.exam-detail-scope .table-search-input {
         width: 100% !important;
     }
 
-    .dashboard-stats-grid,
-    .category-cards-grid,
-    .exam-cards-grid {
+
+    html.exam-detail-scope .dashboard-stats-grid,
+html.exam-detail-scope .category-cards-grid,
+html.exam-detail-scope .exam-cards-grid {
         grid-template-columns: 1fr !important;
     }
 
-    .stat-card {
+
+    html.exam-detail-scope .stat-card {
         min-height: 116px !important;
     }
 
-    .chart-section {
+
+    html.exam-detail-scope .chart-section {
         min-height: 300px;
     }
 
-    .chart-container {
+
+    html.exam-detail-scope .chart-container {
         height: 230px !important;
     }
 }
 
+
 /* Unified dialog polish */
-body .el-overlay {
+html.exam-detail-scope body .el-overlay {
     background: rgba(30, 34, 38, 0.42) !important;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
 }
 
-body .el-overlay-dialog {
+
+html.exam-detail-scope body .el-overlay-dialog {
     padding: 24px !important;
 }
 
-body .el-dialog,
-body .el-message-box,
-body .el-overlay .el-overlay-dialog .el-dialog {
+
+html.exam-detail-scope body .el-dialog,
+html.exam-detail-scope body .el-message-box,
+html.exam-detail-scope body .el-overlay .el-overlay-dialog .el-dialog {
     overflow: hidden !important;
     border: 1px solid rgba(233, 235, 238, 0.96) !important;
     border-radius: 26px !important;
@@ -1206,22 +1361,25 @@ body .el-overlay .el-overlay-dialog .el-dialog {
     box-shadow: 0 28px 90px rgba(30, 34, 38, 0.2) !important;
 }
 
-body .el-dialog::before,
-body .el-message-box::before {
+
+html.exam-detail-scope body .el-dialog::before,
+html.exam-detail-scope body .el-message-box::before {
     content: "";
     display: block;
     height: 4px;
     background: linear-gradient(to right, var(--nb-blue), var(--nb-amber), var(--nb-green), var(--nb-pink));
 }
 
-body .el-dialog .el-dialog__header,
-body .el-message-box .el-message-box__header {
+
+html.exam-detail-scope body .el-dialog .el-dialog__header,
+html.exam-detail-scope body .el-message-box .el-message-box__header {
     padding: 22px 26px 12px !important;
     margin: 0 !important;
 }
 
-body .el-dialog .el-dialog__title,
-body .el-message-box .el-message-box__title {
+
+html.exam-detail-scope body .el-dialog .el-dialog__title,
+html.exam-detail-scope body .el-message-box .el-message-box__title {
     color: var(--nb-fg) !important;
     font-size: 21px !important;
     font-weight: 950 !important;
@@ -1229,7 +1387,8 @@ body .el-message-box .el-message-box__title {
     letter-spacing: 0 !important;
 }
 
-body .el-dialog .el-dialog__headerbtn {
+
+html.exam-detail-scope body .el-dialog .el-dialog__headerbtn {
     top: 18px !important;
     right: 18px !important;
     width: 34px !important;
@@ -1238,26 +1397,30 @@ body .el-dialog .el-dialog__headerbtn {
     background: var(--nb-soft) !important;
 }
 
-body .el-dialog .el-dialog__headerbtn:hover {
+
+html.exam-detail-scope body .el-dialog .el-dialog__headerbtn:hover {
     background: var(--nb-primary-soft) !important;
 }
 
-body .el-dialog .el-dialog__body,
-body .el-message-box .el-message-box__content {
+
+html.exam-detail-scope body .el-dialog .el-dialog__body,
+html.exam-detail-scope body .el-message-box .el-message-box__content {
     padding: 16px 26px 22px !important;
     color: var(--nb-muted) !important;
 }
 
-body .el-dialog .el-dialog__footer,
-body .el-message-box .el-message-box__btns {
+
+html.exam-detail-scope body .el-dialog .el-dialog__footer,
+html.exam-detail-scope body .el-message-box .el-message-box__btns {
     padding: 18px 26px 26px !important;
     border-top: 1px solid var(--nb-border) !important;
     background: rgba(248, 249, 251, 0.72) !important;
 }
 
-body .dialog-footer,
-body .el-dialog .el-dialog__footer span,
-body .el-message-box .el-message-box__btns {
+
+html.exam-detail-scope body .dialog-footer,
+html.exam-detail-scope body .el-dialog .el-dialog__footer span,
+html.exam-detail-scope body .el-message-box .el-message-box__btns {
     display: flex !important;
     justify-content: flex-end;
     align-items: center;
@@ -1265,8 +1428,9 @@ body .el-message-box .el-message-box__btns {
     flex-wrap: wrap;
 }
 
-body .el-dialog .el-dialog__footer .el-button,
-body .el-message-box .el-button {
+
+html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button,
+html.exam-detail-scope body .el-message-box .el-button {
     min-width: 92px;
     height: 38px !important;
     margin: 0 !important;
@@ -1274,45 +1438,52 @@ body .el-message-box .el-button {
     font-weight: 900 !important;
 }
 
-body .el-dialog .el-form-item {
+
+html.exam-detail-scope body .el-dialog .el-form-item {
     margin-bottom: 18px !important;
 }
 
-body .el-dialog .el-form-item__label {
+
+html.exam-detail-scope body .el-dialog .el-form-item__label {
     color: var(--nb-muted) !important;
     font-weight: 800 !important;
 }
 
-body .el-dialog .el-input .el-input__wrapper,
-body .el-dialog .el-select .el-input__wrapper,
-body .el-dialog .el-textarea .el-textarea__inner,
-body .el-dialog .el-input-number .el-input__wrapper {
+
+html.exam-detail-scope body .el-dialog .el-input .el-input__wrapper,
+html.exam-detail-scope body .el-dialog .el-select .el-input__wrapper,
+html.exam-detail-scope body .el-dialog .el-textarea .el-textarea__inner,
+html.exam-detail-scope body .el-dialog .el-input-number .el-input__wrapper {
     border: 1px solid var(--nb-border) !important;
     border-radius: 16px !important;
     background: #fff !important;
     box-shadow: none !important;
 }
 
-body .el-dialog .el-input .el-input__wrapper.is-focus,
-body .el-dialog .el-select .el-input__wrapper.is-focus,
-body .el-dialog .el-textarea .el-textarea__inner:focus {
+
+html.exam-detail-scope body .el-dialog .el-input .el-input__wrapper.is-focus,
+html.exam-detail-scope body .el-dialog .el-select .el-input__wrapper.is-focus,
+html.exam-detail-scope body .el-dialog .el-textarea .el-textarea__inner:focus {
     border-color: rgba(50, 117, 180, 0.62) !important;
     box-shadow: 0 0 0 4px rgba(50, 117, 180, 0.1) !important;
 }
 
-body .el-dialog .el-alert {
+
+html.exam-detail-scope body .el-dialog .el-alert {
     border: 1px solid #f5dfbb !important;
     border-radius: 18px !important;
     background: #fff9ef !important;
 }
 
-body .el-dialog .el-checkbox.is-bordered {
+
+html.exam-detail-scope body .el-dialog .el-checkbox.is-bordered {
     border-color: var(--nb-border) !important;
     border-radius: 18px !important;
     background: #fff !important;
 }
 
-body .el-dialog #bind-qrcode {
+
+html.exam-detail-scope body .el-dialog #bind-qrcode {
     padding: 14px;
     border: 1px solid var(--nb-border);
     border-radius: 22px;
@@ -1320,74 +1491,83 @@ body .el-dialog #bind-qrcode {
     box-shadow: inset 0 0 0 8px #fff;
 }
 
-body .el-dialog #bind-qrcode img,
-body .el-dialog #bind-qrcode canvas {
+
+html.exam-detail-scope body .el-dialog #bind-qrcode img,
+html.exam-detail-scope body .el-dialog #bind-qrcode canvas {
     max-width: 100%;
     height: auto !important;
     border-radius: 12px;
 }
-
-@media (max-width: 768px) {
-    body .el-overlay-dialog {
+@media (max-width: 768px){
+    html.exam-detail-scope body .el-overlay-dialog {
         padding: 12px !important;
         align-items: flex-start !important;
     }
 
-    body .el-dialog,
-    body .el-message-box {
+
+    html.exam-detail-scope body .el-dialog,
+html.exam-detail-scope body .el-message-box {
         width: min(94vw, 520px) !important;
         max-width: 94vw !important;
         margin-top: 5vh !important;
         border-radius: 22px !important;
     }
 
-    body .el-dialog .el-dialog__header,
-    body .el-message-box .el-message-box__header {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__header,
+html.exam-detail-scope body .el-message-box .el-message-box__header {
         padding: 20px 20px 10px !important;
     }
 
-    body .el-dialog .el-dialog__body,
-    body .el-message-box .el-message-box__content {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__body,
+html.exam-detail-scope body .el-message-box .el-message-box__content {
         max-height: 66vh;
         overflow-y: auto;
         padding: 14px 20px 18px !important;
     }
 
-    body .el-dialog .el-dialog__footer,
-    body .el-message-box .el-message-box__btns {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__footer,
+html.exam-detail-scope body .el-message-box .el-message-box__btns {
         padding: 14px 20px 20px !important;
     }
 
-    body .dialog-footer,
-    body .el-dialog .el-dialog__footer span,
-    body .el-message-box .el-message-box__btns {
+
+    html.exam-detail-scope body .dialog-footer,
+html.exam-detail-scope body .el-dialog .el-dialog__footer span,
+html.exam-detail-scope body .el-message-box .el-message-box__btns {
         display: grid !important;
         grid-template-columns: 1fr 1fr;
         gap: 10px;
         width: 100%;
     }
 
-    body .el-dialog .el-dialog__footer .el-button,
-    body .el-message-box .el-button {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button,
+html.exam-detail-scope body .el-message-box .el-button {
         width: 100% !important;
         min-width: 0;
     }
 }
 
+
 /* NodeBits modal correction: calm, compact, form-first dialogs */
-body .el-overlay {
+html.exam-detail-scope body .el-overlay {
     background: rgba(0, 0, 0, 0.48) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
 }
 
-body .el-overlay-dialog {
+
+html.exam-detail-scope body .el-overlay-dialog {
     padding: 10px !important;
 }
 
-body .el-dialog,
-body .el-message-box,
-body .el-overlay .el-overlay-dialog .el-dialog {
+
+html.exam-detail-scope body .el-dialog,
+html.exam-detail-scope body .el-message-box,
+html.exam-detail-scope body .el-overlay .el-overlay-dialog .el-dialog {
     overflow: hidden !important;
     border: 1px solid rgba(0, 0, 0, 0.28) !important;
     border-radius: 24px !important;
@@ -1395,19 +1575,22 @@ body .el-overlay .el-overlay-dialog .el-dialog {
     box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22) !important;
 }
 
-body .el-dialog::before,
-body .el-message-box::before {
+
+html.exam-detail-scope body .el-dialog::before,
+html.exam-detail-scope body .el-message-box::before {
     display: none !important;
 }
 
-body .el-dialog .el-dialog__header,
-body .el-message-box .el-message-box__header {
+
+html.exam-detail-scope body .el-dialog .el-dialog__header,
+html.exam-detail-scope body .el-message-box .el-message-box__header {
     padding: 30px 36px 8px !important;
     margin: 0 !important;
 }
 
-body .el-dialog .el-dialog__title,
-body .el-message-box .el-message-box__title {
+
+html.exam-detail-scope body .el-dialog .el-dialog__title,
+html.exam-detail-scope body .el-message-box .el-message-box__title {
     color: #111827 !important;
     font-size: 24px !important;
     font-weight: 850 !important;
@@ -1415,7 +1598,8 @@ body .el-message-box .el-message-box__title {
     letter-spacing: 0 !important;
 }
 
-body .el-dialog .el-dialog__headerbtn {
+
+html.exam-detail-scope body .el-dialog .el-dialog__headerbtn {
     top: 26px !important;
     right: 26px !important;
     width: 34px !important;
@@ -1424,31 +1608,36 @@ body .el-dialog .el-dialog__headerbtn {
     background: transparent !important;
 }
 
-body .el-dialog .el-dialog__headerbtn:hover {
+
+html.exam-detail-scope body .el-dialog .el-dialog__headerbtn:hover {
     background: #f3f5f8 !important;
 }
 
-body .el-dialog .el-dialog__headerbtn .el-dialog__close {
+
+html.exam-detail-scope body .el-dialog .el-dialog__headerbtn .el-dialog__close {
     color: #1e2226 !important;
     font-size: 20px !important;
 }
 
-body .el-dialog .el-dialog__body,
-body .el-message-box .el-message-box__content {
+
+html.exam-detail-scope body .el-dialog .el-dialog__body,
+html.exam-detail-scope body .el-message-box .el-message-box__content {
     padding: 12px 36px 22px !important;
     color: #4b5563 !important;
 }
 
-body .el-dialog .el-dialog__footer,
-body .el-message-box .el-message-box__btns {
+
+html.exam-detail-scope body .el-dialog .el-dialog__footer,
+html.exam-detail-scope body .el-message-box .el-message-box__btns {
     padding: 0 36px 30px !important;
     border-top: 0 !important;
     background: transparent !important;
 }
 
-body .dialog-footer,
-body .el-dialog .el-dialog__footer span,
-body .el-message-box .el-message-box__btns {
+
+html.exam-detail-scope body .dialog-footer,
+html.exam-detail-scope body .el-dialog .el-dialog__footer span,
+html.exam-detail-scope body .el-message-box .el-message-box__btns {
     display: flex !important;
     justify-content: flex-end;
     align-items: center;
@@ -1456,11 +1645,13 @@ body .el-message-box .el-message-box__btns {
     flex-wrap: nowrap;
 }
 
-body .el-dialog .el-form-item {
+
+html.exam-detail-scope body .el-dialog .el-form-item {
     margin-bottom: 18px !important;
 }
 
-body .el-dialog .el-form-item__label {
+
+html.exam-detail-scope body .el-dialog .el-form-item__label {
     padding-bottom: 7px !important;
     color: #111827 !important;
     font-size: 16px !important;
@@ -1468,9 +1659,10 @@ body .el-dialog .el-form-item__label {
     line-height: 1.25 !important;
 }
 
-body .el-dialog .el-input .el-input__wrapper,
-body .el-dialog .el-select .el-input__wrapper,
-body .el-dialog .el-input-number .el-input__wrapper {
+
+html.exam-detail-scope body .el-dialog .el-input .el-input__wrapper,
+html.exam-detail-scope body .el-dialog .el-select .el-input__wrapper,
+html.exam-detail-scope body .el-dialog .el-input-number .el-input__wrapper {
     min-height: 52px !important;
     padding: 0 18px !important;
     border: 1px solid #edf0f3 !important;
@@ -1479,7 +1671,8 @@ body .el-dialog .el-input-number .el-input__wrapper {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
 }
 
-body .el-dialog .el-textarea .el-textarea__inner {
+
+html.exam-detail-scope body .el-dialog .el-textarea .el-textarea__inner {
     min-height: 112px !important;
     padding: 16px 18px !important;
     border: 1px solid #edf0f3 !important;
@@ -1489,24 +1682,27 @@ body .el-dialog .el-textarea .el-textarea__inner {
     line-height: 1.65;
 }
 
-body .el-dialog .el-input .el-input__wrapper:hover,
-body .el-dialog .el-select .el-input__wrapper:hover,
-body .el-dialog .el-input-number .el-input__wrapper:hover,
-body .el-dialog .el-textarea .el-textarea__inner:hover {
+
+html.exam-detail-scope body .el-dialog .el-input .el-input__wrapper:hover,
+html.exam-detail-scope body .el-dialog .el-select .el-input__wrapper:hover,
+html.exam-detail-scope body .el-dialog .el-input-number .el-input__wrapper:hover,
+html.exam-detail-scope body .el-dialog .el-textarea .el-textarea__inner:hover {
     border-color: #dfe5ec !important;
 }
 
-body .el-dialog .el-input .el-input__wrapper.is-focus,
-body .el-dialog .el-select .el-input__wrapper.is-focus,
-body .el-dialog .el-textarea .el-textarea__inner:focus {
+
+html.exam-detail-scope body .el-dialog .el-input .el-input__wrapper.is-focus,
+html.exam-detail-scope body .el-dialog .el-select .el-input__wrapper.is-focus,
+html.exam-detail-scope body .el-dialog .el-textarea .el-textarea__inner:focus {
     border-color: #6da9e7 !important;
     box-shadow:
         0 0 0 3px rgba(50, 117, 180, 0.28),
         0 2px 8px rgba(0, 0, 0, 0.04) !important;
 }
 
-body .el-dialog .el-dialog__footer .el-button,
-body .el-message-box .el-button {
+
+html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button,
+html.exam-detail-scope body .el-message-box .el-button {
     min-width: 92px;
     height: 52px !important;
     padding: 0 24px !important;
@@ -1517,33 +1713,38 @@ body .el-message-box .el-button {
     box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06) !important;
 }
 
-body .el-dialog .el-dialog__footer .el-button--default,
-body .el-message-box .el-button--default {
+
+html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button--default,
+html.exam-detail-scope body .el-message-box .el-button--default {
     border-color: #edf0f3 !important;
     background: #ffffff !important;
     color: #111827 !important;
 }
 
-body .el-dialog .el-dialog__footer .el-button--primary,
-body .el-message-box .el-button--primary {
+
+html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button--primary,
+html.exam-detail-scope body .el-message-box .el-button--primary {
     border-color: #9fc3e7 !important;
     background: #9fc3e7 !important;
     color: #ffffff !important;
 }
 
-body .el-dialog .el-dialog__footer .el-button--primary:hover,
-body .el-message-box .el-button--primary:hover {
+
+html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button--primary:hover,
+html.exam-detail-scope body .el-message-box .el-button--primary:hover {
     border-color: #82b0de !important;
     background: #82b0de !important;
 }
 
-body .el-dialog .el-alert {
+
+html.exam-detail-scope body .el-dialog .el-alert {
     border: 1px solid #f2e1be !important;
     border-radius: 18px !important;
     background: #fff9ef !important;
 }
 
-body .el-dialog #bind-qrcode {
+
+html.exam-detail-scope body .el-dialog #bind-qrcode {
     width: min(240px, 100%);
     margin: 0 auto;
     padding: 14px;
@@ -1551,48 +1752,53 @@ body .el-dialog #bind-qrcode {
     border-radius: 22px;
     background: #ffffff;
 }
-
-@media (max-width: 768px) {
-    body .el-overlay-dialog {
+@media (max-width: 768px){
+    html.exam-detail-scope body .el-overlay-dialog {
         padding: 8px !important;
         align-items: center !important;
     }
 
-    body .el-dialog,
-    body .el-message-box {
+
+    html.exam-detail-scope body .el-dialog,
+html.exam-detail-scope body .el-message-box {
         width: min(94vw, 640px) !important;
         max-width: 94vw !important;
         margin: 0 auto !important;
         border-radius: 22px !important;
     }
 
-    body .el-dialog .el-dialog__header,
-    body .el-message-box .el-message-box__header {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__header,
+html.exam-detail-scope body .el-message-box .el-message-box__header {
         padding: 24px 22px 8px !important;
     }
 
-    body .el-dialog .el-dialog__body,
-    body .el-message-box .el-message-box__content {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__body,
+html.exam-detail-scope body .el-message-box .el-message-box__content {
         max-height: 68vh;
         overflow-y: auto;
         padding: 10px 22px 18px !important;
     }
 
-    body .el-dialog .el-dialog__footer,
-    body .el-message-box .el-message-box__btns {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__footer,
+html.exam-detail-scope body .el-message-box .el-message-box__btns {
         padding: 0 22px 24px !important;
     }
 
-    body .dialog-footer,
-    body .el-dialog .el-dialog__footer span,
-    body .el-message-box .el-message-box__btns {
+
+    html.exam-detail-scope body .dialog-footer,
+html.exam-detail-scope body .el-dialog .el-dialog__footer span,
+html.exam-detail-scope body .el-message-box .el-message-box__btns {
         display: flex !important;
         justify-content: flex-end;
         gap: 10px;
     }
 
-    body .el-dialog .el-dialog__footer .el-button,
-    body .el-message-box .el-button {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button,
+html.exam-detail-scope body .el-message-box .el-button {
         width: auto !important;
         min-width: 86px;
         height: 46px !important;
@@ -1601,19 +1807,21 @@ body .el-dialog #bind-qrcode {
     }
 }
 
+
 /* Final subject-card alignment fixes */
-body .category-card,
-body .category-card.is-hidden,
-body .category-card.is-assigned {
+html.exam-detail-scope body .category-card,
+html.exam-detail-scope body .category-card.is-hidden,
+html.exam-detail-scope body .category-card.is-assigned {
     border-top: 0 !important;
 }
 
-body .category-card::before,
-body .category-card::after,
-body .category-card.is-hidden::before,
-body .category-card.is-hidden::after,
-body .category-card.is-assigned::before,
-body .category-card.is-assigned::after {
+
+html.exam-detail-scope body .category-card::before,
+html.exam-detail-scope body .category-card::after,
+html.exam-detail-scope body .category-card.is-hidden::before,
+html.exam-detail-scope body .category-card.is-hidden::after,
+html.exam-detail-scope body .category-card.is-assigned::before,
+html.exam-detail-scope body .category-card.is-assigned::after {
     content: none !important;
     display: none !important;
     width: 0 !important;
@@ -1623,7 +1831,8 @@ body .category-card.is-assigned::after {
     box-shadow: none !important;
 }
 
-body .category-status-pill {
+
+html.exam-detail-scope body .category-status-pill {
     min-width: 78px;
     height: 32px;
     padding: 0 14px;
@@ -1637,28 +1846,33 @@ body .category-status-pill {
     white-space: nowrap;
 }
 
-body .category-status-pill > span {
+
+html.exam-detail-scope body .category-status-pill > span {
     display: block;
     line-height: 32px;
 }
 
-body .category-status-pill.is-visible {
+
+html.exam-detail-scope body .category-status-pill.is-visible {
     background: #dff8ee;
     color: #087453;
 }
 
-body .category-status-pill.is-hidden {
+
+html.exam-detail-scope body .category-status-pill.is-hidden {
     background: #eaf4ff;
     color: #0b5cab;
 }
 
-body .category-status-pill.is-assigned {
+
+html.exam-detail-scope body .category-status-pill.is-assigned {
     min-width: 104px;
     background: #fff4df;
     color: #9a5a10;
 }
 
-body .category-card-primary-action.el-button {
+
+html.exam-detail-scope body .category-card-primary-action.el-button {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -1668,7 +1882,8 @@ body .category-card-primary-action.el-button {
     vertical-align: middle !important;
 }
 
-body .category-card-primary-action.el-button > span {
+
+html.exam-detail-scope body .category-card-primary-action.el-button > span {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -1677,8 +1892,9 @@ body .category-card-primary-action.el-button > span {
     line-height: 1 !important;
 }
 
-body .category-card-primary-action.el-button .el-icon,
-body .category-icon-action.el-button .el-icon {
+
+html.exam-detail-scope body .category-card-primary-action.el-button .el-icon,
+html.exam-detail-scope body .category-icon-action.el-button .el-icon {
     margin: 0 !important;
     display: inline-flex !important;
     align-items: center !important;
@@ -1686,20 +1902,23 @@ body .category-icon-action.el-button .el-icon {
     line-height: 1 !important;
 }
 
-body .category-icon-action.el-button {
+
+html.exam-detail-scope body .category-icon-action.el-button {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     padding: 0 !important;
 }
 
+
 /* Exam results page */
-body .exam-results-view .page-header {
+html.exam-detail-scope body .exam-results-view .page-header {
     align-items: center;
     margin-bottom: 26px;
 }
 
-body .exam-results-toolbar {
+
+html.exam-detail-scope body .exam-results-toolbar {
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -1707,7 +1926,8 @@ body .exam-results-toolbar {
     flex-wrap: wrap;
 }
 
-body .exam-results-total {
+
+html.exam-detail-scope body .exam-results-total {
     height: 38px;
     padding: 0 14px;
     display: inline-flex;
@@ -1722,18 +1942,21 @@ body .exam-results-total {
     white-space: nowrap;
 }
 
-body .exam-filter-select {
+
+html.exam-detail-scope body .exam-filter-select {
     width: 210px !important;
 }
 
-body .exam-filter-select .el-input__wrapper {
+
+html.exam-detail-scope body .exam-filter-select .el-input__wrapper {
     height: 40px !important;
     border-radius: 999px !important;
     padding: 0 14px !important;
     background: #ffffff !important;
 }
 
-body .exam-filter-tag {
+
+html.exam-detail-scope body .exam-filter-tag {
     height: 36px !important;
     padding: 0 12px !important;
     display: inline-flex !important;
@@ -1742,42 +1965,49 @@ body .exam-filter-tag {
     font-weight: 850;
 }
 
-body .exam-results-toolbar .batch-danger-button {
+
+html.exam-detail-scope body .exam-results-toolbar .batch-danger-button {
     height: 40px !important;
     min-width: 104px;
     margin: 0 !important;
     border-radius: 999px !important;
 }
 
-body .exam-results-toolbar .batch-danger-button.is-disabled {
+
+html.exam-detail-scope body .exam-results-toolbar .batch-danger-button.is-disabled {
     border-color: #ffe1e6 !important;
     background: #fff4f6 !important;
     color: #d88b98 !important;
 }
 
-body .exam-results-card {
+
+html.exam-detail-scope body .exam-results-card {
     border: 1px solid rgba(218, 229, 241, 0.96) !important;
     border-radius: 24px !important;
     background: #ffffff !important;
     box-shadow: 0 18px 42px rgba(35, 55, 88, 0.08) !important;
 }
 
-body .exam-results-card .el-card__body {
+
+html.exam-detail-scope body .exam-results-card .el-card__body {
     padding: 0 !important;
 }
 
-body .exam-results-table {
+
+html.exam-detail-scope body .exam-results-table {
     --el-table-header-bg-color: #f6f9fd;
     --el-table-row-hover-bg-color: #f8fbff;
     border-radius: 24px;
     overflow: hidden;
 }
 
-body .exam-results-table::before {
+
+html.exam-detail-scope body .exam-results-table::before {
     display: none !important;
 }
 
-body .exam-results-table th.el-table__cell {
+
+html.exam-detail-scope body .exam-results-table th.el-table__cell {
     height: 58px !important;
     padding: 0 !important;
     background: #f6f9fd !important;
@@ -1786,56 +2016,65 @@ body .exam-results-table th.el-table__cell {
     font-weight: 900 !important;
 }
 
-body .exam-results-table td.el-table__cell {
+
+html.exam-detail-scope body .exam-results-table td.el-table__cell {
     height: 82px !important;
     padding: 10px 0 !important;
     border-bottom: 1px solid #edf2f7 !important;
 }
 
-body .exam-results-table .cell {
+
+html.exam-detail-scope body .exam-results-table .cell {
     padding: 0 18px !important;
 }
 
-body .exam-results-table .el-checkbox__inner {
+
+html.exam-detail-scope body .exam-results-table .el-checkbox__inner {
     width: 18px;
     height: 18px;
     border-radius: 6px;
     border-color: #cfd9e6;
 }
 
-body .exam-time-cell,
-body .exam-user-cell,
-body .exam-paper-cell {
+
+html.exam-detail-scope body .exam-time-cell,
+html.exam-detail-scope body .exam-user-cell,
+html.exam-detail-scope body .exam-paper-cell {
     display: flex;
     align-items: center;
     min-width: 0;
 }
 
-body .exam-time-cell {
+
+html.exam-detail-scope body .exam-time-cell {
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
 }
 
-body .exam-date {
+
+html.exam-detail-scope body .exam-date {
     color: #152033;
     font-size: 15px;
     font-weight: 850;
     line-height: 1.2;
 }
 
-body .exam-time {
+
+html.exam-detail-scope body .exam-time {
     color: #738198;
     font-size: 13px;
     font-weight: 760;
     line-height: 1.2;
 }
 
-body .exam-user-cell {
+
+html.exam-detail-scope body .exam-user-cell {
     gap: 10px;
 }
 
-body .exam-user-avatar {
+
+html.exam-detail-scope body .exam-user-avatar {
     width: 34px;
     height: 34px;
     flex: 0 0 auto;
@@ -1849,7 +2088,8 @@ body .exam-user-avatar {
     font-weight: 900;
 }
 
-body .exam-user-name {
+
+html.exam-detail-scope body .exam-user-name {
     overflow: hidden;
     color: #152033;
     font-size: 15px;
@@ -1858,11 +2098,13 @@ body .exam-user-name {
     white-space: nowrap;
 }
 
-body .exam-paper-cell {
+
+html.exam-detail-scope body .exam-paper-cell {
     gap: 10px;
 }
 
-body .exam-paper-icon {
+
+html.exam-detail-scope body .exam-paper-icon {
     width: 34px;
     height: 34px;
     flex: 0 0 auto;
@@ -1874,7 +2116,8 @@ body .exam-paper-icon {
     color: #0f8a69;
 }
 
-body .exam-paper-name {
+
+html.exam-detail-scope body .exam-paper-name {
     overflow: hidden;
     color: #152033;
     font-size: 15px;
@@ -1883,7 +2126,8 @@ body .exam-paper-name {
     white-space: nowrap;
 }
 
-body .exam-results-table .score-badge {
+
+html.exam-detail-scope body .exam-results-table .score-badge {
     width: 76px !important;
     height: 58px !important;
     margin: 0 auto;
@@ -1897,38 +2141,44 @@ body .exam-results-table .score-badge {
     transform: none !important;
 }
 
-body .exam-results-table .score-badge.excellent {
+
+html.exam-detail-scope body .exam-results-table .score-badge.excellent {
     border: 1px solid #c6f0da !important;
     background: #eafaf2 !important;
     color: #058044 !important;
 }
 
-body .exam-results-table .score-badge.pass {
+
+html.exam-detail-scope body .exam-results-table .score-badge.pass {
     border: 1px solid #cbeade !important;
     background: #edf9f4 !important;
     color: #087453 !important;
 }
 
-body .exam-results-table .score-badge.fail {
+
+html.exam-detail-scope body .exam-results-table .score-badge.fail {
     border: 1px solid #ffd8de !important;
     background: #fff2f4 !important;
     color: #d92d20 !important;
 }
 
-body .exam-results-table .score-value {
+
+html.exam-detail-scope body .exam-results-table .score-value {
     font-size: 24px !important;
     font-weight: 950 !important;
     line-height: 1 !important;
 }
 
-body .exam-results-table .score-unit {
+
+html.exam-detail-scope body .exam-results-table .score-unit {
     margin-top: 4px;
     font-size: 13px !important;
     font-weight: 900 !important;
     line-height: 1 !important;
 }
 
-body .exam-results-table .accuracy-indicator {
+
+html.exam-detail-scope body .exam-results-table .accuracy-indicator {
     width: 116px;
     margin: 0 auto;
     display: grid;
@@ -1936,14 +2186,16 @@ body .exam-results-table .accuracy-indicator {
     gap: 6px;
 }
 
-body .exam-results-table .accuracy-text {
+
+html.exam-detail-scope body .exam-results-table .accuracy-text {
     color: #152033;
     font-size: 16px;
     font-weight: 900;
     line-height: 1.15;
 }
 
-body .exam-results-table .accuracy-track {
+
+html.exam-detail-scope body .exam-results-table .accuracy-track {
     width: 96px;
     height: 7px;
     overflow: hidden;
@@ -1951,14 +2203,16 @@ body .exam-results-table .accuracy-track {
     background: #e9eef5;
 }
 
-body .exam-results-table .accuracy-track span {
+
+html.exam-detail-scope body .exam-results-table .accuracy-track span {
     height: 100%;
     display: block;
     border-radius: inherit;
     background: linear-gradient(90deg, #1b6ef3, #12a594);
 }
 
-body .exam-results-table .accuracy-pct {
+
+html.exam-detail-scope body .exam-results-table .accuracy-pct {
     min-width: 48px;
     height: 24px;
     padding: 0 9px;
@@ -1973,7 +2227,8 @@ body .exam-results-table .accuracy-pct {
     line-height: 1;
 }
 
-body .exam-results-card .pagination-container {
+
+html.exam-detail-scope body .exam-results-card .pagination-container {
     padding: 18px 22px !important;
     display: flex;
     justify-content: flex-end;
@@ -1981,37 +2236,41 @@ body .exam-results-card .pagination-container {
     background: #fbfdff !important;
 }
 
-body .exam-results-view .selection-strip {
+
+html.exam-detail-scope body .exam-results-view .selection-strip {
     margin-bottom: 16px;
     padding: 12px 16px !important;
     border: 1px solid #d7e8ff !important;
     border-radius: 16px !important;
     background: #f6fbff !important;
 }
-
-@media (max-width: 768px) {
-    body .exam-results-toolbar {
+@media (max-width: 768px){
+    html.exam-detail-scope body .exam-results-toolbar {
         width: 100%;
         justify-content: stretch;
     }
 
-    body .exam-results-total,
-    body .exam-filter-select,
-    body .exam-results-toolbar .batch-danger-button,
-    body .exam-filter-tag {
+
+    html.exam-detail-scope body .exam-results-total,
+html.exam-detail-scope body .exam-filter-select,
+html.exam-detail-scope body .exam-results-toolbar .batch-danger-button,
+html.exam-detail-scope body .exam-filter-tag {
         width: 100% !important;
     }
 
-    body .exam-results-card {
+
+    html.exam-detail-scope body .exam-results-card {
         overflow-x: auto;
     }
 
-    body .exam-results-table {
+
+    html.exam-detail-scope body .exam-results-table {
         min-width: 760px;
     }
 }
 
-.page-header-actions {
+
+html.exam-detail-scope .page-header-actions {
     margin-left: auto;
     display: flex;
     align-items: center;
@@ -2020,21 +2279,24 @@ body .exam-results-view .selection-strip {
     flex-wrap: wrap;
 }
 
-.paper-share-dialog,
-.accept-share-dialog {
+
+html.exam-detail-scope .paper-share-dialog,
+html.exam-detail-scope .accept-share-dialog {
     display: flex;
     flex-direction: column;
     gap: 16px;
 }
 
-body .paper-share-overlay .el-overlay-dialog {
+
+html.exam-detail-scope body .paper-share-overlay .el-overlay-dialog {
     padding: 20px !important;
     overflow: hidden !important;
     align-items: center !important;
     justify-content: center !important;
 }
 
-body .paper-share-modal.el-dialog {
+
+html.exam-detail-scope body .paper-share-modal.el-dialog {
     width: min(860px, calc(100vw - 40px)) !important;
     max-height: calc(100vh - 40px) !important;
     margin: 0 auto !important;
@@ -2042,11 +2304,13 @@ body .paper-share-modal.el-dialog {
     flex-direction: column !important;
 }
 
-body .paper-share-modal.el-dialog .el-dialog__header {
+
+html.exam-detail-scope body .paper-share-modal.el-dialog .el-dialog__header {
     flex: 0 0 auto !important;
 }
 
-body .paper-share-modal.el-dialog .el-dialog__body {
+
+html.exam-detail-scope body .paper-share-modal.el-dialog .el-dialog__body {
     min-height: 0 !important;
     flex: 1 1 auto !important;
     overflow-y: auto !important;
@@ -2054,21 +2318,24 @@ body .paper-share-modal.el-dialog .el-dialog__body {
     overscroll-behavior: contain !important;
 }
 
-body .paper-share-modal.el-dialog .el-dialog__footer {
+
+html.exam-detail-scope body .paper-share-modal.el-dialog .el-dialog__footer {
     flex: 0 0 auto !important;
     padding-top: 12px !important;
     box-shadow: 0 -12px 28px rgba(15, 23, 42, 0.06) !important;
 }
 
-.share-paper-summary,
-.share-result-panel,
-.accept-preview-panel {
+
+html.exam-detail-scope .share-paper-summary,
+html.exam-detail-scope .share-result-panel,
+html.exam-detail-scope .accept-preview-panel {
     border: 1px solid #e5eaf3;
     border-radius: 8px;
     background: #f8fafc;
 }
 
-.share-paper-summary {
+
+html.exam-detail-scope .share-paper-summary {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2076,45 +2343,52 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
     padding: 14px 16px;
 }
 
-.share-paper-label {
+
+html.exam-detail-scope .share-paper-label {
     color: #64748b;
     font-size: 12px;
     line-height: 1.4;
 }
 
-.share-paper-title,
-.accept-preview-title {
+
+html.exam-detail-scope .share-paper-title,
+html.exam-detail-scope .accept-preview-title {
     color: #111827;
     font-size: 18px;
     font-weight: 800;
     line-height: 1.35;
 }
 
-.paper-share-form {
+
+html.exam-detail-scope .paper-share-form {
     padding-top: 4px;
 }
 
-.share-limit-row,
-.share-generate-row,
-.share-result-actions {
+
+html.exam-detail-scope .share-limit-row,
+html.exam-detail-scope .share-generate-row,
+html.exam-detail-scope .share-result-actions {
     display: flex;
     align-items: center;
     gap: 12px;
     flex-wrap: wrap;
 }
 
-.share-generate-row {
+
+html.exam-detail-scope .share-generate-row {
     justify-content: flex-end;
 }
 
-.share-result-panel {
+
+html.exam-detail-scope .share-result-panel {
     display: flex;
     justify-content: space-between;
     gap: 18px;
     padding: 16px;
 }
 
-.share-result-main {
+
+html.exam-detail-scope .share-result-main {
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -2122,21 +2396,24 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
     gap: 10px;
 }
 
-.share-code {
+
+html.exam-detail-scope .share-code {
     color: #0f172a;
     font-size: 30px;
     font-weight: 900;
     letter-spacing: 0;
 }
 
-.share-meta,
-.accept-preview-meta {
+
+html.exam-detail-scope .share-meta,
+html.exam-detail-scope .accept-preview-meta {
     color: #64748b;
     font-size: 13px;
     line-height: 1.5;
 }
 
-.accept-save-location {
+
+html.exam-detail-scope .accept-save-location {
     margin-top: 12px;
     padding: 10px 12px;
     border: 1px solid #dbe7f3;
@@ -2151,7 +2428,8 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
     line-height: 1.5;
 }
 
-.accept-save-location strong {
+
+html.exam-detail-scope .accept-save-location strong {
     min-width: 0;
     color: #0f172a;
     font-weight: 800;
@@ -2159,7 +2437,8 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
     overflow-wrap: anywhere;
 }
 
-.share-qrcode {
+
+html.exam-detail-scope .share-qrcode {
     width: 190px;
     height: 190px;
     padding: 5px;
@@ -2172,13 +2451,15 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
     border-radius: 8px;
 }
 
-.share-qrcode canvas,
-.share-qrcode img {
+
+html.exam-detail-scope .share-qrcode canvas,
+html.exam-detail-scope .share-qrcode img {
     width: 180px !important;
     height: 180px !important;
 }
 
-.share-table-code {
+
+html.exam-detail-scope .share-table-code {
     padding: 0;
     border: 0;
     background: transparent;
@@ -2187,34 +2468,41 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
     cursor: pointer;
 }
 
-.share-table-code:hover,
-.share-table-code:focus {
+
+html.exam-detail-scope .share-table-code:hover,
+html.exam-detail-scope .share-table-code:focus {
     color: #0f3fb3;
     text-decoration: underline;
 }
 
-.paper-share-dialog .el-table__row {
+
+html.exam-detail-scope .paper-share-dialog .el-table__row {
     cursor: pointer;
 }
 
-.paper-share-dialog .el-table__row.is-selected-share > td.el-table__cell {
+
+html.exam-detail-scope .paper-share-dialog .el-table__row.is-selected-share > td.el-table__cell {
     background: #eef6ff !important;
 }
 
-.share-record-table .el-table__cell {
+
+html.exam-detail-scope .share-record-table .el-table__cell {
     vertical-align: middle !important;
 }
 
-.share-record-table .cell {
+
+html.exam-detail-scope .share-record-table .cell {
     white-space: nowrap;
 }
 
-.share-record-table .share-actions-cell .cell {
+
+html.exam-detail-scope .share-record-table .share-actions-cell .cell {
     padding-left: 10px !important;
     padding-right: 10px !important;
 }
 
-.share-row-actions {
+
+html.exam-detail-scope .share-row-actions {
     min-width: 0;
     display: inline-flex;
     align-items: center;
@@ -2224,7 +2512,8 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
     white-space: nowrap;
 }
 
-.share-row-actions .share-row-action.el-button {
+
+html.exam-detail-scope .share-row-actions .share-row-action.el-button {
     min-width: 42px !important;
     height: 28px !important;
     margin: 0 !important;
@@ -2235,90 +2524,103 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
     transform: none !important;
 }
 
-.share-row-actions .share-row-action.el-button:not(.is-danger) {
+
+html.exam-detail-scope .share-row-actions .share-row-action.el-button:not(.is-danger) {
     color: #265f94 !important;
 }
 
-.share-row-actions .share-row-action.el-button:not(.is-danger):hover,
-.share-row-actions .share-row-action.el-button:not(.is-danger):focus {
+
+html.exam-detail-scope .share-row-actions .share-row-action.el-button:not(.is-danger):hover,
+html.exam-detail-scope .share-row-actions .share-row-action.el-button:not(.is-danger):focus {
     background: #e8f3ff !important;
 }
 
-.share-row-actions .share-row-action.is-danger.el-button {
+
+html.exam-detail-scope .share-row-actions .share-row-action.is-danger.el-button {
     color: #e40014 !important;
 }
 
-.share-row-actions .share-row-action.is-danger.el-button:hover,
-.share-row-actions .share-row-action.is-danger.el-button:focus {
+
+html.exam-detail-scope .share-row-actions .share-row-action.is-danger.el-button:hover,
+html.exam-detail-scope .share-row-actions .share-row-action.is-danger.el-button:focus {
     background: #fff0f2 !important;
 }
 
-.accept-preview-panel {
+
+html.exam-detail-scope .accept-preview-panel {
     padding: 14px 16px;
 }
 
-.accept-preview-panel .el-alert {
+
+html.exam-detail-scope .accept-preview-panel .el-alert {
     margin-top: 12px;
 }
-
-@media (max-width: 768px) {
-    .page-header-actions {
+@media (max-width: 768px){
+    html.exam-detail-scope .page-header-actions {
         width: 100%;
         margin-left: 0;
         justify-content: stretch;
     }
 
-    .page-header-actions .el-button {
+
+    html.exam-detail-scope .page-header-actions .el-button {
         flex: 1 1 auto;
     }
 
-    .share-result-panel {
+
+    html.exam-detail-scope .share-result-panel {
         flex-direction: column;
         align-items: stretch;
     }
 
-    .share-qrcode {
+
+    html.exam-detail-scope .share-qrcode {
         align-self: center;
     }
 
-    body .paper-share-overlay .el-overlay-dialog {
+
+    html.exam-detail-scope body .paper-share-overlay .el-overlay-dialog {
         padding: 10px !important;
     }
 
-    body .paper-share-modal.el-dialog {
+
+    html.exam-detail-scope body .paper-share-modal.el-dialog {
         width: calc(100vw - 20px) !important;
         max-height: calc(100vh - 20px) !important;
     }
 }
-
 /* Mobile and tablet shell rebuild */
-@media (max-width: 1024px) {
-    html,
-    body {
+@media (max-width: 1024px){
+    html.exam-detail-scope,
+html.exam-detail-scope body {
         width: 100% !important;
         min-height: 100% !important;
         overflow-x: hidden !important;
         background: #f6f8fb !important;
     }
 
-    body {
+
+    html.exam-detail-scope body {
         position: static !important;
     }
 
-    #app,
-    #app > .el-container,
-    #app > .el-container > .el-container {
+
+    html.exam-detail-scope #app,
+html.exam-detail-scope #app > .el-container,
+html.exam-detail-scope #app > .el-container > .el-container {
         width: 100% !important;
         min-width: 0 !important;
         min-height: 100vh !important;
         overflow: visible !important;
     }
 
-    .desktop-aside {
+
+    html.exam-detail-scope .desktop-aside {
         display: none !important;
     }
 
-    .mobile-header {
+
+    html.exam-detail-scope .mobile-header {
         position: sticky !important;
         top: 0 !important;
         z-index: 120 !important;
@@ -2336,7 +2638,8 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         -webkit-backdrop-filter: blur(16px) !important;
     }
 
-    .mobile-header .logo {
+
+    html.exam-detail-scope .mobile-header .logo {
         min-width: 0 !important;
         height: 44px !important;
         margin: 0 !important;
@@ -2350,7 +2653,8 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         white-space: nowrap !important;
     }
 
-    .mobile-header .logo-mark {
+
+    html.exam-detail-scope .mobile-header .logo-mark {
         width: 38px !important;
         height: 38px !important;
         min-width: 38px !important;
@@ -2360,14 +2664,16 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         box-shadow: 0 8px 18px rgba(50, 117, 180, 0.16) !important;
     }
 
-    .mobile-header .logo-mark img {
+
+    html.exam-detail-scope .mobile-header .logo-mark img {
         width: 100% !important;
         height: 100% !important;
         object-fit: cover !important;
         display: block !important;
     }
 
-    .mobile-header .el-button {
+
+    html.exam-detail-scope .mobile-header .el-button {
         width: 42px !important;
         height: 42px !important;
         min-width: 42px !important;
@@ -2379,8 +2685,9 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         color: var(--nb-primary) !important;
     }
 
-    body .mobile-menu-drawer.el-drawer,
-    body .el-drawer.mobile-menu-drawer {
+
+    html.exam-detail-scope body .mobile-menu-drawer.el-drawer,
+html.exam-detail-scope body .el-drawer.mobile-menu-drawer {
         width: min(82vw, 320px) !important;
         max-width: calc(100vw - 48px) !important;
         border-radius: 0 18px 18px 0 !important;
@@ -2388,13 +2695,15 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         box-shadow: 18px 0 50px rgba(15, 23, 42, 0.22) !important;
     }
 
-    body .mobile-menu-drawer .el-drawer__body {
+
+    html.exam-detail-scope body .mobile-menu-drawer .el-drawer__body {
         height: 100% !important;
         padding: 0 !important;
         overflow: hidden !important;
     }
 
-    .mobile-menu-drawer .el-aside {
+
+    html.exam-detail-scope .mobile-menu-drawer .el-aside {
         width: 100% !important;
         height: 100% !important;
         min-height: 100% !important;
@@ -2405,7 +2714,8 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         overflow: hidden !important;
     }
 
-    .mobile-menu-drawer .logo {
+
+    html.exam-detail-scope .mobile-menu-drawer .logo {
         width: 100% !important;
         height: 46px !important;
         margin: 0 0 20px !important;
@@ -2420,7 +2730,8 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         white-space: nowrap !important;
     }
 
-    .mobile-menu-drawer .logo-mark {
+
+    html.exam-detail-scope .mobile-menu-drawer .logo-mark {
         width: 42px !important;
         height: 42px !important;
         min-width: 42px !important;
@@ -2430,14 +2741,16 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         box-shadow: 0 10px 24px rgba(50, 117, 180, 0.16) !important;
     }
 
-    .mobile-menu-drawer .logo-mark img {
+
+    html.exam-detail-scope .mobile-menu-drawer .logo-mark img {
         width: 100% !important;
         height: 100% !important;
         object-fit: cover !important;
         display: block !important;
     }
 
-    .mobile-menu-drawer .logo span:last-child {
+
+    html.exam-detail-scope .mobile-menu-drawer .logo span:last-child {
         min-width: 0 !important;
         overflow: hidden !important;
         color: #111827 !important;
@@ -2447,7 +2760,8 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         -webkit-text-fill-color: currentColor !important;
     }
 
-    .mobile-menu-drawer .el-menu {
+
+    html.exam-detail-scope .mobile-menu-drawer .el-menu {
         width: 100% !important;
         padding: 4px 0 !important;
         flex: 1 1 auto !important;
@@ -2456,7 +2770,8 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         background: transparent !important;
     }
 
-    .mobile-menu-drawer .el-menu-item {
+
+    html.exam-detail-scope .mobile-menu-drawer .el-menu-item {
         width: 100% !important;
         height: 48px !important;
         margin: 0 0 8px !important;
@@ -2471,20 +2786,23 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         line-height: 1 !important;
     }
 
-    .mobile-menu-drawer .el-menu-item .el-icon {
+
+    html.exam-detail-scope .mobile-menu-drawer .el-menu-item .el-icon {
         margin-right: 0 !important;
         flex: 0 0 auto !important;
         color: inherit !important;
         font-size: 19px !important;
     }
 
-    .mobile-menu-drawer .el-menu-item.is-active {
+
+    html.exam-detail-scope .mobile-menu-drawer .el-menu-item.is-active {
         border: 1px solid #cfe0f3 !important;
         background: #eef6ff !important;
         color: #1766a6 !important;
     }
 
-    .mobile-menu-drawer .aside-footer {
+
+    html.exam-detail-scope .mobile-menu-drawer .aside-footer {
         width: 100% !important;
         margin: 16px 0 0 !important;
         padding: 14px !important;
@@ -2495,7 +2813,8 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         box-shadow: none !important;
     }
 
-    .mobile-menu-drawer .user-info {
+
+    html.exam-detail-scope .mobile-menu-drawer .user-info {
         min-width: 0 !important;
         margin-bottom: 10px !important;
         color: #111827 !important;
@@ -2503,20 +2822,23 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         font-weight: 800 !important;
     }
 
-    .mobile-menu-drawer .user-info span {
+
+    html.exam-detail-scope .mobile-menu-drawer .user-info span {
         min-width: 0 !important;
         overflow: hidden !important;
         text-overflow: ellipsis !important;
         white-space: nowrap !important;
     }
 
-    .mobile-menu-drawer .aside-footer .el-button {
+
+    html.exam-detail-scope .mobile-menu-drawer .aside-footer .el-button {
         width: 100% !important;
         height: 42px !important;
         border-radius: 999px !important;
     }
 
-    .el-main {
+
+    html.exam-detail-scope .el-main {
         width: 100% !important;
         min-width: 0 !important;
         margin: 0 !important;
@@ -2528,7 +2850,8 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         box-shadow: none !important;
     }
 
-    .page-header {
+
+    html.exam-detail-scope .page-header {
         width: 100% !important;
         margin: 0 0 18px !important;
         display: flex !important;
@@ -2537,7 +2860,8 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         gap: 12px !important;
     }
 
-    .page-title {
+
+    html.exam-detail-scope .page-title {
         width: 100% !important;
         min-width: 0 !important;
         flex: 1 1 100% !important;
@@ -2546,11 +2870,13 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         overflow-wrap: anywhere !important;
     }
 
-    .page-header-spacer {
+
+    html.exam-detail-scope .page-header-spacer {
         display: none !important;
     }
 
-    .page-header-actions {
+
+    html.exam-detail-scope .page-header-actions {
         width: 100% !important;
         margin-left: 0 !important;
         display: grid !important;
@@ -2558,46 +2884,52 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         gap: 10px !important;
     }
 
-    .page-header-actions .el-button {
+
+    html.exam-detail-scope .page-header-actions .el-button {
         width: 100% !important;
         min-width: 0 !important;
         margin: 0 !important;
     }
 
-    .dashboard-stats-grid,
-    .category-cards-grid,
-    .exam-cards-grid {
+
+    html.exam-detail-scope .dashboard-stats-grid,
+html.exam-detail-scope .category-cards-grid,
+html.exam-detail-scope .exam-cards-grid {
         width: 100% !important;
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 14px !important;
     }
 
-    .category-card,
-    .exam-card,
-    .stat-card,
-    .chart-section,
-    .table-card {
+
+    html.exam-detail-scope .category-card,
+html.exam-detail-scope .exam-card,
+html.exam-detail-scope .stat-card,
+html.exam-detail-scope .chart-section,
+html.exam-detail-scope .table-card {
         width: 100% !important;
         min-width: 0 !important;
         border-radius: 14px !important;
     }
 
-    .category-card,
-    .exam-card {
+
+    html.exam-detail-scope .category-card,
+html.exam-detail-scope .exam-card {
         min-height: auto !important;
         padding: 18px !important;
     }
 
-    .category-card-title,
-    .exam-card-title {
+
+    html.exam-detail-scope .category-card-title,
+html.exam-detail-scope .exam-card-title {
         font-size: 17px !important;
         line-height: 1.35 !important;
         word-break: break-word !important;
         overflow-wrap: anywhere !important;
     }
 
-    .category-card-actions,
-    .exam-card-actions {
+
+    html.exam-detail-scope .category-card-actions,
+html.exam-detail-scope .exam-card-actions {
         width: 100% !important;
         margin-top: 16px !important;
         display: flex !important;
@@ -2605,49 +2937,55 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         gap: 8px !important;
     }
 
-    .category-card-actions .el-button,
-    .exam-card-actions .el-button {
+
+    html.exam-detail-scope .category-card-actions .el-button,
+html.exam-detail-scope .exam-card-actions .el-button {
         min-width: 0 !important;
         margin: 0 !important;
         flex: 0 1 auto !important;
     }
 
-    .exam-card-count {
+
+    html.exam-detail-scope .exam-card-count {
         margin-bottom: 0 !important;
     }
 
-    .exam-card-count .count-number {
+
+    html.exam-detail-scope .exam-card-count .count-number {
         font-size: 32px !important;
     }
 
-    .exam-results-card,
-    .table-card {
+
+    html.exam-detail-scope .exam-results-card,
+html.exam-detail-scope .table-card {
         overflow-x: auto !important;
         -webkit-overflow-scrolling: touch !important;
     }
 
-    body .el-dialog,
-    body .el-overlay .el-overlay-dialog .el-dialog {
+
+    html.exam-detail-scope body .el-dialog,
+html.exam-detail-scope body .el-overlay .el-overlay-dialog .el-dialog {
         width: min(92vw, 760px) !important;
         max-width: calc(100vw - 24px) !important;
         margin: 8vh auto 0 !important;
         border-radius: 16px !important;
     }
 }
-
-@media (max-width: 640px) {
-    .mobile-header {
+@media (max-width: 640px){
+    html.exam-detail-scope .mobile-header {
         min-height: 58px !important;
         padding-left: 14px !important;
         padding-right: 14px !important;
     }
 
-    .mobile-header .logo {
+
+    html.exam-detail-scope .mobile-header .logo {
         height: 38px !important;
         font-size: 17px !important;
     }
 
-    .mobile-header .logo-mark {
+
+    html.exam-detail-scope .mobile-header .logo-mark {
         width: 34px !important;
         height: 34px !important;
         min-width: 34px !important;
@@ -2655,24 +2993,28 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         border-radius: 12px !important;
     }
 
-    body .mobile-menu-drawer.el-drawer,
-    body .el-drawer.mobile-menu-drawer {
+
+    html.exam-detail-scope body .mobile-menu-drawer.el-drawer,
+html.exam-detail-scope body .el-drawer.mobile-menu-drawer {
         width: min(86vw, 304px) !important;
         max-width: calc(100vw - 44px) !important;
     }
 
-    .mobile-menu-drawer .el-aside {
+
+    html.exam-detail-scope .mobile-menu-drawer .el-aside {
         padding-left: 16px !important;
         padding-right: 16px !important;
     }
 
-    .mobile-menu-drawer .logo {
+
+    html.exam-detail-scope .mobile-menu-drawer .logo {
         height: 42px !important;
         margin-bottom: 18px !important;
         font-size: 18px !important;
     }
 
-    .mobile-menu-drawer .logo-mark {
+
+    html.exam-detail-scope .mobile-menu-drawer .logo-mark {
         width: 38px !important;
         height: 38px !important;
         min-width: 38px !important;
@@ -2680,67 +3022,77 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         border-radius: 13px !important;
     }
 
-    .el-main {
+
+    html.exam-detail-scope .el-main {
         padding: 18px 12px 34px !important;
     }
 
-    .page-header {
+
+    html.exam-detail-scope .page-header {
         margin-bottom: 14px !important;
         gap: 10px !important;
     }
 
-    .page-title {
+
+    html.exam-detail-scope .page-title {
         font-size: 24px !important;
     }
 
-    .page-header-actions {
+
+    html.exam-detail-scope .page-header-actions {
         grid-template-columns: 1fr !important;
     }
 
-    .dashboard-stats-grid,
-    .category-cards-grid,
-    .exam-cards-grid {
+
+    html.exam-detail-scope .dashboard-stats-grid,
+html.exam-detail-scope .category-cards-grid,
+html.exam-detail-scope .exam-cards-grid {
         grid-template-columns: 1fr !important;
         gap: 12px !important;
     }
 
-    .category-card,
-    .exam-card {
+
+    html.exam-detail-scope .category-card,
+html.exam-detail-scope .exam-card {
         padding: 16px !important;
     }
 
-    .exam-card-actions .el-button,
-    .category-card-actions .el-button {
+
+    html.exam-detail-scope .exam-card-actions .el-button,
+html.exam-detail-scope .category-card-actions .el-button {
         height: 34px !important;
         padding: 0 12px !important;
     }
 
-    .exam-card-actions .el-button--primary {
+
+    html.exam-detail-scope .exam-card-actions .el-button--primary {
         flex: 1 1 100% !important;
     }
 
-    .paper-share-dialog .el-radio-group,
-    .paper-share-dialog .el-radio-button,
-    .paper-share-dialog .el-radio-button__inner {
+
+    html.exam-detail-scope .paper-share-dialog .el-radio-group,
+html.exam-detail-scope .paper-share-dialog .el-radio-button,
+html.exam-detail-scope .paper-share-dialog .el-radio-button__inner {
         width: 100% !important;
     }
 
-    .share-limit-row {
+
+    html.exam-detail-scope .share-limit-row {
         align-items: flex-start !important;
         flex-direction: column !important;
     }
 
-    body .el-dialog,
-    body .el-overlay .el-overlay-dialog .el-dialog {
+
+    html.exam-detail-scope body .el-dialog,
+html.exam-detail-scope body .el-overlay .el-overlay-dialog .el-dialog {
         width: calc(100vw - 20px) !important;
         max-width: calc(100vw - 20px) !important;
         margin-top: 5vh !important;
     }
 }
-
 /* Mobile dashboard overview refresh */
-@media (max-width: 1024px) {
-    .mobile-menu-trigger {
+@media (max-width: 1024px){
+    html.exam-detail-scope .mobile-menu-trigger {
         width: 42px;
         height: 42px;
         min-width: 42px;
@@ -2760,34 +3112,40 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         -webkit-tap-highlight-color: transparent;
     }
 
-    .mobile-menu-trigger .el-icon {
+
+    html.exam-detail-scope .mobile-menu-trigger .el-icon {
         font-size: 20px;
     }
 
-    .mobile-menu-trigger:active {
+
+    html.exam-detail-scope .mobile-menu-trigger:active {
         transform: scale(0.96);
         border-color: rgba(50, 117, 180, 0.32);
         box-shadow: 0 4px 12px rgba(50, 117, 180, 0.12);
     }
 
-    .dashboard-container .page-header {
+
+    html.exam-detail-scope .dashboard-container .page-header {
         margin: 0 0 14px !important;
         align-items: center !important;
     }
 
-    .dashboard-container .page-title {
+
+    html.exam-detail-scope .dashboard-container .page-title {
         text-align: left !important;
         font-size: clamp(26px, 7vw, 32px) !important;
         line-height: 1.05 !important;
     }
 
-    .dashboard-container .dashboard-stats-grid {
+
+    html.exam-detail-scope .dashboard-container .dashboard-stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 10px !important;
         margin-bottom: 14px !important;
     }
 
-    .dashboard-container .stat-card {
+
+    html.exam-detail-scope .dashboard-container .stat-card {
         min-height: 118px !important;
         padding: 14px !important;
         display: flex !important;
@@ -2800,31 +3158,37 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         box-shadow: 0 10px 26px rgba(15, 23, 42, 0.055) !important;
     }
 
-    .dashboard-container .stat-card:hover {
+
+    html.exam-detail-scope .dashboard-container .stat-card:hover {
         transform: none !important;
     }
 
-    .dashboard-container .stat-card.blue {
+
+    html.exam-detail-scope .dashboard-container .stat-card.blue {
         background:
             linear-gradient(145deg, rgba(232, 243, 255, 0.94), rgba(255, 255, 255, 0.92) 64%) !important;
     }
 
-    .dashboard-container .stat-card.green {
+
+    html.exam-detail-scope .dashboard-container .stat-card.green {
         background:
             linear-gradient(145deg, rgba(222, 249, 241, 0.94), rgba(255, 255, 255, 0.92) 64%) !important;
     }
 
-    .dashboard-container .stat-card.orange {
+
+    html.exam-detail-scope .dashboard-container .stat-card.orange {
         background:
             linear-gradient(145deg, rgba(255, 237, 224, 0.94), rgba(255, 255, 255, 0.92) 64%) !important;
     }
 
-    .dashboard-container .stat-card.purple {
+
+    html.exam-detail-scope .dashboard-container .stat-card.purple {
         background:
             linear-gradient(145deg, rgba(246, 238, 255, 0.94), rgba(255, 255, 255, 0.92) 64%) !important;
     }
 
-    .dashboard-container .stat-icon {
+
+    html.exam-detail-scope .dashboard-container .stat-icon {
         width: 40px !important;
         height: 40px !important;
         border-radius: 14px !important;
@@ -2832,87 +3196,98 @@ body .paper-share-modal.el-dialog .el-dialog__footer {
         box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
     }
 
-    .dashboard-container .stat-info {
+
+    html.exam-detail-scope .dashboard-container .stat-info {
         width: 100% !important;
     }
 
-    .dashboard-container .stat-value {
+
+    html.exam-detail-scope .dashboard-container .stat-value {
         font-size: clamp(26px, 8vw, 34px) !important;
         line-height: 0.98 !important;
     }
 
-    .dashboard-container .stat-label {
+
+    html.exam-detail-scope .dashboard-container .stat-label {
         margin-top: 6px !important;
         font-size: 12px !important;
         line-height: 1.25 !important;
     }
 
-    .dashboard-container .chart-section {
+
+    html.exam-detail-scope .dashboard-container .chart-section {
         min-height: 282px !important;
         padding: 18px !important;
         border-radius: 18px !important;
     }
 
-    .dashboard-container .section-title {
+
+    html.exam-detail-scope .dashboard-container .section-title {
         font-size: 18px !important;
         line-height: 1.25 !important;
     }
 
-    .dashboard-container .chart-container {
+
+    html.exam-detail-scope .dashboard-container .chart-container {
         height: 220px !important;
     }
 }
-
-@media (max-width: 420px) {
-    .mobile-menu-trigger {
+@media (max-width: 420px){
+    html.exam-detail-scope .mobile-menu-trigger {
         width: 40px;
         height: 40px;
         min-width: 40px;
         border-radius: 13px;
     }
 
-    .dashboard-container .dashboard-stats-grid {
+
+    html.exam-detail-scope .dashboard-container .dashboard-stats-grid {
         gap: 9px !important;
     }
 
-    .dashboard-container .stat-card {
+
+    html.exam-detail-scope .dashboard-container .stat-card {
         min-height: 110px !important;
         padding: 12px !important;
         border-radius: 16px !important;
     }
 
-    .dashboard-container .stat-icon {
+
+    html.exam-detail-scope .dashboard-container .stat-icon {
         width: 36px !important;
         height: 36px !important;
         border-radius: 12px !important;
         font-size: 17px !important;
     }
 
-    .dashboard-container .stat-value {
+
+    html.exam-detail-scope .dashboard-container .stat-value {
         font-size: clamp(24px, 8vw, 30px) !important;
     }
 }
 
-body .el-overlay.paper-share-overlay .el-overlay-dialog {
+
+html.exam-detail-scope body .el-overlay.paper-share-overlay .el-overlay-dialog {
     padding: 20px !important;
     overflow: hidden !important;
     align-items: center !important;
     justify-content: center !important;
 }
 
-body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-dialog {
+
+html.exam-detail-scope body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-dialog {
     width: min(860px, calc(100vw - 40px)) !important;
     max-width: calc(100vw - 40px) !important;
     max-height: calc(100vh - 40px) !important;
     margin: 0 auto !important;
 }
-
-@media (max-width: 768px) {
-    body .el-overlay.paper-share-overlay .el-overlay-dialog {
+@media (max-width: 768px){
+    html.exam-detail-scope body .el-overlay.paper-share-overlay .el-overlay-dialog {
         padding: 10px !important;
     }
 
-    body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-dialog {
+
+    html.exam-detail-scope body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-dialog {
         width: calc(100vw - 20px) !important;
         max-width: calc(100vw - 20px) !important;
         max-height: calc(100vh - 20px) !important;
@@ -2920,12 +3295,13 @@ body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-di
     }
 }
 
+
 /* Button content alignment repair */
-body .el-button,
-body .el-dialog .el-dialog__footer .el-button,
-body .el-message-box .el-button,
-body .paper-share-dialog .el-button,
-body .accept-share-dialog .el-button {
+html.exam-detail-scope body .el-button,
+html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button,
+html.exam-detail-scope body .el-message-box .el-button,
+html.exam-detail-scope body .paper-share-dialog .el-button,
+html.exam-detail-scope body .accept-share-dialog .el-button {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -2934,12 +3310,13 @@ body .accept-share-dialog .el-button {
     vertical-align: middle !important;
 }
 
-body .el-button > span,
-body .el-button .el-icon + span,
-body .el-dialog .el-dialog__footer .el-button > span,
-body .el-message-box .el-button > span,
-body .paper-share-dialog .el-button > span,
-body .accept-share-dialog .el-button > span {
+
+html.exam-detail-scope body .el-button > span,
+html.exam-detail-scope body .el-button .el-icon + span,
+html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button > span,
+html.exam-detail-scope body .el-message-box .el-button > span,
+html.exam-detail-scope body .paper-share-dialog .el-button > span,
+html.exam-detail-scope body .accept-share-dialog .el-button > span {
     width: auto !important;
     min-width: 0 !important;
     display: inline-flex !important;
@@ -2951,23 +3328,27 @@ body .accept-share-dialog .el-button > span {
     white-space: nowrap !important;
 }
 
-body .el-button .el-icon {
+
+html.exam-detail-scope body .el-button .el-icon {
     flex: 0 0 auto !important;
     margin: 0 !important;
     line-height: 1 !important;
 }
 
-body .dialog-footer > .el-button + .el-button,
-body .el-dialog .el-dialog__footer .dialog-footer > .el-button + .el-button {
+
+html.exam-detail-scope body .dialog-footer > .el-button + .el-button,
+html.exam-detail-scope body .el-dialog .el-dialog__footer .dialog-footer > .el-button + .el-button {
     margin-left: 0 !important;
 }
 
-body .paper-share-dialog .el-radio-group {
+
+html.exam-detail-scope body .paper-share-dialog .el-radio-group {
     display: inline-flex !important;
     align-items: stretch !important;
 }
 
-body .paper-share-dialog .el-radio-button__inner {
+
+html.exam-detail-scope body .paper-share-dialog .el-radio-button__inner {
     min-height: 44px !important;
     display: flex !important;
     align-items: center !important;
@@ -2976,36 +3357,36 @@ body .paper-share-dialog .el-radio-button__inner {
     line-height: 1.15 !important;
     text-align: center !important;
 }
-
-@media (max-width: 768px) {
-    body .el-dialog .el-dialog__footer .el-button,
-    body .el-message-box .el-button {
+@media (max-width: 768px){
+    html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button,
+html.exam-detail-scope body .el-message-box .el-button {
         min-height: 46px !important;
     }
 
-    body .paper-share-dialog .el-radio-group {
+
+    html.exam-detail-scope body .paper-share-dialog .el-radio-group {
         width: 100% !important;
         display: grid !important;
         grid-template-columns: 1fr !important;
     }
 
-    body .paper-share-dialog .el-radio-button,
-    body .paper-share-dialog .el-radio-button__inner {
+
+    html.exam-detail-scope body .paper-share-dialog .el-radio-button,
+html.exam-detail-scope body .paper-share-dialog .el-radio-button__inner {
         width: 100% !important;
     }
 
-    body .accept-share-dialog .el-input-group__append .el-button {
+
+    html.exam-detail-scope body .accept-share-dialog .el-input-group__append .el-button {
         min-height: 40px !important;
         padding: 0 14px !important;
     }
 }
-
 /* ============================================================
    Refined admin workbench layer
    Loaded last to settle old experiments into a lighter UI.
    ============================================================ */
-
-:root {
+:root{
     --admin-bg: #f4f7fa;
     --admin-bg-soft: #f8fafc;
     --admin-surface: #ffffff;
@@ -3039,8 +3420,9 @@ body .paper-share-dialog .el-radio-button__inner {
     --nb-border-strong: var(--admin-line-strong);
 }
 
-html,
-body {
+
+html.exam-detail-scope,
+html.exam-detail-scope body {
     background:
         linear-gradient(rgba(36, 104, 178, 0.042) 1px, transparent 1px),
         linear-gradient(90deg, rgba(18, 128, 92, 0.032) 1px, transparent 1px),
@@ -3051,11 +3433,13 @@ body {
     letter-spacing: 0 !important;
 }
 
-body {
+
+html.exam-detail-scope body {
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif !important;
 }
 
-.dashboard-page {
+
+html.exam-detail-scope .dashboard-page {
     background:
         linear-gradient(rgba(36, 104, 178, 0.042) 1px, transparent 1px),
         linear-gradient(90deg, rgba(18, 128, 92, 0.032) 1px, transparent 1px),
@@ -3063,9 +3447,8 @@ body {
     background-size: 36px 36px, 36px 36px, auto !important;
     background-position: -1px -1px, -1px -1px, 0 0 !important;
 }
-
-@media (min-width: 769px) {
-    .desktop-aside {
+@media (min-width: 769px){
+    html.exam-detail-scope .desktop-aside {
         height: 68px !important;
         min-height: 68px !important;
         padding: 0 max(24px, calc((100% - 1220px) / 2)) !important;
@@ -3077,29 +3460,34 @@ body {
         -webkit-backdrop-filter: blur(16px) saturate(1.15) !important;
     }
 
-    .desktop-aside .logo {
+
+    html.exam-detail-scope .desktop-aside .logo {
         font-size: 17px !important;
         font-weight: 850 !important;
     }
 
-    .desktop-aside .logo span:last-child {
+
+    html.exam-detail-scope .desktop-aside .logo span:last-child {
         background: none !important;
         color: var(--admin-text) !important;
         -webkit-text-fill-color: currentColor !important;
     }
 
-    .desktop-aside .logo-mark {
+
+    html.exam-detail-scope .desktop-aside .logo-mark {
         width: 32px !important;
         height: 32px !important;
         border-radius: var(--admin-radius) !important;
         box-shadow: var(--admin-shadow-xs) !important;
     }
 
-    .desktop-aside .el-menu {
+
+    html.exam-detail-scope .desktop-aside .el-menu {
         gap: 4px !important;
     }
 
-    .desktop-aside .el-menu-item {
+
+    html.exam-detail-scope .desktop-aside .el-menu-item {
         height: 36px !important;
         padding: 0 13px !important;
         border-radius: var(--admin-radius) !important;
@@ -3109,45 +3497,53 @@ body {
         line-height: 36px !important;
     }
 
-    .desktop-aside .el-menu-item:hover {
+
+    html.exam-detail-scope .desktop-aside .el-menu-item:hover {
         border-color: transparent !important;
         background: #eef3f8 !important;
         color: var(--admin-text) !important;
     }
 
-    .desktop-aside .el-menu-item.is-active {
+
+    html.exam-detail-scope .desktop-aside .el-menu-item.is-active {
         border-color: rgba(36, 104, 178, 0.2) !important;
         background: var(--admin-primary-soft) !important;
         color: var(--admin-primary) !important;
     }
 
-    .desktop-aside .user-profile-card {
+
+    html.exam-detail-scope .desktop-aside .user-profile-card {
         height: 36px !important;
         border-radius: var(--admin-radius) !important;
     }
 
-    .desktop-aside .user-profile-card .el-avatar {
+
+    html.exam-detail-scope .desktop-aside .user-profile-card .el-avatar {
         width: 28px !important;
         height: 28px !important;
     }
 
-    .desktop-aside .user-profile-name {
+
+    html.exam-detail-scope .desktop-aside .user-profile-name {
         font-size: 13px !important;
         font-weight: 760 !important;
     }
 
-    .el-main {
+
+    html.exam-detail-scope .el-main {
         max-width: 1220px !important;
         padding: 100px 28px 64px !important;
     }
 }
 
-.page-header {
+
+html.exam-detail-scope .page-header {
     margin-bottom: 22px !important;
     gap: 12px !important;
 }
 
-.page-title {
+
+html.exam-detail-scope .page-title {
     color: var(--admin-text) !important;
     font-size: 32px !important;
     font-weight: 850 !important;
@@ -3155,32 +3551,37 @@ body {
     letter-spacing: 0 !important;
 }
 
-.breadcrumb-link {
+
+html.exam-detail-scope .breadcrumb-link {
     color: var(--admin-text-soft) !important;
 }
 
-.page-header-actions {
+
+html.exam-detail-scope .page-header-actions {
     gap: 8px !important;
 }
 
-.page-header .el-button,
-.page-header .el-input .el-input__wrapper,
-.page-header .el-select .el-input__wrapper {
+
+html.exam-detail-scope .page-header .el-button,
+html.exam-detail-scope .page-header .el-input .el-input__wrapper,
+html.exam-detail-scope .page-header .el-select .el-input__wrapper {
     height: 36px !important;
     border-radius: var(--admin-radius) !important;
 }
 
-.dashboard-stats-grid {
+
+html.exam-detail-scope .dashboard-stats-grid {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
     gap: 14px !important;
     margin-bottom: 18px !important;
 }
 
-.stat-card,
-.chart-section,
-.table-card,
-.category-card,
-.exam-card {
+
+html.exam-detail-scope .stat-card,
+html.exam-detail-scope .chart-section,
+html.exam-detail-scope .table-card,
+html.exam-detail-scope .category-card,
+html.exam-detail-scope .exam-card {
     border: 1px solid var(--admin-line) !important;
     border-radius: var(--admin-radius) !important;
     background: rgba(255, 255, 255, 0.92) !important;
@@ -3192,107 +3593,125 @@ body {
         background-color 0.18s ease !important;
 }
 
-.stat-card:hover,
-.chart-section:hover,
-.table-card:hover,
-.category-card:hover,
-.exam-card:hover {
+
+html.exam-detail-scope .stat-card:hover,
+html.exam-detail-scope .chart-section:hover,
+html.exam-detail-scope .table-card:hover,
+html.exam-detail-scope .category-card:hover,
+html.exam-detail-scope .exam-card:hover {
     transform: translateY(-2px) !important;
     border-color: var(--admin-line-strong) !important;
     box-shadow: var(--admin-shadow-sm) !important;
 }
 
-.stat-card {
+
+html.exam-detail-scope .stat-card {
     min-height: 112px !important;
     padding: 18px !important;
     gap: 14px !important;
 }
 
-.stat-icon,
-.category-card-icon {
+
+html.exam-detail-scope .stat-icon,
+html.exam-detail-scope .category-card-icon {
     border-radius: var(--admin-radius) !important;
     box-shadow: none !important;
 }
 
-.stat-value {
+
+html.exam-detail-scope .stat-value {
     color: var(--admin-text) !important;
     font-size: 30px !important;
     font-weight: 850 !important;
     letter-spacing: 0 !important;
 }
 
-.stat-label,
-.section-title {
+
+html.exam-detail-scope .stat-label,
+html.exam-detail-scope .section-title {
     color: var(--admin-text-soft) !important;
     font-weight: 760 !important;
 }
 
-.chart-section {
+
+html.exam-detail-scope .chart-section {
     min-height: 360px !important;
     padding: 20px !important;
 }
 
-.chart-container {
+
+html.exam-detail-scope .chart-container {
     height: 300px !important;
 }
 
-.category-cards-grid,
-.exam-cards-grid {
+
+html.exam-detail-scope .category-cards-grid,
+html.exam-detail-scope .exam-cards-grid {
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)) !important;
     gap: 14px !important;
 }
 
-.category-card,
-.exam-card {
+
+html.exam-detail-scope .category-card,
+html.exam-detail-scope .exam-card {
     min-height: 0 !important;
     padding: 18px !important;
 }
 
-.category-card-top {
+
+html.exam-detail-scope .category-card-top {
     margin-bottom: 14px !important;
 }
 
-.category-card-title,
-.exam-card-title {
+
+html.exam-detail-scope .category-card-title,
+html.exam-detail-scope .exam-card-title {
     color: var(--admin-text) !important;
     font-size: 17px !important;
     font-weight: 850 !important;
     line-height: 1.38 !important;
 }
 
-.category-card-title {
+
+html.exam-detail-scope .category-card-title {
     min-height: 44px !important;
     margin-bottom: 12px !important;
 }
 
-.category-card-meta {
+
+html.exam-detail-scope .category-card-meta {
     gap: 8px !important;
 }
 
-.category-meta-item {
+
+html.exam-detail-scope .category-meta-item {
     padding: 9px 10px !important;
     border-color: #e6edf4 !important;
     border-radius: var(--admin-radius) !important;
     background: var(--admin-surface-subtle) !important;
 }
 
-.category-card-actions,
-.exam-card-actions {
+
+html.exam-detail-scope .category-card-actions,
+html.exam-detail-scope .exam-card-actions {
     gap: 8px !important;
 }
 
-.category-card-primary-action,
-.category-icon-action {
+
+html.exam-detail-scope .category-card-primary-action,
+html.exam-detail-scope .category-icon-action {
     height: 34px !important;
     border-radius: var(--admin-radius) !important;
 }
 
-.exam-card-count .count-number,
-.category-meta-item strong {
+
+html.exam-detail-scope .exam-card-count .count-number,
+html.exam-detail-scope .category-meta-item strong {
     color: var(--admin-primary) !important;
 }
 
-.el-button {
+
+html.exam-detail-scope .el-button {
     min-height: 34px !important;
     border-radius: var(--admin-radius) !important;
     font-weight: 760 !important;
@@ -3300,86 +3719,101 @@ body {
     transform: none !important;
 }
 
-.el-button:hover {
+
+html.exam-detail-scope .el-button:hover {
     transform: translateY(-1px) !important;
 }
 
-.el-button--primary {
+
+html.exam-detail-scope .el-button--primary {
     border-color: var(--admin-primary) !important;
     background: var(--admin-primary) !important;
 }
 
-.el-button--primary:hover,
-.el-button--primary:focus,
-.el-button--primary:active {
+
+html.exam-detail-scope .el-button--primary:hover,
+html.exam-detail-scope .el-button--primary:focus,
+html.exam-detail-scope .el-button--primary:active {
     border-color: var(--admin-primary-hover) !important;
     background: var(--admin-primary-hover) !important;
 }
 
-.el-button--danger,
-.el-button--danger.is-text,
-.el-button--danger.is-link,
-.el-button--danger.el-button--text {
+
+html.exam-detail-scope .el-button--danger,
+html.exam-detail-scope .el-button--danger.is-text,
+html.exam-detail-scope .el-button--danger.is-link,
+html.exam-detail-scope .el-button--danger.el-button--text {
     color: var(--admin-red) !important;
 }
 
-.el-input .el-input__wrapper,
-.el-select .el-input__wrapper,
-.el-textarea .el-textarea__inner {
+
+html.exam-detail-scope .el-input .el-input__wrapper,
+html.exam-detail-scope .el-select .el-input__wrapper,
+html.exam-detail-scope .el-textarea .el-textarea__inner {
     border-color: var(--admin-line) !important;
     border-radius: var(--admin-radius) !important;
 }
 
-.el-input .el-input__wrapper.is-focus,
-.el-select .el-input__wrapper.is-focus,
-.el-textarea .el-textarea__inner:focus {
+
+html.exam-detail-scope .el-input .el-input__wrapper.is-focus,
+html.exam-detail-scope .el-select .el-input__wrapper.is-focus,
+html.exam-detail-scope .el-textarea .el-textarea__inner:focus {
     border-color: rgba(36, 104, 178, 0.58) !important;
     box-shadow: 0 0 0 3px rgba(36, 104, 178, 0.12) !important;
 }
 
-.el-table {
+
+html.exam-detail-scope .el-table {
     --el-table-header-bg-color: #f7f9fb;
     --el-table-row-hover-bg-color: #f5f9fd;
     font-size: 13px !important;
 }
 
-.el-table th.el-table__cell {
+
+html.exam-detail-scope .el-table th.el-table__cell {
     height: 42px !important;
     color: var(--admin-text-soft) !important;
     background: #f7f9fb !important;
     font-weight: 760 !important;
 }
 
-.el-table td.el-table__cell {
+
+html.exam-detail-scope .el-table td.el-table__cell {
     padding: 10px 0 !important;
 }
 
-.pagination-container {
+
+html.exam-detail-scope .pagination-container {
     padding: 12px 14px !important;
     background: var(--admin-surface-subtle) !important;
 }
 
-.empty-state {
+
+html.exam-detail-scope .empty-state {
     border-radius: var(--admin-radius) !important;
 }
 
-body .user-menu-popover {
+
+html.exam-detail-scope body .user-menu-popover {
     border-radius: var(--admin-radius-lg) !important;
     box-shadow: var(--admin-shadow-lg) !important;
 }
 
-.user-menu-item {
+
+html.exam-detail-scope .user-menu-item {
     border-radius: var(--admin-radius) !important;
 }
 
+
 /* Compact, form-first dialogs */
-body .el-overlay {
+html.exam-detail-scope body .el-overlay {
     background: rgba(20, 32, 51, 0.38) !important;
     backdrop-filter: blur(3px) !important;
     -webkit-backdrop-filter: blur(3px) !important;
 }
 
-body .el-overlay-dialog {
+
+html.exam-detail-scope body .el-overlay-dialog {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -3387,9 +3821,10 @@ body .el-overlay-dialog {
     overflow: auto !important;
 }
 
-body .el-dialog,
-body .el-message-box,
-body .el-overlay .el-overlay-dialog .el-dialog {
+
+html.exam-detail-scope body .el-dialog,
+html.exam-detail-scope body .el-message-box,
+html.exam-detail-scope body .el-overlay .el-overlay-dialog .el-dialog {
     max-height: calc(100dvh - 36px) !important;
     display: flex !important;
     flex-direction: column !important;
@@ -3400,20 +3835,23 @@ body .el-overlay .el-overlay-dialog .el-dialog {
     box-shadow: var(--admin-shadow-lg) !important;
 }
 
-body .el-dialog::before,
-body .el-message-box::before {
+
+html.exam-detail-scope body .el-dialog::before,
+html.exam-detail-scope body .el-message-box::before {
     display: none !important;
 }
 
-body .el-dialog .el-dialog__header,
-body .el-message-box .el-message-box__header {
+
+html.exam-detail-scope body .el-dialog .el-dialog__header,
+html.exam-detail-scope body .el-message-box .el-message-box__header {
     flex: 0 0 auto !important;
     padding: 18px 22px 8px !important;
     margin: 0 !important;
 }
 
-body .el-dialog .el-dialog__title,
-body .el-message-box .el-message-box__title {
+
+html.exam-detail-scope body .el-dialog .el-dialog__title,
+html.exam-detail-scope body .el-message-box .el-message-box__title {
     color: var(--admin-text) !important;
     font-size: 18px !important;
     font-weight: 850 !important;
@@ -3421,7 +3859,8 @@ body .el-message-box .el-message-box__title {
     letter-spacing: 0 !important;
 }
 
-body .el-dialog .el-dialog__headerbtn {
+
+html.exam-detail-scope body .el-dialog .el-dialog__headerbtn {
     top: 14px !important;
     right: 14px !important;
     width: 32px !important;
@@ -3430,17 +3869,20 @@ body .el-dialog .el-dialog__headerbtn {
     background: transparent !important;
 }
 
-body .el-dialog .el-dialog__headerbtn:hover {
+
+html.exam-detail-scope body .el-dialog .el-dialog__headerbtn:hover {
     background: #eef3f8 !important;
 }
 
-body .el-dialog .el-dialog__headerbtn .el-dialog__close {
+
+html.exam-detail-scope body .el-dialog .el-dialog__headerbtn .el-dialog__close {
     color: var(--admin-text-soft) !important;
     font-size: 17px !important;
 }
 
-body .el-dialog .el-dialog__body,
-body .el-message-box .el-message-box__content {
+
+html.exam-detail-scope body .el-dialog .el-dialog__body,
+html.exam-detail-scope body .el-message-box .el-message-box__content {
     min-height: 0 !important;
     flex: 1 1 auto !important;
     overflow-y: auto !important;
@@ -3448,18 +3890,20 @@ body .el-message-box .el-message-box__content {
     color: var(--admin-text-soft) !important;
 }
 
-body .el-dialog .el-dialog__footer,
-body .el-message-box .el-message-box__btns {
+
+html.exam-detail-scope body .el-dialog .el-dialog__footer,
+html.exam-detail-scope body .el-message-box .el-message-box__btns {
     flex: 0 0 auto !important;
     padding: 14px 22px 18px !important;
     border-top: 1px solid var(--admin-line) !important;
     background: var(--admin-surface-subtle) !important;
 }
 
-body .dialog-footer,
-body .el-dialog .el-dialog__footer span,
-body .el-message-box .el-message-box__btns,
-body .batch-dialog-footer {
+
+html.exam-detail-scope body .dialog-footer,
+html.exam-detail-scope body .el-dialog .el-dialog__footer span,
+html.exam-detail-scope body .el-message-box .el-message-box__btns,
+html.exam-detail-scope body .batch-dialog-footer {
     width: 100% !important;
     display: flex !important;
     align-items: center !important;
@@ -3468,8 +3912,9 @@ body .batch-dialog-footer {
     flex-wrap: wrap !important;
 }
 
-body .el-dialog .el-dialog__footer .el-button,
-body .el-message-box .el-button {
+
+html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button,
+html.exam-detail-scope body .el-message-box .el-button {
     min-width: 82px !important;
     height: 36px !important;
     min-height: 36px !important;
@@ -3481,36 +3926,42 @@ body .el-message-box .el-button {
     box-shadow: none !important;
 }
 
-body .el-dialog .el-dialog__footer .el-button--default,
-body .el-message-box .el-button--default {
+
+html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button--default,
+html.exam-detail-scope body .el-message-box .el-button--default {
     border-color: var(--admin-line) !important;
     background: #ffffff !important;
     color: var(--admin-text) !important;
 }
 
-body .el-dialog .el-dialog__footer .el-button--primary,
-body .el-message-box .el-button--primary {
+
+html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button--primary,
+html.exam-detail-scope body .el-message-box .el-button--primary {
     border-color: var(--admin-primary) !important;
     background: var(--admin-primary) !important;
     color: #ffffff !important;
 }
 
-body .el-dialog .el-dialog__footer .el-button--danger,
-body .el-message-box .el-button--danger {
+
+html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button--danger,
+html.exam-detail-scope body .el-message-box .el-button--danger {
     border-color: var(--admin-red) !important;
     background: var(--admin-red) !important;
     color: #ffffff !important;
 }
 
-body .el-dialog .el-form {
+
+html.exam-detail-scope body .el-dialog .el-form {
     --el-component-size: 38px;
 }
 
-body .el-dialog .el-form-item {
+
+html.exam-detail-scope body .el-dialog .el-form-item {
     margin-bottom: 14px !important;
 }
 
-body .el-dialog .el-form-item__label {
+
+html.exam-detail-scope body .el-dialog .el-form-item__label {
     padding-bottom: 4px !important;
     color: var(--admin-text-soft) !important;
     font-size: 13px !important;
@@ -3518,9 +3969,10 @@ body .el-dialog .el-form-item__label {
     line-height: 1.35 !important;
 }
 
-body .el-dialog .el-input .el-input__wrapper,
-body .el-dialog .el-select .el-input__wrapper,
-body .el-dialog .el-input-number .el-input__wrapper {
+
+html.exam-detail-scope body .el-dialog .el-input .el-input__wrapper,
+html.exam-detail-scope body .el-dialog .el-select .el-input__wrapper,
+html.exam-detail-scope body .el-dialog .el-input-number .el-input__wrapper {
     min-height: 38px !important;
     padding: 0 12px !important;
     border: 1px solid var(--admin-line) !important;
@@ -3529,7 +3981,8 @@ body .el-dialog .el-input-number .el-input__wrapper {
     box-shadow: none !important;
 }
 
-body .el-dialog .el-textarea .el-textarea__inner {
+
+html.exam-detail-scope body .el-dialog .el-textarea .el-textarea__inner {
     min-height: 84px !important;
     padding: 10px 12px !important;
     border: 1px solid var(--admin-line) !important;
@@ -3539,55 +3992,64 @@ body .el-dialog .el-textarea .el-textarea__inner {
     line-height: 1.6 !important;
 }
 
-body .el-dialog .el-input .el-input__wrapper:hover,
-body .el-dialog .el-select .el-input__wrapper:hover,
-body .el-dialog .el-input-number .el-input__wrapper:hover,
-body .el-dialog .el-textarea .el-textarea__inner:hover {
+
+html.exam-detail-scope body .el-dialog .el-input .el-input__wrapper:hover,
+html.exam-detail-scope body .el-dialog .el-select .el-input__wrapper:hover,
+html.exam-detail-scope body .el-dialog .el-input-number .el-input__wrapper:hover,
+html.exam-detail-scope body .el-dialog .el-textarea .el-textarea__inner:hover {
     border-color: var(--admin-line-strong) !important;
 }
 
-body .el-dialog .el-input .el-input__wrapper.is-focus,
-body .el-dialog .el-select .el-input__wrapper.is-focus,
-body .el-dialog .el-textarea .el-textarea__inner:focus {
+
+html.exam-detail-scope body .el-dialog .el-input .el-input__wrapper.is-focus,
+html.exam-detail-scope body .el-dialog .el-select .el-input__wrapper.is-focus,
+html.exam-detail-scope body .el-dialog .el-textarea .el-textarea__inner:focus {
     border-color: rgba(36, 104, 178, 0.58) !important;
     box-shadow: 0 0 0 3px rgba(36, 104, 178, 0.12) !important;
 }
 
-body .el-dialog .el-input-number {
+
+html.exam-detail-scope body .el-dialog .el-input-number {
     width: 100% !important;
     max-width: 220px;
 }
 
-body .el-dialog .el-switch__label {
+
+html.exam-detail-scope body .el-dialog .el-switch__label {
     color: var(--admin-text-soft) !important;
     font-size: 12px !important;
     font-weight: 700 !important;
 }
 
-body .el-dialog .el-alert {
+
+html.exam-detail-scope body .el-dialog .el-alert {
     padding: 10px 12px !important;
     border-radius: var(--admin-radius) !important;
     border-color: #f1d8ad !important;
     background: var(--admin-amber-soft) !important;
 }
 
-body .el-dialog .el-alert--error {
+
+html.exam-detail-scope body .el-dialog .el-alert--error {
     border-color: #f0c5c5 !important;
     background: var(--admin-red-soft) !important;
 }
 
-body .el-dialog .el-alert--success {
+
+html.exam-detail-scope body .el-dialog .el-alert--success {
     border-color: #c5eadc !important;
     background: var(--admin-green-soft) !important;
 }
 
-body .el-dialog .el-checkbox.is-bordered {
+
+html.exam-detail-scope body .el-dialog .el-checkbox.is-bordered {
     border-color: var(--admin-line) !important;
     border-radius: var(--admin-radius) !important;
     background: var(--admin-surface-subtle) !important;
 }
 
-body .el-dialog #bind-qrcode {
+
+html.exam-detail-scope body .el-dialog #bind-qrcode {
     width: min(196px, 100%) !important;
     margin: 0 auto !important;
     padding: 10px !important;
@@ -3597,116 +4059,132 @@ body .el-dialog #bind-qrcode {
     box-shadow: none !important;
 }
 
-body .el-dialog #bind-qrcode img,
-body .el-dialog #bind-qrcode canvas {
+
+html.exam-detail-scope body .el-dialog #bind-qrcode img,
+html.exam-detail-scope body .el-dialog #bind-qrcode canvas {
     width: 176px !important;
     height: 176px !important;
     border-radius: var(--admin-radius) !important;
 }
 
-body .paper-share-overlay .el-overlay-dialog {
+
+html.exam-detail-scope body .paper-share-overlay .el-overlay-dialog {
     padding: 18px !important;
 }
 
-body .paper-share-modal.el-dialog,
-body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-dialog {
+
+html.exam-detail-scope body .paper-share-modal.el-dialog,
+html.exam-detail-scope body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-dialog {
     width: min(820px, calc(100vw - 36px)) !important;
     max-height: calc(100dvh - 36px) !important;
 }
 
-.paper-share-dialog,
-.accept-share-dialog {
+
+html.exam-detail-scope .paper-share-dialog,
+html.exam-detail-scope .accept-share-dialog {
     gap: 12px !important;
 }
 
-.share-paper-summary,
-.share-result-panel,
-.accept-preview-panel {
+
+html.exam-detail-scope .share-paper-summary,
+html.exam-detail-scope .share-result-panel,
+html.exam-detail-scope .accept-preview-panel {
     border-color: var(--admin-line) !important;
     border-radius: var(--admin-radius) !important;
     background: var(--admin-surface-subtle) !important;
 }
 
-.share-paper-summary,
-.accept-preview-panel {
+
+html.exam-detail-scope .share-paper-summary,
+html.exam-detail-scope .accept-preview-panel {
     padding: 12px 14px !important;
 }
 
-.share-paper-title,
-.accept-preview-title {
+
+html.exam-detail-scope .share-paper-title,
+html.exam-detail-scope .accept-preview-title {
     font-size: 16px !important;
     font-weight: 850 !important;
 }
 
-.paper-share-form .el-form-item {
+
+html.exam-detail-scope .paper-share-form .el-form-item {
     margin-bottom: 12px !important;
 }
 
-.paper-share-dialog .el-radio-button__inner {
+
+html.exam-detail-scope .paper-share-dialog .el-radio-button__inner {
     min-height: 34px !important;
     padding: 0 14px !important;
     font-weight: 760 !important;
 }
 
-.share-generate-row {
+
+html.exam-detail-scope .share-generate-row {
     margin-top: -2px;
 }
 
-.share-result-panel {
+
+html.exam-detail-scope .share-result-panel {
     padding: 14px !important;
     gap: 14px !important;
 }
 
-.share-code {
+
+html.exam-detail-scope .share-code {
     font-size: 26px !important;
     font-weight: 850 !important;
 }
 
-.share-qrcode {
+
+html.exam-detail-scope .share-qrcode {
     width: 152px !important;
     height: 152px !important;
     padding: 6px !important;
     border-radius: var(--admin-radius) !important;
 }
 
-.share-qrcode canvas,
-.share-qrcode img {
+
+html.exam-detail-scope .share-qrcode canvas,
+html.exam-detail-scope .share-qrcode img {
     width: 138px !important;
     height: 138px !important;
 }
 
-.share-record-table {
+
+html.exam-detail-scope .share-record-table {
     border: 1px solid var(--admin-line);
     border-radius: var(--admin-radius);
     overflow: hidden;
 }
 
-.share-row-actions .share-row-action.el-button {
+
+html.exam-detail-scope .share-row-actions .share-row-action.el-button {
     height: 26px !important;
     border-radius: 6px !important;
 }
-
-@media (max-width: 1024px) {
-    .page-title {
+@media (max-width: 1024px){
+    html.exam-detail-scope .page-title {
         font-size: 28px !important;
     }
 
-    .dashboard-stats-grid,
-    .category-cards-grid,
-    .exam-cards-grid {
+
+    html.exam-detail-scope .dashboard-stats-grid,
+html.exam-detail-scope .category-cards-grid,
+html.exam-detail-scope .exam-cards-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
 }
-
-@media (max-width: 768px) {
-    .mobile-header {
+@media (max-width: 768px){
+    html.exam-detail-scope .mobile-header {
         min-height: 58px !important;
         padding: calc(8px + env(safe-area-inset-top, 0px)) 14px 8px !important;
         border-bottom: 1px solid var(--admin-line) !important;
         background: rgba(255, 255, 255, 0.9) !important;
     }
 
-    .mobile-menu-trigger {
+
+    html.exam-detail-scope .mobile-menu-trigger {
         width: 40px !important;
         height: 40px !important;
         min-width: 40px !important;
@@ -3714,54 +4192,65 @@ body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-di
         box-shadow: var(--admin-shadow-xs) !important;
     }
 
-    .el-main {
+
+    html.exam-detail-scope .el-main {
         padding: 18px 14px 38px !important;
     }
 
-    .page-header {
+
+    html.exam-detail-scope .page-header {
         margin-bottom: 16px !important;
     }
 
-    .page-title {
+
+    html.exam-detail-scope .page-title {
         font-size: 24px !important;
     }
 
-    .dashboard-stats-grid,
-    .category-cards-grid,
-    .exam-cards-grid {
+
+    html.exam-detail-scope .dashboard-stats-grid,
+html.exam-detail-scope .category-cards-grid,
+html.exam-detail-scope .exam-cards-grid {
         grid-template-columns: 1fr !important;
         gap: 12px !important;
     }
 
-    .dashboard-container .dashboard-stats-grid {
+
+    html.exam-detail-scope .dashboard-container .dashboard-stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
 
-    .stat-card {
+
+    html.exam-detail-scope .stat-card {
         min-height: 104px !important;
         padding: 14px !important;
     }
 
-    .stat-value {
+
+    html.exam-detail-scope .stat-value {
         font-size: 26px !important;
     }
 
-    .chart-section {
+
+    html.exam-detail-scope .chart-section {
         min-height: 286px !important;
         padding: 16px !important;
     }
 
-    .chart-container {
+
+    html.exam-detail-scope .chart-container {
         height: 220px !important;
     }
 
-    body .el-overlay-dialog {
+
+    html.exam-detail-scope body .el-overlay-dialog {
         padding: 10px !important;
         align-items: center !important;
     }
 
-    body .el-dialog,
-    body .el-message-box {
+
+    html.exam-detail-scope body .el-dialog,
+html.exam-detail-scope body .el-message-box {
         width: min(94vw, 640px) !important;
         max-width: 94vw !important;
         max-height: calc(100dvh - 20px) !important;
@@ -3769,88 +4258,96 @@ body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-di
         border-radius: var(--admin-radius-lg) !important;
     }
 
-    body .el-dialog .el-dialog__header,
-    body .el-message-box .el-message-box__header {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__header,
+html.exam-detail-scope body .el-message-box .el-message-box__header {
         padding: 16px 18px 6px !important;
     }
 
-    body .el-dialog .el-dialog__body,
-    body .el-message-box .el-message-box__content {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__body,
+html.exam-detail-scope body .el-message-box .el-message-box__content {
         max-height: none !important;
         padding: 10px 18px 14px !important;
     }
 
-    body .el-dialog .el-dialog__footer,
-    body .el-message-box .el-message-box__btns {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__footer,
+html.exam-detail-scope body .el-message-box .el-message-box__btns {
         padding: 12px 18px 16px !important;
     }
 
-    body .dialog-footer,
-    body .el-dialog .el-dialog__footer span,
-    body .el-message-box .el-message-box__btns,
-    body .batch-dialog-footer {
+
+    html.exam-detail-scope body .dialog-footer,
+html.exam-detail-scope body .el-dialog .el-dialog__footer span,
+html.exam-detail-scope body .el-message-box .el-message-box__btns,
+html.exam-detail-scope body .batch-dialog-footer {
         display: grid !important;
         grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)) !important;
         gap: 8px !important;
     }
 
-    body .el-dialog .el-dialog__footer .el-button,
-    body .el-message-box .el-button {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__footer .el-button,
+html.exam-detail-scope body .el-message-box .el-button {
         width: 100% !important;
         min-width: 0 !important;
         height: 38px !important;
     }
 
-    .share-result-panel {
+
+    html.exam-detail-scope .share-result-panel {
         flex-direction: column !important;
     }
 
-    .share-qrcode {
+
+    html.exam-detail-scope .share-qrcode {
         align-self: center;
     }
 }
-
-@media (max-width: 420px) {
-    .dashboard-container .dashboard-stats-grid {
+@media (max-width: 420px){
+    html.exam-detail-scope .dashboard-container .dashboard-stats-grid {
         grid-template-columns: 1fr !important;
     }
 
-    body .el-dialog .el-form-item__label {
+
+    html.exam-detail-scope body .el-dialog .el-form-item__label {
         width: 84px !important;
     }
 }
-
-@media (prefers-reduced-motion: reduce) {
-    .stat-card,
-    .chart-section,
-    .table-card,
-    .category-card,
-    .exam-card,
-    .el-button,
-    .desktop-aside .el-menu-item {
+@media (prefers-reduced-motion: reduce){
+    html.exam-detail-scope .stat-card,
+html.exam-detail-scope .chart-section,
+html.exam-detail-scope .table-card,
+html.exam-detail-scope .category-card,
+html.exam-detail-scope .exam-card,
+html.exam-detail-scope .el-button,
+html.exam-detail-scope .desktop-aside .el-menu-item {
         transition: none !important;
     }
 }
-
 /* Final mobile dashboard density correction */
-@media (max-width: 640px) {
-    .dashboard-container .page-header {
+@media (max-width: 640px){
+    html.exam-detail-scope .dashboard-container .page-header {
         margin-bottom: 12px !important;
     }
 
-    .dashboard-container .page-title {
+
+    html.exam-detail-scope .dashboard-container .page-title {
         font-size: 26px !important;
         line-height: 1.12 !important;
         text-align: center !important;
     }
 
-    .dashboard-container .dashboard-stats-grid {
+
+    html.exam-detail-scope .dashboard-container .dashboard-stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 10px !important;
         margin-bottom: 12px !important;
     }
 
-    .dashboard-container .stat-card {
+
+    html.exam-detail-scope .dashboard-container .stat-card {
         min-height: 94px !important;
         padding: 12px !important;
         display: grid !important;
@@ -3861,67 +4358,74 @@ body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-di
         border-radius: 14px !important;
     }
 
-    .dashboard-container .stat-icon {
+
+    html.exam-detail-scope .dashboard-container .stat-icon {
         width: 38px !important;
         height: 38px !important;
         margin: 0 !important;
         border-radius: 12px !important;
     }
 
-    .dashboard-container .stat-info {
+
+    html.exam-detail-scope .dashboard-container .stat-info {
         min-width: 0 !important;
     }
 
-    .dashboard-container .stat-value {
+
+    html.exam-detail-scope .dashboard-container .stat-value {
         font-size: 25px !important;
         line-height: 1 !important;
     }
 
-    .dashboard-container .stat-label {
+
+    html.exam-detail-scope .dashboard-container .stat-label {
         margin-top: 5px !important;
         font-size: 12px !important;
         line-height: 1.2 !important;
         white-space: nowrap !important;
     }
 }
-
-@media (max-width: 420px) {
-    .dashboard-container .dashboard-stats-grid {
+@media (max-width: 420px){
+    html.exam-detail-scope .dashboard-container .dashboard-stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 8px !important;
     }
 
-    .dashboard-container .stat-card {
+
+    html.exam-detail-scope .dashboard-container .stat-card {
         min-height: 84px !important;
         padding: 10px !important;
         gap: 8px !important;
     }
 
-    .dashboard-container .stat-icon {
+
+    html.exam-detail-scope .dashboard-container .stat-icon {
         width: 32px !important;
         height: 32px !important;
         border-radius: 10px !important;
     }
 
-    .dashboard-container .stat-value {
+
+    html.exam-detail-scope .dashboard-container .stat-value {
         font-size: 22px !important;
     }
 
-    .dashboard-container .stat-label {
+
+    html.exam-detail-scope .dashboard-container .stat-label {
         font-size: 11px !important;
     }
 }
-
 /* Must stay after mobile dashboard rules: exam card actions should be compact. */
-@media (max-width: 640px) {
-    .exam-card .exam-card-actions {
+@media (max-width: 640px){
+    html.exam-detail-scope .exam-card .exam-card-actions {
         display: grid !important;
         grid-template-columns: minmax(92px, 1.35fr) repeat(3, minmax(58px, 0.85fr)) !important;
         gap: 8px !important;
         align-items: center !important;
     }
 
-    .exam-card .exam-card-actions .el-button {
+
+    html.exam-detail-scope .exam-card .exam-card-actions .el-button {
         width: 100% !important;
         min-width: 0 !important;
         height: 36px !important;
@@ -3930,36 +4434,40 @@ body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-di
         border-radius: 8px !important;
     }
 
-    .exam-card .exam-card-actions .el-button:first-child {
+
+    html.exam-detail-scope .exam-card .exam-card-actions .el-button:first-child {
         grid-column: auto !important;
     }
 }
-
-@media (max-width: 420px) {
-    .exam-card .exam-card-actions {
+@media (max-width: 420px){
+    html.exam-detail-scope .exam-card .exam-card-actions {
         grid-template-columns: minmax(86px, 1.3fr) repeat(3, minmax(48px, 0.8fr)) !important;
         gap: 6px !important;
     }
 
-    .exam-card .exam-card-actions .el-button {
+
+    html.exam-detail-scope .exam-card .exam-card-actions .el-button {
         padding: 0 6px !important;
         font-size: 13px !important;
     }
 }
 
+
 /* Final exam card layout lock: keep four actions inside the card. */
-body .exam-card {
+html.exam-detail-scope body .exam-card {
     min-width: 0 !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
 }
 
-body .exam-card .exam-card-header {
+
+html.exam-detail-scope body .exam-card .exam-card-header {
     flex: 0 0 auto !important;
 }
 
-body .exam-card .exam-card-title {
+
+html.exam-detail-scope body .exam-card .exam-card-title {
     min-height: 54px !important;
     display: -webkit-box !important;
     overflow: hidden !important;
@@ -3967,17 +4475,20 @@ body .exam-card .exam-card-title {
     -webkit-line-clamp: 2 !important;
 }
 
-body .exam-card .exam-card-count {
+
+html.exam-detail-scope body .exam-card .exam-card-count {
     flex: 0 0 auto !important;
     margin: 6px 0 18px !important;
 }
 
-body .exam-card .exam-card-actions {
+
+html.exam-detail-scope body .exam-card .exam-card-actions {
     width: 100% !important;
     margin-top: auto !important;
 }
 
-body .exam-card .exam-card-actions.has-four-actions {
+
+html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions {
     width: 100% !important;
     max-width: 100% !important;
     display: grid !important;
@@ -3987,7 +4498,8 @@ body .exam-card .exam-card-actions.has-four-actions {
     overflow: hidden !important;
 }
 
-body .exam-card .exam-card-actions.has-four-actions .el-button {
+
+html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions .el-button {
     width: 100% !important;
     min-width: 0 !important;
     max-width: 100% !important;
@@ -3998,37 +4510,38 @@ body .exam-card .exam-card-actions.has-four-actions .el-button {
     border-radius: 8px !important;
 }
 
-body .exam-card .exam-card-actions.has-four-actions .el-button > span {
+
+html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions .el-button > span {
     min-width: 0 !important;
     max-width: 100% !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
 }
-
-@media (max-width: 420px) {
-    body .exam-card .exam-card-actions.has-four-actions {
+@media (max-width: 420px){
+    html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions {
         grid-template-columns: minmax(0, 1.45fr) repeat(3, minmax(0, 0.74fr)) !important;
         gap: 6px !important;
     }
 
-    body .exam-card .exam-card-actions.has-four-actions .el-button {
+
+    html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions .el-button {
         height: 34px !important;
         padding: 0 4px !important;
         font-size: 13px !important;
     }
 }
-
 /* Desktop exam cards: keep all actions in one row. */
-@media (min-width: 641px) {
-    body .exam-card .exam-card-actions.has-four-actions {
+@media (min-width: 641px){
+    html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions {
         display: grid !important;
         grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.82fr) minmax(0, 0.82fr) minmax(0, 0.72fr) !important;
         align-items: center !important;
         gap: 8px !important;
     }
 
-    body .exam-card .exam-card-actions.has-four-actions .el-button {
+
+    html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions .el-button {
         width: 100% !important;
         min-width: 0 !important;
         height: 36px !important;
@@ -4037,62 +4550,65 @@ body .exam-card .exam-card-actions.has-four-actions .el-button > span {
         border-radius: 8px !important;
     }
 }
-
 /* Must stay last: subject card actions stay on one row on phones. */
-@media (max-width: 640px) {
-    .category-card:not(.is-assigned) .category-card-actions {
+@media (max-width: 640px){
+    html.exam-detail-scope .category-card:not(.is-assigned) .category-card-actions {
         display: grid !important;
         grid-template-columns: minmax(0, 1fr) 42px 42px !important;
         align-items: center !important;
         gap: 8px !important;
     }
 
-    .category-card:not(.is-assigned) .category-card-primary-action {
+
+    html.exam-detail-scope .category-card:not(.is-assigned) .category-card-primary-action {
         grid-column: auto !important;
         width: 100% !important;
         min-width: 0 !important;
     }
 
-    .category-card:not(.is-assigned) .category-icon-action,
-    .category-card:not(.is-assigned) .category-icon-action.el-button {
+
+    html.exam-detail-scope .category-card:not(.is-assigned) .category-icon-action,
+html.exam-detail-scope .category-card:not(.is-assigned) .category-icon-action.el-button {
         width: 42px !important;
         min-width: 42px !important;
         height: 36px !important;
         padding: 0 !important;
     }
 
-    .category-card.is-assigned .category-card-actions {
+
+    html.exam-detail-scope .category-card.is-assigned .category-card-actions {
         display: grid !important;
         grid-template-columns: minmax(0, 1fr) 42px !important;
     }
 }
-
 /* ============================================================
    Phone and tablet adaptation pass
    Touch-first layout from tablets down, phone-specific tightening below.
    ============================================================ */
-
-@media (max-width: 1024px) {
-    html,
-    body,
-    #app,
-    .dashboard-page {
+@media (max-width: 1024px){
+    html.exam-detail-scope,
+html.exam-detail-scope body,
+html.exam-detail-scope #app,
+html.exam-detail-scope .dashboard-page {
         width: 100% !important;
         max-width: 100% !important;
         overflow-x: hidden !important;
     }
 
-    .dashboard-page > .el-container {
+
+    html.exam-detail-scope .dashboard-page > .el-container {
         display: flex !important;
         flex-direction: column !important;
         min-height: 100dvh !important;
     }
 
-    .desktop-aside {
+
+    html.exam-detail-scope .desktop-aside {
         display: none !important;
     }
 
-    .mobile-header {
+
+    html.exam-detail-scope .mobile-header {
         position: sticky !important;
         top: 0 !important;
         z-index: 120 !important;
@@ -4108,7 +4624,8 @@ body .exam-card .exam-card-actions.has-four-actions .el-button > span {
         -webkit-backdrop-filter: blur(14px) !important;
     }
 
-    .mobile-header .logo {
+
+    html.exam-detail-scope .mobile-header .logo {
         min-width: 0 !important;
         height: 40px !important;
         margin: 0 !important;
@@ -4118,7 +4635,8 @@ body .exam-card .exam-card-actions.has-four-actions .el-button > span {
         font-weight: 850 !important;
     }
 
-    .mobile-header .logo span:last-child {
+
+    html.exam-detail-scope .mobile-header .logo span:last-child {
         overflow: hidden !important;
         color: var(--admin-text) !important;
         text-overflow: ellipsis !important;
@@ -4127,39 +4645,45 @@ body .exam-card .exam-card-actions.has-four-actions .el-button > span {
         -webkit-text-fill-color: currentColor !important;
     }
 
-    .mobile-header .logo-mark {
+
+    html.exam-detail-scope .mobile-header .logo-mark {
         width: 34px !important;
         height: 34px !important;
         min-width: 34px !important;
         border-radius: var(--admin-radius) !important;
     }
 
-    .mobile-menu-trigger {
+
+    html.exam-detail-scope .mobile-menu-trigger {
         width: 40px !important;
         height: 40px !important;
         min-width: 40px !important;
         border-radius: var(--admin-radius) !important;
     }
 
-    body .mobile-menu-drawer.el-drawer,
-    body .el-drawer.mobile-menu-drawer {
+
+    html.exam-detail-scope body .mobile-menu-drawer.el-drawer,
+html.exam-detail-scope body .el-drawer.mobile-menu-drawer {
         width: min(78vw, 320px) !important;
         max-width: calc(100vw - 32px) !important;
         border-radius: 0 var(--admin-radius-lg) var(--admin-radius-lg) 0 !important;
     }
 
-    .mobile-menu-drawer .el-aside {
+
+    html.exam-detail-scope .mobile-menu-drawer .el-aside {
         padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)) !important;
     }
 
-    .mobile-menu-drawer .el-menu-item {
+
+    html.exam-detail-scope .mobile-menu-drawer .el-menu-item {
         height: 46px !important;
         margin-bottom: 6px !important;
         border-radius: var(--admin-radius) !important;
         font-size: 14px !important;
     }
 
-    .el-main {
+
+    html.exam-detail-scope .el-main {
         width: 100% !important;
         max-width: none !important;
         min-width: 0 !important;
@@ -4167,7 +4691,8 @@ body .exam-card .exam-card-actions.has-four-actions .el-button > span {
         overflow: visible !important;
     }
 
-    .page-header {
+
+    html.exam-detail-scope .page-header {
         width: 100% !important;
         display: grid !important;
         grid-template-columns: minmax(0, 1fr) auto !important;
@@ -4176,28 +4701,32 @@ body .exam-card .exam-card-actions.has-four-actions .el-button > span {
         margin-bottom: 16px !important;
     }
 
-    .page-title {
+
+    html.exam-detail-scope .page-title {
         min-width: 0 !important;
         width: auto !important;
         font-size: clamp(24px, 4vw, 30px) !important;
         overflow-wrap: anywhere !important;
     }
 
-    .page-header-spacer {
+
+    html.exam-detail-scope .page-header-spacer {
         display: none !important;
     }
 
-    .page-header-actions,
-    .exam-results-toolbar,
-    .page-header > .table-search-input,
-    .page-header > .el-input,
-    .page-header > .el-select,
-    .page-header > .el-button:not(.mobile-menu-trigger) {
+
+    html.exam-detail-scope .page-header-actions,
+html.exam-detail-scope .exam-results-toolbar,
+html.exam-detail-scope .page-header > .table-search-input,
+html.exam-detail-scope .page-header > .el-input,
+html.exam-detail-scope .page-header > .el-select,
+html.exam-detail-scope .page-header > .el-button:not(.mobile-menu-trigger) {
         grid-column: 1 / -1 !important;
     }
 
-    .page-header-actions,
-    .exam-results-toolbar {
+
+    html.exam-detail-scope .page-header-actions,
+html.exam-detail-scope .exam-results-toolbar {
         width: 100% !important;
         margin-left: 0 !important;
         display: grid !important;
@@ -4206,190 +4735,221 @@ body .exam-card .exam-card-actions.has-four-actions .el-button > span {
         justify-content: stretch !important;
     }
 
-    .page-header .el-button,
-    .page-header .el-input,
-    .page-header .el-select,
-    .page-header .el-date-editor,
-    .page-header-actions .el-button,
-    .exam-results-toolbar > * {
+
+    html.exam-detail-scope .page-header .el-button,
+html.exam-detail-scope .page-header .el-input,
+html.exam-detail-scope .page-header .el-select,
+html.exam-detail-scope .page-header .el-date-editor,
+html.exam-detail-scope .page-header-actions .el-button,
+html.exam-detail-scope .exam-results-toolbar > * {
         width: 100% !important;
         min-width: 0 !important;
         margin: 0 !important;
     }
 
-    .table-search-input {
+
+    html.exam-detail-scope .table-search-input {
         width: 100% !important;
     }
 
-    .dashboard-stats-grid {
+
+    html.exam-detail-scope .dashboard-stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 12px !important;
     }
 
-    .category-cards-grid,
-    .exam-cards-grid {
+
+    html.exam-detail-scope .category-cards-grid,
+html.exam-detail-scope .exam-cards-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 12px !important;
     }
 
-    .category-card,
-    .exam-card {
+
+    html.exam-detail-scope .category-card,
+html.exam-detail-scope .exam-card {
         min-width: 0 !important;
         padding: 16px !important;
     }
 
-    .category-card-actions,
-    .exam-card-actions {
+
+    html.exam-detail-scope .category-card-actions,
+html.exam-detail-scope .exam-card-actions {
         display: grid !important;
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 8px !important;
     }
 
-    .category-card-actions .el-button,
-    .exam-card-actions .el-button {
+
+    html.exam-detail-scope .category-card-actions .el-button,
+html.exam-detail-scope .exam-card-actions .el-button {
         width: 100% !important;
         min-width: 0 !important;
         margin: 0 !important;
     }
 
-    .category-card-primary-action {
+
+    html.exam-detail-scope .category-card-primary-action {
         grid-column: 1 / -1;
     }
 
-    .table-card,
-    .exam-results-card {
+
+    html.exam-detail-scope .table-card,
+html.exam-detail-scope .exam-results-card {
         width: 100% !important;
         max-width: 100% !important;
         overflow: hidden !important;
     }
 
-    .table-card .el-card__body,
-    .data-table-card .el-card__body,
-    .exam-results-card .el-card__body {
+
+    html.exam-detail-scope .table-card .el-card__body,
+html.exam-detail-scope .data-table-card .el-card__body,
+html.exam-detail-scope .exam-results-card .el-card__body {
         width: 100% !important;
         overflow-x: auto !important;
         -webkit-overflow-scrolling: touch !important;
         scrollbar-gutter: stable;
     }
 
-    .data-table-card .el-table,
-    .exam-results-table,
-    .share-record-table {
+
+    html.exam-detail-scope .data-table-card .el-table,
+html.exam-detail-scope .exam-results-table,
+html.exam-detail-scope .share-record-table {
         min-width: 780px !important;
     }
 
-    .exam-results-table th.el-table__cell {
+
+    html.exam-detail-scope .exam-results-table th.el-table__cell {
         height: 46px !important;
     }
 
-    .exam-results-table td.el-table__cell {
+
+    html.exam-detail-scope .exam-results-table td.el-table__cell {
         height: 68px !important;
     }
 
-    .exam-results-table .cell {
+
+    html.exam-detail-scope .exam-results-table .cell {
         padding: 0 12px !important;
     }
 
-    .selection-strip {
+
+    html.exam-detail-scope .selection-strip {
         align-items: stretch !important;
         display: grid !important;
         grid-template-columns: 1fr auto !important;
         gap: 10px !important;
     }
 
-    .selection-strip-actions {
+
+    html.exam-detail-scope .selection-strip-actions {
         justify-content: flex-end !important;
     }
 
-    .pagination-container,
-    body .exam-results-card .pagination-container {
+
+    html.exam-detail-scope .pagination-container,
+html.exam-detail-scope body .exam-results-card .pagination-container {
         justify-content: center !important;
         padding: 12px !important;
         overflow-x: auto !important;
     }
 
-    body .el-dialog,
-    body .el-message-box {
+
+    html.exam-detail-scope body .el-dialog,
+html.exam-detail-scope body .el-message-box {
         width: min(92vw, 760px) !important;
         max-width: 92vw !important;
     }
 
-    body .paper-share-modal.el-dialog,
-    body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-dialog {
+
+    html.exam-detail-scope body .paper-share-modal.el-dialog,
+html.exam-detail-scope body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-dialog {
         width: min(92vw, 820px) !important;
         max-width: 92vw !important;
     }
 
-    .share-result-panel {
+
+    html.exam-detail-scope .share-result-panel {
         display: grid !important;
         grid-template-columns: minmax(0, 1fr) auto !important;
     }
 
-    .paper-share-dialog .el-table {
+
+    html.exam-detail-scope .paper-share-dialog .el-table {
         min-width: 760px !important;
     }
 
-    .paper-share-dialog .el-table__inner-wrapper {
+
+    html.exam-detail-scope .paper-share-dialog .el-table__inner-wrapper {
         overflow-x: auto !important;
     }
 
 }
-
-@media (max-width: 640px) {
-    .mobile-header {
+@media (max-width: 640px){
+    html.exam-detail-scope .mobile-header {
         min-height: 56px !important;
         padding-left: 12px !important;
         padding-right: 12px !important;
     }
 
-    .mobile-header .logo {
+
+    html.exam-detail-scope .mobile-header .logo {
         font-size: 16px !important;
     }
 
-    body .mobile-menu-drawer.el-drawer,
-    body .el-drawer.mobile-menu-drawer {
+
+    html.exam-detail-scope body .mobile-menu-drawer.el-drawer,
+html.exam-detail-scope body .el-drawer.mobile-menu-drawer {
         width: min(86vw, 300px) !important;
         max-width: calc(100vw - 24px) !important;
     }
 
-    .el-main {
+
+    html.exam-detail-scope .el-main {
         padding: 16px 12px calc(34px + env(safe-area-inset-bottom, 0px)) !important;
     }
 
-    .page-header {
+
+    html.exam-detail-scope .page-header {
         grid-template-columns: 1fr !important;
         gap: 10px !important;
     }
 
-    .page-title {
+
+    html.exam-detail-scope .page-title {
         font-size: 24px !important;
         line-height: 1.18 !important;
     }
 
-    .page-header-actions,
-    .exam-results-toolbar {
+
+    html.exam-detail-scope .page-header-actions,
+html.exam-detail-scope .exam-results-toolbar {
         grid-template-columns: 1fr !important;
     }
 
-    .dashboard-stats-grid,
-    .category-cards-grid,
-    .exam-cards-grid {
+
+    html.exam-detail-scope .dashboard-stats-grid,
+html.exam-detail-scope .category-cards-grid,
+html.exam-detail-scope .exam-cards-grid {
         grid-template-columns: 1fr !important;
         gap: 10px !important;
     }
 
-    .dashboard-container .dashboard-stats-grid {
+
+    html.exam-detail-scope .dashboard-container .dashboard-stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 10px !important;
         margin-bottom: 12px !important;
     }
 
-    .dashboard-container .stat-card {
+
+    html.exam-detail-scope .dashboard-container .stat-card {
         min-height: 96px !important;
         padding: 12px !important;
     }
 
-    .dashboard-container .stat-card {
+
+    html.exam-detail-scope .dashboard-container .stat-card {
         display: grid !important;
         grid-template-columns: auto minmax(0, 1fr) !important;
         align-items: center !important;
@@ -4397,187 +4957,218 @@ body .exam-card .exam-card-actions.has-four-actions .el-button > span {
         text-align: left !important;
     }
 
-    .dashboard-container .stat-icon {
+
+    html.exam-detail-scope .dashboard-container .stat-icon {
         width: 38px !important;
         height: 38px !important;
         margin: 0 !important;
     }
 
-    .dashboard-container .stat-value {
+
+    html.exam-detail-scope .dashboard-container .stat-value {
         font-size: 25px !important;
         line-height: 1 !important;
     }
 
-    .dashboard-container .stat-label {
+
+    html.exam-detail-scope .dashboard-container .stat-label {
         margin-top: 5px !important;
         font-size: 12px !important;
         line-height: 1.2 !important;
     }
 
-    .chart-section {
+
+    html.exam-detail-scope .chart-section {
         min-height: 260px !important;
         padding: 14px !important;
     }
 
-    .chart-container {
+
+    html.exam-detail-scope .chart-container {
         height: 198px !important;
     }
 
-    .category-card-actions,
-    .exam-card-actions {
+
+    html.exam-detail-scope .category-card-actions,
+html.exam-detail-scope .exam-card-actions {
         grid-template-columns: minmax(0, 1fr) 44px 44px !important;
         align-items: center !important;
     }
 
-    .category-card.is-assigned .category-card-actions {
+
+    html.exam-detail-scope .category-card.is-assigned .category-card-actions {
         grid-template-columns: minmax(0, 1fr) 44px !important;
     }
 
-    .category-card-actions .category-card-primary-action {
+
+    html.exam-detail-scope .category-card-actions .category-card-primary-action {
         grid-column: auto !important;
     }
 
-    .category-card-actions .category-icon-action,
-    .category-card-actions .category-icon-action.el-button {
+
+    html.exam-detail-scope .category-card-actions .category-icon-action,
+html.exam-detail-scope .category-card-actions .category-icon-action.el-button {
         width: 44px !important;
         min-width: 44px !important;
         height: 36px !important;
     }
 
-    .selection-strip {
+
+    html.exam-detail-scope .selection-strip {
         grid-template-columns: 1fr !important;
     }
 
-    .selection-strip-actions {
+
+    html.exam-detail-scope .selection-strip-actions {
         display: grid !important;
         grid-template-columns: 1fr 1fr !important;
         gap: 8px !important;
     }
 
-    .selection-strip-actions .el-button {
+
+    html.exam-detail-scope .selection-strip-actions .el-button {
         width: 100% !important;
         margin: 0 !important;
     }
 
-    .data-table-card .el-table,
-    .exam-results-table,
-    .share-record-table {
+
+    html.exam-detail-scope .data-table-card .el-table,
+html.exam-detail-scope .exam-results-table,
+html.exam-detail-scope .share-record-table {
         min-width: 720px !important;
     }
 
-    body .el-overlay-dialog {
+
+    html.exam-detail-scope body .el-overlay-dialog {
         padding: 8px !important;
     }
 
-    body .el-dialog,
-    body .el-message-box,
-    body .paper-share-modal.el-dialog,
-    body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-dialog {
+
+    html.exam-detail-scope body .el-dialog,
+html.exam-detail-scope body .el-message-box,
+html.exam-detail-scope body .paper-share-modal.el-dialog,
+html.exam-detail-scope body .el-overlay.paper-share-overlay .el-overlay-dialog .paper-share-modal.el-dialog {
         width: calc(100vw - 16px) !important;
         max-width: calc(100vw - 16px) !important;
         max-height: calc(100dvh - 16px) !important;
     }
 
-    body .el-dialog .el-dialog__header,
-    body .el-message-box .el-message-box__header {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__header,
+html.exam-detail-scope body .el-message-box .el-message-box__header {
         padding: 15px 16px 6px !important;
     }
 
-    body .el-dialog .el-dialog__body,
-    body .el-message-box .el-message-box__content {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__body,
+html.exam-detail-scope body .el-message-box .el-message-box__content {
         padding: 10px 16px 14px !important;
     }
 
-    body .el-dialog .el-dialog__footer,
-    body .el-message-box .el-message-box__btns {
+
+    html.exam-detail-scope body .el-dialog .el-dialog__footer,
+html.exam-detail-scope body .el-message-box .el-message-box__btns {
         padding: 12px 16px 16px !important;
     }
 
-    body .el-dialog .el-form-item {
+
+    html.exam-detail-scope body .el-dialog .el-form-item {
         display: block !important;
     }
 
-    body .el-dialog .el-form-item__label {
+
+    html.exam-detail-scope body .el-dialog .el-form-item__label {
         width: auto !important;
         margin-bottom: 4px !important;
         display: block !important;
         text-align: left !important;
     }
 
-    body .el-dialog .el-form-item__content {
+
+    html.exam-detail-scope body .el-dialog .el-form-item__content {
         margin-left: 0 !important;
     }
 
-    body .dialog-footer,
-    body .el-dialog .el-dialog__footer span,
-    body .el-message-box .el-message-box__btns {
+
+    html.exam-detail-scope body .dialog-footer,
+html.exam-detail-scope body .el-dialog .el-dialog__footer span,
+html.exam-detail-scope body .el-message-box .el-message-box__btns {
         grid-template-columns: 1fr !important;
     }
 
-    .share-result-panel {
+
+    html.exam-detail-scope .share-result-panel {
         grid-template-columns: 1fr !important;
     }
 
-    .share-qrcode {
+
+    html.exam-detail-scope .share-qrcode {
         justify-self: center !important;
     }
 
 }
-
-@media (max-width: 420px) {
-    .dashboard-container .dashboard-stats-grid {
+@media (max-width: 420px){
+    html.exam-detail-scope .dashboard-container .dashboard-stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 9px !important;
     }
 
-    .dashboard-container .stat-card {
+
+    html.exam-detail-scope .dashboard-container .stat-card {
         min-height: 88px !important;
         padding: 10px !important;
         gap: 8px !important;
     }
 
-    .dashboard-container .stat-icon {
+
+    html.exam-detail-scope .dashboard-container .stat-icon {
         width: 34px !important;
         height: 34px !important;
         border-radius: 10px !important;
     }
 
-    .dashboard-container .stat-value {
+
+    html.exam-detail-scope .dashboard-container .stat-value {
         font-size: 23px !important;
     }
 
-    .dashboard-container .stat-label {
+
+    html.exam-detail-scope .dashboard-container .stat-label {
         font-size: 11px !important;
     }
 
-    .empty-state {
+
+    html.exam-detail-scope .empty-state {
         padding: 30px 14px !important;
     }
 
-    .empty-icon {
+
+    html.exam-detail-scope .empty-icon {
         font-size: 34px !important;
     }
 }
-
 /* Must stay last: mobile dashboard cards should remain dense. */
-@media (max-width: 640px) {
-    .dashboard-container .page-header {
+@media (max-width: 640px){
+    html.exam-detail-scope .dashboard-container .page-header {
         margin-bottom: 12px !important;
     }
 
-    .dashboard-container .page-title {
+
+    html.exam-detail-scope .dashboard-container .page-title {
         font-size: 26px !important;
         line-height: 1.12 !important;
         text-align: center !important;
     }
 
-    .dashboard-container .dashboard-stats-grid {
+
+    html.exam-detail-scope .dashboard-container .dashboard-stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 10px !important;
         margin-bottom: 12px !important;
     }
 
-    .dashboard-container .stat-card {
+
+    html.exam-detail-scope .dashboard-container .stat-card {
         min-height: 94px !important;
         padding: 12px !important;
         display: grid !important;
@@ -4588,65 +5179,74 @@ body .exam-card .exam-card-actions.has-four-actions .el-button > span {
         border-radius: 14px !important;
     }
 
-    .dashboard-container .stat-icon {
+
+    html.exam-detail-scope .dashboard-container .stat-icon {
         width: 38px !important;
         height: 38px !important;
         margin: 0 !important;
         border-radius: 12px !important;
     }
 
-    .dashboard-container .stat-info {
+
+    html.exam-detail-scope .dashboard-container .stat-info {
         min-width: 0 !important;
     }
 
-    .dashboard-container .stat-value {
+
+    html.exam-detail-scope .dashboard-container .stat-value {
         font-size: 25px !important;
         line-height: 1 !important;
     }
 
-    .dashboard-container .stat-label {
+
+    html.exam-detail-scope .dashboard-container .stat-label {
         margin-top: 5px !important;
         font-size: 12px !important;
         line-height: 1.2 !important;
         white-space: nowrap !important;
     }
 }
-
-@media (max-width: 420px) {
-    .dashboard-container .dashboard-stats-grid {
+@media (max-width: 420px){
+    html.exam-detail-scope .dashboard-container .dashboard-stats-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 8px !important;
     }
 
-    .dashboard-container .stat-card {
+
+    html.exam-detail-scope .dashboard-container .stat-card {
         min-height: 84px !important;
         padding: 10px !important;
         gap: 8px !important;
     }
 
-    .dashboard-container .stat-icon {
+
+    html.exam-detail-scope .dashboard-container .stat-icon {
         width: 32px !important;
         height: 32px !important;
         border-radius: 10px !important;
     }
 
-    .dashboard-container .stat-value {
+
+    html.exam-detail-scope .dashboard-container .stat-value {
         font-size: 22px !important;
     }
 
-    .dashboard-container .stat-label {
+
+    html.exam-detail-scope .dashboard-container .stat-label {
         font-size: 11px !important;
     }
 }
 
+
 /* Final exam-card action balance: four buttons stay readable in one row. */
-body .exam-card .exam-card-actions.has-four-actions {
+html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions {
     grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.72fr) minmax(0, 0.78fr) minmax(0, 0.62fr) !important;
     gap: 6px !important;
     overflow: visible !important;
 }
 
-body .exam-card .exam-card-actions.has-four-actions .el-button {
+
+html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions .el-button {
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -4658,11 +5258,13 @@ body .exam-card .exam-card-actions.has-four-actions .el-button {
     white-space: nowrap !important;
 }
 
-body .exam-card .exam-card-actions.has-four-actions .el-button + .el-button {
+
+html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions .el-button + .el-button {
     margin-left: 0 !important;
 }
 
-body .exam-card .exam-card-actions.has-four-actions .el-button > span {
+
+html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions .el-button > span {
     min-width: 0 !important;
     max-width: 100% !important;
     display: inline-flex !important;
@@ -4673,50 +5275,57 @@ body .exam-card .exam-card-actions.has-four-actions .el-button > span {
     white-space: nowrap !important;
 }
 
-body .exam-card .exam-card-actions.has-four-actions .el-button .el-icon {
+
+html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions .el-button .el-icon {
     flex: 0 0 auto !important;
     font-size: 14px !important;
 }
 
-body .exam-card .exam-card-actions.has-four-actions .el-button .el-icon + span {
+
+html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions .el-button .el-icon + span {
     margin-left: 4px !important;
 }
 
-body .exam-card .exam-card-actions.has-four-actions .el-button:nth-child(3) {
+
+html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions .el-button:nth-child(3) {
     padding-left: 4px !important;
     padding-right: 4px !important;
 }
-
-@media (max-width: 640px) {
-    body .exam-card .exam-card-actions.has-four-actions {
+@media (max-width: 640px){
+    html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions {
         grid-template-columns: minmax(0, 1.14fr) minmax(0, 0.66fr) minmax(0, 0.72fr) minmax(0, 0.58fr) !important;
         gap: 5px !important;
     }
 
-    body .exam-card .exam-card-actions.has-four-actions .el-button {
+
+    html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions .el-button {
         height: 34px !important;
         padding-left: 4px !important;
         padding-right: 4px !important;
         font-size: 12px !important;
     }
 
-    body .exam-card .exam-card-actions.has-four-actions .el-button .el-icon {
+
+    html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions .el-button .el-icon {
         font-size: 13px !important;
     }
 
-    body .exam-card .exam-card-actions.has-four-actions .el-button .el-icon + span {
+
+    html.exam-detail-scope body .exam-card .exam-card-actions.has-four-actions .el-button .el-icon + span {
         margin-left: 2px !important;
     }
 }
 
+
 /* Must stay last: Element Plus dialogs and confirm boxes share one centered shell. */
-body .el-overlay {
+html.exam-detail-scope body .el-overlay {
     position: fixed !important;
     inset: 0 !important;
 }
 
-body .el-overlay-dialog,
-body .el-overlay.is-message-box .el-overlay-message-box {
+
+html.exam-detail-scope body .el-overlay-dialog,
+html.exam-detail-scope body .el-overlay.is-message-box .el-overlay-message-box {
     position: fixed !important;
     inset: 0 !important;
     width: 100vw !important;
@@ -4732,27 +5341,32 @@ body .el-overlay.is-message-box .el-overlay-message-box {
     text-align: left !important;
 }
 
-body .el-overlay.is-message-box .el-overlay-message-box::after {
+
+html.exam-detail-scope body .el-overlay.is-message-box .el-overlay-message-box::after {
     display: none !important;
 }
 
-body .el-overlay-dialog .el-dialog,
-body .el-overlay.is-message-box .el-message-box {
+
+html.exam-detail-scope body .el-overlay-dialog .el-dialog,
+html.exam-detail-scope body .el-overlay.is-message-box .el-message-box {
     margin: 0 !important;
 }
 
-body .el-overlay.is-message-box .el-message-box {
+
+html.exam-detail-scope body .el-overlay.is-message-box .el-message-box {
     width: min(460px, calc(100vw - 40px)) !important;
     max-width: calc(100vw - 40px) !important;
     min-height: 0 !important;
 }
 
-body .el-overlay.is-message-box .el-message-box__header {
+
+html.exam-detail-scope body .el-overlay.is-message-box .el-message-box__header {
     position: relative !important;
     padding-right: 48px !important;
 }
 
-body .el-overlay.is-message-box .el-message-box__headerbtn {
+
+html.exam-detail-scope body .el-overlay.is-message-box .el-message-box__headerbtn {
     top: 12px !important;
     right: 12px !important;
     width: 32px !important;
@@ -4761,115 +5375,129 @@ body .el-overlay.is-message-box .el-message-box__headerbtn {
     background: transparent !important;
 }
 
-body .el-overlay.is-message-box .el-message-box__headerbtn:hover {
+
+html.exam-detail-scope body .el-overlay.is-message-box .el-message-box__headerbtn:hover {
     background: #eef3f8 !important;
 }
 
-body .el-overlay.is-message-box .el-message-box__container {
+
+html.exam-detail-scope body .el-overlay.is-message-box .el-message-box__container {
     align-items: flex-start !important;
     gap: 12px !important;
 }
 
-body .el-overlay.is-message-box .el-message-box__status {
+
+html.exam-detail-scope body .el-overlay.is-message-box .el-message-box__status {
     flex: 0 0 auto !important;
     margin-top: 1px !important;
 }
 
-body .el-overlay.is-message-box .el-message-box__message {
+
+html.exam-detail-scope body .el-overlay.is-message-box .el-message-box__message {
     min-width: 0 !important;
     color: var(--admin-text-soft) !important;
     line-height: 1.65 !important;
 }
 
-body .el-overlay.is-message-box .el-message-box__btns {
+
+html.exam-detail-scope body .el-overlay.is-message-box .el-message-box__btns {
     min-height: 62px !important;
 }
-
-@media (max-width: 640px) {
-    body .el-overlay-dialog,
-    body .el-overlay.is-message-box .el-overlay-message-box {
+@media (max-width: 640px){
+    html.exam-detail-scope body .el-overlay-dialog,
+html.exam-detail-scope body .el-overlay.is-message-box .el-overlay-message-box {
         padding: 12px !important;
         align-items: center !important;
     }
 
-    body .el-overlay.is-message-box .el-message-box {
+
+    html.exam-detail-scope body .el-overlay.is-message-box .el-message-box {
         width: calc(100vw - 24px) !important;
         max-width: calc(100vw - 24px) !important;
         border-radius: 14px !important;
     }
 
-    body .el-overlay.is-message-box .el-message-box__header {
+
+    html.exam-detail-scope body .el-overlay.is-message-box .el-message-box__header {
         padding: 16px 50px 6px 16px !important;
     }
 
-    body .el-overlay.is-message-box .el-message-box__content {
+
+    html.exam-detail-scope body .el-overlay.is-message-box .el-message-box__content {
         padding: 10px 16px 14px !important;
     }
 
-    body .el-overlay.is-message-box .el-message-box__btns {
+
+    html.exam-detail-scope body .el-overlay.is-message-box .el-message-box__btns {
         display: grid !important;
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 8px !important;
         padding: 12px 16px 16px !important;
     }
 
-    body .el-overlay.is-message-box .el-message-box__btns .el-button {
+
+    html.exam-detail-scope body .el-overlay.is-message-box .el-message-box__btns .el-button {
         width: 100% !important;
         min-width: 0 !important;
     }
 }
 
+
 /* Must stay after button layout rules: keep press/focus feedback rounded. */
-body .dashboard-page button,
-body .dashboard-page .el-button,
-body .el-overlay .el-button,
-body .el-message-box .el-button,
-body .el-popper .el-button {
+html.exam-detail-scope body .dashboard-page button,
+html.exam-detail-scope body .dashboard-page .el-button,
+html.exam-detail-scope body .el-overlay .el-button,
+html.exam-detail-scope body .el-message-box .el-button,
+html.exam-detail-scope body .el-popper .el-button {
     -webkit-tap-highlight-color: transparent !important;
     background-clip: padding-box !important;
     overflow: hidden !important;
 }
 
-body .dashboard-page button:active,
-body .dashboard-page button:focus,
-body .dashboard-page button:focus-visible,
-body .dashboard-page .el-button:active,
-body .dashboard-page .el-button:focus,
-body .dashboard-page .el-button:focus-visible,
-body .dashboard-page .el-button.is-active,
-body .el-overlay .el-button:active,
-body .el-overlay .el-button:focus,
-body .el-overlay .el-button:focus-visible,
-body .el-message-box .el-button:active,
-body .el-message-box .el-button:focus,
-body .el-message-box .el-button:focus-visible,
-body .el-popper .el-button:active,
-body .el-popper .el-button:focus,
-body .el-popper .el-button:focus-visible {
+
+html.exam-detail-scope body .dashboard-page button:active,
+html.exam-detail-scope body .dashboard-page button:focus,
+html.exam-detail-scope body .dashboard-page button:focus-visible,
+html.exam-detail-scope body .dashboard-page .el-button:active,
+html.exam-detail-scope body .dashboard-page .el-button:focus,
+html.exam-detail-scope body .dashboard-page .el-button:focus-visible,
+html.exam-detail-scope body .dashboard-page .el-button.is-active,
+html.exam-detail-scope body .el-overlay .el-button:active,
+html.exam-detail-scope body .el-overlay .el-button:focus,
+html.exam-detail-scope body .el-overlay .el-button:focus-visible,
+html.exam-detail-scope body .el-message-box .el-button:active,
+html.exam-detail-scope body .el-message-box .el-button:focus,
+html.exam-detail-scope body .el-message-box .el-button:focus-visible,
+html.exam-detail-scope body .el-popper .el-button:active,
+html.exam-detail-scope body .el-popper .el-button:focus,
+html.exam-detail-scope body .el-popper .el-button:focus-visible {
     outline: none !important;
     background-clip: padding-box !important;
 }
 
-body .dashboard-page button::before,
-body .dashboard-page button::after,
-body .dashboard-page .el-button::before,
-body .dashboard-page .el-button::after,
-body .el-overlay .el-button::before,
-body .el-overlay .el-button::after,
-body .el-message-box .el-button::before,
-body .el-message-box .el-button::after,
-body .el-popper .el-button::before,
-body .el-popper .el-button::after {
+
+html.exam-detail-scope body .dashboard-page button::before,
+html.exam-detail-scope body .dashboard-page button::after,
+html.exam-detail-scope body .dashboard-page .el-button::before,
+html.exam-detail-scope body .dashboard-page .el-button::after,
+html.exam-detail-scope body .el-overlay .el-button::before,
+html.exam-detail-scope body .el-overlay .el-button::after,
+html.exam-detail-scope body .el-message-box .el-button::before,
+html.exam-detail-scope body .el-message-box .el-button::after,
+html.exam-detail-scope body .el-popper .el-button::before,
+html.exam-detail-scope body .el-popper .el-button::after {
     border-radius: inherit !important;
 }
 
-body .dashboard-page button:focus-visible,
-body .dashboard-page .el-button:focus-visible,
-body .el-overlay .el-button:focus-visible,
-body .el-message-box .el-button:focus-visible,
-body .el-popper .el-button:focus-visible {
+
+html.exam-detail-scope body .dashboard-page button:focus-visible,
+html.exam-detail-scope body .dashboard-page .el-button:focus-visible,
+html.exam-detail-scope body .el-overlay .el-button:focus-visible,
+html.exam-detail-scope body .el-message-box .el-button:focus-visible,
+html.exam-detail-scope body .el-popper .el-button:focus-visible {
     box-shadow:
         0 0 0 3px rgba(36, 104, 178, 0.14),
         var(--admin-shadow-xs) !important;
 }
+
 

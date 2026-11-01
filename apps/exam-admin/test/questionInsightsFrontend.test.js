@@ -55,7 +55,7 @@ test('question quality is a scoped lazy dashboard view with filtering, paginatio
   const quality = readSource('src', 'components', 'QuestionQualityView.vue');
 
   assert.match(adminApi, /getQuestionQuality:[\s\S]*\/question-quality[\s\S]*scopeParams\(params\)/);
-  assert.match(nav, /index="question-quality"[\s\S]*题库质量/);
+  assert.match(nav, /key: 'question-quality'[\s\S]*?'题库质量'/);
   assert.match(dashboard, /defineAsyncComponent\(\(\) => import\('@\/components\/QuestionQualityView\.vue'\)\)/);
   assert.match(dashboard, /activeMenu === 'question-quality'[\s\S]*@open-question="openQuestionQualityTarget"/);
   assert.match(dashboard, /qualityIssueCodes = new Set[\s\S]*parseQualityInteger[\s\S]*qualityRouteState/);

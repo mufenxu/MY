@@ -1234,10 +1234,13 @@ import {
 const route = useRoute();
 const router = useRouter();
 const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
+const EXAM_DETAIL_SCOPE_CLASS = 'exam-detail-scope';
 const RESPONSIVE_EDITOR_BREAKPOINT = 1080;
 
 if (typeof document !== 'undefined') {
     document.body.classList.add(EXAM_DETAIL_BODY_CLASS);
+    // 旧世代 admin 样式只在编辑页生效，见 <style> 顶部说明
+    document.documentElement.classList.add(EXAM_DETAIL_SCOPE_CLASS);
 }
 
 const authType = session.getAuthType();
@@ -1597,12 +1600,18 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
     window.removeEventListener('beforeunload', handleBeforeUnload);
+    document.documentElement.classList.remove(EXAM_DETAIL_SCOPE_CLASS);
     cleanupExamDetailData();
     cleanupBatchImport();
 });
 </script>
 
 <style>
+/* 编辑器仍沿用旧的 admin 世代样式：这些文件已整体挂到 html.exam-detail-scope 下，
+   只在本页生效，不会随 SPA 路由切回后台时污染珍珠样式。 */
+@import '@/assets/css/admin.legacy.css';
+@import '@/assets/css/admin-redesign.legacy.css';
+@import '@/assets/css/admin-premium.legacy.css';
 @import '@/assets/css/exam-detail.css';
 @import '@/assets/css/exam-detail-redesign.css';
 @import '@/assets/css/exam-detail-premium.css';
