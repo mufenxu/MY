@@ -12,7 +12,6 @@
     color: var(--ink);
     background: var(--canvas);
     inset: 0;
-    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
 }
 
