@@ -230,7 +230,6 @@
 
 .data-row.is-targeted {
   background: var(--blue-soft);
-  box-shadow: inset 2px 0 0 var(--blue);
 }
 
 .col-monitor {
@@ -319,7 +318,6 @@
 
 .incident-item.is-selected {
   background: var(--blue-soft);
-  box-shadow: inset 2px 0 0 var(--blue);
 }
 
 .incident-item > svg {
@@ -1219,7 +1217,6 @@
 
 .config-item.is-targeted {
   background: var(--blue-soft);
-  box-shadow: inset 2px 0 0 var(--blue);
 }
 
 .config-item-copy {
@@ -1405,7 +1402,6 @@ a.data-row:hover .capability-open {
 
 .data-row.is-selected {
   background: var(--blue-soft);
-  box-shadow: inset 2px 0 0 var(--blue);
 }
 
 .restore-target {

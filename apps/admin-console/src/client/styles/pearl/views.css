@@ -1156,7 +1156,6 @@
 
 .service-row.is-targeted {
   background: var(--blue-soft);
-  box-shadow: inset 2px 0 0 var(--blue);
 }
 
 .service-cell-main {

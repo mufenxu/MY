@@ -691,7 +691,7 @@
 .question-card {
     position: relative;
     margin-bottom: 10px;
-    padding: 13px 16px 14px 18px;
+    padding: 13px 16px 14px;
     border: 1px solid var(--line-strong);
     border-radius: var(--r-md);
     background: var(--surface);
@@ -700,18 +700,6 @@
     outline: none;
     transition: transform 0.16s var(--ease-premium), border-color 0.16s ease,
         box-shadow 0.16s ease, background 0.16s ease;
-}
-
-.question-card::before {
-    position: absolute;
-    top: 13px;
-    bottom: 13px;
-    left: 0;
-    width: 3px;
-    border-radius: 0 3px 3px 0;
-    background: transparent;
-    content: '';
-    transition: background 0.16s ease;
 }
 
 .question-card:hover {
@@ -729,10 +717,6 @@
     border-color: color-mix(in srgb, var(--blue) 52%, transparent);
     background: var(--surface-solid);
     box-shadow: 0 0 0 3px var(--blue-soft), var(--e2);
-}
-
-.question-card.active::before {
-    background: var(--blue);
 }
 
 .q-header {
