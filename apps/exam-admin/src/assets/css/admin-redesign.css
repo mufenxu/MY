@@ -944,24 +944,24 @@ body .user-menu-popover {
     color: #e40014 !important;
 }
 
-.el-input .el-input__wrapper,
-.el-select .el-input__wrapper,
-.el-textarea .el-textarea__inner {
+html:not(.auth-standalone) .el-input .el-input__wrapper,
+html:not(.auth-standalone) .el-select .el-input__wrapper,
+html:not(.auth-standalone) .el-textarea .el-textarea__inner {
     border: 1px solid var(--nb-border) !important;
     border-radius: 14px !important;
     background: #fff !important;
     box-shadow: none !important;
 }
 
-.el-input .el-input__wrapper:hover,
-.el-select .el-input__wrapper:hover,
-.el-textarea .el-textarea__inner:hover {
+html:not(.auth-standalone) .el-input .el-input__wrapper:hover,
+html:not(.auth-standalone) .el-select .el-input__wrapper:hover,
+html:not(.auth-standalone) .el-textarea .el-textarea__inner:hover {
     border-color: var(--nb-border-strong) !important;
 }
 
-.el-input .el-input__wrapper.is-focus,
-.el-select .el-input__wrapper.is-focus,
-.el-textarea .el-textarea__inner:focus {
+html:not(.auth-standalone) .el-input .el-input__wrapper.is-focus,
+html:not(.auth-standalone) .el-select .el-input__wrapper.is-focus,
+html:not(.auth-standalone) .el-textarea .el-textarea__inner:focus {
     border-color: rgba(50, 117, 180, 0.62) !important;
     box-shadow: 0 0 0 4px rgba(50, 117, 180, 0.1) !important;
 }

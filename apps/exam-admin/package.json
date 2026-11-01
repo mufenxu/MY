@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
+    "@my-platform/pearl-tokens": "file:../../packages/pearl-tokens",
     "@my-platform/platform-browser-runtime": "file:../../packages/platform-browser-runtime",
     "brace-expansion": "^5.0.12",
     "element-plus": "^2.13.7",

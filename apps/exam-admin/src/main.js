@@ -1,3 +1,6 @@
+// 样式入口：Element Plus 在前，本应用样式在后。
+// 珍珠令牌目前只有登录页在用，跟随登录页分包按需加载（见 LoginView.vue）；
+// Dashboard / ExamDetail 迁移时再把令牌与组件层提到这里。
 import { createApp } from 'vue';
 import 'element-plus/es/components/message/style/css';
 import 'element-plus/es/components/message-box/style/css';
@@ -51,6 +54,10 @@ import { setupHttpInterceptors } from './utils/setupHttp';
 import './assets/css/interaction-polish.css';
 import { fetchWithTimeout, installExperienceMonitoring, IS_PLATFORM_SSO, redirectToPlatformLogin, reportExperience, resolveAppUrl } from './utils/runtime';
 import { session } from './utils/session';
+import { initTheme } from './utils/theme';
+
+// 先落定主题，避免首屏闪白
+initTheme();
 
 const icons = {
     ArrowDown,

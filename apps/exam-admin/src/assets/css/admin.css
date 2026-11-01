@@ -24,8 +24,9 @@
     display: none !important;
 }
 
-/* 移动端视口优化 */
-html {
+/* 移动端视口优化
+   登录页（html.auth-standalone）不参与后台的固定视口布局，否则短屏无法滚动。 */
+html:not(.auth-standalone) {
     height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
@@ -34,6 +35,9 @@ html {
 
 body {
     margin: 0;
+}
+
+html:not(.auth-standalone) body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: var(--bg-color);
     color: var(--text-primary);
@@ -49,7 +53,7 @@ body {
     overflow: hidden;
 }
 
-#app {
+html:not(.auth-standalone) #app {
     height: 100%;
     overflow: hidden;
     display: flex;

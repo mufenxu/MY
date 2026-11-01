@@ -36,6 +36,7 @@ RUN npm run build
 FROM ${NODE_IMAGE} AS exam-admin-build
 WORKDIR /build/apps/exam-admin
 COPY packages/platform-browser-runtime/ /build/packages/platform-browser-runtime/
+COPY packages/pearl-tokens/ /build/packages/pearl-tokens/
 COPY apps/exam-admin/package*.json ./
 RUN npm ci --no-audit --no-fund
 COPY apps/exam-admin/ ./

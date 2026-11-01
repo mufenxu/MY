@@ -5,6 +5,7 @@ ARG NODE_IMAGE=node:24-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b12
 FROM ${NODE_IMAGE} AS admin-build
 WORKDIR /build/apps/exam-admin
 COPY packages/platform-browser-runtime/ /build/packages/platform-browser-runtime/
+COPY packages/pearl-tokens/ /build/packages/pearl-tokens/
 COPY apps/exam-admin/package*.json ./
 RUN npm ci --no-audit --no-fund
 COPY apps/exam-admin/ ./

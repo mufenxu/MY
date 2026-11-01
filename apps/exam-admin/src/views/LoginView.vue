@@ -1,130 +1,119 @@
 <template>
-    <div class="login-page">
-        <div class="shell">
-            <section class="hero">
-                <div class="brand-mark">
-                    <img :src="faviconUrl" alt="好爱学习">
-                </div>
-                <div class="hero-badge">{{ loginCopy.heroBadge }}</div>
-                <h1>{{ loginCopy.heroTitle }}</h1>
-                <p>{{ loginCopy.heroDescription }}</p>
-
-                <div class="hero-meta">
-                    <span>题库管理</span>
-                    <span>考试数据</span>
-                    <span>安全访问</span>
-                </div>
-
-                <div class="mini-program-card">
-                    <div class="mini-program-code">
-                        <img :src="miniProgramCodeUrl" alt="好爱学习小程序码">
-                    </div>
-                    <div class="mini-program-copy">
-                        <strong>好爱学习小程序</strong>
-                        <span>首次使用请先完成小程序登录，微信扫码后会进入确认页。</span>
-                    </div>
-                </div>
-            </section>
-
-            <section class="panel">
-                <div class="panel-header">
-                    <h2>{{ loginCopy.panelTitle }}</h2>
-                    <p>{{ loginCopy.panelSubtitle }}</p>
-                </div>
-
-                <div class="auth-tabs" role="tablist" aria-label="登录方式">
-                    <button type="button" class="auth-tab"
-                        :class="{ active: activeTab === 'qrcode', disabled: !scanLoginEnabled }"
-                        :disabled="!scanLoginEnabled"
-                        :aria-selected="activeTab === 'qrcode'"
-                        @click="switchTab('qrcode')">
-                        <span class="auth-tab-icon">
-                            <el-icon :size="20"><FullScreen /></el-icon>
-                        </span>
-                        <span class="auth-tab-copy">
-                            <strong>{{ loginCopy.qrTab }}</strong>
-                            <small>微信扫码，小程序确认</small>
-                        </span>
-                        <span class="auth-tab-state"></span>
-                    </button>
-                    <button type="button" class="auth-tab" :class="{ active: activeTab === 'account' }"
-                        :aria-selected="activeTab === 'account'"
-                        @click="switchTab('account')">
-                        <span class="auth-tab-icon">
-                            <el-icon :size="20"><User /></el-icon>
-                        </span>
-                        <span class="auth-tab-copy">
-                            <strong>{{ loginCopy.accountTab }}</strong>
-                            <small>使用管理员账号进入</small>
-                        </span>
-                        <span class="auth-tab-state"></span>
-                    </button>
-                </div>
-
-                <div class="panel-body">
-                    <div v-show="activeTab === 'qrcode'" class="qr-pane">
-                        <div class="qr-card">
-                            <div v-show="!qrError" ref="qrcodeEl" class="qrcode-container"></div>
-                            <div v-if="qrError" class="qr-fallback" :class="qrFallback.tone">
-                                <div class="qr-fallback-icon">
-                                    <el-icon :color="qrFallback.color" size="34">
-                                        <component :is="qrFallback.icon" />
-                                    </el-icon>
-                                </div>
-                                <h3>{{ qrFallback.title }}</h3>
-                                <p>{{ qrFallback.message }}</p>
-                                <el-button type="primary" class="qr-refresh-btn"
-                                    :disabled="!scanLoginEnabled" @click="initQrcode">
-                                    {{ qrFallback.buttonText }}
-                                </el-button>
-                            </div>
-
-                            <div v-show="!qrError" class="qr-status" :class="qrStatusClass">
-                                <el-icon v-if="qrStatusIcon" :size="16">
-                                    <component :is="qrStatusIcon" />
-                                </el-icon>
-                                <span>{{ qrStatusText }}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div v-show="activeTab === 'account'" class="account-pane">
-                        <div class="login-tip">
-                            个人用户可使用微信扫一扫扫码登录，更安全；账号密码登录仅供后台管理员使用。
-                        </div>
-                        <el-form :model="loginForm" :rules="rules" ref="loginFormRef" size="large"
-                            @keyup.enter="handleLogin">
-                            <el-form-item prop="username">
-                                <el-input v-model="loginForm.username" placeholder="请输入管理员用户名"
-                                    prefix-icon="User" />
-                            </el-form-item>
-                            <el-form-item prop="password">
-                                <el-input v-model="loginForm.password" type="password" placeholder="请输入密码"
-                                    prefix-icon="Lock" show-password />
-                            </el-form-item>
-                            <div v-if="aiCaptchaEnabled" id="account-login-captcha" class="ai-captcha-box"></div>
-                            <button
-                                v-if="aiCaptchaEnabled"
-                                id="account-login-captcha-trigger"
-                                ref="captchaTriggerRef"
-                                type="button"
-                                class="ai-captcha-trigger"
-                                aria-hidden="true"
-                                tabindex="-1"
-                            ></button>
-                            <el-button type="primary" :loading="loading" class="submit-btn"
-                                @click="handleLogin">立即登录</el-button>
-                        </el-form>
-                    </div>
-                </div>
-            </section>
+    <main class="login-page">
+        <div class="login-aurora" aria-hidden="true">
+            <span class="login-glow login-glow-a"></span>
+            <span class="login-glow login-glow-b"></span>
         </div>
-        <footer class="icp-footer" aria-label="ICP备案信息">
-            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">
-                宁ICP备2025009338号-4
-            </a>
+
+        <section class="login-panel" aria-labelledby="login-title">
+            <header class="login-brand">
+                <span class="login-brand-mark">
+                    <img :src="faviconUrl" alt="好爱学习">
+                </span>
+                <span class="login-brand-copy">
+                    <strong>好爱学习</strong>
+                    <small>考试业务管理后台</small>
+                </span>
+                <button type="button" class="login-theme-toggle" :aria-pressed="isDarkTheme"
+                    :aria-label="isDarkTheme ? '切换到浅色主题' : '切换到深色主题'"
+                    :title="isDarkTheme ? '切换到浅色主题' : '切换到深色主题'" @click="handleThemeToggle">
+                    <svg v-if="isDarkTheme" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="1.6" />
+                        <path
+                            d="M12 3.2v2.1M12 18.7v2.1M4.2 12h2.1M17.7 12h2.1M6.5 6.5l1.5 1.5M16 16l1.5 1.5M17.5 6.5L16 8M8 16l-1.5 1.5"
+                            stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                    </svg>
+                    <svg v-else viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.4 8.4 0 1 0 10.2 10.2Z" stroke="currentColor"
+                            stroke-width="1.6" stroke-linejoin="round" />
+                    </svg>
+                </button>
+            </header>
+
+            <div class="login-heading">
+                <h1 id="login-title">欢迎回来</h1>
+                <p>请选择登录方式继续进入后台。</p>
+            </div>
+
+            <div class="login-methods" role="tablist" aria-label="登录方式">
+                <button type="button" role="tab" class="login-method"
+                    :class="{ active: activeTab === 'qrcode' }" :disabled="!scanLoginEnabled"
+                    :aria-selected="activeTab === 'qrcode'" @click="switchTab('qrcode')">
+                    <el-icon :size="17">
+                        <FullScreen />
+                    </el-icon>
+                    <span>扫码登录</span>
+                </button>
+                <button type="button" role="tab" class="login-method"
+                    :class="{ active: activeTab === 'account' }" :aria-selected="activeTab === 'account'"
+                    @click="switchTab('account')">
+                    <el-icon :size="17">
+                        <User />
+                    </el-icon>
+                    <span>账号登录</span>
+                </button>
+            </div>
+
+            <div class="login-body">
+                <div v-show="activeTab === 'qrcode'" class="qr-pane" role="tabpanel" aria-label="扫码登录">
+                    <div class="qr-well">
+                        <div v-show="!qrError" ref="qrcodeEl" class="qrcode-container"></div>
+
+                        <div v-if="qrError" class="qr-fallback" :class="`is-${qrFallback.tone}`">
+                            <span class="qr-fallback-icon">
+                                <el-icon :size="22">
+                                    <component :is="qrFallback.icon" />
+                                </el-icon>
+                            </span>
+                            <strong>{{ qrFallback.title }}</strong>
+                            <p>{{ qrFallback.message }}</p>
+                            <button type="button" class="btn btn-secondary btn-sm"
+                                :disabled="!scanLoginEnabled" @click="initQrcode">
+                                {{ qrFallback.buttonText }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <p v-if="!qrError" class="qr-status" :class="qrStatusClass">
+                        <el-icon v-if="qrStatusIcon" :size="14">
+                            <component :is="qrStatusIcon" />
+                        </el-icon>
+                        <span>{{ qrStatusText }}</span>
+                    </p>
+                </div>
+
+                <div v-show="activeTab === 'account'" class="account-pane" role="tabpanel" aria-label="账号登录">
+                    <el-form ref="loginFormRef" :model="loginForm" :rules="rules" size="large" label-position="top"
+                        hide-required-asterisk class="login-form" @keyup.enter="handleLogin">
+                        <el-form-item prop="username" label="管理员账号">
+                            <el-input v-model="loginForm.username" placeholder="请输入管理员用户名" prefix-icon="User"
+                                autocomplete="username" />
+                        </el-form-item>
+                        <el-form-item prop="password" label="登录密码">
+                            <el-input v-model="loginForm.password" type="password" placeholder="请输入密码"
+                                prefix-icon="Lock" show-password autocomplete="current-password" />
+                        </el-form-item>
+
+                        <div v-if="aiCaptchaEnabled" id="account-login-captcha" class="ai-captcha-box"></div>
+                        <button v-if="aiCaptchaEnabled" id="account-login-captcha-trigger" ref="captchaTriggerRef"
+                            type="button" class="ai-captcha-trigger" aria-hidden="true" tabindex="-1"></button>
+
+                        <button type="button" class="btn btn-primary login-submit" :disabled="loading"
+                            @click="handleLogin">
+                            <span v-if="loading" class="spin" aria-hidden="true"></span>
+                            {{ loading ? '正在登录…' : '立即登录' }}
+                        </button>
+                    </el-form>
+
+                    <p class="login-tip">个人用户建议使用微信扫码登录；账号密码登录仅供后台管理员使用。</p>
+                </div>
+            </div>
+        </section>
+
+        <footer class="login-footer">
+            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">宁ICP备2025009338号-4</a>
         </footer>
-    </div>
+    </main>
 </template>
 
 <script setup>
@@ -140,28 +129,30 @@ import {
 import http from '@/utils/http';
 import { fetchWithTimeout, resolveAppUrl } from '@/utils/runtime';
 import { createSequentialPoller } from '@/utils/sequentialPoller';
+import { getCurrentTheme, toggleTheme } from '@/utils/theme';
 
 const router = useRouter();
 const route = useRoute();
 const faviconUrl = resolveAppUrl('/favicon.png');
-const miniProgramCodeUrl = resolveAppUrl('/assets/haoai-miniprogram-code.jpg');
 
 const QR_TOKEN_KEY = 'manage_qr_token';
 const QR_POLL_TOKEN_KEY = 'manage_qr_poll_token';
 const ACCOUNT_CAPTCHA_ELEMENT = '#account-login-captcha';
 const ACCOUNT_CAPTCHA_TRIGGER = '#account-login-captcha-trigger';
+// 登录页独立布局：后台样式表里针对 html/body/#app 与 el-input 的全局规则会按这个类放过登录页
+const AUTH_STANDALONE_CLASS = 'auth-standalone';
 
 const loginCopy = {
     pageTitle: '好爱学习',
-    heroBadge: '好爱学习',
-    heroTitle: '好爱学习',
-    heroDescription: '集中管理题库内容、考试数据与学习运营，让日常维护更清晰高效。',
-    panelTitle: '欢迎回来',
-    panelSubtitle: '请选择登录方式继续进入后台。',
-    qrHint: '请使用微信扫一扫扫码登录',
+    qrHint: '请使用微信扫一扫，在手机上确认登录',
     qrEmptyState: '二维码加载失败，请刷新后重试。',
-    accountTab: '账号登录',
-    qrTab: '扫码登录',
+};
+
+// --- 主题 ---
+const isDarkTheme = ref(getCurrentTheme() === 'dark');
+
+const handleThemeToggle = () => {
+    isDarkTheme.value = toggleTheme() === 'dark';
 };
 
 function unwrapPayload(payload) {
@@ -476,14 +467,14 @@ const initQrcode = async () => {
         if (el) {
             el.innerHTML = '';
             el.classList.toggle('is-wxacode', !!data.qrCodeImage);
-            el.style.width = 'min(232px, 72vw)';
+            el.style.width = 'min(216px, 72vw)';
             el.style.minHeight = '0';
             el.style.aspectRatio = '1 / 1';
             if (data.qrCodeImage) {
                 const image = document.createElement('img');
                 image.src = data.qrCodeImage;
                 image.alt = '微信扫码登录小程序码';
-                image.style.width = 'min(200px, 100%)';
+                image.style.width = 'min(184px, 100%)';
                 image.style.height = 'auto';
                 image.style.maxWidth = '100%';
                 el.appendChild(image);
@@ -494,13 +485,13 @@ const initQrcode = async () => {
                 const qrText = data.qrCodeText || `miniprogram-login://scan?qrToken=${data.qrToken}`;
                 const canvas = document.createElement('canvas');
                 await QRCode.toCanvas(canvas, qrText, {
-                    width: 200,
+                    width: 184,
                     margin: 2,
                     color: { dark: '#111827', light: '#ffffff' },
                     errorCorrectionLevel: 'H',
                 });
                 if (controller.signal.aborted || requestSequence !== qrCreateSequence) return;
-                canvas.style.width = 'min(200px, 100%)';
+                canvas.style.width = 'min(184px, 100%)';
                 canvas.style.height = 'auto';
                 el.appendChild(canvas);
             }
@@ -581,8 +572,20 @@ const handleLogin = async () => {
     await submitAccountLogin();
 };
 
+// 系统主题变化时同步开关图标（手动选择过主题时 theme.js 不会跟随）
+const themeQuery = typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-color-scheme: dark)')
+    : null;
+const syncThemeIcon = () => {
+    isDarkTheme.value = getCurrentTheme() === 'dark';
+};
+
 onMounted(async () => {
     document.title = loginCopy.pageTitle;
+    document.documentElement.classList.add(AUTH_STANDALONE_CLASS);
+    syncThemeIcon();
+    themeQuery?.addEventListener?.('change', syncThemeIcon);
+
     const runtimeConfig = await loadRuntimeConfig();
     scanLoginConfig = runtimeConfig.scanLogin || scanLoginConfig;
     scanLoginEnabled.value = !!scanLoginConfig.enabled && !!scanLoginConfig.apiBase;
@@ -602,372 +605,455 @@ onMounted(async () => {
 onUnmounted(() => {
     stopPolling();
     stopQrCreation();
+    themeQuery?.removeEventListener?.('change', syncThemeIcon);
+    document.documentElement.classList.remove(AUTH_STANDALONE_CLASS);
 });
 </script>
 
-<style scoped>
+<style>
+@import "@my-platform/pearl-tokens/tokens.css";
+@import "@my-platform/pearl-tokens/components.css";
+
+/* ==========================================================================
+   登录页 · 珍珠玻璃
+   单列认证卡片：品牌头 + 登录方式分段 + 扫码 / 账号两种面板。
+   深浅主题由 <html data-theme> 驱动（见 utils/theme.js），此处不写死颜色。
+   ========================================================================== */
 
 .login-page {
-    --surface: #ffffff;
-    --background: #f3f8fb;
-    --text-main: #182536;
-    --text-soft: #344960;
-    --text-muted: #6a7b8e;
-    --border: #d8e5ef;
-    --primary: #1f7ae0;
-    --primary-strong: #1764bd;
-    --primary-soft: rgba(31, 122, 224, 0.11);
-    --accent: #10a98a;
-    --accent-soft: rgba(16, 169, 138, 0.14);
-    --warm: #f3a33b;
-    min-height: 100vh;
-    padding: 24px;
-    display: grid;
-    grid-template-rows: auto auto;
-    align-content: center;
-    justify-items: center;
-    gap: 14px;
-    font-family: 'Manrope', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    background:
-        linear-gradient(rgba(31, 122, 224, 0.07) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(16, 169, 138, 0.045) 1px, transparent 1px),
-        linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.58)),
-        linear-gradient(120deg, rgba(218, 244, 255, 0.86) 0%, rgba(244, 255, 241, 0.72) 42%, rgba(255, 247, 232, 0.76) 100%);
-    background-size: 32px 32px, 32px 32px, auto, auto;
-    background-position: -1px -1px, -1px -1px, 0 0, 0 0;
-    color: var(--text-main);
-}
-
-.icp-footer {
-    width: min(1160px, 100%);
-    text-align: center;
-    color: var(--text-muted);
-    font-size: 13px;
-    line-height: 1.6;
-}
-
-.icp-footer a {
-    color: inherit;
-    text-decoration: none;
-}
-
-.icp-footer a:hover,
-.icp-footer a:focus-visible {
-    color: var(--primary);
-    text-decoration: underline;
-}
-
-.shell {
-    width: min(1160px, 100%);
-    display: grid;
-    grid-template-columns: 0.95fr 1.05fr;
-    border: 1px solid rgba(216, 229, 239, 0.9);
-    border-radius: 8px;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 24px 70px rgba(50, 72, 94, 0.14);
-}
-
-/* --- Hero Section --- */
-.hero {
     position: relative;
-    overflow: hidden;
-    padding: 52px 56px;
-    color: var(--text-main);
-    background:
-        linear-gradient(135deg, rgba(224, 246, 255, 0.96) 0%, rgba(237, 255, 248, 0.94) 54%, rgba(255, 248, 235, 0.96) 100%);
-    border-right: 1px solid rgba(216, 229, 239, 0.8);
+    display: flex;
+    flex-direction: column;
+    min-height: 100dvh;
+    padding: clamp(24px, 6vh, 60px) 20px 20px;
+    background: var(--canvas);
+    color: var(--ink);
+    overflow-x: hidden;
+    isolation: isolate;
 }
 
-.hero::before {
-    content: '';
-    position: absolute;
+/* ── 背景光晕 ─────────────────────────────────────────────────── */
+.login-aurora {
+    position: fixed;
     inset: 0;
-    background:
-        linear-gradient(rgba(31, 122, 224, 0.055) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(16, 169, 138, 0.052) 1px, transparent 1px);
-    background-size: 30px 30px;
+    z-index: 0;
+    overflow: hidden;
     pointer-events: none;
 }
 
-.brand-mark {
-    position: relative;
-    width: 74px;
-    height: 74px;
-    margin-bottom: 26px;
-    border-radius: 8px;
-    display: grid;
-    place-items: center;
-    overflow: hidden;
-    background: #ffffff;
-    border: 1px solid rgba(216, 229, 239, 0.9);
-    box-shadow: 0 14px 28px rgba(50, 72, 94, 0.12);
-}
-
-.brand-mark img {
-    width: 100%;
-    height: 100%;
-    display: block;
-}
-
-.hero-badge {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 15px;
-    border-radius: 999px;
-    border: 1px solid rgba(31, 122, 224, 0.16);
-    background: rgba(255, 255, 255, 0.72);
-    color: #13756b;
-    font-size: 13px;
-    font-weight: 800;
-    letter-spacing: 0;
-    box-shadow: 0 10px 22px rgba(50, 72, 94, 0.08);
-}
-
-.hero h1 {
-    position: relative;
-    margin: 28px 0 18px;
-    font-size: 44px;
-    line-height: 1.12;
-    color: #14273c;
-}
-
-.hero p {
-    position: relative;
-    margin: 0;
-    max-width: 540px;
-    font-size: 16px;
-    line-height: 1.85;
-    color: var(--text-soft);
-}
-
-.hero-meta {
-    position: relative;
-    margin-top: 44px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    color: var(--text-soft);
-    font-size: 13px;
-}
-
-.hero-meta span {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    min-height: 34px;
-    padding: 0 12px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.66);
-    border: 1px solid rgba(216, 229, 239, 0.8);
-}
-
-.hero-meta span::before {
-    content: '';
-    width: 6px;
-    height: 6px;
+.login-glow {
+    position: absolute;
     border-radius: 50%;
-    background: var(--accent);
+    filter: blur(4px);
 }
 
-.mini-program-card {
+.login-glow-a {
+    top: -220px;
+    right: -170px;
+    width: 560px;
+    height: 560px;
+    background: radial-gradient(circle, var(--blue-soft) 0%, transparent 68%);
+    animation: login-drift 22s ease-in-out infinite;
+}
+
+.login-glow-b {
+    bottom: -240px;
+    left: -190px;
+    width: 520px;
+    height: 520px;
+    background: radial-gradient(circle, var(--lime-soft) 0%, transparent 68%);
+    animation: login-drift 27s ease-in-out infinite reverse;
+}
+
+@keyframes login-drift {
+    0%,
+    100% {
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+
+    50% {
+        transform: translate3d(-26px, 24px, 0) scale(1.06);
+    }
+}
+
+/* ── 主题开关 ─────────────────────────────────────────────────── */
+.login-theme-toggle {
+    display: grid;
+    flex: none;
+    width: 30px;
+    height: 30px;
+    margin-left: auto;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.login-theme-toggle:hover {
+    border-color: var(--line-strong);
+    background: var(--hover-bg);
+    color: var(--ink);
+}
+
+.login-theme-toggle:active {
+    transform: scale(0.96);
+}
+
+.login-theme-toggle:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+}
+
+.login-theme-toggle svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* ── 认证卡片 ─────────────────────────────────────────────────── */
+.login-panel {
     position: relative;
-    width: min(430px, 100%);
-    margin-top: 36px;
-    padding: 16px;
-    border-radius: 8px;
-    border: 1px solid rgba(216, 229, 239, 0.9);
-    background: rgba(255, 255, 255, 0.76);
+    z-index: 1;
+    width: 100%;
+    max-width: 420px;
+    margin: auto auto 0;
+    padding: 28px 28px 24px;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-xl);
+    background: var(--surface);
+    box-shadow: var(--edge), var(--e2);
+    backdrop-filter: blur(18px) saturate(1.18);
+    -webkit-backdrop-filter: blur(18px) saturate(1.18);
+}
+
+.login-brand {
     display: flex;
     align-items: center;
-    gap: 16px;
-    box-shadow: 0 18px 38px rgba(50, 72, 94, 0.1);
+    gap: 11px;
+    min-width: 0;
 }
 
-.mini-program-code {
-    width: 104px;
-    height: 104px;
-    flex: 0 0 auto;
-    padding: 8px;
-    border-radius: 8px;
-    background: #fff;
-    border: 1px solid rgba(216, 229, 239, 0.8);
+.login-brand-mark {
+    display: grid;
+    flex: none;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border: 1px solid var(--line-strong);
+    border-radius: 13px;
+    background: var(--surface-solid);
+    box-shadow: var(--edge), var(--e1);
 }
 
-.mini-program-code img {
-    width: 100%;
-    height: 100%;
-    display: block;
+.login-brand-mark img {
+    width: 30px;
+    height: 30px;
     object-fit: contain;
-    border-radius: 6px;
 }
 
-.mini-program-copy strong {
-    display: block;
-    margin-bottom: 6px;
-    font-size: 16px;
-    line-height: 1.4;
+.login-brand-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
 }
 
-.mini-program-copy span {
+.login-brand-copy strong {
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+
+.login-brand-copy small {
+    color: var(--ink-faint);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+}
+
+.login-heading {
+    margin: 22px 0 16px;
+}
+
+.login-heading h1 {
+    margin: 0 0 5px;
+    color: var(--ink);
+    font-size: 22px;
+    font-weight: 720;
+    letter-spacing: -0.025em;
+}
+
+.login-heading p {
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: 12.5px;
+    line-height: 1.55;
+}
+
+/* ── 登录方式：凹槽分段 ───────────────────────────────────────── */
+.login-methods {
+    display: grid;
+    gap: 3px;
+    padding: 3px;
+    border-radius: var(--r-sm);
+    background: var(--groove-bg);
+    box-shadow: var(--groove-inset);
+    grid-template-columns: 1fr 1fr;
+}
+
+.login-method {
+    display: inline-flex;
+    height: 36px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--ink-muted);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.login-method:hover:not(:disabled) {
+    color: var(--ink);
+}
+
+.login-method.active {
+    background: var(--surface);
+    box-shadow: var(--edge), var(--e1);
+    color: var(--ink);
+}
+
+.login-method:disabled {
+    cursor: not-allowed;
+    opacity: 0.42;
+}
+
+.login-method:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 1px;
+}
+
+/* ── 面板 ─────────────────────────────────────────────────────── */
+.login-body {
+    margin-top: 18px;
+}
+
+.qr-pane,
+.account-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.qr-well {
+    display: grid;
+    min-height: 226px;
+    padding: 13px;
+    place-items: center;
+    border-radius: var(--r-md);
+    background: var(--groove-bg);
+    box-shadow: var(--groove-inset);
+}
+
+/* 二维码底色必须保持白色，深浅主题都一样，否则扫不出来 */
+.qrcode-container {
+    display: grid;
+    padding: 10px;
+    place-items: center;
+    border-radius: var(--r-sm);
+    background: #fff;
+    box-shadow: var(--e1);
+}
+
+.qrcode-container img,
+.qrcode-container canvas {
     display: block;
-    color: var(--text-soft);
-    font-size: 13px;
+    max-width: 100%;
+    height: auto;
+}
+
+.qr-status {
+    display: flex;
+    min-height: 20px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.qr-status.is-ready {
+    color: var(--blue);
+}
+
+.qr-status.is-waiting {
+    color: var(--amber);
+}
+
+.qr-status.is-success {
+    color: var(--leaf-text);
+}
+
+.qr-status.is-danger {
+    color: var(--red-text);
+}
+
+/* ── 二维码兜底态 ─────────────────────────────────────────────── */
+.qr-fallback {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    gap: 7px;
+    padding: 16px 10px;
+    text-align: center;
+}
+
+.qr-fallback-icon {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    margin-bottom: 3px;
+    place-items: center;
+    border-radius: 14px;
+    background: var(--red-soft);
+    color: var(--red-text);
+}
+
+.qr-fallback.is-notice .qr-fallback-icon {
+    background: var(--blue-soft);
+    color: var(--blue);
+}
+
+.qr-fallback strong {
+    color: var(--ink);
+    font-size: 13.5px;
+    font-weight: 650;
+}
+
+.qr-fallback p {
+    max-width: 244px;
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: 12px;
     line-height: 1.65;
 }
 
-/* --- Panel Section --- */
-.panel {
-    padding: 48px 54px 42px;
-    background:
-        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(250, 253, 255, 0.96));
-}
-
-.panel-header h2 {
-    margin: 0 0 10px;
-    font-size: 32px;
-    letter-spacing: 0;
-    color: #152235;
-}
-
-.panel-header p {
-    margin: 0 0 24px;
-    color: var(--text-muted);
-    line-height: 1.7;
-}
-
-.auth-tabs {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-    margin-bottom: 28px;
-}
-
-.auth-tab {
-    position: relative;
-    min-height: 78px;
-    padding: 14px 15px;
-    border-radius: 8px;
-    border: 1px solid rgba(199, 216, 229, 0.94);
-    background: linear-gradient(180deg, #ffffff 0%, #f8fbfe 100%);
-    color: var(--text-soft);
-    text-align: left;
-    font-weight: 800;
+.qr-fallback .btn {
+    height: 32px;
+    margin-top: 6px;
+    padding: 0 14px;
+    border-color: var(--line-strong);
+    background: var(--surface-solid);
+    box-shadow: var(--e1);
+    color: var(--ink);
     cursor: pointer;
-    user-select: none;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    box-shadow: 0 10px 24px rgba(50, 72, 94, 0.07);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
 }
 
-.auth-tab:hover {
-    border-color: rgba(31, 122, 224, 0.34);
-    box-shadow: 0 14px 30px rgba(50, 72, 94, 0.1);
+.qr-fallback .btn:hover:not(:disabled) {
+    border-color: rgba(var(--shade), 0.22);
+    box-shadow: var(--e2);
 }
 
-.auth-tab.active {
-    border-color: rgba(31, 122, 224, 0.62);
-    background: linear-gradient(180deg, #f7fbff 0%, #ffffff 100%);
-    color: var(--primary);
-    box-shadow: 0 14px 32px rgba(31, 122, 224, 0.16);
-    transform: translateY(-1px);
+/* ── 账号表单 ─────────────────────────────────────────────────── */
+.login-form .el-form-item {
+    margin-bottom: 15px;
 }
 
-.auth-tab.disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-    box-shadow: none;
-}
-
-.auth-tab.disabled:hover {
-    border-color: rgba(199, 216, 229, 0.94);
-    transform: none;
-}
-
-.auth-tab-icon {
-    width: 42px;
-    height: 42px;
-    flex: 0 0 auto;
-    border-radius: 8px;
-    display: grid;
-    place-items: center;
-    background: #eef6ff;
-    color: var(--primary);
-    border: 1px solid rgba(31, 122, 224, 0.12);
-}
-
-.auth-tab.active .auth-tab-icon {
-    background: var(--primary);
-    color: #ffffff;
-    border-color: var(--primary);
-    box-shadow: 0 10px 18px rgba(31, 122, 224, 0.18);
-}
-
-.auth-tab-copy {
-    min-width: 0;
-    display: grid;
-    gap: 4px;
-}
-
-.auth-tab-copy strong {
-    font-size: 16px;
-    line-height: 1.3;
-}
-
-.auth-tab-copy small {
-    color: var(--text-muted);
+.login-form .el-form-item__label {
+    padding: 0 0 6px;
+    color: var(--ink-muted);
     font-size: 12px;
-    font-weight: 700;
-    line-height: 1.35;
+    font-weight: 600;
+    line-height: 1.4;
 }
 
-.auth-tab.active .auth-tab-copy small {
-    color: #4f80b5;
+.login-form .el-form-item__content {
+    line-height: normal;
 }
 
-.auth-tab-state {
-    position: absolute;
-    right: 14px;
-    top: 14px;
-    width: 10px;
-    height: 10px;
-    border-radius: 999px;
-    background: #d2dfeb;
+.login-form .el-input__wrapper {
+    height: 42px;
+    padding: 0 13px;
+    border-radius: var(--r-sm);
+    background: var(--input-bg);
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+    transition: box-shadow 0.16s ease, background 0.16s ease;
 }
 
-.auth-tab.active .auth-tab-state {
-    background: var(--accent);
-    box-shadow: 0 0 0 4px var(--accent-soft);
+.login-form .el-input__wrapper:hover {
+    box-shadow: inset 0 0 0 1px rgba(var(--shade), 0.2);
 }
 
-.panel-body {
-    min-height: 330px;
+.login-form .el-input__wrapper.is-focus {
+    background: var(--surface-solid);
+    box-shadow: inset 0 0 0 1px var(--blue), 0 0 0 3px var(--blue-soft);
 }
 
-.account-pane {
-    max-width: 440px;
-    margin: 0 auto;
+.login-form .el-form-item.is-error .el-input__wrapper {
+    box-shadow: inset 0 0 0 1px var(--red);
+}
+
+.login-form .el-input__inner {
+    height: 40px;
+    color: var(--ink);
+    font-size: 13.5px;
+}
+
+.login-form .el-input__inner::placeholder {
+    color: var(--ink-faint);
+}
+
+.login-form .el-input__prefix,
+.login-form .el-input__suffix {
+    color: var(--ink-faint);
+}
+
+.login-form .el-form-item__error {
+    position: static;
+    padding-top: 5px;
+    color: var(--red-text);
+    font-size: 11.5px;
+    line-height: 1.4;
+}
+
+.login-submit.btn {
+    width: 100%;
+    height: 44px;
+    margin-top: 3px;
+    border-radius: var(--r-sm);
+    cursor: pointer;
+    font-size: 13.5px;
+    font-weight: 650;
+}
+
+.login-submit .spin {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.42);
+    border-radius: 50%;
+    border-top-color: #fff;
 }
 
 .login-tip {
-    margin-bottom: 18px;
-    padding: 14px 16px;
-    border-radius: 8px;
-    background: #f7fbff;
-    border: 1px solid rgba(216, 229, 239, 0.72);
-    color: var(--text-muted);
-    line-height: 1.7;
-    font-size: 14px;
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 11.5px;
+    line-height: 1.6;
 }
 
+/* 阿里云验证码挂载点 */
 .ai-captcha-box {
-    min-height: 1px;
-    margin-bottom: 12px;
+    position: relative;
 }
 
 .ai-captcha-box:empty {
@@ -976,1545 +1062,77 @@ onUnmounted(() => {
 
 .ai-captcha-trigger {
     position: absolute;
-    width: 1px;
-    height: 1px;
+    width: 0;
+    height: 0;
     padding: 0;
     border: 0;
     opacity: 0;
     pointer-events: none;
 }
 
-.account-pane .submit-btn.el-button {
-    width: 100%;
-    height: 54px;
-    display: inline-flex !important;
-    margin-top: 2px;
-    border: none !important;
-    border-radius: 8px !important;
-    background: var(--primary) !important;
-    border-color: var(--primary) !important;
-    color: #ffffff !important;
-    font-size: 16px;
-    font-weight: 800;
-    box-shadow: 0 12px 24px rgba(31, 122, 224, 0.22);
-}
-
-.account-pane .submit-btn.el-button:hover,
-.account-pane .submit-btn.el-button:focus {
-    background: var(--primary-strong) !important;
-    border-color: var(--primary-strong) !important;
-    color: #ffffff !important;
-}
-
-/* --- QR Code --- */
-.qr-pane {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 18px;
-}
-
-.qr-card {
-    width: 100%;
-    padding: 24px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: #ffffff;
-    box-shadow: 0 18px 40px rgba(50, 72, 94, 0.07);
-    text-align: center;
-}
-
-.qrcode-container {
-    width: 232px;
-    min-height: 232px;
-    margin: 0 auto 20px;
-    padding: 16px;
-    background: #fff;
-    border-radius: 8px;
-    border: 1px solid #eef2f7;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.qrcode-container canvas,
-.qrcode-container img {
-    display: block;
-    width: 200px;
-    height: 200px;
-    object-fit: contain;
-}
-
-.qr-status {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    max-width: 100%;
-    padding: 10px 18px;
-    border-radius: 999px;
-    background: #eef8f4;
-    color: #59606f;
-    font-weight: 800;
-    line-height: 1.5;
-    transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-.qr-fallback {
-    min-height: 280px;
-    padding: 22px 18px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-}
-
-.qr-fallback-icon {
-    width: 68px;
-    height: 68px;
-    border-radius: 8px;
-    display: grid;
-    place-items: center;
-    margin-bottom: 16px;
-    background: var(--primary-soft);
-}
-
-.qr-fallback.error .qr-fallback-icon {
-    background: #fef2f2;
-}
-
-.qr-fallback h3 {
-    margin: 0 0 8px;
-    font-size: 20px;
-    line-height: 1.35;
-}
-
-.qr-fallback p {
-    max-width: 320px;
-    margin: 0;
-    color: var(--text-muted);
-    line-height: 1.7;
-}
-
-.qr-refresh-btn {
-    min-width: 132px;
-    height: 42px;
-    margin-top: 20px;
-    border-radius: 8px !important;
-    font-weight: 800 !important;
-    background: var(--primary) !important;
-    border-color: var(--primary) !important;
-    box-shadow: 0 10px 22px rgba(37, 99, 235, 0.18);
-}
-
-.qr-refresh-btn:hover {
-    background: var(--primary-strong) !important;
-    border-color: var(--primary-strong) !important;
-}
-
-/* --- Responsive --- */
-@media (max-width: 960px) {
-    .login-page {
-        padding: 16px;
-    }
-
-    .shell {
-        grid-template-columns: 1fr;
-    }
-
-    .hero,
-    .panel {
-        padding: 32px 26px;
-    }
-
-    .hero h1 {
-        font-size: 36px;
-    }
-
-    .hero-meta {
-        margin-top: 34px;
-        flex-wrap: wrap;
-    }
-
-    .mini-program-card {
-        margin-top: 28px;
-    }
-}
-
-@media (max-width: 520px) {
-    .auth-tabs {
-        display: grid;
-        grid-template-columns: 1fr;
-    }
-
-    .panel {
-        padding: 28px 18px 24px;
-    }
-
-    .hero {
-        padding: 28px 20px;
-    }
-
-    .hero h1 {
-        font-size: 30px;
-    }
-
-    .mini-program-card {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
-    .mini-program-code {
-        width: 88px;
-        height: 88px;
-    }
-}
-
-:deep(.el-input__wrapper) {
-    border-radius: 8px !important;
-    box-shadow: none !important;
-    border: 1px solid var(--border) !important;
-    background: #ffffff !important;
-    padding: 11px 16px !important;
-}
-
-:deep(.el-input__wrapper.is-focus) {
-    background: #fff !important;
-    border-color: var(--primary) !important;
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1) !important;
-}
-
-:deep(.el-form-item) {
-    margin-bottom: 22px;
-}
-
-/* Touch device adaptation */
-@media (min-width: 821px) and (max-width: 1100px) {
-    .login-page {
-        padding: 18px;
-        align-items: start;
-    }
-
-    .shell {
-        width: min(980px, 100%);
-        grid-template-columns: 0.9fr 1.1fr;
-    }
-
-    .hero {
-        padding: 34px 32px;
-    }
-
-    .panel {
-        padding: 34px 32px 30px;
-    }
-
-    .brand-mark {
-        width: 60px;
-        height: 60px;
-        margin-bottom: 18px;
-    }
-
-    .hero h1 {
-        margin-top: 22px;
-        font-size: 36px;
-    }
-
-    .hero p {
-        font-size: 15px;
-        line-height: 1.75;
-    }
-
-    .hero-meta {
-        margin-top: 28px;
-        gap: 8px;
-    }
-
-    .mini-program-card {
-        margin-top: 26px;
-        padding: 12px;
-    }
-
-    .mini-program-code {
-        width: 86px;
-        height: 86px;
-    }
-
-    .panel-header h2 {
-        font-size: 28px;
-    }
-
-    .auth-tabs {
-        gap: 10px;
-        margin-bottom: 22px;
-    }
-
-    .auth-tab {
-        min-height: 70px;
-        padding: 12px;
-    }
-
-    .auth-tab-copy small {
-        display: none;
-    }
-
-    .panel-body {
-        min-height: 300px;
-    }
-
-    .qr-card {
-        padding: 20px;
-    }
-
-    .qrcode-container {
-        width: 214px;
-        min-height: 214px;
-    }
-}
-
-@media (max-width: 820px) {
-    .login-page {
-        min-height: 100dvh;
-        padding: 14px;
-        align-content: start;
-        justify-items: center;
-        overflow-x: hidden;
-    }
-
-    .shell {
-        width: 100%;
-        grid-template-columns: 1fr;
-        border-radius: 8px;
-        overflow: hidden;
-    }
-
-    .hero {
-        padding: 26px 24px;
-        border-right: 0;
-        border-bottom: 1px solid rgba(216, 229, 239, 0.8);
-    }
-
-    .brand-mark {
-        width: 54px;
-        height: 54px;
-        margin-bottom: 16px;
-    }
-
-    .hero-badge {
-        min-height: 30px;
-        padding: 0 12px;
-        font-size: 12px;
-    }
-
-    .hero h1 {
-        margin: 18px 0 10px;
-        font-size: clamp(28px, 7vw, 34px);
-    }
-
-    .hero p {
-        font-size: 14px;
-        line-height: 1.7;
-    }
-
-    .hero-meta {
-        margin-top: 22px;
-        gap: 8px;
-    }
-
-    .hero-meta span {
-        min-height: 30px;
-        padding: 0 10px;
-        font-size: 12px;
-    }
-
-    .mini-program-card {
-        width: 100%;
-        margin-top: 22px;
-        padding: 12px;
-        gap: 12px;
-    }
-
-    .mini-program-code {
-        width: 78px;
-        height: 78px;
-        padding: 6px;
-    }
-
-    .mini-program-copy strong {
-        font-size: 15px;
-    }
-
-    .mini-program-copy span {
-        font-size: 12px;
-        line-height: 1.55;
-    }
-
-    .panel {
-        padding: 26px 22px 24px;
-    }
-
-    .panel-header h2 {
-        margin-bottom: 6px;
-        font-size: 26px;
-    }
-
-    .panel-header p {
-        margin-bottom: 18px;
-        font-size: 14px;
-        line-height: 1.6;
-    }
-
-    .auth-tabs {
-        gap: 10px;
-        margin-bottom: 20px;
-    }
-
-    .auth-tab {
-        min-height: 68px;
-        padding: 12px;
-    }
-
-    .auth-tab-icon {
-        width: 38px;
-        height: 38px;
-    }
-
-    .auth-tab-copy strong {
-        font-size: 15px;
-    }
-
-    .auth-tab-copy small {
-        font-size: 11px;
-    }
-
-    .panel-body {
-        min-height: auto;
-    }
-
-    .account-pane {
-        max-width: none;
-    }
-
-    .qr-card {
-        padding: 18px;
-    }
-
-    .qrcode-container {
-        width: min(220px, 100%);
-        min-height: 0;
-        aspect-ratio: 1;
-        margin-bottom: 16px;
-        padding: 12px;
-    }
-
-    .qrcode-container canvas,
-    .qrcode-container img {
-        width: 100% !important;
-        height: auto !important;
-    }
-
-    .qr-status {
-        width: 100%;
-        padding: 9px 12px;
-        font-size: 13px;
-    }
-
-    .qr-fallback {
-        min-height: 220px;
-        padding: 18px 12px;
-    }
-
-    .account-pane .submit-btn.el-button {
-        height: 48px;
-    }
-
-    :deep(.el-form-item) {
-        margin-bottom: 16px;
-    }
-}
-
-@media (max-width: 520px) {
-    .login-page {
-        padding: 0;
-        background-size: 28px 28px, 28px 28px, auto, auto;
-    }
-
-    .shell {
-        min-height: 100dvh;
-        border: 0;
-        border-radius: 0;
-        box-shadow: none;
-    }
-
-    .hero {
-        padding: calc(22px + env(safe-area-inset-top, 0px)) 18px 20px;
-    }
-
-    .hero h1 {
-        font-size: 30px;
-    }
-
-    .hero-meta {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .hero-meta span {
-        justify-content: center;
-        padding: 0 7px;
-        white-space: nowrap;
-    }
-
-    .mini-program-card {
-        align-items: center;
-        flex-direction: row;
-    }
-
-    .panel {
-        padding: 24px 18px 24px;
-    }
-
-    .icp-footer {
-        padding: 0 18px calc(16px + env(safe-area-inset-bottom, 0px));
-    }
-
-    .auth-tabs {
-        grid-template-columns: 1fr;
-    }
-
-    .auth-tab {
-        min-height: 62px;
-    }
-
-    .qr-card {
-        padding: 14px;
-    }
-
-    .qrcode-container {
-        width: min(204px, 100%);
-    }
-}
-
-@media (max-width: 380px) {
-    .hero-meta {
-        grid-template-columns: 1fr;
-    }
-
-    .mini-program-card {
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
-    .mini-program-code {
-        width: 72px;
-        height: 72px;
-    }
-}
-
-/* Final login polish: same visual language as the management console. */
-@keyframes login-rise {
-    from {
-        opacity: 0;
-        transform: translateY(12px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.login-page {
-    --surface: #ffffff;
-    --background: #f6f8fb;
-    --text-main: #151a21;
-    --text-soft: #4e5c6d;
-    --text-muted: #7a8797;
-    --border: #dfe7ef;
-    --border-strong: #c8d5e2;
-    --primary: #2563eb;
-    --primary-strong: #1d4ed8;
-    --primary-soft: #eaf2ff;
-    --accent: #0f8f72;
-    --accent-soft: #e7f8f2;
-    --warm: #b66a12;
-    min-height: 100dvh;
-    padding: 24px;
-    gap: 14px;
-    background:
-        linear-gradient(rgba(37, 99, 235, 0.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(15, 143, 114, 0.03) 1px, transparent 1px),
-        linear-gradient(180deg, #fbfcfe 0%, var(--background) 100%);
-    background-size: 28px 28px, 28px 28px, auto;
-    background-position: -1px -1px, -1px -1px, 0 0;
-    color: var(--text-main);
-    -webkit-font-smoothing: antialiased;
-}
-
-.shell {
-    width: min(1120px, 100%);
-    grid-template-columns: minmax(0, 0.96fr) minmax(420px, 1.04fr);
-    border-color: rgba(210, 221, 232, 0.92);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.94);
-    box-shadow: 0 24px 70px rgba(18, 28, 38, 0.12);
-    animation: login-rise 0.46s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.hero {
-    isolation: isolate;
-    padding: 52px 54px;
-    border-right-color: rgba(210, 221, 232, 0.86);
-    background:
-        linear-gradient(135deg, rgba(234, 242, 255, 0.92), rgba(231, 248, 242, 0.82) 58%, rgba(255, 244, 223, 0.72));
-}
-
-.hero::before {
-    opacity: 0.72;
-    background:
-        linear-gradient(rgba(37, 99, 235, 0.05) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(15, 143, 114, 0.045) 1px, transparent 1px);
-    background-size: 24px 24px;
-}
-
-.hero::after {
-    content: "";
-    position: absolute;
-    right: -56px;
-    bottom: -36px;
-    z-index: -1;
-    width: 300px;
-    height: 220px;
-    border: 1px solid rgba(200, 213, 226, 0.72);
-    border-radius: 8px;
-    background:
-        linear-gradient(#ffffff, #ffffff) 20px 20px / 112px 10px no-repeat,
-        linear-gradient(#e6edf5, #e6edf5) 20px 42px / 210px 8px no-repeat,
-        linear-gradient(90deg, #eaf2ff 0 34%, #e7f8f2 34% 66%, #fff4df 66% 100%) 20px 72px / 240px 48px no-repeat,
-        repeating-linear-gradient(0deg, #ffffff 0 32px, #f3f6fa 32px 33px);
-    box-shadow: 0 20px 44px rgba(18, 28, 38, 0.12);
-    opacity: 0.8;
-    transform: rotate(-3deg);
-}
-
-.brand-mark {
-    width: 68px;
-    height: 68px;
-    margin-bottom: 24px;
-    border-color: rgba(210, 221, 232, 0.9);
-    border-radius: 8px;
-    box-shadow: 0 14px 30px rgba(18, 28, 38, 0.12);
-}
-
-.hero-badge {
-    min-height: 32px;
-    padding: 0 12px;
-    border-color: rgba(15, 143, 114, 0.22);
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.72);
-    color: var(--accent);
-    box-shadow: 0 8px 18px rgba(18, 28, 38, 0.06);
-}
-
-.hero h1 {
-    margin: 26px 0 16px;
-    color: var(--text-main);
-    font-size: clamp(38px, 4vw, 50px);
-    font-weight: 920;
-    letter-spacing: 0;
-}
-
-.hero p {
-    max-width: 500px;
-    color: var(--text-soft);
-    font-size: 16px;
-    line-height: 1.85;
-}
-
-.hero-meta {
-    margin-top: 38px;
-    gap: 10px;
-}
-
-.hero-meta span {
-    min-height: 32px;
-    border-color: rgba(210, 221, 232, 0.86);
-    background: rgba(255, 255, 255, 0.68);
-    color: var(--text-soft);
-    font-weight: 760;
-}
-
-.hero-meta span:nth-child(2)::before {
-    background: var(--primary);
-}
-
-.hero-meta span:nth-child(3)::before {
-    background: var(--warm);
-}
-
-.mini-program-card {
-    margin-top: 34px;
-    border-color: rgba(210, 221, 232, 0.9);
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.82);
-    box-shadow: 0 16px 38px rgba(18, 28, 38, 0.09);
-}
-
-.mini-program-code {
-    border-color: var(--border);
-    border-radius: 8px;
-}
-
-.mini-program-copy strong {
-    color: var(--text-main);
-    font-weight: 880;
-}
-
-.mini-program-copy span {
-    color: var(--text-muted);
-}
-
-.panel {
-    padding: 50px 54px 44px;
-    background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
-}
-
-.panel-header h2 {
-    color: var(--text-main);
-    font-size: 31px;
-    font-weight: 900;
-}
-
-.panel-header p {
-    color: var(--text-muted);
-}
-
-.auth-tabs {
-    gap: 10px;
-    margin-bottom: 24px;
-}
-
-.auth-tab {
-    min-height: 76px;
-    border-color: var(--border);
-    border-radius: 8px;
-    background: #ffffff;
-    box-shadow: 0 1px 2px rgba(18, 28, 38, 0.05);
-}
-
-.auth-tab:hover,
-.auth-tab:focus-visible {
-    border-color: var(--border-strong);
-    box-shadow: 0 10px 24px rgba(18, 28, 38, 0.08);
-    outline: none;
-}
-
-.auth-tab.active {
-    border-color: rgba(37, 99, 235, 0.52);
-    background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
-    color: var(--primary);
-    box-shadow: 0 12px 28px rgba(37, 99, 235, 0.13);
-}
-
-.auth-tab-icon {
-    border-color: rgba(37, 99, 235, 0.14);
-    border-radius: 8px;
-    background: var(--primary-soft);
-}
-
-.auth-tab.active .auth-tab-icon {
-    background: var(--primary);
-    box-shadow: 0 10px 20px rgba(37, 99, 235, 0.18);
-}
-
-.auth-tab-copy strong {
-    color: var(--text-main);
-    font-weight: 880;
-}
-
-.auth-tab.active .auth-tab-copy strong {
-    color: var(--primary);
-}
-
-.auth-tab-copy small {
-    color: var(--text-muted);
-}
-
-.auth-tab-state {
-    background: #d8e2ec;
-}
-
-.auth-tab.active .auth-tab-state {
-    background: var(--accent);
-    box-shadow: 0 0 0 4px var(--accent-soft);
-}
-
-.login-tip,
-.qr-card {
-    border-color: var(--border);
-    border-radius: 8px;
-    background: #ffffff;
-    box-shadow: 0 1px 2px rgba(18, 28, 38, 0.05);
-}
-
-.login-tip {
-    color: var(--text-muted);
-    background: #f8fafc;
-}
-
-.qr-card {
-    padding: 22px;
-}
-
-.qrcode-container {
-    border-color: var(--border);
-    border-radius: 8px;
-    box-shadow: inset 0 0 0 6px #f8fafc;
-}
-
-.qr-status {
-    border-radius: 999px;
-    background: var(--accent-soft);
-}
-
-.qr-status.is-neutral {
-    color: #59606f;
-    background: #f1f5f9;
-}
-
-.qr-status.is-ready,
-.qr-status.is-success {
-    color: #0f766e;
-    background: #e7f8f2;
-}
-
-.qr-status.is-waiting {
-    color: #b45309;
-    background: #fff4df;
-}
-
-.qr-status.is-danger {
-    color: #dc2626;
-    background: #fef2f2;
-}
-
-.qr-fallback-icon {
-    border-radius: 8px;
-}
-
-.qr-refresh-btn,
-.account-pane .submit-btn.el-button {
-    border-radius: 8px !important;
-    background: var(--primary) !important;
-    border-color: var(--primary) !important;
-    box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2) !important;
-}
-
-.qr-refresh-btn:hover,
-.account-pane .submit-btn.el-button:hover,
-.account-pane .submit-btn.el-button:focus {
-    background: var(--primary-strong) !important;
-    border-color: var(--primary-strong) !important;
-    transform: translateY(-1px);
-}
-
-.icp-footer {
-    color: var(--text-muted);
-    animation: login-rise 0.46s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
-}
-
-:deep(.el-input__wrapper) {
-    min-height: 46px;
-    border-color: var(--border) !important;
-    border-radius: 8px !important;
-    transition: border-color 0.18s ease, box-shadow 0.18s ease !important;
-}
-
-:deep(.el-input__wrapper:hover) {
-    border-color: var(--border-strong) !important;
-}
-
-:deep(.el-input__wrapper.is-focus) {
-    border-color: rgba(37, 99, 235, 0.58) !important;
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.09) !important;
-}
-
-@media (max-width: 960px) {
-    .shell {
-        grid-template-columns: 1fr;
-    }
-
-    .hero::after {
-        width: 260px;
-        height: 160px;
-        right: -90px;
-        bottom: -54px;
-        opacity: 0.48;
-    }
-}
-
-@media (max-width: 820px) {
-    .login-page {
-        padding: 12px;
-        align-content: start;
-    }
-
-    .shell {
-        border-radius: 8px;
-    }
-
-    .hero,
-    .panel {
-        padding: 28px 22px;
-    }
-
-    .hero h1 {
-        font-size: clamp(30px, 9vw, 38px);
-    }
-
-    .mini-program-card {
-        width: 100%;
-    }
-}
-
-@media (max-width: 520px) {
-    .login-page {
-        padding: 0;
-    }
-
-    .shell {
-        min-height: 100dvh;
-        border: 0;
-        border-radius: 0;
-    }
-
-    .hero {
-        padding: calc(22px + env(safe-area-inset-top, 0px)) 18px 20px;
-    }
-
-    .hero::after {
-        display: none;
-    }
-
-    .hero-meta {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .hero-meta span {
-        min-width: 0;
-        padding: 0 6px;
-        font-size: 12px;
-    }
-
-    .panel {
-        padding: 24px 18px;
-    }
-
-    .auth-tabs {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* Final mobile login rebuild: centered, complete, scan-first. */
-@media (max-width: 640px) {
-    .login-page {
-        width: 100% !important;
-        max-width: 100% !important;
-        min-width: 0 !important;
-        min-height: 100dvh !important;
-        padding: calc(18px + env(safe-area-inset-top, 0px)) 16px calc(18px + env(safe-area-inset-bottom, 0px)) !important;
-        display: grid !important;
-        grid-template-columns: minmax(0, 1fr) !important;
-        grid-template-rows: auto auto !important;
-        align-content: center !important;
-        justify-content: center !important;
-        justify-items: center !important;
-        row-gap: 12px !important;
-        box-sizing: border-box !important;
-        overflow-x: hidden !important;
-        background:
-            radial-gradient(circle at 16% 0%, rgba(37, 99, 235, 0.12), transparent 30%),
-            radial-gradient(circle at 88% 12%, rgba(15, 143, 114, 0.1), transparent 28%),
-            linear-gradient(rgba(37, 99, 235, 0.035) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(15, 143, 114, 0.03) 1px, transparent 1px),
-            linear-gradient(180deg, #f8fbff 0%, #eef4f8 100%) !important;
-        background-size: auto, auto, 28px 28px, 28px 28px, auto !important;
-        background-position: 0 0, 0 0, -1px -1px, -1px -1px, 0 0 !important;
-    }
-
-    .login-page,
-    .login-page *,
-    .login-page *::before,
-    .login-page *::after {
-        box-sizing: border-box !important;
-    }
-
-    .shell {
-        width: min(390px, calc(100vw - 32px)) !important;
-        max-width: 100% !important;
-        min-height: auto !important;
-        margin-inline: auto !important;
-        display: block !important;
-        justify-self: center !important;
-        border: 1px solid rgba(204, 218, 232, 0.92) !important;
-        border-radius: 18px !important;
-        overflow: hidden !important;
-        background: rgba(255, 255, 255, 0.94) !important;
-        box-shadow:
-            0 24px 60px rgba(18, 28, 38, 0.14),
-            inset 0 1px 0 rgba(255, 255, 255, 0.76) !important;
-        backdrop-filter: blur(16px) saturate(1.12);
-        -webkit-backdrop-filter: blur(16px) saturate(1.12);
-    }
-
-    .hero {
-        min-height: auto !important;
-        padding: 22px 22px 16px !important;
-        display: grid !important;
-        grid-template-columns: 58px minmax(0, 1fr) !important;
-        gap: 14px !important;
-        align-items: center !important;
-        border: 0 !important;
-        border-bottom: 1px solid rgba(223, 231, 239, 0.86) !important;
-        background:
-            linear-gradient(rgba(37, 99, 235, 0.035) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(37, 99, 235, 0.026) 1px, transparent 1px),
-            linear-gradient(180deg, rgba(248, 251, 255, 0.9), rgba(255, 255, 255, 0.72)) !important;
-        background-size: 28px 28px, 28px 28px, auto !important;
-        background-position: -1px -1px, -1px -1px, 0 0 !important;
-    }
-
-    .hero::before,
-    .hero::after,
-    .hero-badge,
-    .mini-program-card {
-        display: none !important;
-    }
-
-    .brand-mark {
-        grid-row: 1 / span 2;
-        width: 58px !important;
-        height: 58px !important;
-        margin: 0 !important;
-        border-radius: 16px !important;
-        border: 1px solid rgba(255, 255, 255, 0.82) !important;
-        background: rgba(255, 255, 255, 0.78) !important;
-        box-shadow:
-            0 12px 28px rgba(37, 99, 235, 0.12),
-            inset 0 1px 0 rgba(255, 255, 255, 0.76) !important;
-    }
-
-    .hero h1 {
-        min-width: 0;
-        margin: 3px 0 -1px !important;
-        color: #101828 !important;
-        font-size: 25px !important;
-        font-weight: 920 !important;
-        line-height: 1.12 !important;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        transform: translateY(2px);
-    }
-
-    .hero p {
-        display: block !important;
-        grid-column: 2;
-        margin: 6px 0 0 !important;
-        color: #667085 !important;
-        font-size: 12px !important;
-        line-height: 1.45 !important;
-    }
-
-    .hero-meta {
-        grid-column: 1 / -1;
-        margin-top: 14px !important;
-        display: grid !important;
-        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-        gap: 8px !important;
-    }
-
-    .hero-meta span {
-        min-width: 0 !important;
-        min-height: 30px !important;
-        padding: 0 8px !important;
-        justify-content: center !important;
-        border-color: rgba(223, 231, 239, 0.9) !important;
-        border-radius: 999px !important;
-        background: rgba(255, 255, 255, 0.74) !important;
-        color: #536276 !important;
-        font-size: 11px !important;
-        font-weight: 780 !important;
-        white-space: nowrap !important;
-    }
-
-    .hero-meta span::before {
-        width: 5px !important;
-        height: 5px !important;
-        flex: 0 0 auto;
-    }
-
-    .panel {
-        width: 100% !important;
-        margin: 0 !important;
-        padding: 22px !important;
-        border: 0 !important;
-        border-radius: 0 !important;
-        background: #ffffff !important;
-        box-shadow: none !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
-    }
-
-    .panel-header {
-        margin: 0 0 16px !important;
-        text-align: left !important;
-    }
-
-    .panel-header h2 {
-        margin: 0 0 6px !important;
-        color: #101828 !important;
-        font-size: 26px !important;
-        font-weight: 920 !important;
-        line-height: 1.15 !important;
-    }
-
-    .panel-header p {
-        margin: 0 !important;
-        color: #667085 !important;
-        font-size: 13px !important;
-        line-height: 1.5 !important;
-    }
-
-    .auth-tabs {
-        margin: 0 0 18px !important;
-        padding: 4px !important;
-        display: grid !important;
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-        gap: 4px !important;
-        border: 1px solid #dfe7ef !important;
-        border-radius: 13px !important;
-        background: #f3f7fb !important;
-    }
-
-    .auth-tab {
-        min-height: 46px !important;
-        padding: 0 8px !important;
-        display: inline-flex !important;
-        justify-content: center !important;
-        gap: 7px !important;
-        border: 0 !important;
-        border-radius: 10px !important;
-        background: transparent !important;
-        color: #5f6f85 !important;
-        box-shadow: none !important;
-        text-align: center !important;
-        transform: none !important;
-    }
-
-    .auth-tab.active {
-        background: #ffffff !important;
-        color: var(--primary) !important;
-        box-shadow:
-            0 7px 16px rgba(18, 28, 38, 0.08),
-            inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
-    }
-
-    .auth-tab-icon {
-        width: 24px !important;
-        height: 24px !important;
-        border: 0 !important;
-        background: transparent !important;
-        color: currentColor !important;
-        box-shadow: none !important;
-    }
-
-    .auth-tab-copy {
-        display: block !important;
-    }
-
-    .auth-tab-copy strong {
-        display: block !important;
-        color: currentColor !important;
-        font-size: 14px !important;
-        line-height: 1 !important;
-        white-space: nowrap !important;
-    }
-
-    .auth-tab-copy small,
-    .auth-tab-state {
-        display: none !important;
-    }
-
-    .panel-body {
-        min-height: 0 !important;
-    }
-
-    .qr-pane {
-        width: 100% !important;
-        display: grid !important;
-        justify-items: center !important;
-    }
-
-    .qr-card,
-    .login-tip {
-        border-color: #dfe7ef !important;
-        border-radius: 14px !important;
-        background: #f8fafc !important;
-        box-shadow: none !important;
-    }
-
-    .qr-card {
-        width: 100% !important;
-        max-width: 100% !important;
-        padding: 16px !important;
-        display: grid !important;
-        justify-items: center !important;
-        overflow: hidden !important;
-    }
-
-    .qrcode-container {
-        width: min(218px, 72vw) !important;
-        min-height: 0 !important;
-        aspect-ratio: 1 !important;
-        margin: 0 auto 14px !important;
-        padding: 12px !important;
-        border-color: #dfe7ef !important;
-        border-radius: 14px !important;
-        background: #ffffff !important;
-        box-shadow: inset 0 0 0 6px #f8fafc !important;
-    }
-
-    .qrcode-container canvas,
-    .qrcode-container img {
-        width: 100% !important;
-        height: auto !important;
-    }
-
-    .qr-status {
-        width: 100% !important;
-        max-width: 100% !important;
-        display: flex !important;
-        min-height: 40px !important;
-        padding: 9px 12px !important;
-        gap: 7px !important;
-        justify-content: center !important;
-        border-radius: 12px !important;
-        font-size: 13px !important;
-        line-height: 1.35 !important;
-        text-align: center !important;
-    }
-
-    .account-pane {
-        max-width: none !important;
-    }
-
-    .login-tip {
-        margin-bottom: 15px !important;
-        padding: 12px 13px !important;
-        color: #667085 !important;
-        font-size: 12px !important;
-        line-height: 1.55 !important;
-    }
-
-    :deep(.el-form-item) {
-        margin-bottom: 14px !important;
-    }
-
-    :deep(.el-input__wrapper) {
-        min-height: 48px !important;
-        padding: 0 13px !important;
-        border-color: #d9e4ef !important;
-        border-radius: 12px !important;
-        background: #ffffff !important;
-    }
-
-    :deep(.el-input__inner) {
-        font-size: 15px !important;
-    }
-
-    .account-pane .submit-btn.el-button {
-        height: 48px !important;
-        margin-top: 2px !important;
-        border-radius: 12px !important;
-        font-size: 15px !important;
-        box-shadow: 0 12px 26px rgba(37, 99, 235, 0.2) !important;
-    }
-
-    .qr-fallback {
-        min-height: 208px !important;
-        padding: 16px 12px !important;
-    }
-
-    .qr-fallback-icon {
-        width: 54px !important;
-        height: 54px !important;
-        margin-bottom: 12px !important;
-        border-radius: 14px !important;
-    }
-
-    .qr-fallback h3 {
-        font-size: 18px !important;
-    }
-
-    .qr-fallback p {
-        font-size: 13px !important;
-        line-height: 1.55 !important;
-    }
-
-    .qr-refresh-btn {
-        min-width: 120px !important;
-        height: 40px !important;
-        margin-top: 14px !important;
-        border-radius: 12px !important;
-    }
-
-    .icp-footer {
-        width: min(390px, calc(100vw - 32px)) !important;
-        max-width: 100% !important;
-        margin: 0 auto !important;
-        padding: 0 8px !important;
-        display: block !important;
-        color: rgba(83, 98, 118, 0.72) !important;
-        font-size: 11px !important;
-        line-height: 1.55 !important;
-        text-align: center !important;
-        animation: none !important;
-    }
-
-    .icp-footer a {
-        color: inherit !important;
-        text-decoration: none !important;
-    }
-}
-
-@media (max-width: 380px) {
-    .login-page {
-        padding-right: 10px !important;
-        padding-left: 10px !important;
-    }
-
-    .shell {
-        border-radius: 16px !important;
-    }
-
-    .icp-footer {
-        width: min(100%, calc(100vw - 20px)) !important;
-        font-size: 10.5px !important;
-    }
-
-    .hero {
-        padding: 18px 18px 14px !important;
-        grid-template-columns: 52px minmax(0, 1fr) !important;
-    }
-
-    .brand-mark {
-        width: 52px !important;
-        height: 52px !important;
-    }
-
-    .hero h1 {
-        font-size: 23px !important;
-    }
-
-    .panel {
-        padding: 18px !important;
-    }
-
-    .panel-header h2 {
-        font-size: 24px !important;
-    }
-
-    .auth-tab-copy strong {
-        font-size: 13px !important;
-    }
-}
-
-/* Final login interaction repair: prevent rectangular press/focus flash. */
-.login-page button,
-.login-page :deep(.el-button) {
-    -webkit-tap-highlight-color: transparent !important;
-    appearance: none !important;
-    background-clip: padding-box !important;
-    outline: none !important;
-    overflow: hidden !important;
-}
-
-.login-page button:active,
-.login-page button:focus,
-.login-page button:focus-visible,
-.login-page :deep(.el-button:active),
-.login-page :deep(.el-button:focus),
-.login-page :deep(.el-button:focus-visible) {
-    outline: none !important;
-    background-clip: padding-box !important;
-}
-
-.login-page button::before,
-.login-page button::after,
-.login-page :deep(.el-button)::before,
-.login-page :deep(.el-button)::after {
-    border-radius: inherit !important;
-}
-
-.account-pane .submit-btn.el-button,
-.qr-refresh-btn {
-    --login-button-radius: 8px;
-}
-
-@media (max-width: 640px) {
-    .account-pane .submit-btn.el-button,
-    .qr-refresh-btn {
-        --login-button-radius: 12px;
-    }
-}
-
-.account-pane .submit-btn.el-button:active,
-.account-pane .submit-btn.el-button:focus,
-.account-pane .submit-btn.el-button:focus-visible,
-.qr-refresh-btn:active,
-.qr-refresh-btn:focus,
-.qr-refresh-btn:focus-visible {
-    border-radius: var(--login-button-radius, 8px) !important;
-    outline: none !important;
-    box-shadow: 0 12px 26px rgba(37, 99, 235, 0.2) !important;
-}
-
-/* Subtle login motion: same clean scan language as the mini program. */
-@keyframes login-ambient-scan {
-    0%,
-    100% {
-        opacity: 0;
-        transform: translate3d(0, -44px, 0);
-    }
-
-    22%,
-    72% {
-        opacity: 0.52;
-    }
-
-    50% {
-        opacity: 0.72;
-        transform: translate3d(0, 30vh, 0);
-    }
-}
-
-@keyframes login-ambient-scan-up {
-    0%,
-    100% {
-        opacity: 0;
-        transform: translate3d(0, 44px, 0);
-    }
-
-    22%,
-    72% {
-        opacity: 0.38;
-    }
-
-    50% {
-        opacity: 0.56;
-        transform: translate3d(0, -30vh, 0);
-    }
-}
-
-@keyframes login-card-sheen {
-    0%,
-    56%,
-    100% {
-        opacity: 0;
-        transform: translateX(-130%) skewX(-16deg);
-    }
-
-    68% {
-        opacity: 1;
-    }
-
-    86% {
-        opacity: 0;
-        transform: translateX(320%) skewX(-16deg);
-    }
-}
-
-@keyframes login-quiet-pulse {
-    0%,
-    100% {
-        transform: scale(1);
-        opacity: 1;
-    }
-
-    50% {
-        transform: scale(0.86);
-        opacity: 0.72;
-    }
-}
-
-.login-page {
-    position: relative;
-    overflow: hidden;
-}
-
-.login-page::before,
-.login-page::after {
-    content: '';
-    position: fixed;
-    left: 8vw;
-    right: 8vw;
-    height: 1px;
-    border-radius: 999px;
-    pointer-events: none;
-    background: linear-gradient(90deg, transparent 0%, rgba(37, 99, 235, 0.22) 50%, transparent 100%);
-    box-shadow: 0 0 18px rgba(37, 99, 235, 0.12);
-    animation: login-ambient-scan 8s ease-in-out infinite;
-}
-
-.login-page::before {
-    top: 19vh;
-}
-
-.login-page::after {
-    top: 68vh;
-    opacity: 0.34;
-    animation-name: login-ambient-scan-up;
-    animation-delay: -4s;
-}
-
-.shell,
-.icp-footer {
+/* ── 页脚 ─────────────────────────────────────────────────────── */
+.login-footer {
     position: relative;
     z-index: 1;
+    margin: 18px 0 auto;
+    color: var(--ink-faint);
+    font-size: 11px;
+    text-align: center;
 }
 
-.qr-card {
-    position: relative;
-    overflow: hidden;
+.login-footer a {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.16s ease;
 }
 
-.qr-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -30%;
-    width: 42%;
-    height: 100%;
-    pointer-events: none;
-    background: linear-gradient(90deg, transparent, rgba(37, 99, 235, 0.055), transparent);
-    animation: login-card-sheen 5.8s ease-in-out infinite;
+.login-footer a:hover {
+    color: var(--ink-muted);
 }
 
-.auth-tab.active .auth-tab-state,
-.qr-status svg {
-    animation: login-quiet-pulse 2.6s ease-in-out infinite;
+.login-footer a:focus-visible {
+    border-radius: 4px;
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .login-page::before,
-    .login-page::after,
-    .qr-card::before,
-    .login-page *,
-    .shell,
-    .icp-footer {
-        animation: none !important;
-        transition: none !important;
+/* ── 断点 ─────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+    .login-page {
+        padding: 18px 16px 16px;
+    }
+
+    .login-panel {
+        padding: 22px 18px 18px;
+        border-radius: var(--r-lg);
+    }
+
+    .login-heading {
+        margin: 18px 0 14px;
+    }
+
+    .login-heading h1 {
+        font-size: 20px;
+    }
+
+    .qr-well {
+        min-height: 218px;
+        padding: 11px;
+    }
+}
+
+@media (max-height: 660px) {
+    .login-page {
+        padding-top: 14px;
+        padding-bottom: 12px;
+    }
+
+    .login-heading {
+        margin: 14px 0 12px;
+    }
+
+    .qr-well {
+        min-height: 204px;
     }
 }
 </style>
