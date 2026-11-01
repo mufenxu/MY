@@ -52,6 +52,7 @@ import cn.pxyb.mycontrol.assistant.buildPersonalAssistantSnapshot
 import cn.pxyb.mycontrol.ui.components.display.AppDivider
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
+import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.navigation.WorkspaceDestination
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
@@ -95,24 +96,18 @@ internal fun HomeScheduleCard(state: OverviewUiState, onOpenWorkspace: (Workspac
         listOf(Color.White.copy(alpha = if (isAppInDarkTheme()) 0.16f else 0.42f), Color.Transparent),
     )
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        AppPanel {
-            Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                listOf("今日概览", "本周课表", "校园服务").forEachIndexed { index, label ->
-                    Box(
-                        Modifier.weight(1f).clip(RoundedCornerShape(24.dp))
-                            .background(if (index == 0) accent.copy(alpha = 0.10f) else Color.Transparent)
-                            .clickable(role = Role.Button) {
-                                if (index != 0) onOpenWorkspace(if (index == 1) WorkspaceDestination.Timetable else WorkspaceDestination.Campus)
-                            }.heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 12.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(label, style = MaterialTheme.typography.labelMedium,
-                            color = if (index == 0) accent else colors.onSurfaceVariant,
-                            fontWeight = if (index == 0) FontWeight.SemiBold else FontWeight.Normal)
-                    }
+        AppSegmentedControl(
+            options = listOf(WorkspaceDestination.Today, WorkspaceDestination.Timetable, WorkspaceDestination.Campus),
+            selected = WorkspaceDestination.Today,
+            onSelect = onOpenWorkspace,
+            label = { destination ->
+                when (destination) {
+                    WorkspaceDestination.Today -> "今日概览"
+                    WorkspaceDestination.Timetable -> "本周课表"
+                    else -> "校园服务"
                 }
-            }
-        }
+            },
+        )
         Surface(
             onClick = { onOpenWorkspace(WorkspaceDestination.Today) },
             shape = cardShape, color = Color.Transparent, contentColor = onAccent,
