@@ -9,6 +9,10 @@
 .agents/
 .codex-logs/
 
+# Temporary browser profiles and screenshots
+/.tmp-chrome/
+/.tmp-shot/
+
 # Runtime data
 **/data/
 **/uploads/

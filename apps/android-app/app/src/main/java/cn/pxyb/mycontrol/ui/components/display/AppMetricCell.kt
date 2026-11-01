@@ -25,7 +25,7 @@ fun AppMetricCell(
     Column(modifier = modifier.padding(vertical = 2.dp)) {
         Text(
             text = label,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+            style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(3.dp))
@@ -33,7 +33,6 @@ fun AppMetricCell(
             text = value,
             style = MaterialTheme.typography.titleMedium.copy(
                 fontWeight = FontWeight.Bold,
-                fontSize = 16.5.sp,
             ),
             color = displayValueColor,
             maxLines = 1,

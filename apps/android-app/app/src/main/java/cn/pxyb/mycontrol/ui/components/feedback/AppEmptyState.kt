@@ -69,7 +69,6 @@ fun AppEmptyState(
             text = title,
             style = MaterialTheme.typography.titleMedium.copy(
                 fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp,
             ),
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center,

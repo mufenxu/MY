@@ -21,7 +21,7 @@ import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 fun DialogInfoText(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
-        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp, lineHeight = 21.sp),
+        style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier.fillMaxWidth(),
     )

@@ -259,10 +259,7 @@ fun AppDialog(
                                     if (subtitle != null) {
                                         Text(
                                             text = subtitle,
-                                            style = MaterialTheme.typography.bodySmall.copy(
-                                                fontSize = 13.sp,
-                                                lineHeight = 20.sp,
-                                            ),
+                                            style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }

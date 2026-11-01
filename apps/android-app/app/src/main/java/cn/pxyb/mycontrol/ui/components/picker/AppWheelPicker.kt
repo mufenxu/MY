@@ -169,13 +169,11 @@ fun <T> AppWheelPicker(
                         Text(
                             text = formatItem(item),
                             style = if (isSelected) {
-                                MaterialTheme.typography.titleLarge.copy(
-                                    fontSize = 21.sp,
+                                MaterialTheme.typography.headlineSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                 )
                             } else {
                                 MaterialTheme.typography.bodyLarge.copy(
-                                    fontSize = 16.sp,
                                     fontWeight = FontWeight.Normal,
                                 )
                             },
@@ -191,7 +189,6 @@ fun <T> AppWheelPicker(
                             Text(
                                 text = unitText,
                                 style = MaterialTheme.typography.labelSmall.copy(
-                                    fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
                                 ),
                                 color = MaterialTheme.colorScheme.primary,

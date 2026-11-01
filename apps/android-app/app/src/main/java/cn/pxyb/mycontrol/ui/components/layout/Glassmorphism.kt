@@ -20,6 +20,7 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.Dp
@@ -96,7 +97,7 @@ fun Modifier.glassShimmer(dark: Boolean): Modifier = this.composed {
 
     val baseAlpha = if (dark) 0.03f else 0.08f
     val highlightAlpha = if (dark) 0.16f else 0.28f
-    val highlightColor = if (dark) Color(0xFF93C5FD) else Color.White
+    val highlightColor = if (dark) ColorTokens.ShimmerHighlightDark else ColorTokens.AppSurfaceLight
 
     drawWithCache {
         val width = size.width

@@ -76,7 +76,6 @@ private fun StatusBadgeContent(
                 text = label,
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 11.sp,
                 ),
             )
         }

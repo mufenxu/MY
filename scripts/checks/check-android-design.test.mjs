@@ -35,3 +35,25 @@ test('ignores documentation, string literals and import names', () => {
     val snippet = """Color(0xFF123456)"""
   `), []);
 });
+
+test('checks shared component tokens while allowing their native implementations', () => {
+  const findings = checkAndroidDesignSource('ui/components/button/AppButtons.kt', `
+    Button(onClick = {}) {}
+    TextField(value = name)
+    AlertDialog(onDismissRequest = {})
+    val color = Color(0xFF123456)
+    Text(value, fontSize = if (compact) 13.sp else 14.sp)
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {}
+  `);
+  assert.deepEqual(findings.map(item => item.rule), ['color', 'typography']);
+  assert.equal(findings[1].line, 6);
+});
+
+test('allows theme typography and computed sizing in shared components on Windows', () => {
+  assert.deepEqual(checkAndroidDesignSource('ui\\components\\display\\AppAvatar.kt', `
+    Text(value, style = MaterialTheme.typography.labelLarge)
+    Text(initials, fontSize = fontSize)
+    Text(title, style = MaterialTheme.typography.titleLarge.copy(fontSize = titleSize.sp))
+    // Text(value, fontSize = 11.sp)
+  `), []);
+});

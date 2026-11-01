@@ -54,6 +54,8 @@
 
 - **颜色令牌**：只能取自 `ui/theme/Color.kt` 与 `ColorTokens`，严禁在页面内硬编码 `Color(0x...)`。品牌操作使用 `MaterialTheme.colorScheme.primary/onPrimary`；状态使用 `ColorTokens` 的成组前景/底色；扫描器等业务专用色也集中定义在 `Color.kt`。`Theme.kt` 直接组装最终深浅配色，不再二次覆盖。
 - **字体与形状**：排版样式使用 `MaterialTheme.typography`（由 `AppTypography` 注入），业务页面不覆盖数值字号。正文用 `body*`、辅助标签用 `label*`、大数值或验证码用 `display*`；圆角规范使用 `AppShapes`（独立卡片统一为 20.dp 圆角）。
+- **长内容与特殊排版**：通用组件不覆盖数值字号；七列课表的紧凑规格取自 `Type.kt` 中的 `AppTimetableTypography`，头像和收拢页头保留按尺寸计算的字号。指标值与单位允许换行，详情行按实际文字宽度切换上下排布，默认完整显示；仅次要信息或业务明确指定行数时允许省略。
+- **可点击详情行**：复制行显式保留 48dp 最小高度，提供“复制”提示、点击/长按操作语义和短暂“已复制”反馈；非交互详情不增加按钮热区。
 - **通用组件复用**：
   - 二级页面骨架：`AppSubPage`
   - 卡片面板：`AppPanel`
@@ -69,7 +71,7 @@
      - **层次**：不添加阴影、高光或渐变描边；
      - **纯净原则（坚决不泛白）**：**绝对禁止在按钮表面叠加半透明白色高光雾蒙层**，蓝白文字对比必须锋利纯正；
      - **交互触觉**：内置 `pressFeedback` 轻微下压（最多 0.995 缩放 + 1dp 下移），松开平滑恢复，保留 `AppHaptics.tick` 微震动；
-     - **状态集成**：直接支持 `loading = true` 平滑加载转圈动画与 `icon` 矢量图标，无需外层手写 `CircularProgressIndicator` 样板代码。
+     - **状态集成**：直接支持 `loading = true` 与 `icon`；加载时保留操作文字、显示小进度图标并禁用重复提交，预留图标宽度保持尺寸一致，同时提供“处理中”的读屏状态。无需外层手写 `CircularProgressIndicator` 样板代码。
   2. **次要行动按钮 (`AppSecondaryButton`)**：
      - 采用全圆角胶囊、中性 `surfaceContainerHigh` 实色底色，不加阴影或彩色渐变边框，用于“取消”、“查看说明”、“返回查询”、“写入 NFC”等次要操作，清爽通透，绝不发灰泛白。
   3. **危险/破坏性按钮 (`AppDangerButton`)**：
@@ -162,8 +164,9 @@
 ## 11. 设计检查与组件预览
 
 - 根目录运行 `npm.cmd run check:android-design`，检查业务页面的原生按钮/字段/弹窗、硬编码颜色/字号和非标准垂直间距；已接入根 `check` 和 Android CI。
+- 公共组件目录同时检查硬编码颜色与数值字号（包括条件字号）；作为封装实现使用原生控件和紧凑内部间距不触发业务层禁用规则。
 - 专用验证码输入保留 `BasicTextField`，身份码全屏展示保留专用 `Dialog`；这些例外不允许扩展成普通表单的替代体系。
-- `app/src/debug/java/cn/pxyb/mycontrol/ui/components/DesignSystemPreviews.kt` 提供浅色、深色和 1.5 倍字号预览，仅进入 Debug 源集。预览涵盖按钮状态、字段错误、筛选选中、持续反馈、头像与指标。
+- `app/src/debug/java/cn/pxyb/mycontrol/ui/components/DesignSystemPreviews.kt` 提供浅色、深色、深色大字号和窄屏 1.5 倍字号预览，仅进入 Debug 源集。预览涵盖按钮加载/禁用、字段错误、筛选选中、持续反馈、长名称、长指标值与单位、可复制长详情。
 - 源码检查和 Kotlin 编译不能代替实际渲染、TalkBack 或真机性能验证；报告时分别说明。
 
 ## 12. 设备侧回归测试 (androidTest)

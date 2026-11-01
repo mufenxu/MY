@@ -23,10 +23,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppDangerButton
+import cn.pxyb.mycontrol.ui.components.button.AppInlineDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppAvatar
 import cn.pxyb.mycontrol.ui.components.display.AppGroupedCard
+import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
 import cn.pxyb.mycontrol.ui.components.display.AppMetricCard
 import cn.pxyb.mycontrol.ui.components.display.AppMetricDashboard
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
@@ -36,14 +38,17 @@ import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
 import cn.pxyb.mycontrol.ui.components.input.AppPickerField
 import cn.pxyb.mycontrol.ui.components.input.AppSearchBar
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
+import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
 
 @Preview(name = "浅色", widthDp = 390, heightDp = 1100)
 @Preview(name = "大字号", widthDp = 390, heightDp = 1400, fontScale = 1.5f)
+@Preview(name = "窄屏大字号", widthDp = 320, heightDp = 1800, fontScale = 1.5f)
 @Composable
 private fun LightComponentsPreview() = ComponentsPreview(dark = false)
 
 @Preview(name = "深色", widthDp = 390, heightDp = 1100)
+@Preview(name = "深色大字号", widthDp = 390, heightDp = 1800, fontScale = 1.5f)
 @Composable
 private fun DarkComponentsPreview() = ComponentsPreview(dark = true)
 
@@ -66,6 +71,7 @@ private fun ComponentsPreview(dark: Boolean) {
                 AppGroupedCard {
                     AppActionRow("账号与安全", subtitle = "密码、登录设备与多重验证", onClick = {},
                         trailingContent = { AppAvatar("MY") })
+                    AppActionRow("名称较长的个人工作区与应用访问设置", subtitle = "检查长名称与说明在大字号下的显示", onClick = {})
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     AppFilterChip("已选中", selected, { selected = !selected })
@@ -84,6 +90,9 @@ private fun ComponentsPreview(dark: Boolean) {
                     AppSecondaryButton("取消", {}, modifier = Modifier.weight(1f))
                 }
                 AppButton("处理中", {}, loading = true, modifier = Modifier.fillMaxWidth())
+                AppSecondaryButton("同步记录", {}, loading = true, modifier = Modifier.fillMaxWidth())
+                AppDangerButton("撤销预约", {}, loading = true, modifier = Modifier.fillMaxWidth())
+                AppInlineDangerButton("解绑设备", {}, loading = true)
                 AppDangerButton("删除", {}, enabled = false, modifier = Modifier.fillMaxWidth())
                 AppFeedbackBanner("操作已保存", autoDismissDurationMillis = null)
                 AppFeedbackBanner("当前展示离线快照，联网后继续同步。", type = AppFeedbackType.Info, showCloseButton = false)
@@ -91,7 +100,18 @@ private fun ComponentsPreview(dark: Boolean) {
                 AppMetricDashboard(metrics = listOf(
                     { AppMetricCard("待办", "12") },
                     { AppMetricCard("已完成", "8") },
+                    { AppMetricCard("本月累计使用时长与资源统计", "1234567890.12", unit = "分钟",
+                        icon = Icons.Outlined.Apps, trendText = "与上月相比增加，长说明允许换行") },
+                    { AppMetricCard("已同步数据", "987654321", unit = "条") },
                 ))
+                AppPanel {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AppDetailRow("编号", "MY-2026-1101", canCopy = true)
+                        AppDetailRow("完整访问地址", "https://example.invalid/workspace/applications/releases/2026/11/01", canCopy = true)
+                        AppDetailRow("较长的设置名称与补充说明", "长详情自动在标签下方完整换行，关键内容无需依靠省略号猜测。")
+                        AppDetailRow("暂无数据", "")
+                    }
+                }
             }
         }
     }

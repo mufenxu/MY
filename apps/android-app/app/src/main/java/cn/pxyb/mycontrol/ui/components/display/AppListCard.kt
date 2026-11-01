@@ -54,7 +54,6 @@ fun AppListCard(
                         text = title,
                         style = MaterialTheme.typography.titleSmall.copy(
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 16.sp,
                         ),
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,

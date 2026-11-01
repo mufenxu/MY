@@ -1,5 +1,7 @@
 package cn.pxyb.mycontrol.ui.feature.overview
 
+import android.content.ActivityNotFoundException
+
 import androidx.compose.animation.animateContentSize
 
 import androidx.compose.foundation.clickable
@@ -41,11 +43,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.ExternalApplication
+import cn.pxyb.mycontrol.data.ApiException
 import cn.pxyb.mycontrol.data.ExternalApplicationLaunch
 import cn.pxyb.mycontrol.data.HomeQuickAction
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
+import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
@@ -64,6 +68,9 @@ import cn.pxyb.mycontrol.ui.sectionError
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import java.io.IOException
+import java.net.SocketTimeoutException
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -97,6 +104,7 @@ fun OverviewScreen(
     var confirmBackup by remember { mutableStateOf(false) }
     var openingExternalApplicationId by remember { mutableStateOf<String?>(null) }
     var externalApplicationOpenError by remember { mutableStateOf<String?>(null) }
+    var retryExternalApplicationId by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val overview = state.overview
@@ -114,16 +122,39 @@ fun OverviewScreen(
     val applicationRows = remember(state.externalApplications) { state.externalApplications.chunked(2) }
     val listState = rememberLazyListState()
     val dark = isAppInDarkTheme()
+    fun reportExternalApplicationFailure(application: ExternalApplication, error: Throwable) {
+        val reason = error.cause ?: error
+        if (reason is CancellationException) throw reason
+        val (message, retryable) = when (reason) {
+            is ActivityNotFoundException -> "系统未找到可用浏览器，请安装或启用浏览器后再打开。" to false
+            is SecurityException -> "系统阻止了应用打开，请检查浏览器和应用的访问权限。" to false
+            is IllegalArgumentException -> "该应用的访问网址无效，请在应用管理中检查配置。" to false
+            is SocketTimeoutException -> "连接超时，请检查网络后重新打开。" to true
+            is IOException -> "暂时无法连接服务，请检查网络后重新打开。" to true
+            is ApiException -> when (reason.status) {
+                401 -> "登录状态已失效，请重新登录后打开应用。" to false
+                403 -> "当前账号没有访问权限，请在应用管理中检查授权。" to false
+                404 -> "该应用已不存在，请刷新应用列表后重试。" to false
+                400, 409, 422 -> "应用访问配置暂不可用，请在应用管理中检查访问网址和登录配置。" to false
+                429 -> "打开请求过于频繁，请稍后重新打开。" to true
+                else -> "应用服务暂不可用，请稍后重新打开。" to true
+            }
+            else -> "打开应用失败，请稍后重新打开。" to true
+        }
+        externalApplicationOpenError = message
+        retryExternalApplicationId = application.id.takeIf { retryable }
+    }
     fun openExternalApplication(application: ExternalApplication) {
         if (!application.canAccess || openingExternalApplicationId != null) return
+        externalApplicationOpenError = null
+        retryExternalApplicationId = null
         // 直接打开类型不需要平台统一认证：跳过登录票据生成，仅打开网址本身。
         if (application.kind == "direct") {
             openingExternalApplicationId = application.id
-            externalApplicationOpenError = null
             val targetUrl = application.launchUrl.ifBlank { null }
             if (targetUrl == null) {
                 openingExternalApplicationId = null
-                externalApplicationOpenError = "该外部应用未配置访问网址。"
+                externalApplicationOpenError = "该外部应用未配置访问网址，请在应用管理中补充配置。"
             } else {
                 try {
                     if (application.openMode == "browser") {
@@ -137,8 +168,7 @@ fun OverviewScreen(
                         )
                     }
                 } catch (error: Exception) {
-                    externalApplicationOpenError = error.message?.takeIf { it.isNotBlank() }
-                        ?: "打开外部应用失败，请稍后重试。"
+                    reportExternalApplicationFailure(application, error)
                 } finally {
                     openingExternalApplicationId = null
                 }
@@ -146,7 +176,6 @@ fun OverviewScreen(
             return
         }
         openingExternalApplicationId = application.id
-        externalApplicationOpenError = null
         scope.launch {
             runCatching {
                 val launch = requestExternalApplicationLaunch(application.id)
@@ -175,8 +204,7 @@ fun OverviewScreen(
                 }
                 .onFailure { error ->
                     openingExternalApplicationId = null
-                    externalApplicationOpenError = error.message?.takeIf { it.isNotBlank() }
-                        ?: "外部应用登录地址生成失败，请稍后重试。"
+                    reportExternalApplicationFailure(application, error)
             }
         }
     }
@@ -254,7 +282,17 @@ fun OverviewScreen(
             if (state.externalApplications.isNotEmpty() || state.externalApplicationsLoading) {
                 item(key = "applications-title") { OverviewSectionTitle("接入应用", "已接入的应用快捷访问", icon = Icons.Outlined.Apps) }
                 externalApplicationOpenError?.let { message ->
-                    item(key = "applications-error") { AppFeedbackBanner(message, error = true) }
+                    val retryApplication = state.externalApplications.firstOrNull {
+                        it.id == retryExternalApplicationId && it.canAccess
+                    }
+                    item(key = "applications-error") {
+                        AppFeedbackBanner(
+                            message, type = AppFeedbackType.Error,
+                            onRetry = retryApplication?.let { application -> { openExternalApplication(application) } },
+                            retryText = "重新打开",
+                            onDismiss = { externalApplicationOpenError = null; retryExternalApplicationId = null },
+                        )
+                    }
                 }
                 if (state.externalApplications.isEmpty()) {
                     item(key = "applications-loading") { ExternalApplicationsLoadingPlaceholder() }

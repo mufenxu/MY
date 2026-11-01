@@ -150,7 +150,7 @@ fun AppTimeRangePicker(
                         )
                         Text(
                             text = if (isDurationValid) "时长 $durationText (合规)" else "时长 $durationText ($ruleText)",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                            style = MaterialTheme.typography.labelSmall,
                             color = statusColor,
                             fontWeight = FontWeight.Bold,
                         )
@@ -179,7 +179,7 @@ fun AppTimeRangePicker(
                 ) {
                     Text(
                         text = "开始时间",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Row(
@@ -196,7 +196,6 @@ fun AppTimeRangePicker(
                             text = startTime,
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 17.5.sp,
                             ),
                             color = MaterialTheme.colorScheme.onSurface,
                         )
@@ -234,7 +233,7 @@ fun AppTimeRangePicker(
                 ) {
                     Text(
                         text = "结束时间",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Row(
@@ -251,7 +250,6 @@ fun AppTimeRangePicker(
                             text = endTime,
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 17.5.sp,
                             ),
                             color = MaterialTheme.colorScheme.onSurface,
                         )
@@ -265,7 +263,7 @@ fun AppTimeRangePicker(
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = "快捷时长推算（从开始时间自动顺延）",
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Row(
@@ -293,7 +291,7 @@ fun AppTimeRangePicker(
                             Box(contentAlignment = Alignment.Center) {
                                 Text(
                                     text = durationQuickLabel(durationMinutes),
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                    style = MaterialTheme.typography.labelSmall,
                                     fontWeight = if (isCurrentDuration) FontWeight.Bold else FontWeight.Medium,
                                     color = if (isCurrentDuration) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,

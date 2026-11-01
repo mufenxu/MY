@@ -47,6 +47,7 @@ data class AccentColors(
 object ColorTokens {
     // 页面表面与品牌角色；下方成组状态色独立表达成功、警告等语义。
     val PrimaryDark = Color(0xFF9FCBFF)
+    val ShimmerHighlightDark = Color(0xFF93C5FD)
     val ScannerBackground = Color(0xFF111827)
     val BackgroundLight = Color(0xFFF2F4F8)
     val BackgroundDark = Color(0xFF101419)

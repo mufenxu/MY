@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.heightIn
@@ -31,12 +33,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
 import cn.pxyb.mycontrol.ui.theme.BrandBlue
@@ -74,7 +78,8 @@ fun AppButton(
             .minimumInteractiveComponentSize()
             .heightIn(min = height)
             .clip(shape)
-            .pressFeedback(interactionSource),
+            .pressFeedback(interactionSource)
+            .semantics { if (loading) stateDescription = "处理中" },
         interactionSource = interactionSource,
         enabled = enabled && !loading,
         shape = shape,
@@ -93,33 +98,7 @@ fun AppButton(
         ),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp),
     ) {
-        if (loading) {
-            AppCircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                color = LocalContentColor.current,
-            )
-        } else {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (icon != null) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = LocalContentColor.current,
-                    )
-                }
-                Text(
-                    text = text,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 14.sp,
-                    letterSpacing = (-0.1).sp,
-                    color = LocalContentColor.current,
-                )
-            }
-        }
+        AppButtonContent(text, icon, loading, MaterialTheme.typography.labelLarge)
     }
 }
 
@@ -148,7 +127,8 @@ fun AppSecondaryButton(
             .minimumInteractiveComponentSize()
             .heightIn(min = height)
             .clip(shape)
-            .pressFeedback(interactionSource),
+            .pressFeedback(interactionSource)
+            .semantics { if (loading) stateDescription = "处理中" },
         interactionSource = interactionSource,
         enabled = enabled && !loading,
         shape = shape,
@@ -156,39 +136,15 @@ fun AppSecondaryButton(
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
             contentColor = MaterialTheme.colorScheme.onSurface,
-            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+            disabledContainerColor = if (loading) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainerLow,
+            disabledContentColor = if (loading) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
         ),
         contentPadding = PaddingValues(horizontal = if (compact) 12.dp else 20.dp, vertical = 4.dp),
     ) {
-        if (loading) {
-            AppCircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        } else {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (icon != null) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = LocalContentColor.current,
-                    )
-                }
-                Text(
-                    text = text,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = if (compact) 13.sp else 14.sp,
-                    letterSpacing = (-0.1).sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+        AppButtonContent(
+            text, icon, loading,
+            if (compact) MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold) else MaterialTheme.typography.labelLarge,
+        )
     }
 }
 
@@ -221,7 +177,8 @@ fun AppDangerButton(
             .minimumInteractiveComponentSize()
             .heightIn(min = height)
             .clip(shape)
-            .pressFeedback(interactionSource),
+            .pressFeedback(interactionSource)
+            .semantics { if (loading) stateDescription = "处理中" },
         interactionSource = interactionSource,
         enabled = enabled && !loading,
         shape = shape,
@@ -234,35 +191,10 @@ fun AppDangerButton(
         ),
         contentPadding = PaddingValues(horizontal = if (compact) 12.dp else 20.dp, vertical = 4.dp),
     ) {
-        if (loading) {
-            AppCircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                color = LocalContentColor.current,
-            )
-        } else {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (icon != null) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = LocalContentColor.current,
-                    )
-                }
-                Text(
-                    text = text,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = if (compact) 13.sp else 14.sp,
-                    letterSpacing = (-0.1).sp,
-                    color = LocalContentColor.current,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+        AppButtonContent(
+            text, icon, loading,
+            if (compact) MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold) else MaterialTheme.typography.labelLarge,
+        )
     }
 }
 
@@ -293,7 +225,8 @@ fun AppInlineDangerButton(
             AppHaptics.tick(haptics)
             onClick()
         },
-        modifier = modifier.pressFeedback(interactionSource),
+        modifier = modifier.pressFeedback(interactionSource)
+            .semantics { if (loading) stateDescription = "处理中" },
         interactionSource = interactionSource,
         enabled = enabled && !loading,
         shape = RoundedCornerShape(50),
@@ -302,35 +235,48 @@ fun AppInlineDangerButton(
         border = BorderStroke(0.6.dp, borderColor),
         shadowElevation = 0.dp,
     ) {
+        Box(Modifier.padding(horizontal = 11.dp, vertical = 5.dp)) {
+            AppButtonContent(
+                text, icon, loading,
+                MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                iconSize = 13.dp, spacing = 4.dp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppButtonContent(
+    text: String,
+    icon: ImageVector?,
+    loading: Boolean,
+    style: TextStyle,
+    iconSize: Dp = 18.dp,
+    spacing: Dp = 8.dp,
+) {
+    Box(contentAlignment = Alignment.Center) {
+        // 预留进度图标宽度，加载前后尺寸一致；占位内容不参与读屏。
         Row(
-            modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
+            modifier = Modifier.clearAndSetSemantics {},
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+        ) {
+            Spacer(Modifier.size(iconSize))
+            Text(text, style = style, color = Color.Transparent, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(spacing),
         ) {
             if (loading) {
                 AppCircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
-                    strokeWidth = 1.5.dp,
-                    color = contentColor,
+                    modifier = Modifier.size(iconSize).clearAndSetSemantics {},
+                    color = LocalContentColor.current,
                 )
-            } else {
-                if (icon != null) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(13.dp),
-                        tint = contentColor,
-                    )
-                }
-                Text(
-                    text = text,
-                    style = MaterialTheme.typography.labelMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.5.sp,
-                    ),
-                    color = contentColor,
-                )
+            } else if (icon != null) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(iconSize), tint = LocalContentColor.current)
             }
+            Text(text, style = style, color = LocalContentColor.current, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }

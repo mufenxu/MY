@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,10 +26,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.adaptiveGridColumnCount
@@ -37,6 +39,7 @@ import cn.pxyb.mycontrol.ui.theme.AppHaptics
  * 现代指标度量卡片
  */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun AppMetricCard(
     label: String,
     value: String,
@@ -56,6 +59,8 @@ fun AppMetricCard(
         modifier
             .pressFeedback(interactionSource, pressedScale = 0.96f)
             .clickable(
+                role = Role.Button,
+                onClickLabel = "查看$label",
                 interactionSource = interactionSource,
                 indication = null,
             ) {
@@ -70,7 +75,7 @@ fun AppMetricCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
@@ -80,9 +85,10 @@ fun AppMetricCard(
             ) {
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    modifier = Modifier.weight(1f).padding(end = if (icon != null) 8.dp else 0.dp),
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (icon != null) {
@@ -103,25 +109,25 @@ fun AppMetricCard(
                 }
             }
 
-            Row(
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text(
                     text = value,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontSize = 23.sp,
+                    style = MaterialTheme.typography.headlineMedium.copy(
                         fontWeight = FontWeight.Bold,
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
+                    modifier = Modifier.alignByBaseline(),
                 )
                 if (!unit.isNullOrBlank()) {
                     Text(
                         text = unit,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.5.sp),
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 3.dp),
+                        modifier = Modifier.alignByBaseline(),
                     )
                 }
             }
@@ -129,10 +135,11 @@ fun AppMetricCard(
             if (!trendText.isNullOrBlank()) {
                 Text(
                     text = trendText,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                    style = MaterialTheme.typography.labelSmall,
                     color = trendColor,
                     fontWeight = FontWeight.Medium,
-                    maxLines = 1,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

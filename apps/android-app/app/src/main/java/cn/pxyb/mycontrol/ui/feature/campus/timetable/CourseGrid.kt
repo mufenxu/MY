@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.CampusCourse
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.appContentWidth
+import cn.pxyb.mycontrol.ui.theme.AppTimetableTypography
 import java.time.DayOfWeek
 import java.time.LocalDate
 
@@ -101,12 +102,12 @@ internal fun CourseGridMatrix(
                     ) {
                         Text(
                             currentMonthText,
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = if (wideGrid) 11.sp else 9.sp, fontWeight = FontWeight.Bold),
+                            style = (if (wideGrid) MaterialTheme.typography.labelSmall else AppTimetableTypography.compactDate).copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Text(
                             "节次",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = if (wideGrid) 11.sp else 9.5.sp, fontWeight = FontWeight.Medium),
+                            style = (if (wideGrid) MaterialTheme.typography.labelSmall else AppTimetableTypography.compactSection).copy(fontWeight = FontWeight.Medium),
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                         )
                     }
@@ -134,14 +135,14 @@ internal fun CourseGridMatrix(
                             if (dateText.isNotBlank()) {
                                 Text(
                                     dateText,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = if (wideGrid) 11.sp else 9.sp),
+                                    style = if (wideGrid) MaterialTheme.typography.labelSmall else AppTimetableTypography.compactDate,
                                     fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                                     color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             Text(
                                 "周$day",
-                                style = MaterialTheme.typography.labelMedium.copy(fontSize = if (wideGrid) 13.sp else 11.sp),
+                                style = if (wideGrid) AppTimetableTypography.weekday else MaterialTheme.typography.labelSmall,
                                 fontWeight = if (isToday) FontWeight.Bold else FontWeight.Medium,
                                 color = if (isToday) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                             )
@@ -266,11 +267,7 @@ internal fun CourseGridMatrix(
                                     Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                         Text(
                                             text = course.courseName,
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                fontSize = if (wideGrid) 13.sp else 9.5.sp,
-                                                lineHeight = if (wideGrid) 16.sp else 11.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                            ),
+                                            style = if (wideGrid) AppTimetableTypography.courseName else AppTimetableTypography.compactCourseName,
                                             color = if (isThisWeek) colorScheme.foreground else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                                             maxLines = if (span >= 3) 4 else if (span == 2) 3 else 2,
                                             overflow = TextOverflow.Ellipsis,
@@ -281,10 +278,7 @@ internal fun CourseGridMatrix(
                                         if (isThisWeek && course.location.isNotBlank()) {
                                             Text(
                                                 text = course.location,
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontSize = if (wideGrid) 11.sp else 8.sp,
-                                                    lineHeight = if (wideGrid) 14.sp else 9.5.sp,
-                                                ),
+                                                style = if (wideGrid) AppTimetableTypography.location else AppTimetableTypography.compactLocation,
                                                 color = colorScheme.foreground.copy(alpha = 0.85f),
                                                 maxLines = if (span >= 3) 2 else 1,
                                                 overflow = TextOverflow.Ellipsis,
@@ -292,7 +286,7 @@ internal fun CourseGridMatrix(
                                         } else if (!isThisWeek) {
                                             Text(
                                                 text = "(非本周)",
-                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = if (wideGrid) 10.sp else 7.5.sp),
+                                                style = if (wideGrid) AppTimetableTypography.inactive else AppTimetableTypography.compactInactive,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
                                                 maxLines = 1,
                                             )
