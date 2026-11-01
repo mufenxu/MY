@@ -4,6 +4,7 @@ import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -35,8 +37,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.CampusAutoReservationCandidate
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
@@ -45,6 +49,7 @@ import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
+import cn.pxyb.mycontrol.ui.components.dialog.AppDialogSize
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
@@ -72,7 +77,7 @@ internal fun AutoReservationEditDialog(
     var name by rememberSaveable { mutableStateOf(task?.name ?: "研讨间自动预约任务") }
     var enabled by rememberSaveable { mutableStateOf(task?.enabled ?: true) }
     var reservationDate by rememberSaveable {
-        mutableStateOf(task?.reservationDate?.ifBlank { null } ?: today.plusDays(1).format(DateTimeFormatter.ISO_LOCAL_DATE))
+        mutableStateOf(task?.reservationDate?.ifBlank { null } ?: today.plusDays(3).format(DateTimeFormatter.ISO_LOCAL_DATE))
     }
     var executeDate by rememberSaveable {
         mutableStateOf(task?.executeDate?.ifBlank { null } ?: defaultAutoReservationExecuteDate(reservationDate, today))
@@ -125,6 +130,9 @@ internal fun AutoReservationEditDialog(
             null
         }
     }
+    val executeDateText = listOfNotNull(executeDate, executeDateWeekday).joinToString(" · ")
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
 
     var datePickerTarget by remember { mutableStateOf<String?>(null) }
     var timePickerOpen by remember { mutableStateOf(false) }
@@ -162,6 +170,7 @@ internal fun AutoReservationEditDialog(
 
     AppDialog(
         onDismissRequest = onDismiss,
+        size = AppDialogSize.Form,
         icon = Icons.Outlined.AutoAwesome,
         iconTint = MaterialTheme.colorScheme.primary,
         iconBackground = MaterialTheme.colorScheme.primaryContainer,
@@ -282,25 +291,36 @@ internal fun AutoReservationEditDialog(
                 shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text("启用此自动任务", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                    AppSwitch(
-                        checked = enabled && !needsRoom,
-                        onCheckedChange = if (needsRoom) null else { value: Boolean -> enabled = value },
-                    )
-                }
-                if (needsRoom || task?.isLocalDraft == true) {
-                    Text(
-                        text = "草稿仅保存在当前账号的本机数据中，不会执行。补选房间并保存为正式任务后，才可启用自动预约。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "启用此自动任务",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        AppSwitch(
+                            checked = enabled && !needsRoom,
+                            onCheckedChange = { enabled = it },
+                            enabled = !needsRoom,
+                        )
+                    }
+                    if (needsRoom || task?.isLocalDraft == true) {
+                        Text(
+                            text = "草稿仅保存在当前账号的本机数据中，不会执行。补选房间并保存为正式任务后，才可启用自动预约。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
 
@@ -349,21 +369,51 @@ internal fun AutoReservationEditDialog(
                 onClick = { datePickerTarget = "reservation" },
                 icon = Icons.Outlined.CalendarMonth,
             )
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                AppPickerField(
-                    label = "任务运行日期",
-                    value = listOfNotNull(executeDate, executeDateWeekday).joinToString(" · "),
-                    onClick = { datePickerTarget = "execute" },
-                    icon = Icons.Outlined.CalendarMonth,
-                    modifier = Modifier.weight(1.25f),
-                )
-                AppPickerField(
-                    label = "运行时间",
-                    value = executeTime,
-                    onClick = { timePickerOpen = true },
-                    icon = Icons.Outlined.AccessTime,
-                    modifier = Modifier.weight(1f),
-                )
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val valueStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium)
+                // 字段图标、箭头、内边距与间隙共占 100dp，文字按当前系统字号测量。
+                val dateFieldWidth = with(density) {
+                    textMeasurer.measure(executeDateText, valueStyle).size.width.toDp() + 100.dp
+                }
+                val timeFieldWidth = with(density) {
+                    maxOf(
+                        textMeasurer.measure(executeTime, valueStyle).size.width,
+                        textMeasurer.measure("运行时间", MaterialTheme.typography.labelSmall).size.width,
+                    ).toDp() + 100.dp
+                }
+                if (dateFieldWidth + timeFieldWidth + 12.dp <= maxWidth) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AppPickerField(
+                            label = "任务运行日期",
+                            value = executeDateText,
+                            onClick = { datePickerTarget = "execute" },
+                            icon = Icons.Outlined.CalendarMonth,
+                            modifier = Modifier.weight(1f),
+                        )
+                        AppPickerField(
+                            label = "运行时间",
+                            value = executeTime,
+                            onClick = { timePickerOpen = true },
+                            icon = Icons.Outlined.AccessTime,
+                            modifier = Modifier.width(timeFieldWidth),
+                        )
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        AppPickerField(
+                            label = "任务运行日期",
+                            value = executeDateText,
+                            onClick = { datePickerTarget = "execute" },
+                            icon = Icons.Outlined.CalendarMonth,
+                        )
+                        AppPickerField(
+                            label = "运行时间",
+                            value = executeTime,
+                            onClick = { timePickerOpen = true },
+                            icon = Icons.Outlined.AccessTime,
+                        )
+                    }
+                }
             }
 
             Text(

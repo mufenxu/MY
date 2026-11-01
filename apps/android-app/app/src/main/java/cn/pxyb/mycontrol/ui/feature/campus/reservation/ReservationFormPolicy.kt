@@ -16,7 +16,8 @@ internal fun defaultAutoReservationExecuteDate(reservationDate: String, today: L
     val target = runCatching {
         LocalDate.parse(reservationDate.trim(), DateTimeFormatter.ISO_LOCAL_DATE)
     }.getOrNull() ?: today
-    val earliest = target.minusDays(3)
+    // 学校的三天预约窗口包含运行当天，例如周日可预约周二。
+    val earliest = target.minusDays(2)
     return (if (earliest.isAfter(today)) earliest else today).format(DateTimeFormatter.ISO_LOCAL_DATE)
 }
 
