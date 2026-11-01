@@ -66,8 +66,67 @@ env:
   ACR_IMAGE: crpi-ijf5w3rczq2vwnig.cn-beijing.personal.cr.aliyuncs.com/mufenxu/my
 
 jobs:
+  # CI 按分支加并发组（ci-<ref> + cancel-in-progress），同一分支连推两次时旧提交的
+  # CI 会变成 cancelled。那不是失败，而是「已被更新的提交顶替」，不该让镜像工作流飘红，
+  # 也不该为它出镜像；只有真正的失败才拦。发布中心手动触发的场合例外：那时有人在等结果，
+  # 必须明确报错，不能悄悄跳过。
+  verify-required-ci:
+    name: Verify required CI passed
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      proceed: ${{ steps.gate.outputs.proceed }}
+    steps:
+      - name: Wait for required CI
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          api="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&per_page=30"
+          filter='[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")]'
+          for attempt in $(seq 1 90); do
+            payload="$(curl --fail --silent --show-error \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${api}")"
+            # 同一提交可能有多次运行（重跑、手动补跑），只要有一次成功就算通过
+            passed="$(printf '%s' "${payload}" | jq -r "${filter} | map(select(.conclusion == \"success\")) | length")"
+            if [ "${passed}" != "0" ]; then
+              echo "proceed=true" >> "${GITHUB_OUTPUT}"
+              echo "Required CI passed for ${GITHUB_SHA}."
+              exit 0
+            fi
+            latest_status="$(printf '%s' "${payload}" | jq -r "${filter} | sort_by(.run_started_at // .created_at // \"\") | last | .status // \"\"")"
+            latest_conclusion="$(printf '%s' "${payload}" | jq -r "${filter} | sort_by(.run_started_at // .created_at // \"\") | last | .conclusion // \"\"")"
+            if [ "${latest_status}" = "completed" ]; then
+              case "${latest_conclusion}" in
+                cancelled|skipped)
+                  if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+                    echo "proceed=false" >> "${GITHUB_OUTPUT}"
+                    echo "::notice::CI for ${GITHUB_SHA} was ${latest_conclusion} because a newer commit superseded it; skipping image build for this commit."
+                    exit 0
+                  fi
+                  echo "Required CI for ${GITHUB_SHA} was ${latest_conclusion}; refusing to build release images from an unverified commit." >&2
+                  exit 1
+                  ;;
+                *)
+                  echo "Required CI completed with conclusion: ${latest_conclusion}" >&2
+                  exit 1
+                  ;;
+              esac
+            fi
+            echo "Waiting for required CI for ${GITHUB_SHA} (${attempt}/90)..."
+            sleep 30
+          done
+          echo "Timed out waiting for required CI for ${GITHUB_SHA}." >&2
+          exit 1
+
   build-and-push:
     name: Build selected ACR images
+    needs: verify-required-ci
+    if: needs.verify-required-ci.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: production
@@ -85,34 +144,6 @@ jobs:
             echo "Manual image promotion is restricted to main." >&2
             exit 1
           fi
-
-      - name: Verify this commit passed required CI
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          api="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&per_page=20"
-          for attempt in $(seq 1 90); do
-            payload="$(curl --fail --silent --show-error \
-              -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${GH_TOKEN}" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "${api}")"
-            conclusion="$(printf '%s' "${payload}" | jq -r '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")][0].conclusion // ""')"
-            status="$(printf '%s' "${payload}" | jq -r '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")][0].status // ""')"
-            if [ "${status}" = "completed" ]; then
-              if [ "${conclusion}" != "success" ]; then
-                echo "Required CI completed with conclusion: ${conclusion}" >&2
-                exit 1
-              fi
-              echo "Required CI passed for ${GITHUB_SHA}."
-              exit 0
-            fi
-            echo "Waiting for required CI for ${GITHUB_SHA} (${attempt}/90)..."
-            sleep 30
-          done
-          echo "Timed out waiting for required CI for ${GITHUB_SHA}." >&2
-          exit 1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
