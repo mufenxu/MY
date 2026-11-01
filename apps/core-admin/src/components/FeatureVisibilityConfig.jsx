@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Card, Switch, Button, List, Typography, Space, Divider, Select } from 'antd';
+import { Switch, Select } from 'antd';
 import { SaveOutlined, AppstoreOutlined, UserOutlined, SafetyCertificateOutlined, TeamOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import { message } from '../utils/feedback';
 
-const { Text } = Typography;
 const { Option } = Select;
 
 const features = [
@@ -107,52 +106,62 @@ const FeatureVisibilityConfig = () => {
     };
 
     return (
-        <Card 
-            title={<span><AppstoreOutlined style={{ marginRight: 8 }} />小程序首页功能管理</span>} 
-            bordered={false}
-            extra={<Button type="primary" icon={<SaveOutlined />} onClick={handleSave} loading={saving} disabled={loading} size="large">保存配置</Button>}
-        >
-            <div style={{ marginBottom: 16 }}>
-                <Text type="secondary">配置各功能的全局开关和可见角色：</Text>
-                <ul>
-                    <li><Text type="secondary"><b>所有人</b>：注册用户登录后均可见。</Text></li>
-                    <li><Text type="secondary"><b>管理员/超级管理员</b>：仅限指定角色或拥有该功能特权的个人可见。</Text></li>
-                </ul>
+        <section className="panel">
+            <div className="toolbar-row">
+                <h2 className="panel-title">
+                    <AppstoreOutlined />
+                    小程序首页功能
+                </h2>
+                <span className="toolbar-spacer" />
+                <span className="toolbar-count">共 {features.length} 项</span>
+                <button
+                    type="button"
+                    className="btn btn-sm btn-primary"
+                    onClick={handleSave}
+                    disabled={saving || loading}
+                >
+                    <SaveOutlined />
+                    {saving ? '保存中…' : '保存配置'}
+                </button>
             </div>
-            <Divider />
-            <List
-                loading={loading}
-                grid={{ gutter: 16, xs: 1, sm: 2, md: 2, lg: 3, xl: 3, xxl: 4 }}
-                dataSource={features}
-                renderItem={item => (
-                    <List.Item>
-                        <Card hoverable size="small" style={{ borderRadius: 12, border: '1px solid var(--border-color)' }}>
-                            <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <Space>
-                                    <span style={{ fontSize: '24px' }}>{item.icon}</span>
-                                    <Text strong style={{ fontSize: '16px' }}>{item.name}</Text>
-                                </Space>
-                                <Switch 
-                                    checked={config[item.key]?.enabled !== false} 
-                                    onChange={(checked) => handleUpdate(item.key, 'enabled', checked)} 
-                                />
+
+            <div className="panel-body">
+                <p className="settings-note">
+                    配置各功能的全局开关和可见角色：「所有人」注册用户登录后均可见；「管理员 / 超级管理员」仅限指定角色，或拥有该功能特权的个人可见。
+                </p>
+
+                {loading ? (
+                    <div className="ops-loading">正在加载功能配置…</div>
+                ) : (
+                    <div className="feature-grid">
+                        {features.map(item => (
+                            <div key={item.key} className="feature-tile">
+                                <div className="feature-tile-head">
+                                    <span className="feature-icon" aria-hidden="true">{item.icon}</span>
+                                    <strong>{item.name}</strong>
+                                    <Switch
+                                        size="small"
+                                        checked={config[item.key]?.enabled !== false}
+                                        onChange={(checked) => handleUpdate(item.key, 'enabled', checked)}
+                                        aria-label={`${item.name}开关`}
+                                    />
+                                </div>
+                                <Select
+                                    disabled={config[item.key]?.enabled === false}
+                                    style={{ width: '100%' }}
+                                    value={config[item.key]?.minRole || 'user'}
+                                    onChange={(val) => handleUpdate(item.key, 'minRole', val)}
+                                >
+                                    <Option value="user">所有人可见 <TeamOutlined style={{ color: 'var(--leaf-text)' }} /></Option>
+                                    <Option value="admin">仅限管理员 <UserOutlined style={{ color: 'var(--blue)' }} /></Option>
+                                    <Option value="super_admin">仅限超级管理员 <SafetyCertificateOutlined style={{ color: 'var(--violet)' }} /></Option>
+                                </Select>
                             </div>
-                            <Select 
-                                disabled={config[item.key]?.enabled === false}
-                                style={{ width: '100%' }} 
-                                value={config[item.key]?.minRole || 'user'}
-                                onChange={(val) => handleUpdate(item.key, 'minRole', val)}
-                                size="middle"
-                            >
-                                <Option value="user">所有人可见 <TeamOutlined style={{ color: '#52c41a' }} /></Option>
-                                <Option value="admin">仅限管理员可见 <UserOutlined style={{ color: '#1890ff' }} /></Option>
-                                <Option value="super_admin">仅限超级管理员 <SafetyCertificateOutlined style={{ color: '#722ed1' }} /></Option>
-                            </Select>
-                        </Card>
-                    </List.Item>
+                        ))}
+                    </div>
                 )}
-            />
-        </Card>
+            </div>
+        </section>
     );
 };
 

@@ -1,15 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Card, Table, Button, Modal, Form, Input, Switch, Space, Tag, List, Typography } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ApiOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Switch, Tooltip } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ApiOutlined, ReloadOutlined } from '@ant-design/icons';
 import api from '../utils/api';
-import useIsMobile from '../hooks/useIsMobile';
+import { useResponsive } from '../hooks/useIsMobile';
 import { message } from '../utils/feedback';
 
-const { Text } = Typography;
-
 const CourseConfig = () => {
-    const isMobile = useIsMobile();
-    const isTablet = window.innerWidth <= 1024;
+    const { isMobile } = useResponsive();
     const [configs, setConfigs] = useState([]);
     const [loading, setLoading] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
@@ -102,116 +99,162 @@ const CourseConfig = () => {
             title: '通道标识',
             dataIndex: 'platformCode',
             key: 'platformCode',
-            render: text => <Tag color="blue">{text}</Tag>
+            width: 120,
+            render: (text) => <span className="tag tone-info">{text}</span>
         },
         {
             title: '通道名称',
             dataIndex: 'name',
             key: 'name',
+            render: (text) => <strong className="cell-strong">{text}</strong>
         },
         {
             title: '接口 URL',
             dataIndex: 'url',
             key: 'url',
-            ellipsis: true
+            render: (text) => <span className="cell-mono ellipsis" style={{ display: 'block' }} title={text}>{text}</span>
         },
         {
             title: '商户 UID',
             dataIndex: 'uid',
             key: 'uid',
+            width: 130,
+            render: (text) => <span className="cell-mono">{text || '—'}</span>
         },
         {
             title: '状态',
             dataIndex: 'status',
             key: 'status',
-            render: status => (
-                <Tag color={status ? 'success' : 'default'}>
-                    {status ? '启用中' : '已停用'}
-                </Tag>
+            width: 92,
+            render: (status) => (
+                <span className={`tag tone-${status ? 'ok' : 'neutral'}`}>{status ? '启用中' : '已停用'}</span>
             )
         },
         {
             title: '备注',
             dataIndex: 'remark',
             key: 'remark',
+            width: 150,
+            render: (text) => <span className="muted">{text || '—'}</span>
         },
         {
             title: '操作',
             key: 'action',
+            width: 92,
+            align: 'right',
             render: (_, record) => (
-                <Space size="middle">
-                    <Button 
-                        type="primary" 
-                        size="small" 
-                        icon={<EditOutlined />} 
-                        onClick={() => handleOpenModal(record)}
-                    >
-                        配置
-                    </Button>
-                    <Button 
-                        danger 
-                        size="small" 
-                        icon={<DeleteOutlined />} 
-                        onClick={() => handleDelete(record.platformCode)}
-                    >
-                        删除
-                    </Button>
-                </Space>
+                <span className="row-actions">
+                    <Tooltip title="配置通道">
+                        <button
+                            type="button"
+                            className="icon-action"
+                            onClick={() => handleOpenModal(record)}
+                            aria-label={`配置通道：${record.name}`}
+                        >
+                            <EditOutlined />
+                        </button>
+                    </Tooltip>
+                    <Tooltip title="删除通道">
+                        <button
+                            type="button"
+                            className="icon-action danger"
+                            onClick={() => handleDelete(record.platformCode)}
+                            aria-label={`删除通道：${record.name}`}
+                        >
+                            <DeleteOutlined />
+                        </button>
+                    </Tooltip>
+                </span>
             ),
         },
     ];
 
     return (
-        <Card 
-            title={
-                <Space>
-                    <ApiOutlined style={{ color: '#4A7CF7' }}/>
-                    <span style={{ fontWeight: 'bold', fontSize: isMobile ? 15 : 16 }}>网课通道平台</span>
-                </Space>
-            } 
-            extra={!isMobile && (
-                <Button type="primary" icon={<PlusOutlined />} onClick={() => handleOpenModal()}>
+        <section className="panel">
+            <div className="toolbar-row">
+                <h2 className="panel-title">
+                    <ApiOutlined />
+                    网课通道平台
+                </h2>
+                <span className="toolbar-spacer" />
+                <span className="toolbar-count">共 {configs.length} 个通道</span>
+                <Tooltip title="刷新列表">
+                    <button type="button" className="icon-action" onClick={fetchConfigs} aria-label="刷新列表">
+                        <ReloadOutlined spin={loading} />
+                    </button>
+                </Tooltip>
+                <button type="button" className="btn btn-sm btn-primary" onClick={() => handleOpenModal()}>
+                    <PlusOutlined />
                     新增通道
-                </Button>
-            )}
-            bordered={false} 
-            style={{ borderRadius: 12, boxShadow: 'var(--card-shadow)', margin: 0 }}
-            headStyle={{ paddingBottom: isMobile ? 8 : 16 }}
-        >
-            {isMobile || isTablet ? (
-                <div style={{ paddingBottom: 16 }}>
-                    {isMobile && (
-                        <Button type="primary" block icon={<PlusOutlined />} onClick={() => handleOpenModal()} style={{ marginBottom: 16, borderRadius: 8 }}>
-                            新增网课通道
-                        </Button>
+                </button>
+            </div>
+
+            <p className="settings-note" style={{ margin: '0 16px 10px' }}>
+                第三方代刷平台的接口信息，密钥只在保存时提交，不会回显。
+            </p>
+
+            {isMobile ? (
+                <div className="panel-body">
+                    {loading ? (
+                        <div className="ops-loading">正在加载通道…</div>
+                    ) : configs.length === 0 ? (
+                        <div className="ops-empty">还没有配置通道</div>
+                    ) : (
+                        <div className="view-stack">
+                            {configs.map((item) => (
+                                <article key={item.platformCode} className="list-card">
+                                    <div className="list-card-head">
+                                        <span className="list-card-title">{item.name}</span>
+                                        <span className={`tag tone-${item.status ? 'ok' : 'neutral'}`}>
+                                            {item.status ? '启用中' : '已停用'}
+                                        </span>
+                                    </div>
+                                    <div className="cell-tags">
+                                        <span className="tag tone-info">{item.platformCode}</span>
+                                        {item.uid && <span className="tag tone-neutral">UID {item.uid}</span>}
+                                    </div>
+                                    <dl className="list-meta">
+                                        <div>
+                                            <dt>接口 URL</dt>
+                                            <dd className="cell-mono">{item.url}</dd>
+                                        </div>
+                                        {item.remark && (
+                                            <div>
+                                                <dt>备注</dt>
+                                                <dd>{item.remark}</dd>
+                                            </div>
+                                        )}
+                                    </dl>
+                                    <div className="list-card-foot">
+                                        <span className="cell-sub">通道配置</span>
+                                        <span className="row-actions">
+                                            <button
+                                                type="button"
+                                                className="icon-action"
+                                                onClick={() => handleOpenModal(item)}
+                                                aria-label={`配置通道：${item.name}`}
+                                            >
+                                                <EditOutlined />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="icon-action danger"
+                                                onClick={() => handleDelete(item.platformCode)}
+                                                aria-label={`删除通道：${item.name}`}
+                                            >
+                                                <DeleteOutlined />
+                                            </button>
+                                        </span>
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
                     )}
-                    <List
-                        dataSource={configs}
-                        loading={loading}
-                        renderItem={item => (
-                            <Card size="small" style={{ marginBottom: 12, borderRadius: 12, border: '1px solid var(--border-color)' }} bodyStyle={{ padding: 12 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' }}>
-                                    <div style={{ fontWeight: 'bold' }}>{item.name}</div>
-                                    <Tag color={item.status ? 'success' : 'default'} style={{ margin: 0 }}>{item.status ? '启用中' : '已停用'}</Tag>
-                                </div>
-                                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
-                                    <div>标识码: <Tag color="blue">{item.platformCode}</Tag></div>
-                                    <div style={{ marginTop: 4, wordBreak: 'break-all' }}>URL: <Text code>{item.url}</Text></div>
-                                    {item.uid && <div style={{ marginTop: 4 }}>UID: {item.uid}</div>}
-                                    {item.remark && <div style={{ marginTop: 4, color: '#999' }}>备注: {item.remark}</div>}
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                                    <Button size="small" type="primary" icon={<EditOutlined />} onClick={() => handleOpenModal(item)}>配置</Button>
-                                    <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(item.platformCode)}>删除</Button>
-                                </div>
-                            </Card>
-                        )}
-                    />
                 </div>
             ) : (
-                <Table 
-                    columns={columns} 
-                    dataSource={configs} 
+                <Table
+                    columns={columns}
+                    dataSource={configs}
                     rowKey="platformCode"
                     loading={loading}
                     scroll={{ x: 'max-content' }}
@@ -220,77 +263,60 @@ const CourseConfig = () => {
             )}
 
             <Modal
-                title={editingCode ? "编辑网课通道" : "新增网课通道"}
+                title={editingCode ? '编辑网课通道' : '新增网课通道'}
                 open={modalVisible}
                 onOk={handleSave}
                 onCancel={() => setModalVisible(false)}
                 okText="保存配置"
                 cancelText="取消"
-                width={600}
+                width={isMobile ? '94%' : 600}
                 maskClosable={false}
             >
-                <Form
-                    form={form}
-                    layout="vertical"
-                    initialValues={{ status: true }}
-                >
-                    <Form.Item 
-                        name="platformCode" 
-                        label="平台标识码 (Code)" 
+                <Form form={form} layout="vertical" initialValues={{ status: true }}>
+                    <Form.Item
+                        name="platformCode"
+                        label="平台标识码（Code）"
                         tooltip="系统底层调用的唯一标识，例如 mx、joker"
                         rules={[{ required: true, message: '请输入平台标识码' }]}
                     >
-                        <Input placeholder="例如: mx" disabled={!!editingCode} />
+                        <Input placeholder="例如：mx" disabled={!!editingCode} />
                     </Form.Item>
-                    
-                    <Form.Item 
-                        name="name" 
-                        label="平台名称" 
+
+                    <Form.Item
+                        name="name"
+                        label="平台名称"
                         rules={[{ required: true, message: '请输入平台名称' }]}
                     >
-                        <Input placeholder="例如: 蜜雪代刷对接平台" />
+                        <Input placeholder="例如：蜜雪代刷对接平台" />
                     </Form.Item>
-                    
-                    <Form.Item 
-                        name="url" 
-                        label="接口 URL" 
-                        tooltip="第三方代刷平台的API入口请求地址，勿带 act 参数"
+
+                    <Form.Item
+                        name="url"
+                        label="接口 URL"
+                        tooltip="第三方代刷平台的 API 入口请求地址，勿带 act 参数"
                         rules={[{ required: true, message: '请输入接口 URL' }]}
                     >
-                        <Input placeholder="例如: http://api.example.com" />
+                        <Input placeholder="例如：http://api.example.com" />
                     </Form.Item>
-                    
-                    <Form.Item 
-                        name="uid" 
-                        label="商户 UID (如有)" 
-                    >
-                        <Input placeholder="对接所需的商户ID或用户账号" />
+
+                    <Form.Item name="uid" label="商户 UID（如有）">
+                        <Input placeholder="对接所需的商户 ID 或用户账号" />
                     </Form.Item>
-                    
-                    <Form.Item 
-                        name="secretKey" 
-                        label="通信秘钥 (Key/Token)" 
-                    >
+
+                    <Form.Item name="secretKey" label="通信秘钥（Key / Token）">
                         <Input.Password placeholder="对接所需的通信加密秘钥或 Token" />
                     </Form.Item>
-                    
-                    <Form.Item 
-                        name="status" 
-                        label="启用状态" 
-                        valuePropName="checked"
-                    >
+
+                    <Form.Item name="status" label="启用状态" valuePropName="checked">
                         <Switch checkedChildren="开启" unCheckedChildren="停用" />
                     </Form.Item>
 
-                    <Form.Item 
-                        name="remark" 
-                        label="内部备注" 
-                    >
-                        <Input.TextArea placeholder="记录一些账号信息或其他备注说明" rows={2}/>
+                    <Form.Item name="remark" label="内部备注">
+                        <Input.TextArea placeholder="记录一些账号信息或其他备注说明" rows={2} />
                     </Form.Item>
                 </Form>
             </Modal>
-        </Card>
+        </section>
     );
 };
 

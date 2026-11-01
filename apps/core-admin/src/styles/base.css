@@ -1,0 +1,363 @@
+/* ==========================================================================
+   基础层：元素重置、旧变量别名、页面原语
+   设计令牌与通用组件来自 @my-platform/pearl-tokens。
+   别名块让历史内联样式（style={{ color: 'var(--text-primary)' }}）无需改动
+   即可落到珍珠色板，避免一次性重写上千处内联样式。
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  min-width: 320px;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  color: var(--ink);
+  background: var(--canvas);
+  font-family: var(--font-sans, inherit);
+  font-size: var(--type-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  overflow: hidden;
+}
+
+img,
+svg {
+  display: block;
+}
+
+::selection {
+  background: var(--blue-soft);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* 裸按钮统一交给设计系统接管：antd 的 .ant-btn 类选择器优先级更高，不受影响 */
+button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ── 旧变量别名 ───────────────────────────────────────────────── */
+:root {
+  --primary-color: var(--blue);
+  --primary-gradient: var(--blue);
+  --secondary-color: var(--teal);
+  --bg-color: var(--canvas);
+  --component-bg: var(--surface-solid);
+  --sidebar-bg: var(--rail-bg);
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-muted);
+  --text-tertiary: var(--ink-faint);
+  --border-color: var(--line-strong);
+  --card-border: 1px solid var(--line);
+  --box-shadow: var(--e2);
+  --card-shadow: var(--e1);
+  --hover-shadow: var(--e2), var(--edge);
+  --header-height: 56px;
+  --sider-width: var(--rail-w);
+  --border-radius: var(--r-md);
+  --card-radius: var(--r-lg);
+}
+
+/* ── 工具类 ───────────────────────────────────────────────────── */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.muted {
+  color: var(--ink-muted);
+}
+
+.soft {
+  color: var(--ink-soft);
+}
+
+.faint {
+  color: var(--ink-faint);
+}
+
+.ellipsis {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.fade-in {
+  animation: fade-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── 页面原语 ─────────────────────────────────────────────────── */
+.page-view {
+  display: flex;
+  width: 100%;
+  max-width: 1500px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 auto;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.view-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.page-head {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.page-head h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 680;
+  letter-spacing: -0.02em;
+}
+
+.page-head p {
+  margin: 3px 0 0;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+
+.page-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 分段标题：表单、设置区的分组标签 */
+.section-label {
+  margin: 4px 0 12px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 640;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* 标题元素复用面板标题样式时去掉默认外边距 */
+.panel-title {
+  margin: 0;
+}
+
+.stat-figure .stat-unit {
+  margin-left: 3px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 560;
+}
+
+/* 提示块：中性说明 / 警告 / 危险三种语义 */
+.hint {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--ink-faint);
+  border-radius: var(--r-sm);
+  background: var(--groove-bg);
+  color: var(--ink-muted);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.hint strong {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 660;
+}
+
+.hint.is-warn {
+  border-left-color: var(--amber);
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.hint.is-warn strong {
+  color: var(--amber);
+}
+
+.hint.is-danger {
+  border-left-color: var(--red);
+  background: var(--red-soft);
+  color: var(--red-text);
+}
+
+.hint.is-danger strong {
+  color: var(--red-text);
+}
+
+/* 统计条：桌面等宽、平板两列、手机一列 */
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.stat-card {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 13px 15px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--edge), var(--e1);
+}
+
+.stat-icon {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  color: var(--blue);
+  background: var(--blue-soft);
+}
+
+.stat-icon.tone-ok {
+  color: var(--leaf-text);
+  background: var(--lime-soft);
+}
+
+.stat-icon.tone-warn {
+  color: var(--amber);
+  background: var(--amber-soft);
+}
+
+.stat-icon.tone-danger {
+  color: var(--red-text);
+  background: var(--red-soft);
+}
+
+.stat-icon.tone-violet {
+  color: var(--violet);
+  background: var(--violet-soft);
+}
+
+.stat-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.stat-label {
+  color: var(--ink-soft);
+  font-size: 11.5px;
+}
+
+.stat-figure {
+  color: var(--ink);
+  font-size: 21px;
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.stat-foot {
+  color: var(--ink-muted);
+  font-size: 11.5px;
+}
+
+/* 两列主从布局 */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.split.even {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 1080px) {
+  .split,
+  .split.even {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

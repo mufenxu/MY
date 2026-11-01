@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Row, Col, Switch, Typography, Spin, Tag, Space, Button, Statistic, Slider, Radio, Divider } from 'antd';
+import { Switch, Slider, Radio, Spin } from 'antd';
 import {
     ThunderboltOutlined,
     ReloadOutlined,
@@ -14,8 +14,6 @@ import {
 } from '@ant-design/icons';
 import { message } from '../utils/feedback';
 import api from '../utils/api';
-
-const { Text } = Typography;
 
 // 涂鸦 DP ID 映射
 const DP_MAP = {
@@ -37,51 +35,32 @@ const DP_MAP = {
     MODE: 'mode'
 };
 
-const DataCard = ({ title, value, unit, icon, color, loading, subText }) => (
-    <Card
-        style={{
-            borderRadius: 20,
-            background: `linear-gradient(135deg, ${color}05 0%, ${color}15 100%)`,
-            border: `1px solid ${color}20`,
-            height: '100%',
-            transition: 'all 0.3s'
-        }}
-        bodyStyle={{ padding: '24px' }}
-        hoverable
-    >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-                <Text style={{ color: '#8C98A9', fontSize: 14, fontWeight: 500 }}>{title}</Text>
-                <div style={{ marginTop: 8 }}>
-                    {loading ? (
-                        <Spin size="small" />
-                    ) : (
-                        <span style={{ fontSize: 32, fontWeight: 700, color: 'var(--text-primary)' }}>
-                            {value}
-                            <span style={{ fontSize: 16, color: '#8C98A9', marginLeft: 4 }}>{unit}</span>
-                        </span>
-                    )}
-                </div>
-                {subText && <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>{subText}</Text>}
-            </div>
-            <div style={{
-                width: 48,
-                height: 48,
-                borderRadius: 12,
-                background: `${color}20`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-            }}>
-                {React.cloneElement(icon, { style: { fontSize: 24, color } })}
-            </div>
-        </div>
-    </Card>
+const Readout = ({ icon, tone, label, value, unit, foot }) => (
+    <div className="stat-card">
+        <span className={`stat-icon${tone ? ` tone-${tone}` : ''}`}>{icon}</span>
+        <span className="stat-copy">
+            <span className="stat-label">{label}</span>
+            <span className="stat-figure">
+                {value}
+                {unit ? <span className="stat-unit">{unit}</span> : null}
+            </span>
+            {foot ? <span className="stat-foot">{foot}</span> : null}
+        </span>
+    </div>
 );
 
 const TrendChart = ({ data, loading }) => {
-    if (loading) return <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin tip="加载趋势数据..." /></div>;
-    if (!data || data.length === 0) return <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Text type="secondary">暂无趋势数据</Text></div>;
+    if (loading) {
+        return (
+            <div className="chart-placeholder">
+                <Spin />
+                <span>加载趋势数据…</span>
+            </div>
+        );
+    }
+    if (!data || data.length === 0) {
+        return <div className="chart-placeholder"><span>暂无趋势数据</span></div>;
+    }
 
     const padding = { top: 20, right: 40, bottom: 30, left: 40 };
     const width = 1000;
@@ -105,9 +84,8 @@ const TrendChart = ({ data, loading }) => {
     const areaPath = powerPath + ` L ${getX(data.length - 1)} ${padding.top + graphHeight} L ${getX(0)} ${padding.top + graphHeight} Z`;
 
     return (
-        <div style={{ width: '100%', overflowX: 'auto' }}>
+        <div className="chart-scroll">
             <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" style={{ minWidth: 600 }}>
-                {/* 网格线 */}
                 {[0, 1, 2, 3, 4].map(i => (
                     <line
                         key={i}
@@ -115,24 +93,19 @@ const TrendChart = ({ data, loading }) => {
                         y1={padding.top + (graphHeight / 4) * i}
                         x2={width - padding.right}
                         y2={padding.top + (graphHeight / 4) * i}
-                        stroke="#f0f0f0"
+                        stroke="var(--line)"
                     />
                 ))}
 
-                {/* 功率填充 */}
-                <path d={areaPath} fill="rgba(67, 24, 255, 0.1)" />
-                {/* 功率曲线 */}
-                <path d={powerPath} fill="none" stroke="#4A7CF7" strokeWidth="2" strokeOpacity="0.5" />
-                {/* 温度曲线 */}
-                <path d={tempPath} fill="none" stroke="#FF5252" strokeWidth="3" strokeLinecap="round" />
+                <path d={areaPath} fill="var(--blue-soft)" />
+                <path d={powerPath} fill="none" stroke="var(--blue)" strokeWidth="2" strokeOpacity="0.55" />
+                <path d={tempPath} fill="none" stroke="var(--red-text)" strokeWidth="3" strokeLinecap="round" />
 
-                {/* 轴标签 */}
-                <text x={padding.left - 10} y={padding.top} fill="#FF5252" fontSize="10" textAnchor="end">℃</text>
-                <text x={width - padding.right + 10} y={padding.top} fill="#4A7CF7" fontSize="10">W</text>
+                <text x={padding.left - 10} y={padding.top} fill="var(--red-text)" fontSize="10" textAnchor="end">℃</text>
+                <text x={width - padding.right + 10} y={padding.top} fill="var(--blue)" fontSize="10">W</text>
 
-                {/* 时间点 */}
                 {data.map((d, i) => (i % 8 === 0) && (
-                    <text key={i} x={getX(i)} y={height - 5} fill="#8C98A9" fontSize="10" textAnchor="middle">{d.time}</text>
+                    <text key={i} x={getX(i)} y={height - 5} fill="var(--ink-muted)" fontSize="10" textAnchor="middle">{d.time}</text>
                 ))}
             </svg>
         </div>
@@ -323,142 +296,158 @@ const AirEnergyMonitor = () => {
     };
 
     const formatTime = (ts) => ts ? new Date(ts).toLocaleTimeString() : '--:--:--';
+    const waterTooHot = parseFloat(data.currentTemp) > 55;
 
     return (
-        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 0 40px' }}>
-            {/* Header Status */}
-            <Card
-                className="glass-card"
-                style={{
-                    borderRadius: 20,
-                    marginBottom: 24,
-                    boxShadow: '0 20px 40px rgba(0,0,0,0.05)',
-                    border: 'none',
-                    background: 'var(--component-bg)'
-                }}
-            >
-                <Row justify="space-between" align="middle" gutter={[16, 16]}>
-                    <Col>
-                        <Space size="large">
-                            <Tag color={data.online ? 'green' : 'red'} style={{ padding: '4px 12px', borderRadius: 8 }}>
-                                {data.online ? <CheckCircleOutlined /> : <CloseCircleOutlined />} {data.online ? '在线' : '离线'}
-                            </Tag>
-                            <Tag color={data.powerOn ? 'blue' : 'default'} style={{ padding: '4px 12px', borderRadius: 8 }}>
-                                {data.powerOn ? '正在运行' : '待机中'}
-                            </Tag>
-                            <Text type="secondary">更新时间：{formatTime(data.lastUpdated)}</Text>
-                        </Space>
-                    </Col>
-                    <Col>
-                        <Space>
-                            <Button icon={<ReloadOutlined spin={loading} />} onClick={() => { setLoading(true); fetchData(); fetchChartData(); }}>刷新</Button>
-                            <Switch checked={autoRefresh} onChange={setAutoRefresh} checkedChildren="自动刷新" unCheckedChildren="手动" />
-                        </Space>
-                    </Col>
-                </Row>
-            </Card>
+        <div className="page-view fade-in">
+            <div className="toolbar-row" style={{ padding: 0 }}>
+                <span className={`tag tone-${data.online ? 'ok' : 'danger'}`}>
+                    {data.online ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+                    {data.online ? '在线' : '离线'}
+                </span>
+                <span className={`tag tone-${data.powerOn ? 'info' : 'neutral'}`}>
+                    {data.powerOn ? '正在运行' : '待机中'}
+                </span>
+                <span className={`tag tone-${data.mode === 'heating' ? 'warn' : data.mode === 'cold' ? 'teal' : 'neutral'}`}>
+                    {data.modeLabel}
+                </span>
+                <span className="toolbar-spacer" />
+                <span className="toolbar-count">更新于 {formatTime(data.lastUpdated)}</span>
+                <button
+                    type="button"
+                    className="btn btn-sm"
+                    onClick={() => { setLoading(true); fetchData(); fetchChartData(); }}
+                >
+                    <ReloadOutlined spin={loading} />
+                    刷新
+                </button>
+                <span className="settings-inline">
+                    <Switch size="small" checked={autoRefresh} onChange={setAutoRefresh} />
+                    <span className="settings-note">自动刷新</span>
+                </span>
+            </div>
 
-            {/* Main Stats */}
-            <Row gutter={[24, 24]}>
-                <Col xs={24} sm={12} lg={6}>
-                    <DataCard title="当前水温" value={data.currentTemp} unit="℃" icon={<FireOutlined />} color="#FF5252" loading={loading} />
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                    <DataCard title="目标温度" value={data.targetTemp} unit="℃" icon={<DashboardFilled />} color="#4A7CF7" loading={loading} />
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                    <DataCard title="室外温度" value={data.outdoorTemp} unit="℃" icon={<GlobalOutlined />} color="#5CC9A7" loading={loading} />
-                </Col>
-                <Col xs={24} sm={12} lg={6}>
-                    <DataCard title="当前功率" value={data.realtimePower} unit="" icon={<ThunderboltOutlined />} color="#FFB547" loading={loading} subText={`能效估算：${data.copScore}`} />
-                </Col>
-            </Row>
+            <div className="stat-strip">
+                <Readout
+                    icon={<FireOutlined />}
+                    tone="danger"
+                    label="当前水温"
+                    value={loading ? '—' : data.currentTemp}
+                    unit="℃"
+                    foot={waterTooHot ? '水温偏高' : undefined}
+                />
+                <Readout
+                    icon={<DashboardFilled />}
+                    label="目标温度"
+                    value={loading ? '—' : data.targetTemp}
+                    unit="℃"
+                />
+                <Readout
+                    icon={<GlobalOutlined />}
+                    tone="ok"
+                    label="室外温度"
+                    value={loading ? '—' : data.outdoorTemp}
+                    unit="℃"
+                />
+                <Readout
+                    icon={<ThunderboltOutlined />}
+                    tone="warn"
+                    label="当前功率"
+                    value={loading ? '—' : data.realtimePower}
+                    foot={`能效估算 ${data.copScore}`}
+                />
+            </div>
 
-            {/* Controls & Diagnostics */}
-            <Row gutter={[24, 24]} style={{ marginTop: 24 }}>
-                {/* Control Panel */}
-                <Col xs={24} lg={10}>
-                    <Card title={<Space><ToolOutlined /> 控制</Space>} style={{ borderRadius: 20, height: '100%' }}>
-                        <div style={{ padding: '10px 0' }}>
-                            <Row align="middle" justify="space-between">
-                                <Col><Text strong>主电源</Text></Col>
-                                <Col><Switch checked={data.powerOn} onChange={handlePowerChange} loading={switching} disabled={!data.online} /></Col>
-                            </Row>
-                            <Divider />
-                            <div style={{ marginBottom: 16 }}>
-                                <Text strong>运行方式</Text>
-                                <div style={{ marginTop: 12 }}>
-                                    <Radio.Group value={data.mode} disabled={!data.powerOn} buttonStyle="solid">
-                                        <Radio.Button value="heating">加热</Radio.Button>
-                                        <Radio.Button value="cold">制冷</Radio.Button>
-                                        <Radio.Button value="auto">自动</Radio.Button>
-                                    </Radio.Group>
-                                </div>
-                            </div>
-                            <Divider />
-                            <div>
-                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                    <Text strong>目标温度</Text>
-                                    <Text type="primary" strong>{data.targetTemp}℃</Text>
-                                </div>
-                                <Slider
-                                    min={15} max={60}
-                                    value={typeof data.targetTemp === 'number' ? data.targetTemp : 45}
-                                    onChange={handleTempChange}
-                                    disabled={!data.powerOn}
-                                />
-                            </div>
+            <div className="split">
+                <section className="panel">
+                    <header className="panel-head">
+                        <span className="panel-title">
+                            <ToolOutlined />
+                            控制
+                        </span>
+                        <span className="panel-meta">{data.powerOn ? '设备运行中' : '设备待机'}</span>
+                    </header>
+                    <div className="panel-body">
+                        <div className="control-row">
+                            <span className="control-label">主电源</span>
+                            <Switch
+                                checked={data.powerOn}
+                                onChange={handlePowerChange}
+                                loading={switching}
+                                disabled={!data.online}
+                            />
                         </div>
-                    </Card>
-                </Col>
 
-                {/* Diagnostics Panel */}
-                <Col xs={24} lg={14}>
-                    <Card title={<Space><DashboardOutlined /> 详细数据</Space>} style={{ borderRadius: 20, height: '100%' }}>
-                        <Row gutter={[16, 16]}>
-                            <Col xs={12} sm={8}>
-                                <Statistic title="运行频率" value={data.runFreq} suffix="Hz" />
-                            </Col>
-                            <Col xs={12} sm={8}>
-                                <Statistic title="出水温度" value={data.waterOutTemp} suffix="℃" />
-                            </Col>
-                            <Col xs={12} sm={8}>
-                                <Statistic title="回水温度" value={data.waterBackTemp} suffix="℃" />
-                            </Col>
-                            <Col xs={12} sm={8}>
-                                <Statistic title="供电电压" value={data.acinVol} suffix="V" />
-                            </Col>
-                            <Col xs={12} sm={8}>
-                                <Statistic title="运行电流" value={data.runCurrent} suffix="A" />
-                            </Col>
-                            <Col xs={12} sm={8}>
-                                <Statistic title="模块温度" value={data.ipmTemp} suffix="℃" />
-                            </Col>
-                        </Row>
-                        <Divider />
-                        <div>
-                            <Text type="secondary" style={{ fontSize: 12 }}>提醒</Text>
-                            <div style={{ marginTop: 10 }}>
-                                {data.online ? (
-                                    <Tag color="success">系统健康</Tag>
-                                ) : (
-                                    <Tag color="error">设备连接异常</Tag>
-                                )}
-                                {parseFloat(data.currentTemp) > 55 && <Tag color="warning">水温过高</Tag>}
-                            </div>
+                        <div className="control-block">
+                            <span className="control-label">运行方式</span>
+                            <Radio.Group value={data.mode} disabled={!data.powerOn} buttonStyle="solid">
+                                <Radio.Button value="heating">加热</Radio.Button>
+                                <Radio.Button value="cold">制冷</Radio.Button>
+                                <Radio.Button value="auto">自动</Radio.Button>
+                            </Radio.Group>
                         </div>
-                    </Card>
-                </Col>
-            </Row>
 
-            {/* History Trends */}
-            <Card
-                title={<Space><HistoryOutlined /> 今天的变化</Space>}
-                style={{ borderRadius: 20, marginTop: 24 }}
-                extra={<Text type="secondary" style={{ fontSize: 12 }}><span style={{ color: '#FF5252', marginRight: 10 }}>● 温度</span> <span style={{ color: '#4A7CF7' }}>● 功率</span></Text>}
-            >
-                <TrendChart data={chartData} loading={chartLoading} />
-            </Card>
+                        <div className="control-block">
+                            <div className="control-row">
+                                <span className="control-label">目标温度</span>
+                                <strong className="control-value">{data.targetTemp}℃</strong>
+                            </div>
+                            <Slider
+                                min={15}
+                                max={60}
+                                value={typeof data.targetTemp === 'number' ? data.targetTemp : 45}
+                                onChange={handleTempChange}
+                                disabled={!data.powerOn}
+                            />
+                        </div>
+                    </div>
+                </section>
+
+                <section className="panel">
+                    <header className="panel-head">
+                        <span className="panel-title">
+                            <DashboardOutlined />
+                            详细数据
+                        </span>
+                        <span className="panel-meta">实时读表</span>
+                    </header>
+                    <div className="panel-body">
+                        <div className="metric-grid">
+                            <div className="metric-tile"><span>运行频率</span><strong>{data.runFreq} Hz</strong></div>
+                            <div className="metric-tile"><span>出水温度</span><strong>{data.waterOutTemp} ℃</strong></div>
+                            <div className="metric-tile"><span>回水温度</span><strong>{data.waterBackTemp} ℃</strong></div>
+                            <div className="metric-tile"><span>供电电压</span><strong>{data.acinVol} V</strong></div>
+                            <div className="metric-tile"><span>运行电流</span><strong>{data.runCurrent} A</strong></div>
+                            <div className="metric-tile"><span>模块温度</span><strong>{data.ipmTemp} ℃</strong></div>
+                        </div>
+
+                        <div className="cell-tags" style={{ marginTop: 14 }}>
+                            {data.online ? (
+                                <span className="tag tone-ok">系统健康</span>
+                            ) : (
+                                <span className="tag tone-danger">设备连接异常</span>
+                            )}
+                            {waterTooHot && <span className="tag tone-warn">水温过高</span>}
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <section className="panel">
+                <header className="panel-head">
+                    <span className="panel-title">
+                        <HistoryOutlined />
+                        今天的变化
+                    </span>
+                    <span className="chart-legend">
+                        <span className="chart-legend-temp">温度</span>
+                        <span className="chart-legend-power">功率</span>
+                    </span>
+                </header>
+                <div className="panel-body">
+                    <TrendChart data={chartData} loading={chartLoading} />
+                </div>
+            </section>
         </div>
     );
 };

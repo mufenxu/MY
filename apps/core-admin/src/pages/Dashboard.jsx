@@ -1,18 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import {
-    Button,
-    Card,
-    Checkbox,
-    Col,
-    Empty,
-    Input,
-    Popconfirm,
-    Row,
-    Space,
-    Spin,
-    Statistic,
-    Typography,
-} from 'antd';
+import { Button, Checkbox, Input, Popconfirm, Spin } from 'antd';
 import {
     AreaChartOutlined,
     DeleteOutlined,
@@ -27,39 +14,19 @@ import {
 import { useNavigate } from 'react-router';
 import api from '../utils/api';
 import { message } from '../utils/feedback';
-import { useResponsive } from '../hooks/useIsMobile';
 
-const { Title, Text } = Typography;
 const DashboardTrendChart = lazy(() => import('../components/DashboardTrendChart'));
 const getTimestamp = () => Date.now();
 
-const StatCard = ({ title, value, note, icon, color, loading }) => (
-    <Card bordered={false} style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', height: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-            <Statistic
-                title={title}
-                value={loading ? '--' : value}
-                valueStyle={{ color: 'var(--text-primary)', fontWeight: 700 }}
-            />
-            <div
-                style={{
-                    width: 46,
-                    height: 46,
-                    borderRadius: 14,
-                    background: color,
-                    color: '#fff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 21,
-                    flexShrink: 0,
-                }}
-            >
-                {icon}
-            </div>
+const StatCard = ({ title, value, note, icon, tone, loading }) => (
+    <article className="stat-card">
+        <span className={`stat-icon ${tone ? `tone-${tone}` : ''}`} aria-hidden="true">{icon}</span>
+        <div className="stat-copy">
+            <span className="stat-label">{title}</span>
+            <strong className="stat-figure tnum">{loading ? '—' : value}</strong>
+            <span className="stat-foot">{note}</span>
         </div>
-        <Text type="secondary" style={{ fontSize: 12 }}>{note}</Text>
-    </Card>
+    </article>
 );
 
 const Dashboard = () => {
@@ -73,7 +40,6 @@ const Dashboard = () => {
     const [todoLoading, setTodoLoading] = useState(true);
     const [todoSaving, setTodoSaving] = useState(false);
     const navigate = useNavigate();
-    const { isMobile } = useResponsive();
 
     const fetchStats = useCallback(async () => {
         try {
@@ -112,6 +78,7 @@ const Dashboard = () => {
         return () => window.clearTimeout(timerId);
     }, [fetchStats, loadTodos]);
 
+    // 图表延后到空闲时再挂载，避免首页首屏被 recharts 拖慢
     useEffect(() => {
         const reveal = () => setShowTrendChart(true);
         const idleId = 'requestIdleCallback' in window
@@ -199,88 +166,82 @@ const Dashboard = () => {
         weekday: 'long',
     }).format(new Date());
 
+    const pendingTodos = todos.filter((todo) => !todo.completed).length;
+
     return (
-        <div style={{ maxWidth: 1500, margin: '0 auto' }}>
-            <Card
-                bordered={false}
-                style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', marginBottom: isMobile ? 12 : 20 }}
-                bodyStyle={{ padding: isMobile ? 16 : 22 }}
-            >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                    <div>
-                        <Title level={3} style={{ margin: 0, color: 'var(--text-primary)' }}>我的管理台</Title>
-                        <Text type="secondary">{today}，常用操作都在这里。</Text>
-                    </div>
-                    <Space wrap size={8}>
-                        {quickActions.map((action) => (
-                            <Button key={action.path} icon={action.icon} onClick={() => navigate(action.path)}>
-                                {action.label}
-                            </Button>
-                        ))}
-                    </Space>
+        <div className="page-view">
+            <section className="panel hero">
+                <div className="hero-copy">
+                    <h1>我的管理台</h1>
+                    <p>{today}，常用操作都在这里。</p>
                 </div>
-            </Card>
+                <div className="quick-actions">
+                    {quickActions.map((action) => (
+                        <button
+                            key={action.path}
+                            type="button"
+                            className="quick-action"
+                            onClick={() => navigate(action.path)}
+                        >
+                            {action.icon}
+                            {action.label}
+                        </button>
+                    ))}
+                </div>
+            </section>
 
-            <Row gutter={[isMobile ? 10 : 18, isMobile ? 10 : 18]}>
-                <Col xs={12} lg={8}>
-                    <StatCard
-                        title="需要处理"
-                        value={statsError ? '--' : (stats?.orders?.active ?? 0)}
-                        note={statsError ? '暂时无法获取' : '待处理或进行中的订单'}
-                        icon={<ShoppingOutlined />}
-                        color="#F59E0B"
-                        loading={statsLoading}
-                    />
-                </Col>
-                <Col xs={12} lg={8}>
-                    <StatCard
-                        title="全部订单"
-                        value={statsError ? '--' : (stats?.orders?.total ?? 0)}
-                        note={statsError ? '暂时无法获取' : '当前保存的订单'}
-                        icon={<AreaChartOutlined />}
-                        color="#4A7CF7"
-                        loading={statsLoading}
-                    />
-                </Col>
-                <Col xs={24} lg={8}>
-                    <StatCard
-                        title="用户"
-                        value={statsError ? '--' : (stats?.users?.total ?? 0)}
-                        note={statsError ? '暂时无法获取' : `正常使用 ${stats?.users?.active ?? 0}`}
-                        icon={<TeamOutlined />}
-                        color="#5CC9A7"
-                        loading={statsLoading}
-                    />
-                </Col>
-            </Row>
+            <div className="stat-strip">
+                <StatCard
+                    title="需要处理"
+                    value={statsError ? '—' : (stats?.orders?.active ?? 0)}
+                    note={statsError ? '暂时无法获取' : '待处理或进行中的订单'}
+                    icon={<ShoppingOutlined />}
+                    tone="warn"
+                    loading={statsLoading}
+                />
+                <StatCard
+                    title="全部订单"
+                    value={statsError ? '—' : (stats?.orders?.total ?? 0)}
+                    note={statsError ? '暂时无法获取' : '当前保存的订单'}
+                    icon={<AreaChartOutlined />}
+                    loading={statsLoading}
+                />
+                <StatCard
+                    title="用户"
+                    value={statsError ? '—' : (stats?.users?.total ?? 0)}
+                    note={statsError ? '暂时无法获取' : `正常使用 ${stats?.users?.active ?? 0}`}
+                    icon={<TeamOutlined />}
+                    tone="ok"
+                    loading={statsLoading}
+                />
+            </div>
 
-            <Row gutter={[isMobile ? 10 : 18, isMobile ? 10 : 18]} style={{ marginTop: isMobile ? 12 : 18 }}>
-                <Col xs={24} lg={14}>
-                    <Card
-                        title="最近 7 天"
-                        extra={<Text type="secondary" style={{ fontSize: 12 }}>新用户和新订单</Text>}
-                        bordered={false}
-                        style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', height: '100%' }}
-                        bodyStyle={{ height: 340, padding: isMobile ? '16px 8px' : 20 }}
-                    >
-                        {showTrendChart ? (
-                            <Suspense fallback={<Spin style={{ width: '100%', paddingTop: 120 }} />}>
-                                <DashboardTrendChart data={stats?.trend || []} />
-                            </Suspense>
-                        ) : (
-                            <Spin style={{ width: '100%', paddingTop: 120 }} />
-                        )}
-                    </Card>
-                </Col>
-                <Col xs={24} lg={10}>
-                    <Card
-                        title="我的待办"
-                        extra={<Text type="secondary" style={{ fontSize: 12 }}>{todos.filter((todo) => !todo.completed).length} 件未完成</Text>}
-                        bordered={false}
-                        style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', height: '100%' }}
-                        bodyStyle={{ padding: isMobile ? 16 : 20 }}
-                    >
-                        <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
+            <div className="split">
+                <section className="panel" aria-label="最近 7 天趋势">
+                    <header className="panel-head">
+                        <span className="panel-title">最近 7 天</span>
+                        <span className="panel-meta">新用户和新订单</span>
+                    </header>
+                    <div className="panel-body">
+                        <div className="chart-box">
+                            {showTrendChart ? (
+                                <Suspense fallback={<Spin style={{ width: '100%', paddingTop: 120 }} />}>
+                                    <DashboardTrendChart data={stats?.trend || []} />
+                                </Suspense>
+                            ) : (
+                                <Spin style={{ width: '100%', paddingTop: 120 }} />
+                            )}
+                        </div>
+                    </div>
+                </section>
+
+                <section className="panel" aria-label="我的待办">
+                    <header className="panel-head">
+                        <span className="panel-title">我的待办</span>
+                        <span className="panel-meta">{pendingTodos} 件未完成</span>
+                    </header>
+                    <div className="panel-body">
+                        <div className="todo-add">
                             <Input
                                 value={todoInput}
                                 onChange={(event) => setTodoInput(event.target.value)}
@@ -298,39 +259,20 @@ const Dashboard = () => {
                             >
                                 添加
                             </Button>
-                        </Space.Compact>
+                        </div>
 
                         <Spin spinning={todoLoading}>
-                            <div style={{ maxHeight: 260, overflowY: 'auto', paddingRight: 4 }}>
+                            <div className="todo-scroll">
                                 {!todoLoading && sortedTodos.length === 0 ? (
-                                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有待办" />
+                                    <div className="ops-empty todo-empty">还没有待办</div>
                                 ) : sortedTodos.map((todo) => (
-                                    <div
-                                        key={todo.id}
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: 10,
-                                            minHeight: 42,
-                                            padding: '8px 2px',
-                                            borderBottom: '1px solid var(--border-color)',
-                                        }}
-                                    >
+                                    <div key={todo.id} className={`todo-row ${todo.completed ? 'is-done' : ''}`}>
                                         <Checkbox
                                             checked={todo.completed}
                                             disabled={todoSaving}
                                             onChange={(event) => toggleTodo(todo, event.target.checked)}
                                         />
-                                        <Text
-                                            style={{
-                                                flex: 1,
-                                                color: todo.completed ? 'var(--text-tertiary)' : 'var(--text-primary)',
-                                                textDecoration: todo.completed ? 'line-through' : 'none',
-                                                wordBreak: 'break-word',
-                                            }}
-                                        >
-                                            {todo.title}
-                                        </Text>
+                                        <span className="todo-title">{todo.title}</span>
                                         <Popconfirm
                                             title="删除这条待办？"
                                             okText="删除"
@@ -350,9 +292,9 @@ const Dashboard = () => {
                                 ))}
                             </div>
                         </Spin>
-                    </Card>
-                </Col>
-            </Row>
+                    </div>
+                </section>
+            </div>
         </div>
     );
 };

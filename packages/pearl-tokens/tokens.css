@@ -1,9 +1,7 @@
 /* ==========================================================================
-   设计令牌 · 珍珠玻璃（Pearl Glass）
-   视觉语汇移植自 scaffold-master（MIT）：中性灰绿底、白色珠光材质、
-   深色外框、极细描边、单一蓝色强调 + 柠檬绿状态点。
-   本文件同时保留旧变量名（--panel / --text / --glass-* 等）作为别名，
-   使尚未改写的视图在不改 CSS 的前提下自动落到新色板。
+   珍珠玻璃（Pearl Glass）设计令牌
+   视觉语汇移植自 scaffold-master（MIT）。本文件只含 CSS 变量与主题作用域，
+   不含任何元素级重置，可安全导入带 UI 组件库的应用。
    ========================================================================== */
 
 :root {
@@ -265,179 +263,6 @@
   initial-value: 0%;
 }
 
-/* ── 基础重置 ─────────────────────────────────────────────────── */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  margin: 0;
-  height: 100%;
-}
-
-body {
-  min-width: 320px;
-  color: var(--ink);
-  background: var(--stage);
-  font-family: inherit;
-  font-size: var(--type-body);
-  line-height: 1.5;
-}
-
-h1,
-h2,
-h3,
-h4,
-p {
-  margin: 0;
-}
-
-img,
-svg {
-  display: block;
-}
-
-table {
-  border-collapse: collapse;
-  border-spacing: 0;
-}
-
-::selection {
-  background: var(--blue-soft);
-}
-
-:focus {
-  outline: none;
-}
-
-/* 按钮基线重置：设计系统统一接管边框与底色 */
-button {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  color: inherit;
-  background: none;
-  font: inherit;
-  cursor: pointer;
-}
-
-button:disabled {
-  cursor: not-allowed;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-button:focus-visible,
-a:focus-visible,
-[tabindex]:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
-}
-
-.tnum {
-  font-variant-numeric: tabular-nums;
-}
-
-.mono {
-  font-family: var(--font-mono);
-  font-size: 12px;
-}
-
-.muted {
-  color: var(--ink-muted);
-}
-
-.soft {
-  color: var(--ink-soft);
-}
-
-.faint {
-  color: var(--ink-faint);
-}
-
-.ellipsis {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-/* ── 材质 ─────────────────────────────────────────────────────── */
-.m-rail {
-  background: var(--rail-bg);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
-}
-
-.m-pill {
-  border: 1px solid var(--glass-line);
-  background: var(--pill-bg);
-  box-shadow: var(--e2), var(--edge-strong), var(--pill-inset);
-  backdrop-filter: blur(22px) saturate(1.18);
-  -webkit-backdrop-filter: blur(22px) saturate(1.18);
-}
-
-.m-float {
-  border: 1px solid var(--glass-line);
-  background: var(--float-bg);
-  box-shadow: var(--e3), var(--float-inset);
-  backdrop-filter: blur(28px) saturate(1.08);
-  -webkit-backdrop-filter: blur(28px) saturate(1.08);
-}
-
-.m-surface {
-  border: 1px solid var(--line-strong);
-  background: var(--surface);
-  box-shadow: var(--edge), var(--e1);
-}
-
-.m-groove {
-  border: 1px solid var(--glass-line-soft);
-  background: var(--groove-bg);
-  box-shadow: var(--groove-inset);
-}
-
-/* ── 分区标题（柠檬绿脉冲点） ─────────────────────────────────── */
-.section-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 15px;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  color: var(--ink);
-}
-
-.section-label::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: var(--lime);
-  box-shadow: 0 0 0 5px var(--lime-soft);
-  flex: none;
-}
-
 /* ── 滚动条 ───────────────────────────────────────────────────── */
 * {
   scrollbar-width: thin;
@@ -464,6 +289,7 @@ textarea:focus-visible {
   background: transparent;
 }
 
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -474,18 +300,5 @@ textarea:focus-visible {
     transition-duration: 0.01ms !important;
     transition-delay: 0s !important;
     scroll-behavior: auto !important;
-  }
-}
-
-@media (prefers-reduced-transparency: reduce) {
-  .m-rail,
-  .m-pill,
-  .m-float {
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-  .m-float,
-  .m-rail {
-    background: var(--surface-solid);
   }
 }

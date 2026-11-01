@@ -1,106 +1,113 @@
+/* ==========================================================================
+   登录页：珍珠玻璃卡片 + 探头小动物，深色主题自动跟随
+   ========================================================================== */
 
-/* Login Page Specific Styles - Horizon UI Theme */
-
-.login-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  width: 100vw;
-  background: #F5F7FB;
+.login-shell {
   position: relative;
-  overflow: hidden;
-  padding: 24px;
+  display: flex;
+  height: 100dvh;
+  justify-content: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 92px 24px 40px;
+  background: var(--canvas);
 }
 
-/* Decorative Background Blobs - Purple/Blue Theme */
-.login-container::before,
-.login-container::after {
-  content: '';
+.login-aurora {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.login-glow {
   position: absolute;
   border-radius: 50%;
-  filter: none;
-  z-index: 1;
-  animation: none;
+  filter: blur(2px);
+  animation: login-drift 18s ease-in-out infinite;
 }
 
-.login-container::before {
-  width: 500px;
-  height: 500px;
-  background: rgba(67, 24, 255, 0.15);
-  top: -150px;
-  right: -100px;
-  opacity: 0.6;
+.login-glow-a {
+  top: -160px;
+  right: -120px;
+  width: 520px;
+  height: 520px;
+  background: radial-gradient(circle, var(--blue-soft) 0%, transparent 68%);
 }
 
-.login-container::after {
-  width: 400px;
-  height: 400px;
-  background: rgba(106, 210, 255, 0.2);
-  bottom: -100px;
-  left: -50px;
-  opacity: 0.5;
-  animation-delay: -5s;
-  animation-duration: 25s;
+.login-glow-b {
+  bottom: -170px;
+  left: -130px;
+  width: 460px;
+  height: 460px;
+  background: radial-gradient(circle, var(--lime-soft) 0%, transparent 68%);
+  animation-delay: -7s;
 }
 
-@keyframes float-blobs {
-  0% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(30px, -50px) scale(1.1); }
-  66% { transform: translate(-20px, 20px) scale(0.9); }
-  100% { transform: translate(0, 0) scale(1); }
-}
-
-.login-form-side {
-  width: 100%;
-  max-width: 480px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  z-index: 5;
+.login-panel {
   position: relative;
-}
-
-/* Split side removed to keep it minimalist and focused */
-.login-brand-side {
-  display: none !important;
-}
-
-.login-card-wrapper {
+  z-index: 2;
   width: 100%;
-  position: relative;
-  margin-top: 80px;
-  z-index: 10;
+  max-width: 420px;
+  margin: auto 0;
+
+  /* 小动物固定配色：与主题无关，白熊猫在深色背景下依然能看清 */
+  --animal-face: #ffffff;
+  --animal-ink: #1c2126;
+  --animal-ink-soft: #4a555f;
+  --animal-line: #e6eaee;
+  --animal-blush: #f7c9d3;
+  --animal-amber: #e59a3c;
+  --animal-pupil: #101418;
 }
 
-/* Card Style - Horizon UI Glassmorphism */
-.login-card-wrapper .ant-card {
-  background: rgba(255, 255, 255, 0.92) !important;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-radius: 24px !important;
-  border: 1px solid rgba(255, 255, 255, 0.8) !important;
-  box-shadow: 0 20px 50px rgba(112, 144, 176, 0.18) !important;
-  padding: 10px !important;
+/* ── 卡片 ─────────────────────────────────────────────────────── */
+.login-card {
   position: relative;
   z-index: 15;
-  transition: box-shadow 0.3s ease;
+  padding: 26px 24px 22px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  box-shadow: var(--edge), var(--e2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
 }
 
-.login-card-wrapper .ant-card:hover {
-  box-shadow: 0 25px 60px rgba(112, 144, 176, 0.25) !important;
+.login-head {
+  margin-bottom: 18px;
+  text-align: center;
 }
 
-/* Animal Peeking Container */
+.login-head h1 {
+  margin: 0 0 4px;
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+
+.login-head p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+
+.login-legal {
+  margin: 22px 0 0;
+  color: var(--ink-faint);
+  font-size: 11px;
+  text-align: center;
+}
+
+/* ── 探头小动物 ───────────────────────────────────────────────── */
 .peeking-animals {
   position: absolute;
-  top: -85px;
+  top: -80px;
   left: 0;
   right: 0;
   display: flex;
   justify-content: center;
-  gap: 24px;
+  gap: 22px;
   pointer-events: none;
   z-index: 5;
 }
@@ -111,200 +118,220 @@
   transform: translateY(0);
 }
 
-.animal-panda { width: 110px; }
-.animal-fox { width: 90px; transform: translateY(20px); }
-.animal-rabbit { width: 90px; transform: translateY(15px); }
+.animal-panda {
+  width: 104px;
+}
 
-/* Animation - Diving down BEHIND the card */
+.animal-fox {
+  width: 78px;
+  transform: translateY(8px);
+}
+
+.animal-rabbit {
+  width: 76px;
+  transform: translateY(6px);
+}
+
+/* 输入密码时集体躲到卡片后面 */
 .is-typing-password .animal-container {
   transform: translateY(150px);
 }
 
-/* Turnstile Centering */
-.turnstile-container {
-  display: flex !important;
-  justify-content: center !important;
-  width: 100% !important;
-  margin-bottom: 24px !important;
-  transition: all 0.3s ease;
+/* ── 登录方式切换：凹槽分段控件 ───────────────────────────────── */
+.login-tabs .ant-tabs-nav {
+  margin-bottom: 16px;
 }
 
-.turnstile-container > div {
-  margin: 0 auto !important;
-}
-
-/* Input Fields - Horizon UI style, scoped to login container */
-.login-container .ant-input, 
-.login-container .ant-input-password, 
-.login-container .ant-input-affix-wrapper,
-.login-container .ant-input-affix-wrapper > input.ant-input {
-  background: #F5F7FB !important;
-  background-color: #F5F7FB !important;
-  border: 2px solid transparent !important;
-  border-radius: 16px !important;
-  transition: all 0.3s ease !important;
-}
-
-.login-container .ant-input-affix-wrapper {
-  padding: 12px 20px !important;
-}
-
-.login-container .ant-input-affix-wrapper:focus, 
-.login-container .ant-input-affix-wrapper-focused,
-.login-container .ant-input-affix-wrapper:focus-within {
-  border-color: #4A7CF7 !important;
-  background: #FFFFFF !important;
-  background-color: #FFFFFF !important;
-  box-shadow: 0 8px 24px rgba(74, 124, 247, 0.12) !important;
-}
-
-.login-container .ant-input-affix-wrapper:focus input,
-.login-container .ant-input-affix-wrapper-focused input,
-.login-container .ant-input-affix-wrapper:focus-within input {
-  background: #FFFFFF !important;
-  background-color: #FFFFFF !important;
-}
-
-/* Button - Horizon UI Purple Gradient */
-.login-container .ant-btn-primary {
-  background: linear-gradient(135deg, #4A7CF7 0%, #6B9BFF 100%) !important;
-  font-weight: 700 !important;
-  border-radius: 16px !important;
-  height: 52px !important;
-  font-size: 16px !important;
-  box-shadow: 0 10px 25px rgba(74, 124, 247, 0.3) !important;
-  border: none !important;
-  transition: all 0.3s ease !important;
-}
-
-.login-container .ant-btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 15px 30px rgba(74, 124, 247, 0.4) !important;
-}
-
-.login-container .ant-btn-primary:active {
-  transform: translateY(0);
-}
-
-/* Tabs Styling - Horizon UI Capsule Style */
 .login-tabs .ant-tabs-nav::before {
-  display: none !important;
+  display: none;
+}
+
+.login-tabs .ant-tabs-nav-list {
+  width: 100%;
+  gap: 3px;
+  padding: 4px;
+  border-radius: var(--r-sm);
+  background: var(--groove-bg);
 }
 
 .login-tabs .ant-tabs-tab {
-  background: #F5F7FB !important;
-  margin: 0 6px !important;
-  padding: 8px 24px !important;
-  border-radius: 14px !important;
-  color: #A3AED0 !important;
-  font-weight: 600 !important;
-  transition: all 0.3s ease;
-  border: 1px solid transparent !important;
+  flex: 1;
+  justify-content: center;
+  margin: 0;
+  padding: 6px 0;
+  border-radius: 9px;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background 0.16s ease, color 0.16s ease;
 }
 
 .login-tabs .ant-tabs-tab:hover {
-  color: #4A7CF7 !important;
-  background: #EBF0FF !important;
+  color: var(--ink);
 }
 
 .login-tabs .ant-tabs-tab-active {
-  background: linear-gradient(135deg, #4A7CF7 0%, #6B9BFF 100%) !important;
-  border-color: transparent !important;
+  background: var(--surface);
+  box-shadow: var(--edge), var(--e1);
 }
 
 .login-tabs .ant-tabs-tab-active .ant-tabs-tab-btn {
-  color: #FFFFFF !important;
+  color: var(--ink);
 }
 
 .login-tabs .ant-tabs-ink-bar {
-  display: none !important;
+  display: none;
 }
 
-/* Mobile Adjustments */
-@media (max-width: 600px) {
-  .login-container {
-      padding: 16px;
-  }
-  
-  .animal-fox, .animal-rabbit {
-    display: none;
-  }
-  
-  .animal-panda {
-    width: 140px;
-  }
+/* ── 表单 ─────────────────────────────────────────────────────── */
+.login-card .ant-form-item-label > label {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 620;
 }
 
-/* Floating Animation */
-@keyframes float {
-  0% { transform: translateY(0px); }
-  50% { transform: translateY(-10px); }
-  100% { transform: translateY(0px); }
+.login-card .ant-input-affix-wrapper,
+.login-card .ant-input {
+  height: 42px;
+  border-radius: var(--r-sm);
 }
 
-.brand-floating {
-  animation: float 4s ease-in-out infinite;
+.login-card .ant-btn-lg {
+  height: 44px;
+  border-radius: var(--r-sm);
+  font-size: 14px;
+  font-weight: 660;
 }
 
-/* --- 扫码登录模式切换相关样式 --- */
-
-/* 模式切换链接 */
-.scan-mode-toggle {
-  margin-top: 12px;
-  font-size: 13px;
-  color: #4A7CF7;
-  cursor: pointer;
-  user-select: none;
-  transition: color 0.2s ease, opacity 0.2s ease;
-  text-decoration: none;
-  border: 0;
-  padding: 4px;
-  background: transparent;
-  font: inherit;
+.turnstile-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 18px;
 }
 
-.scan-mode-toggle:hover {
-  color: #3366E6;
-  opacity: 0.85;
-  text-decoration: underline;
+/* ── 扫码登录 ─────────────────────────────────────────────────── */
+.scan-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0 2px;
 }
 
-/* 微信小程序码图片 */
-.wxacode-image {
-  width: 180px;
-  height: 180px;
+.scan-frame {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface-solid);
+  box-shadow: var(--edge), var(--e1);
+}
+
+.scan-code {
+  position: relative;
   display: block;
-  border-radius: 8px;
+}
+
+.wxacode-image {
+  display: block;
+  width: 176px;
+  height: 176px;
+  border-radius: 10px;
   object-fit: contain;
   transition: opacity 0.3s ease;
 }
 
-/* 二维码过期覆盖层 */
 .qr-expired-overlay {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.2s ease;
+  gap: 2px;
   border: 0;
-  padding: 0;
-  font: inherit;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 620;
+  cursor: pointer;
 }
 
-.qr-expired-overlay:hover {
-  background: rgba(255, 255, 255, 0.92);
+.scan-overlay {
+  position: absolute;
+  inset: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 660;
 }
 
-.scan-mode-toggle:focus-visible,
-.qr-expired-overlay:focus-visible {
-  outline: 3px solid rgba(74, 124, 247, 0.35);
-  outline-offset: 3px;
+.scan-status {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+
+.scan-mode-toggle {
+  font-size: 12px;
+}
+
+/* ── 动画与降级 ───────────────────────────────────────────────── */
+@keyframes login-drift {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-26px, 22px);
+  }
+}
+
+@media (max-width: 600px) {
+  .login-shell {
+    padding: 78px 16px 28px;
+  }
+
+  .login-card {
+    padding: 22px 18px 18px;
+    border-radius: var(--r-lg);
+  }
+
+  .animal-fox,
+  .animal-rabbit {
+    display: none;
+  }
+
+  .animal-panda {
+    width: 120px;
+  }
+
+  .peeking-animals {
+    top: -70px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-glow,
+  .animal-container {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .login-card {
+    background: var(--surface-solid);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }

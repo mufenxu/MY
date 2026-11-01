@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Space, Tag, Typography } from 'antd';
 import { HomeOutlined, ReloadOutlined, RocketOutlined, SmileOutlined } from '@ant-design/icons';
 import { useLocation, useNavigate } from 'react-router';
 import './NotFound.css';
-
-const { Paragraph, Text } = Typography;
 
 const QUIPS = [
     '系统认真找了一圈，确认这里没有页面，只有空气和一点点尴尬。',
@@ -59,47 +56,40 @@ const NotFound = () => {
     return (
         <div className="notfound-wrap">
             <div className="notfound-card">
-                <span className="notfound-orb notfound-orb-a" />
-                <span className="notfound-orb notfound-orb-b" />
-                <span className="notfound-orb notfound-orb-c" />
+                <span className="notfound-glow notfound-glow-a" aria-hidden="true" />
+                <span className="notfound-glow notfound-glow-b" aria-hidden="true" />
 
-                <Tag className="notfound-path-tag" bordered={false}>
-                    迷路坐标：{currentPath}
-                </Tag>
+                <span className="tag tone-info notfound-path">迷路坐标：{currentPath}</span>
 
-                <div className="notfound-title" aria-label="404">
+                <div className="notfound-code" aria-label="404">
                     <span>4</span>
                     <span>0</span>
                     <span>4</span>
                 </div>
 
-                <Paragraph className="notfound-subtitle">
-                    管理后台里没有这条路，不过笑点已经送达。
-                </Paragraph>
+                <p className="notfound-subtitle">管理后台里没有这条路，不过笑点已经送达。</p>
+                <p className="notfound-quip">{QUIPS[quipIndex]}</p>
+                <div className="notfound-radar" aria-hidden="true" />
 
-                <Text className="notfound-quip">{QUIPS[quipIndex]}</Text>
-                <div className="notfound-radar" />
-
-                <Space wrap className="notfound-actions" size={[10, 10]}>
-                    <Button type="primary" size="large" icon={<HomeOutlined />} onClick={() => navigate(fallbackPath)}>
+                <div className="notfound-actions">
+                    <button type="button" className="btn btn-primary" onClick={() => navigate(fallbackPath)}>
+                        <HomeOutlined />
                         {hasSessionHint ? '带我回仪表盘' : '带我去登录'}
-                    </Button>
-                    <Button size="large" icon={<RocketOutlined />} onClick={handleRandomJump}>
+                    </button>
+                    <button type="button" className="btn btn-secondary" onClick={handleRandomJump}>
+                        <RocketOutlined />
                         随机传送
-                    </Button>
-                    <Button
-                        size="large"
-                        type="text"
-                        icon={<ReloadOutlined spin={bonkCount % 2 === 1} />}
-                        onClick={() => setBonkCount(prev => prev + 1)}
-                    >
+                    </button>
+                    <button type="button" className="btn btn-text" onClick={() => setBonkCount(prev => prev + 1)}>
+                        <ReloadOutlined spin={bonkCount % 2 === 1} />
                         再撞一次墙
-                    </Button>
-                </Space>
+                    </button>
+                </div>
 
-                <Text className="notfound-bonk">
-                    <SmileOutlined /> {bonkText}
-                </Text>
+                <p className="notfound-bonk">
+                    <SmileOutlined />
+                    {bonkText}
+                </p>
             </div>
         </div>
     );

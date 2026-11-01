@@ -109,7 +109,7 @@ test('legacy IoT route redirects to the service-owned management app', () => {
 
 test('header icon tools and tabs remain keyboard and screen-reader accessible', () => {
   const layout = readSource('src', 'components', 'MainLayout.jsx');
-  const styles = readSource('src', 'index.css');
+  const styles = readSource('src', 'styles', 'shell.css');
 
   assert.match(layout, /role="tablist"/);
   assert.match(layout, /role="tab"[\s\S]*?tabIndex=\{isActive \? 0 : -1\}[\s\S]*?aria-selected/);
@@ -120,11 +120,11 @@ test('header icon tools and tabs remain keyboard and screen-reader accessible', 
   }
   assert.match(layout, /aria-label="打开导航菜单"/);
   assert.match(layout, /aria-label="刷新当前页"/);
-  assert.match(layout, /aria-label="打开统一通知控制中心"[\s\S]*?openNotificationConsole/);
-  assert.match(layout, /<button className="soybean-header-avatar-trigger"[\s\S]*?aria-label="打开用户菜单"/);
-  assert.match(styles, /\.soybean-tab-item:focus-visible/);
-  assert.match(styles, /\.soybean-header-avatar-trigger:focus-visible/);
-  assert.match(styles, /\.soybean-tab-item\s*\{[\s\S]*?height:\s*38px/);
+  assert.match(layout, /<button[^>]*onClick=\{openNotificationConsole\}[\s\S]*?aria-label="打开统一通知控制中心"/);
+  assert.match(layout, /<button className="app-avatar-trigger"[\s\S]*?aria-label="打开用户菜单"/);
+  assert.match(styles, /\.app-tab:focus-visible/);
+  assert.match(styles, /\.app-avatar-trigger:focus-visible/);
+  assert.match(styles, /\.app-tab\s*\{[\s\S]*?height:\s*38px/);
 });
 
 test('Ant Design feedback is bound to the application context', () => {
@@ -164,9 +164,9 @@ test('local admin credentials remain in HttpOnly cookies with CSRF replay protec
 test('order reliability states are explicit and submitting orders cannot be refreshed concurrently', () => {
   const orders = readSource('src', 'pages', 'CourseOrders.jsx');
 
-  assert.match(orders, /'Submitting': \{ color: 'processing', label: '提交中' \}/);
-  assert.match(orders, /'ReconcilePending': \{ color: 'warning', label: '待人工核对' \}/);
-  assert.match(orders, /'Unknown': \{ color: 'default', label: '结果未知' \}/);
+  assert.match(orders, /Submitting: \{ label: '提交中', tone: 'info' \}/);
+  assert.match(orders, /ReconcilePending: \{ label: '需要确认', tone: 'warn' \}/);
+  assert.match(orders, /Unknown: \{ label: '状态未知', tone: 'neutral' \}/);
   assert.match(orders, /disabled: record\.status === 'Submitting'/);
   assert.match(orders, /<Option value="Pending" disabled>/);
 });

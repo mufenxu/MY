@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Form, Input, Button, Switch, Card, Divider, Space, Row, Col, Select, Typography, Tabs, Modal, Tag, Upload } from 'antd';
+import { Form, Input, Button, Switch, Row, Col, Select, Tabs, Modal, Upload } from 'antd';
 import { useNavigate } from 'react-router';
 import { message } from '../utils/feedback';
 import {
@@ -17,6 +17,7 @@ import {
     DatabaseOutlined,
     DownloadOutlined,
     UploadOutlined,
+    SyncOutlined,
     WarningOutlined
 } from '@ant-design/icons';
 import api from '../utils/api';
@@ -26,7 +27,6 @@ import CourseCategoryConfig from '../components/CourseCategoryConfig';
 import TurnstileSettings from '../components/TurnstileSettings';
 
 const { Option } = Select;
-const { Title, Text } = Typography;
 
 const BACKUP_REQUEST_TIMEOUT_MS = 120000;
 const RESTORE_REQUEST_TIMEOUT_MS = 300000;
@@ -184,56 +184,64 @@ const CronSettings = ({ title, type }) => {
     };
 
     return (
-        <Card title={title} bordered={false} style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', marginBottom: 24 }}>
-            <Form form={form} layout="vertical" onFinish={onFinish} initialValues={{ enabled: true, schedule: DEFAULT_CRON_SCHEDULE }}>
-                <Form.Item name="enabled" label="自动运行" valuePropName="checked">
-                    <Switch checkedChildren="已开启" unCheckedChildren="已暂停" />
-                </Form.Item>
+        <section className="panel">
+            <div className="panel-head">
+                <h2 className="panel-title">
+                    <ScheduleOutlined />
+                    {title}
+                </h2>
                 {taskStatus && (
-                    <Tag color={taskStatus.enabled ? 'success' : 'default'} style={{ marginBottom: 16 }}>
+                    <span className={`tag tone-${taskStatus.enabled ? 'ok' : 'neutral'}`}>
                         {taskStatus.enabled ? '自动运行中' : '已暂停'}
-                    </Tag>
+                    </span>
                 )}
-                {isTaskEnabled && (
-                    <>
-                        <Form.Item label="运行时间" required>
-                            <Select
-                                value={selectedSchedule}
-                                onChange={(value) => {
-                                    setSelectedSchedule(value);
-                                    selectedScheduleRef.current = value;
-                                    if (value !== 'custom') {
-                                        setCustomSchedule('');
-                                        customScheduleRef.current = '';
-                                        form.setFieldValue('customSchedule', undefined);
-                                    }
-                                }}
-                            >
-                                {CRON_PRESETS.map(preset => (
-                                    <Option key={preset.value} value={preset.value}>{preset.label}</Option>
-                                ))}
-                            </Select>
-                        </Form.Item>
-                        {selectedSchedule === 'custom' && (
-                            <Form.Item label="自定义时间规则" required>
-                                <Input
-                                    value={customSchedule}
-                                    placeholder={`高级用法，例如：${DEFAULT_CRON_SCHEDULE}`}
-                                    onChange={(event) => {
-                                        setCustomSchedule(event.target.value);
-                                        customScheduleRef.current = event.target.value;
+            </div>
+            <div className="panel-body">
+                <Form form={form} layout="vertical" onFinish={onFinish} initialValues={{ enabled: true, schedule: DEFAULT_CRON_SCHEDULE }}>
+                    <Form.Item name="enabled" label="自动运行" valuePropName="checked">
+                        <Switch checkedChildren="已开启" unCheckedChildren="已暂停" />
+                    </Form.Item>
+                    {isTaskEnabled && (
+                        <>
+                            <Form.Item label="运行时间" required>
+                                <Select
+                                    value={selectedSchedule}
+                                    onChange={(value) => {
+                                        setSelectedSchedule(value);
+                                        selectedScheduleRef.current = value;
+                                        if (value !== 'custom') {
+                                            setCustomSchedule('');
+                                            customScheduleRef.current = '';
+                                            form.setFieldValue('customSchedule', undefined);
+                                        }
                                     }}
-                                />
+                                >
+                                    {CRON_PRESETS.map(preset => (
+                                        <Option key={preset.value} value={preset.value}>{preset.label}</Option>
+                                    ))}
+                                </Select>
                             </Form.Item>
-                        )}
-                    </>
+                            {selectedSchedule === 'custom' && (
+                                <Form.Item label="自定义时间规则" required>
+                                    <Input
+                                        value={customSchedule}
+                                        placeholder={`高级用法，例如：${DEFAULT_CRON_SCHEDULE}`}
+                                        onChange={(event) => {
+                                            setCustomSchedule(event.target.value);
+                                            customScheduleRef.current = event.target.value;
+                                        }}
+                                    />
+                                </Form.Item>
+                            )}
+                        </>
                     )}
-                <Space style={{ marginTop: 24 }}>
-                    <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading}>保存</Button>
-                    <Button icon={<PlayCircleOutlined />} onClick={handleRunNow} loading={loading}>现在运行</Button>
-                </Space>
-            </Form>
-        </Card>
+                    <div className="form-actions">
+                        <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading}>保存</Button>
+                        <Button icon={<PlayCircleOutlined />} onClick={handleRunNow} loading={loading}>现在运行</Button>
+                    </div>
+                </Form>
+            </div>
+        </section>
     );
 };
 
@@ -288,23 +296,33 @@ const ExpiryNotificationSettings = () => {
     };
 
     return (
-        <Card title="到期提醒接收目标" bordered={false} style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', marginBottom: 24 }}>
-            <Form form={form} layout="vertical" onFinish={onFinish} initialValues={{ qywxEnabled: false }}>
-                <Form.Item name="qywxEnabled" label="企业微信通知" valuePropName="checked">
-                    <Switch checkedChildren="已开启" unCheckedChildren="已关闭" />
-                </Form.Item>
-                <Form.Item name="qywxToUser" label="成员 ID">
-                    <Input placeholder="例如：zhangsan" />
-                </Form.Item>
-                <Form.Item name="qywxToParty" label="部门 ID">
-                    <Input placeholder="例如：1" />
-                </Form.Item>
-                <Form.Item name="qywxToTag" label="标签 ID">
-                    <Input placeholder="例如：ops" />
-                </Form.Item>
-                <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading}>保存</Button>
-            </Form>
-        </Card>
+        <section className="panel">
+            <div className="panel-head">
+                <h2 className="panel-title">
+                    <ApiOutlined />
+                    到期提醒接收目标
+                </h2>
+            </div>
+            <div className="panel-body">
+                <Form form={form} layout="vertical" onFinish={onFinish} initialValues={{ qywxEnabled: false }}>
+                    <Form.Item name="qywxEnabled" label="企业微信通知" valuePropName="checked">
+                        <Switch checkedChildren="已开启" unCheckedChildren="已关闭" />
+                    </Form.Item>
+                    <Form.Item name="qywxToUser" label="成员 ID">
+                        <Input placeholder="例如：zhangsan" />
+                    </Form.Item>
+                    <Form.Item name="qywxToParty" label="部门 ID">
+                        <Input placeholder="例如：1" />
+                    </Form.Item>
+                    <Form.Item name="qywxToTag" label="标签 ID">
+                        <Input placeholder="例如：ops" />
+                    </Form.Item>
+                    <div className="form-actions">
+                        <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading}>保存</Button>
+                    </div>
+                </Form>
+            </div>
+        </section>
     );
 };
 
@@ -383,51 +401,52 @@ const BackupRestoreSettings = () => {
     };
 
     return (
-        <div style={{ padding: '0 4px' }}>
-            <Row gutter={[24, 24]}>
-                <Col xs={24} xl={12}>
-                    <Card 
-                        title={<span style={{ fontWeight: 700 }}><DatabaseOutlined style={{ marginRight: 8, color: '#4A7CF7' }} /> 数据备份</span>}
-                        bordered={false} 
-                        style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', height: '100%' }}
-                    >
-                        <div style={{ marginBottom: 20 }}>
-                            <Typography.Text type="secondary">
-                                下载一份当前数据副本。换电脑或误操作时，可以用它恢复。
-                            </Typography.Text>
+        <div className="view-stack">
+            <div className="split even">
+                <section className="panel">
+                    <div className="panel-head">
+                        <h2 className="panel-title">
+                            <DatabaseOutlined />
+                            数据备份
+                        </h2>
+                    </div>
+                    <div className="panel-body">
+                        <p className="settings-note">
+                            下载一份当前数据副本。换电脑或误操作时，可以用它恢复。
+                        </p>
+                        <div className="backup-drop">
+                            <DatabaseOutlined />
+                            <span>不包含临时运行记录</span>
                         </div>
-                        <div style={{ padding: '12px 0', border: '1px dashed #e2e8f0', borderRadius: 12, textAlign: 'center', background: '#f7fafc', marginBottom: 24 }}>
-                            <DatabaseOutlined style={{ fontSize: 32, color: '#a0aec0', marginBottom: 8 }} />
-                            <div><Typography.Text type="secondary" style={{ fontSize: 13 }}>不包含临时运行记录</Typography.Text></div>
+                        <div className="form-actions">
+                            <Button
+                                type="primary"
+                                icon={<DownloadOutlined />}
+                                loading={exportLoading}
+                                onClick={handleExport}
+                            >
+                                下载备份
+                            </Button>
                         </div>
-                        <Button 
-                            type="primary" 
-                            icon={<DownloadOutlined />} 
-                            loading={exportLoading} 
-                            onClick={handleExport}
-                            size="large"
-                        >
-                            下载备份
-                        </Button>
-                    </Card>
-                </Col>
+                    </div>
+                </section>
 
-                <Col xs={24} xl={12}>
-                    <Card 
-                        title={<span style={{ fontWeight: 700 }}><WarningOutlined style={{ marginRight: 8, color: '#ff4d4f' }} /> 数据恢复</span>}
-                        bordered={false} 
-                        style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', height: '100%' }}
-                    >
-                        <div style={{ marginBottom: 20 }}>
-                            <Typography.Text type="secondary">
-                                选择之前下载的备份文件，把数据恢复到备份时的状态。
-                            </Typography.Text>
-                            <div style={{ color: '#ff4d4f', fontWeight: 600, marginTop: 8 }}>
-                                恢复后，备份之后新增的数据会丢失。
-                            </div>
+                <section className="panel">
+                    <div className="panel-head">
+                        <h2 className="panel-title">
+                            <WarningOutlined />
+                            数据恢复
+                        </h2>
+                    </div>
+                    <div className="panel-body">
+                        <p className="settings-note">
+                            选择之前下载的备份文件，把数据恢复到备份时的状态。
+                        </p>
+                        <div className="hint is-danger" style={{ marginTop: 10 }}>
+                            <strong>恢复后，备份之后新增的数据会丢失</strong>
+                            <span>只能用备份文件覆盖，操作不可撤销。</span>
                         </div>
-
-                        <div style={{ marginBottom: 24 }}>
+                        <div style={{ marginTop: 12 }}>
                             <Upload
                                 accept=".gz"
                                 fileList={fileList}
@@ -442,19 +461,19 @@ const BackupRestoreSettings = () => {
                                 </Button>
                             </Upload>
                         </div>
-
-                        <Button 
-                            type="primary" 
-                            danger 
-                            disabled={fileList.length === 0}
-                            onClick={() => setModalVisible(true)}
-                            size="large"
-                        >
-                            恢复数据
-                        </Button>
-                    </Card>
-                </Col>
-            </Row>
+                        <div className="form-actions">
+                            <Button
+                                type="primary"
+                                danger
+                                disabled={fileList.length === 0}
+                                onClick={() => setModalVisible(true)}
+                            >
+                                恢复数据
+                            </Button>
+                        </div>
+                    </div>
+                </section>
+            </div>
 
             <Modal
                 title="确认恢复数据"
@@ -468,17 +487,15 @@ const BackupRestoreSettings = () => {
                 okText="确认恢复"
                 cancelText="取消"
                 okButtonProps={{ danger: true }}
+                width={400}
             >
-                <div style={{ marginBottom: 16 }}>
-                    <Typography.Text type="danger" strong>
-                        当前数据会被备份文件覆盖，请确认你选对了文件。
-                    </Typography.Text>
+                <div className="hint is-danger" style={{ marginBottom: 14 }}>
+                    <strong>当前数据会被备份文件覆盖</strong>
+                    <span>请确认你选对了文件，恢复过程无法中止。</span>
                 </div>
-                <div style={{ marginBottom: 8 }}>
-                    <Typography.Text>请输入当前登录密码：</Typography.Text>
-                </div>
+                <p className="settings-note" style={{ marginBottom: 8 }}>请输入当前登录密码：</p>
                 <Input.Password
-                    prefix={<LockOutlined style={{ color: '#A3AED0' }} />}
+                    prefix={<LockOutlined style={{ color: 'var(--ink-faint)' }} />}
                     placeholder="请输入管理员密码"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -592,31 +609,34 @@ const Settings = () => {
             label: (
                 <span className="settings-tab-label">
                     <SettingOutlined />
-                    常用
+                    <span className="settings-tab-text">常用</span>
                 </span>
             ),
             children: (
-                <Card bordered={false} style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)' }}>
-                    <Space direction="vertical" size={18} style={{ width: '100%' }}>
-                        <div>
-                            <Title level={4} style={{ marginTop: 0 }}>常用操作</Title>
-                            <Text type="secondary">
-                                这里放最常用的入口，其他设置需要时再打开。
-                            </Text>
+                <div className="view-stack">
+                    <section className="panel">
+                        <div className="panel-head">
+                            <h2 className="panel-title">
+                                <SettingOutlined />
+                                常用操作
+                            </h2>
+                            <p className="panel-meta">这里放最常用的入口，其他设置需要时再打开。</p>
                         </div>
-                        <Space wrap>
-                            <Button type="primary" icon={<FileTextOutlined />} onClick={() => { window.location.href = '/course-orders'; }}>
-                                查看订单
-                            </Button>
-                            <Button icon={<AppstoreOutlined />} onClick={() => { window.location.href = '/query'; }}>
-                                查询记录
-                            </Button>
-                            <Button icon={<ApiOutlined />} onClick={() => { window.location.href = '/console?view=notification'; }}>
-                                打开通知
-                            </Button>
-                        </Space>
-                    </Space>
-                </Card>
+                        <div className="panel-body">
+                            <div className="settings-inline">
+                                <Button type="primary" icon={<FileTextOutlined />} onClick={() => { window.location.href = '/course-orders'; }}>
+                                    查看订单
+                                </Button>
+                                <Button icon={<AppstoreOutlined />} onClick={() => { window.location.href = '/query'; }}>
+                                    查询记录
+                                </Button>
+                                <Button icon={<ApiOutlined />} onClick={() => { window.location.href = '/console?view=notification'; }}>
+                                    打开通知
+                                </Button>
+                            </div>
+                        </div>
+                    </section>
+                </div>
             )
         },
         {
@@ -624,28 +644,20 @@ const Settings = () => {
             label: (
                 <span className="settings-tab-label">
                     <ScheduleOutlined />
-                    自动任务
+                    <span className="settings-tab-text">自动任务</span>
                 </span>
             ),
             children: (
-                <>
-                    <Row gutter={[24, 24]}>
-                        <Col xs={24} sm={24} md={12} lg={8} xl={8}>
-                            <CronSettings title="CT8 自动签到" type="ct8_task" />
-                        </Col>
-                        <Col xs={24} sm={24} md={12} lg={8} xl={8}>
-                            <CronSettings title="到期提醒" type="due_reminder" />
-                        </Col>
-                        <Col xs={24} sm={24} md={12} lg={8} xl={8}>
-                            <CronSettings title="待办提醒" type="todo_reminder" />
-                        </Col>
-                    </Row>
-                    <Row gutter={[24, 24]}>
-                        <Col xs={24} sm={24} lg={8} xl={8}>
-                            <ExpiryNotificationSettings />
-                        </Col>
-                    </Row>
-                </>
+                <div className="view-stack">
+                    <div className="split even">
+                        <CronSettings title="CT8 自动签到" type="ct8_task" />
+                        <CronSettings title="到期提醒" type="due_reminder" />
+                    </div>
+                    <div className="split even">
+                        <CronSettings title="待办提醒" type="todo_reminder" />
+                        <ExpiryNotificationSettings />
+                    </div>
+                </div>
             )
         },
         {
@@ -653,64 +665,60 @@ const Settings = () => {
             label: (
                 <span className="settings-tab-label">
                     <SafetyCertificateOutlined />
-                    登录安全
+                    <span className="settings-tab-text">登录安全</span>
                 </span>
             ),
             children: (
-                <div style={{ padding: '0 4px' }}>
-                    <Row gutter={[24, 24]}>
-                        <Col xs={24} xl={12}>
-                            <Card 
-                                title={<span style={{ fontWeight: 700 }}><UserOutlined style={{ marginRight: 8, color: '#4A7CF7' }} /> 登录账号</span>}
-                                bordered={false} 
-                                style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)', height: '100%' }}
-                            >
-                                <Form form={adminForm} layout="vertical" onFinish={onAdminFinish}>
-                                    <Form.Item name="username" label={<Text strong>用户名</Text>} rules={[{ required: true, min: 3 }]}>
-                                        <Input prefix={<UserOutlined style={{ color: '#A3AED0' }} />} placeholder="请输入用户名" />
-                                    </Form.Item>
+                <div className="split even">
+                    <section className="panel">
+                        <div className="panel-head">
+                            <h2 className="panel-title">
+                                <UserOutlined />
+                                登录账号
+                            </h2>
+                        </div>
+                        <div className="panel-body">
+                            <Form form={adminForm} layout="vertical" onFinish={onAdminFinish}>
+                                <Form.Item name="username" label="用户名" rules={[{ required: true, min: 3 }]}>
+                                    <Input prefix={<UserOutlined style={{ color: 'var(--ink-faint)' }} />} placeholder="请输入用户名" />
+                                </Form.Item>
 
-                                    <Divider plain style={{ margin: '32px 0 24px' }}>
-                                        <Space><LockOutlined style={{ color: '#707EAE' }} /><Text type="secondary" style={{ fontSize: 13, fontWeight: 500 }}>修改密码（可选）</Text></Space>
-                                    </Divider>
-                                    
-                                    <Form.Item name="currentPassword" label={<Text strong>验证当前密码</Text>}>
-                                        <Input.Password prefix={<LockOutlined style={{ color: '#A3AED0' }} />} placeholder="更改敏感信息需验证身份" />
-                                    </Form.Item>
+                                <p className="section-label" style={{ marginTop: 18 }}>修改密码（可选）</p>
 
-                                    <Row gutter={16}>
-                                        <Col xs={24} lg={12}>
-                                            <Form.Item name="newPassword" label={<Text strong>设置新密码</Text>}>
-                                                <Input.Password prefix={<LockOutlined style={{ color: '#A3AED0' }} />} placeholder="建议 8 位以上" />
-                                            </Form.Item>
-                                        </Col>
-                                        <Col xs={24} lg={12}>
-                                            <Form.Item name="confirmPassword" label={<Text strong>确认新密码</Text>} dependencies={['newPassword']} rules={[
-                                                ({ getFieldValue }) => ({
-                                                    validator(_, value) {
-                                                        if (!value || getFieldValue('newPassword') === value) return Promise.resolve();
-                                                        return Promise.reject(new Error('两次输入的密码不一致'));
-                                                    },
-                                                }),
-                                            ]}>
-                                                <Input.Password prefix={<LockOutlined style={{ color: '#A3AED0' }} />} placeholder="请再次输入新密码" />
-                                            </Form.Item>
-                                        </Col>
-                                    </Row>
+                                <Form.Item name="currentPassword" label="验证当前密码">
+                                    <Input.Password prefix={<LockOutlined style={{ color: 'var(--ink-faint)' }} />} placeholder="更改敏感信息需验证身份" />
+                                </Form.Item>
 
-                                    <div style={{ marginTop: 12 }}>
-                                        <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={adminLoading} size="large">
-                                            保存账号
-                                        </Button>
-                                    </div>
-                                </Form>
-                            </Card>
-                        </Col>
+                                <Row gutter={16}>
+                                    <Col xs={24} lg={12}>
+                                        <Form.Item name="newPassword" label="设置新密码">
+                                            <Input.Password prefix={<LockOutlined style={{ color: 'var(--ink-faint)' }} />} placeholder="建议 8 位以上" />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col xs={24} lg={12}>
+                                        <Form.Item name="confirmPassword" label="确认新密码" dependencies={['newPassword']} rules={[
+                                            ({ getFieldValue }) => ({
+                                                validator(_, value) {
+                                                    if (!value || getFieldValue('newPassword') === value) return Promise.resolve();
+                                                    return Promise.reject(new Error('两次输入的密码不一致'));
+                                                },
+                                            }),
+                                        ]}>
+                                            <Input.Password prefix={<LockOutlined style={{ color: 'var(--ink-faint)' }} />} placeholder="请再次输入新密码" />
+                                        </Form.Item>
+                                    </Col>
+                                </Row>
 
-                        <Col xs={24} xl={12}>
-                            <TurnstileSettings />
-                        </Col>
-                    </Row>
+                                <div className="form-actions">
+                                    <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={adminLoading}>
+                                        保存账号
+                                    </Button>
+                                </div>
+                            </Form>
+                        </div>
+                    </section>
+
+                    <TurnstileSettings />
                 </div>
             )
         },
@@ -719,21 +727,17 @@ const Settings = () => {
             label: (
                 <span className="settings-tab-label">
                     <KeyOutlined />
-                    连接信息
+                    <span className="settings-tab-text">连接信息</span>
                 </span>
             ),
-            children: (
-                <Card bordered={false} style={{ borderRadius: 20, boxShadow: 'var(--card-shadow)' }}>
-                    <SecretSettings />
-                </Card>
-            )
+            children: <SecretSettings />
         },
         {
             key: '6',
             label: (
-                <span className="settings-tab-label settings-tab-label-compact">
+                <span className="settings-tab-label">
                     <ApiOutlined />
-                    网课平台
+                    <span className="settings-tab-text">网课平台</span>
                 </span>
             ),
             children: <CourseConfig />,
@@ -741,9 +745,9 @@ const Settings = () => {
         {
             key: '7',
             label: (
-                <span className="settings-tab-label settings-tab-label-compact">
+                <span className="settings-tab-label">
                     <AppstoreOutlined />
-                    课程分类
+                    <span className="settings-tab-text">课程分类</span>
                 </span>
             ),
             children: <CourseCategoryConfig />,
@@ -754,9 +758,9 @@ const Settings = () => {
         items.push({
             key: '8',
             label: (
-                <span className="settings-tab-label settings-tab-label-compact">
+                <span className="settings-tab-label">
                     <DatabaseOutlined />
-                    备份与恢复
+                    <span className="settings-tab-text">备份与恢复</span>
                 </span>
             ),
             children: <BackupRestoreSettings />
@@ -767,11 +771,15 @@ const Settings = () => {
     items.sort((left, right) => settingsOrder.indexOf(left.key) - settingsOrder.indexOf(right.key));
 
     return (
-        <div>
-            <Text type="secondary" style={{ display: 'block', marginBottom: 14 }}>
-                常用设置排在前面，连接信息和数据恢复平时不用修改。
-            </Text>
-            <Tabs className="settings-tabs" defaultActiveKey={isSuperAdmin ? '1' : '6'} items={items} type="card" />
+        <div className="page-view fade-in">
+            <div className="page-head">
+                <div>
+                    <h1>系统设置</h1>
+                    <p>常用设置排在前面，连接信息和数据恢复平时不用修改。</p>
+                </div>
+            </div>
+
+            <Tabs className="settings-tabs" defaultActiveKey={isSuperAdmin ? '1' : '6'} items={items} />
         </div>
     );
 };

@@ -1,12 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Card, Switch, Form, Input, Button, Typography, Divider, Alert, Row, Col } from 'antd';
+import { Switch, Form, Input, Button, Row, Col } from 'antd';
 import { SafetyCertificateOutlined, SaveOutlined, KeyOutlined, GlobalOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import ReauthenticationModal from './ReauthenticationModal';
 import { establishSensitiveSession } from '../utils/reauth';
 import { message } from '../utils/feedback';
-
-const { Text, Link } = Typography;
 
 const TurnstileSettings = () => {
     const [form] = Form.useForm();
@@ -20,7 +18,7 @@ const TurnstileSettings = () => {
         try {
             // 获取开关和 Site Key (来自 AppConfig)
             const res = await api.get('/settings/app-config/turnstile_config');
-            
+
             // 获取 Secret Key 状态 (来自 SecretService)
             const secretRes = await api.get('/secrets');
             const secretData = secretRes.data.result.find(s => s.key === 'TURNSTILE_SECRET_KEY');
@@ -100,95 +98,84 @@ const TurnstileSettings = () => {
 
     return (
         <>
-        <Card 
-            title={<span><SafetyCertificateOutlined style={{ marginRight: 8, color: '#4A7CF7' }} />人机验证 (Cloudflare Turnstile)</span>} 
-            bordered={false}
-            style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}
-        >
-            <Alert
-                className="turnstile-security-alert"
-                message="人机验证安全提示"
-                description={
-                    <span>
-                        通过集成 Cloudflare Turnstile 可以有效防御大规模暴力破解。您需要前往 <Link href="https://dash.cloudflare.com/" target="_blank">Cloudflare 控制台</Link> 获取相关凭据。
-                    </span>
-                }
-                type="info"
-                showIcon
-                style={{ marginBottom: 32, borderRadius: 12 }}
-            />
-
-            <Form
-                form={form}
-                layout="vertical"
-                onFinish={onFinish}
-                initialValues={{ enabled: false }}
-            >
-                <div style={{ background: 'var(--bg-color)', padding: '24px', borderRadius: 20, marginBottom: 32, border: '1px solid var(--border-color)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                            <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 4 }}>启用登录人机挑战</Text>
-                            <Text type="secondary" style={{ fontSize: 13 }}>开启后，管理后台登录页面将强制要求完成 Cloudflare Turnstile 验证</Text>
-                        </div>
-                        <Form.Item 
-                            name="enabled" 
-                            valuePropName="checked"
-                            style={{ marginBottom: 0 }}
-                        >
-                            <Switch size="large" />
-                        </Form.Item>
+            <section className="panel">
+                <div className="panel-head">
+                    <h2 className="panel-title">
+                        <SafetyCertificateOutlined />
+                        人机验证
+                    </h2>
+                    <span className="panel-meta">Cloudflare Turnstile</span>
+                </div>
+                <div className="panel-body">
+                    <div className="hint">
+                        <strong>人机验证安全提示</strong>
+                        <span>
+                            通过 Cloudflare Turnstile 可以有效防御大规模暴力破解。凭据请前往{' '}
+                            <a href="https://dash.cloudflare.com/" target="_blank" rel="noreferrer">Cloudflare 控制台</a>{' '}
+                            获取。
+                        </span>
                     </div>
-                </div>
 
-                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.enabled !== curr.enabled}>
-                    {({ getFieldValue }) => (
-                        <div style={{ display: getFieldValue('enabled') ? 'block' : 'none' }} className="fade-in">
-                            <Row gutter={24}>
-                                <Col xs={24} md={12}>
-                                    <Form.Item 
-                                        name="siteKey" 
-                                        label={<span><GlobalOutlined style={{ marginRight: 8, color: '#4A7CF7' }} /> Site Key (前端显示凭据)</span>}
-                                        rules={[{ required: getFieldValue('enabled'), message: '请输入 Site Key' }]}
-                                    >
-                                        <Input placeholder="0x4AAAAAA..." />
-                                    </Form.Item>
-                                </Col>
-                                <Col xs={24} md={12}>
-                                    <Form.Item 
-                                        name="secretKey" 
-                                        label={<span><KeyOutlined style={{ marginRight: 8, color: '#4A7CF7' }} /> Secret Key (后端验证私钥)</span>}
-                                        rules={[{ required: getFieldValue('enabled'), message: '请输入 Secret Key' }]}
-                                    >
-                                        <Input.Password placeholder="请输入 Cloudflare 提供的私钥" />
-                                    </Form.Item>
-                                </Col>
-                            </Row>
-                            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: -8, marginBottom: 24 }}>
-                                * 出于安全考虑，保存后 Secret Key 将以掩码形式显示。
-                            </Text>
+                    <Form form={form} layout="vertical" onFinish={onFinish} initialValues={{ enabled: false }}>
+                        <div className="toggle-block">
+                            <span>
+                                <strong>启用登录人机挑战</strong>
+                                <span>开启后，登录页会强制要求完成 Cloudflare Turnstile 验证。</span>
+                            </span>
+                            <Form.Item name="enabled" valuePropName="checked" noStyle>
+                                <Switch />
+                            </Form.Item>
                         </div>
-                    )}
-                </Form.Item>
 
-                <Divider style={{ margin: '24px 0' }} />
+                        <Form.Item noStyle shouldUpdate={(prev, curr) => prev.enabled !== curr.enabled}>
+                            {({ getFieldValue }) => (
+                                <div style={{ display: getFieldValue('enabled') ? 'block' : 'none' }} className="fade-in">
+                                    <Row gutter={16}>
+                                        <Col xs={24} md={12}>
+                                            <Form.Item
+                                                name="siteKey"
+                                                label={<span><GlobalOutlined style={{ marginRight: 6 }} />Site Key（前端凭据）</span>}
+                                                rules={[{ required: getFieldValue('enabled'), message: '请输入 Site Key' }]}
+                                            >
+                                                <Input placeholder="0x4AAAAAA..." />
+                                            </Form.Item>
+                                        </Col>
+                                        <Col xs={24} md={12}>
+                                            <Form.Item
+                                                name="secretKey"
+                                                label={<span><KeyOutlined style={{ marginRight: 6 }} />Secret Key（后端私钥）</span>}
+                                                rules={[{ required: getFieldValue('enabled'), message: '请输入 Secret Key' }]}
+                                            >
+                                                <Input.Password placeholder="请输入 Cloudflare 提供的私钥" />
+                                            </Form.Item>
+                                        </Col>
+                                    </Row>
+                                    <p className="settings-note" style={{ marginTop: -6 }}>
+                                        * 出于安全考虑，保存后 Secret Key 只会以掩码形式显示。
+                                    </p>
+                                </div>
+                            )}
+                        </Form.Item>
 
-                <div style={{ textAlign: 'left' }}>
-                    <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving} size="large" style={{ minWidth: 120 }}>
-                        保存配置
-                    </Button>
+                        <div className="form-actions">
+                            <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>
+                                保存配置
+                            </Button>
+                        </div>
+                    </Form>
                 </div>
-            </Form>
-        </Card>
-        <ReauthenticationModal
-            open={reauthVisible}
-            title="更新 Turnstile 密钥二次验证"
-            confirmLoading={saving}
-            onCancel={() => {
-                setReauthVisible(false);
-                setPendingValues(null);
-            }}
-            onConfirm={handleReauthentication}
-        />
+            </section>
+
+            <ReauthenticationModal
+                open={reauthVisible}
+                title="更新 Turnstile 密钥二次验证"
+                confirmLoading={saving}
+                onCancel={() => {
+                    setReauthVisible(false);
+                    setPendingValues(null);
+                }}
+                onConfirm={handleReauthentication}
+            />
         </>
     );
 };

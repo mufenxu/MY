@@ -1,13 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Tag, Typography, List, Card } from 'antd';
+import { Table, Modal, Form, Input, Tooltip } from 'antd';
 import { EditOutlined, DeleteOutlined, KeyOutlined, ReloadOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import useIsMobile from '../hooks/useIsMobile';
 import ReauthenticationModal from './ReauthenticationModal';
 import { establishSensitiveSession } from '../utils/reauth';
 import { message } from '../utils/feedback';
-
-const { Text } = Typography;
 
 const SecretSettings = () => {
     const [secrets, setSecrets] = useState([]);
@@ -108,31 +106,35 @@ const SecretSettings = () => {
             title: '密钥名称',
             dataIndex: 'key',
             key: 'key',
-            render: (text) => <Text strong>{text}</Text>
+            width: 190,
+            render: (text) => <span className="cell-mono" style={{ color: 'var(--ink)', fontWeight: 620 }}>{text}</span>
         },
         {
             title: '用途说明',
             dataIndex: 'desc',
-            key: 'desc'
+            key: 'desc',
+            render: (text) => <span className="muted">{text}</span>
         },
         {
             title: '当前值',
             dataIndex: 'displayValue',
             key: 'displayValue',
+            width: 190,
             render: (val) => (
-                <Text type="secondary" style={{ fontFamily: 'monospace' }}>
+                <span className="cell-mono ellipsis" style={{ display: 'block' }} title={val || ''}>
                     {val || '未配置'}
-                </Text>
+                </span>
             )
         },
         {
             title: '生效来源',
             key: 'source',
+            width: 150,
             render: (_, record) => (
                 record.isUsingDb ? (
-                    <Tag color="green">数据库 (热更新)</Tag>
+                    <span className="tag tone-ok">数据库 · 热更新</span>
                 ) : (
-                    <Tag color="default">本地 .env (需重启)</Tag>
+                    <span className="tag tone-neutral">本地 .env · 需重启</span>
                 )
             )
         },
@@ -140,76 +142,110 @@ const SecretSettings = () => {
             title: '最近修改',
             dataIndex: 'updated_at',
             key: 'updated_at',
-            render: (val) => val ? new Date(val).toLocaleString() : '-'
+            width: 160,
+            render: (val) => <span className="cell-sub">{val ? new Date(val).toLocaleString() : '—'}</span>
         },
         {
             title: '操作',
             key: 'action',
+            width: 92,
+            align: 'right',
             render: (_, record) => (
-                <Space size="middle">
-                    <Button type="link" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-                        覆盖配置
-                    </Button>
+                <span className="row-actions">
+                    <Tooltip title="覆盖配置">
+                        <button
+                            type="button"
+                            className="icon-action"
+                            onClick={() => openEdit(record)}
+                            aria-label={`覆盖配置：${record.key}`}
+                        >
+                            <EditOutlined />
+                        </button>
+                    </Tooltip>
                     {record.isUsingDb && (
-                        <Button type="link" danger icon={<DeleteOutlined />} onClick={() => handleDeleteClick(record.key)}>
-                            恢复默认
-                        </Button>
+                        <Tooltip title="恢复默认">
+                            <button
+                                type="button"
+                                className="icon-action danger"
+                                onClick={() => handleDeleteClick(record.key)}
+                                aria-label={`恢复默认：${record.key}`}
+                            >
+                                <DeleteOutlined />
+                            </button>
+                        </Tooltip>
                     )}
-                </Space>
+                </span>
             )
         }
     ];
 
     return (
-        <div style={{ padding: '0 0' }}>
-            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center', flexDirection: isMobile ? 'column' : 'row', gap: 12 }}>
-                <Text type="secondary" style={{ flex: 1 }}>在此处修改的密钥配置将加密存储至数据库中，并要求管理员二次验证。</Text>
-                <Button icon={<ReloadOutlined />} onClick={fetchSecrets} loading={loading} style={{ alignSelf: isMobile ? 'flex-end' : 'auto' }}>
+        <section className="panel">
+            <div className="toolbar-row">
+                <h2 className="panel-title">
+                    <KeyOutlined />
+                    连接信息
+                </h2>
+                <span className="toolbar-spacer" />
+                <span className="toolbar-count">共 {secrets.length} 项</span>
+                <button type="button" className="btn btn-sm" onClick={fetchSecrets} disabled={loading}>
+                    <ReloadOutlined spin={loading} />
                     刷新状态
-                </Button>
+                </button>
             </div>
 
+            <p className="settings-note" style={{ margin: '0 16px 10px' }}>
+                在此处修改的密钥配置会加密存进数据库，并要求管理员二次验证。
+            </p>
+
             {isMobile ? (
-                <List
-                    dataSource={secrets}
-                    loading={loading}
-                    rowKey="key"
-                    renderItem={(record) => (
-                        <Card style={{ marginBottom: 16, borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }} bodyStyle={{ padding: 16 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                <Text strong style={{ fontSize: 16 }}>{record.key}</Text>
-                                {record.isUsingDb ? (
-                                    <Tag color="green">数据库</Tag>
-                                ) : (
-                                    <Tag color="default">本地 .env</Tag>
-                                )}
-                            </div>
-                            <div style={{ marginBottom: 8 }}>
-                                <Text type="secondary">{record.desc}</Text>
-                            </div>
-                            <div style={{ marginBottom: 12, background: 'var(--bg-color)', padding: '8px 12px', borderRadius: 6, wordBreak: 'break-all' }}>
-                                <Text type="secondary" style={{ fontFamily: 'monospace' }}>
-                                    {record.displayValue || '未配置'}
-                                </Text>
-                            </div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: 12, marginTop: 12 }}>
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                    {record.updated_at ? new Date(record.updated_at).toLocaleString() : '-'}
-                                </Text>
-                                <Space>
-                                    <Button type="primary" size="small" ghost icon={<EditOutlined />} onClick={() => openEdit(record)}>
-                                        修改
-                                    </Button>
-                                    {record.isUsingDb && (
-                                        <Button type="text" danger size="small" icon={<DeleteOutlined />} onClick={() => handleDeleteClick(record.key)}>
-                                            重置
-                                        </Button>
-                                    )}
-                                </Space>
-                            </div>
-                        </Card>
+                <div className="panel-body">
+                    {loading ? (
+                        <div className="ops-loading">正在加载密钥…</div>
+                    ) : secrets.length === 0 ? (
+                        <div className="ops-empty">还没有可配置的密钥</div>
+                    ) : (
+                        <div className="view-stack">
+                            {secrets.map((record) => (
+                                <article key={record.key} className="list-card">
+                                    <div className="list-card-head">
+                                        <span className="list-card-title cell-mono">{record.key}</span>
+                                        <span className={`tag tone-${record.isUsingDb ? 'ok' : 'neutral'}`}>
+                                            {record.isUsingDb ? '数据库' : '本地 .env'}
+                                        </span>
+                                    </div>
+                                    <p className="cell-sub">{record.desc}</p>
+                                    <p className="payload" style={{ maxHeight: 'none' }}>{record.displayValue || '未配置'}</p>
+                                    <div className="list-card-foot">
+                                        <span className="cell-sub">
+                                            {record.updated_at ? new Date(record.updated_at).toLocaleString() : '—'}
+                                        </span>
+                                        <span className="row-actions">
+                                            <button
+                                                type="button"
+                                                className="icon-action"
+                                                onClick={() => openEdit(record)}
+                                                aria-label={`覆盖配置：${record.key}`}
+                                            >
+                                                <EditOutlined />
+                                            </button>
+                                            {record.isUsingDb && (
+                                                <button
+                                                    type="button"
+                                                    className="icon-action danger"
+                                                    onClick={() => handleDeleteClick(record.key)}
+                                                    aria-label={`恢复默认：${record.key}`}
+                                                >
+                                                    <DeleteOutlined />
+                                                </button>
+                                            )}
+                                        </span>
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
                     )}
-                />
+                </div>
             ) : (
                 <Table
                     columns={columns}
@@ -217,8 +253,6 @@ const SecretSettings = () => {
                     rowKey="key"
                     loading={loading}
                     pagination={false}
-                    bordered={false}
-                    style={{ borderRadius: 8, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
                 />
             )}
 
@@ -232,7 +266,7 @@ const SecretSettings = () => {
             />
 
             <Modal
-                title={`修改配置: ${currentSecret?.desc}`}
+                title={`修改配置：${currentSecret?.desc || ''}`}
                 open={isModalVisible}
                 onOk={handleOk}
                 onCancel={() => {
@@ -240,6 +274,7 @@ const SecretSettings = () => {
                     setCurrentSecret(null);
                     form.resetFields();
                 }}
+                width={isMobile ? '94%' : 520}
                 destroyOnHidden
             >
                 <Form layout="vertical" form={form}>
@@ -248,14 +283,14 @@ const SecretSettings = () => {
                     </Form.Item>
                     <Form.Item
                         name="value"
-                        label={<><KeyOutlined style={{ marginRight: 8 }} /> 新的密钥内容</>}
+                        label={<><KeyOutlined style={{ marginRight: 8 }} />新的密钥内容</>}
                         rules={[{ required: true, message: '请输入新的密钥内容' }]}
                     >
-                        <Input.TextArea rows={4} placeholder="在此粘贴新的密钥内容..." />
+                        <Input.TextArea rows={4} placeholder="在此粘贴新的密钥内容…" />
                     </Form.Item>
                 </Form>
             </Modal>
-        </div>
+        </section>
     );
 };
 

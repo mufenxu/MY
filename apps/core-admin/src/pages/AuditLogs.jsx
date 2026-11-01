@@ -1,8 +1,27 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Table, Card, Tag, Typography, Space, List } from 'antd';
+import { Table, Pagination } from 'antd';
+import { FileSearchOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import dayjs from 'dayjs';
 import useIsMobile from '../hooks/useIsMobile';
+
+const ACTION_META = {
+    CREATE: { label: '创建', tone: 'ok' },
+    UPDATE: { label: '更新', tone: 'warn' },
+    DELETE: { label: '删除', tone: 'danger' },
+    LOGIN: { label: '登录', tone: 'info' },
+    LOGOUT: { label: '登出', tone: 'neutral' },
+};
+
+const resolveAction = (action = '') => {
+    const matched = Object.keys(ACTION_META).find((name) => action.includes(name));
+    return ACTION_META[matched] || { label: action || '未知', tone: 'neutral' };
+};
+
+const ActionTag = ({ action }) => {
+    const meta = resolveAction(action);
+    return <span className={`tag tone-${meta.tone}`}>{meta.label}</span>;
+};
 
 const AuditLogs = () => {
     const [logs, setLogs] = useState([]);
@@ -41,8 +60,8 @@ const AuditLogs = () => {
         return () => window.clearTimeout(timerId);
     }, [fetchLogs]);
 
-    const handleTableChange = (pagination) => {
-        fetchLogs(pagination.current, pagination.pageSize);
+    const handleTableChange = (nextPagination) => {
+        fetchLogs(nextPagination.current, nextPagination.pageSize);
     };
 
     const columns = [
@@ -50,109 +69,94 @@ const AuditLogs = () => {
             title: '时间',
             dataIndex: 'ts',
             key: 'ts',
-            width: 180,
-            render: (ts) => dayjs(ts).format('YYYY-MM-DD HH:mm:ss'),
+            width: 172,
+            render: (ts) => <span className="cell-mono">{dayjs(ts).format('YYYY-MM-DD HH:mm:ss')}</span>,
         },
         {
             title: '操作人',
             dataIndex: 'actorOpenid',
             key: 'actorOpenid',
-            width: 120,
-            ellipsis: true,
+            width: 96,
             render: () => '我',
         },
         {
             title: '操作',
             dataIndex: 'action',
             key: 'action',
-            width: 150,
-            render: (action) => {
-                const actionMap = {
-                    'CREATE': '创建',
-                    'UPDATE': '更新',
-                    'DELETE': '删除',
-                    'LOGIN': '登录',
-                    'LOGOUT': '登出'
-                };
-                let color = 'blue';
-                if (action.includes('DELETE')) color = 'red';
-                if (action.includes('UPDATE')) color = 'orange';
-                if (action.includes('CREATE')) color = 'green';
-                return <Tag color={color}>{actionMap[action] || action}</Tag>;
-            },
+            width: 110,
+            render: (action) => <ActionTag action={action} />,
         },
         {
             title: '对象',
             dataIndex: 'targetId',
             key: 'targetId',
-            width: 140,
-            ellipsis: true,
-            render: (targetId) => targetId || '—',
+            width: 150,
+            render: (targetId) => <span className="cell-mono">{targetId || '—'}</span>,
         },
         {
             title: '内容',
             dataIndex: 'payload',
             key: 'payload',
-            ellipsis: true,
-            render: (payload) => (
-                <Typography.Text code ellipsis={{ tooltip: JSON.stringify(payload, null, 2) }}>
-                    {JSON.stringify(payload)}
-                </Typography.Text>
-            ),
+            render: (payload) => {
+                const text = JSON.stringify(payload);
+                return (
+                    <span className="cell-mono ellipsis" style={{ display: 'block' }} title={text}>
+                        {text}
+                    </span>
+                );
+            },
         },
     ];
 
-    const mobileView = (
-        <List
-            dataSource={logs}
-            loading={loading}
-            rowKey="_id"
-            pagination={{
-                ...pagination,
-                size: "small",
-                showTotal: (total) => `共 ${total} 条`,
-                onChange: (page, pageSize) => fetchLogs(page, pageSize),
-            }}
-            renderItem={item => {
-                const actionMap = {
-                    'CREATE': '创建',
-                    'UPDATE': '更新',
-                    'DELETE': '删除',
-                    'LOGIN': '登录',
-                    'LOGOUT': '登出'
-                };
-                let color = 'blue';
-                if (item.action.includes('DELETE')) color = 'red';
-                if (item.action.includes('UPDATE')) color = 'orange';
-                if (item.action.includes('CREATE')) color = 'green';
-                
-                return (
-                    <List.Item style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', background: '#F4F7FE', marginBottom: 16, borderRadius: 16, padding: '16px 12px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', marginBottom: 12 }}>
-                            <Tag color={color} style={{ margin: 0 }}>{actionMap[item.action] || item.action}</Tag>
-                            <Typography.Text type="secondary" style={{ fontSize: 12 }}>{dayjs(item.ts).format('MM-DD HH:mm:ss')}</Typography.Text>
-                        </div>
-                        <div style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 8, width: '100%' }}>
-                            <div style={{ marginBottom: 4 }}>对象：{item.targetId || '—'}</div>
-                        </div>
-                        <div style={{ width: '100%', background: 'var(--bg-color)', padding: 8, borderRadius: 6, overflowX: 'auto' }}>
-                            <pre style={{ margin: 0, fontSize: 12, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                                {JSON.stringify(item.payload, null, 2)}
-                            </pre>
-                        </div>
-                    </List.Item>
-                );
-            }}
-        />
+    const mobileList = (
+        <div className="panel-body">
+            {loading ? (
+                <div className="ops-loading">正在加载记录…</div>
+            ) : logs.length === 0 ? (
+                <div className="ops-empty">还没有修改记录</div>
+            ) : (
+                <div className="view-stack">
+                    {logs.map((item) => (
+                        <article key={item._id} className="list-card">
+                            <div className="list-card-head">
+                                <ActionTag action={item.action} />
+                                <span className="cell-mono">{dayjs(item.ts).format('MM-DD HH:mm:ss')}</span>
+                            </div>
+                            <dl className="list-meta">
+                                <div>
+                                    <dt>对象</dt>
+                                    <dd className="cell-mono">{item.targetId || '—'}</dd>
+                                </div>
+                            </dl>
+                            <pre className="payload">{JSON.stringify(item.payload, null, 2)}</pre>
+                        </article>
+                    ))}
+                </div>
+            )}
+            <Pagination
+                style={{ marginTop: 12, textAlign: 'center' }}
+                size="small"
+                current={pagination.current}
+                pageSize={pagination.pageSize}
+                total={pagination.total}
+                simple
+                onChange={(page, pageSize) => fetchLogs(page, pageSize)}
+            />
+        </div>
     );
 
     return (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-            <Typography.Text type="secondary">
-                这里记录最近的修改，只有需要排查问题时再查看。
-            </Typography.Text>
-            <Card bordered={false} style={{ borderRadius: 20, border: 'none', boxShadow: 'var(--card-shadow)' }} bodyStyle={isMobile ? { padding: '16px 12px' } : undefined}>
-                {isMobile ? mobileView : (
+        <div className="page-view fade-in">
+            <section className="panel">
+                <div className="panel-head">
+                    <h2 className="panel-title">
+                        <FileSearchOutlined />
+                        修改记录
+                    </h2>
+                    <p className="panel-meta">这里记录最近的修改，只有需要排查问题时再查看。</p>
+                </div>
+
+                {isMobile ? mobileList : (
                     <Table
                         columns={columns}
                         dataSource={logs}
@@ -161,14 +165,15 @@ const AuditLogs = () => {
                             ...pagination,
                             showSizeChanger: true,
                             showTotal: (total) => `共 ${total} 条记录`,
+                            style: { padding: '12px 16px' },
                         }}
                         loading={loading}
                         onChange={handleTableChange}
-                        scroll={{ x: 1000 }}
+                        scroll={{ x: 900 }}
                     />
                 )}
-            </Card>
-        </Space>
+            </section>
+        </div>
     );
 };
 

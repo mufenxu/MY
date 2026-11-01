@@ -1,0 +1,720 @@
+/* ==========================================================================
+   页面级样式：只放与具体页面结构绑定的规则，通用组件在共享包里。
+   ========================================================================== */
+
+/* ── 首页 ─────────────────────────────────────────────────────── */
+.hero {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+}
+
+.hero-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.hero-copy h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 680;
+  letter-spacing: -0.02em;
+}
+
+.hero-copy p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quick-action {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  color: var(--ink-muted);
+  background: var(--surface-solid);
+  font-size: 12px;
+  font-weight: 580;
+  transition: color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.quick-action svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+}
+
+.quick-action:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+  box-shadow: var(--e1);
+}
+
+.chart-box {
+  height: 316px;
+  padding: 4px 6px 0;
+}
+
+.todo-add {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.todo-add .ant-input {
+  flex: 1;
+}
+
+.todo-scroll {
+  max-height: 268px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.todo-row {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.todo-row:last-child {
+  border-bottom: 0;
+}
+
+.todo-title {
+  min-width: 0;
+  flex: 1;
+  color: var(--ink);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.todo-row.is-done .todo-title {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+
+.todo-empty {
+  padding: 26px 0;
+}
+
+/* ── 设置页 ───────────────────────────────────────────────────── */
+.settings-tabs > .ant-tabs-nav {
+  margin-bottom: 12px;
+  padding: 0 2px;
+}
+
+.settings-tabs > .ant-tabs-nav::before {
+  display: none;
+}
+
+.settings-tab-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 560;
+}
+
+.settings-tab-label svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.85;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-note {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.settings-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 表单底部动作区 */
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* 开关行：说明 + 控件 */
+.toggle-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 14px 0;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--groove-bg);
+}
+
+.toggle-block strong {
+  display: block;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 640;
+}
+
+.toggle-block span span {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+/* 功能开关网格 */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(228px, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.feature-tile {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-solid);
+}
+
+.feature-tile-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.feature-tile-head strong {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feature-icon {
+  font-size: 17px;
+  line-height: 1;
+}
+
+/* 备份卡里的示意区块 */
+.backup-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  margin: 12px 0 2px;
+  padding: 18px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--groove-bg);
+  color: var(--ink-soft);
+  font-size: 11.5px;
+}
+
+.backup-drop svg {
+  color: var(--ink-faint);
+  font-size: 24px;
+}
+
+/* ── 用户与订单 ───────────────────────────────────────────────── */
+.cell-user {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.cell-user-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.cell-user-copy strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 640;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-user-copy small {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+/* 表格单元格语汇 */
+.cell-stack {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.cell-strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 640;
+  text-overflow: ellipsis;
+}
+
+.cell-mono {
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.cell-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 纵向堆叠的单元格里，标签只占自身宽度，不被拉伸成通栏色块 */
+.cell-stack > .tag {
+  align-self: flex-start;
+}
+
+.cell-progress {
+  color: var(--leaf-text);
+  font-size: 12.5px;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-wrap {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* 移动端列表卡片 */
+.list-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-solid);
+}
+
+.list-card-head {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.list-card-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 640;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+}
+
+.list-meta {
+  display: flex;
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--groove-bg);
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11.5px;
+}
+
+.list-meta > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.list-meta dt {
+  flex: none;
+  color: var(--ink-soft);
+}
+
+.list-meta dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.list-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* 危险确认弹窗的图标底座 */
+.danger-glyph {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  margin: 4px auto 14px;
+  border-radius: 16px;
+  color: var(--red-text);
+  background: var(--red-soft);
+  font-size: 23px;
+}
+
+/* 原始报文（审计日志等） */
+.payload {
+  max-height: 220px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-radius: 8px;
+  background: var(--groove-bg);
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.toolbar-row {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px 10px;
+}
+
+.toolbar-row .ant-input-affix-wrapper {
+  max-width: 280px;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.toolbar-count {
+  color: var(--ink-soft);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* ── 空气能 ───────────────────────────────────────────────────── */
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  /* 窄屏三列会把「45.2 °C」挤断行，退成两列 */
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.metric-tile {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--groove-bg);
+}
+
+.metric-tile span {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.metric-tile strong {
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 660;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.control-block {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.control-label {
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 620;
+}
+
+.control-value {
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
+}
+
+.control-block .ant-radio-group {
+  margin-top: 10px;
+}
+
+.control-block .ant-slider {
+  margin: 10px 4px 0;
+}
+
+.chart-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.chart-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-solid);
+  box-shadow: var(--e2);
+  font-size: 11.5px;
+}
+
+.chart-tip strong {
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 620;
+}
+
+.chart-placeholder {
+  display: flex;
+  height: 200px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.chart-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink-soft);
+  font-size: 11.5px;
+}
+
+.chart-legend span::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 1px;
+}
+
+.chart-legend-temp {
+  color: var(--red-text);
+}
+
+.chart-legend-power {
+  color: var(--blue);
+}
+
+/* ── 通知 ─────────────────────────────────────────────────────── */
+.notice-row {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--line);
+}
+
+.notice-row:last-child {
+  border-bottom: 0;
+}
+
+.notice-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notice-copy strong {
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 620;
+}
+
+.notice-copy p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.notice-time {
+  flex: none;
+  color: var(--ink-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* ── 操作记录 ─────────────────────────────────────────────────── */
+.audit-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.4;
+}
+
+.audit-cell strong {
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 620;
+}
+
+.audit-cell small {
+  color: var(--ink-faint);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+/* ── 通用：面板内的表格去掉重复边框 ───────────────────────────── */
+.panel > .ant-table-wrapper,
+.panel > .ant-table {
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+}
+
+.panel-flush > .ant-table-wrapper .ant-table {
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+}
+
+@media (max-width: 768px) {
+  .hero {
+    padding: 14px;
+  }
+
+  .hero-copy h1 {
+    font-size: 16px;
+  }
+
+  .chart-box {
+    height: 244px;
+  }
+
+  .toolbar-row {
+    padding: 10px 12px 8px;
+  }
+
+  .toolbar-row .ant-input-affix-wrapper {
+    max-width: none;
+    width: 100%;
+  }
+}
+
+/* 平板宽度收紧页签间距，七个页签才能连文字一起排下 */
+@media (max-width: 900px) {
+  .settings-tabs > .ant-tabs-nav .ant-tabs-tab {
+    padding: 10px 2px;
+  }
+
+  .settings-tabs > .ant-tabs-nav .ant-tabs-tab + .ant-tabs-tab {
+    margin-inline-start: 16px;
+  }
+}
+
+/* 手机宽度才退成纯图标页签；平板（768 左右）仍保留文字 */
+@media (max-width: 560px) {
+  .settings-tab-text {
+    display: none;
+  }
+
+  .settings-tab-label svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .settings-tabs > .ant-tabs-nav .ant-tabs-tab {
+    padding: 8px 4px;
+  }
+
+  /* 收窄页签间距，让全部页签排在导航条内，不折叠成「…」 */
+  .settings-tabs > .ant-tabs-nav .ant-tabs-tab + .ant-tabs-tab {
+    margin-inline-start: 4px;
+  }
+
+  .settings-tabs > .ant-tabs-nav .ant-tabs-nav-list {
+    gap: 0;
+  }
+}

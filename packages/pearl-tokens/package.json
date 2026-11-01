@@ -1,0 +1,24 @@
+{
+  "name": "@my-platform/pearl-tokens",
+  "description": "珍珠玻璃设计令牌：CSS 变量、通用组件样式与 JS 色板",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./tokens.css": "./tokens.css",
+    "./components.css": "./components.css"
+  },
+  "files": [
+    "index.js",
+    "tokens.css",
+    "components.css"
+  ],
+  "scripts": {
+    "check": "node --test test/tokens.test.mjs"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,422 @@
+/* ==========================================================================
+   Ant Design 桥接层
+   ----------------------------------------------------------------------------
+   antd 的样式在运行时注入到 <head>，静态样式表在层叠顺序上处于劣势，
+   因此这里对少数结构性属性使用 !important；能通过 ConfigProvider token
+   表达的一律不写在 CSS 里（见 App.jsx 的 theme.token）。
+   ========================================================================== */
+
+/* ── 全局容器 ─────────────────────────────────────────────────── */
+.ant-app {
+  height: 100%;
+}
+
+/* ── 按钮 ─────────────────────────────────────────────────────── */
+.ant-btn {
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.ant-btn-primary:not(:disabled) {
+  box-shadow: var(--e-accent);
+}
+
+.ant-btn-primary:not(:disabled):hover {
+  box-shadow: var(--e-accent-hover);
+}
+
+.ant-btn-default:not(:disabled):hover {
+  border-color: var(--line-strong);
+  background: var(--surface-solid);
+}
+
+.ant-btn-text:not(:disabled):hover {
+  background: var(--hover-bg);
+}
+
+.ant-btn-link {
+  padding-inline: 4px;
+}
+
+/* 图标按钮统一为方块命中区 */
+.ant-btn-icon-only.ant-btn-text {
+  border-radius: 9px;
+}
+
+/* ── 卡片 ─────────────────────────────────────────────────────── */
+.ant-card {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--edge), var(--e1);
+}
+
+.ant-card .ant-card-head {
+  min-height: 50px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.ant-card .ant-card-head-title {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.ant-card .ant-card-extra {
+  color: var(--ink-soft);
+  font-size: 11.5px;
+}
+
+/* ── 表格 ─────────────────────────────────────────────────────── */
+.ant-table-wrapper .ant-table {
+  background: transparent;
+  font-size: 12.5px;
+}
+
+.ant-table-wrapper .ant-table-container {
+  border-start-start-radius: var(--r-md);
+  border-start-end-radius: var(--r-md);
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th {
+  height: 38px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line) !important;
+  color: var(--ink-soft) !important;
+  background: var(--groove-bg) !important;
+  font-size: 11px;
+  font-weight: 620;
+  letter-spacing: 0.02em;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th::before {
+  display: none !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line) !important;
+  color: var(--ink);
+}
+
+.ant-table-wrapper .ant-table-tbody > tr:last-child > td {
+  border-bottom: 0 !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr.ant-table-row:hover > td,
+.ant-table-wrapper .ant-table-tbody > tr > td.ant-table-cell-row-hover {
+  background: var(--hover-bg) !important;
+}
+
+.ant-table-wrapper .ant-table-placeholder > td {
+  background: transparent !important;
+}
+
+.ant-table-wrapper .ant-table-cell-scrollbar {
+  box-shadow: none;
+}
+
+/* 固定列：底色对齐面板（面板是渐变底，固定列必须不透明，故用「实色 + 叠层」还原），
+   并把 antd 默认的浓投影换成一像素分隔线，避免水平滚动时出现一条浅色竖带。 */
+.ant-table-wrapper .ant-table-tbody > tr > td.ant-table-cell-fix-left,
+.ant-table-wrapper .ant-table-tbody > tr > td.ant-table-cell-fix-right {
+  background: var(--surface-solid) !important;
+}
+
+.ant-table-wrapper .ant-table-thead > tr > th.ant-table-cell-fix-left,
+.ant-table-wrapper .ant-table-thead > tr > th.ant-table-cell-fix-right {
+  background-color: var(--surface-solid) !important;
+  background-image: linear-gradient(var(--groove-bg), var(--groove-bg)) !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr.ant-table-row:hover > td.ant-table-cell-fix-left,
+.ant-table-wrapper .ant-table-tbody > tr.ant-table-row:hover > td.ant-table-cell-fix-right,
+.ant-table-wrapper .ant-table-tbody > tr > td.ant-table-cell-fix-left.ant-table-cell-row-hover,
+.ant-table-wrapper .ant-table-tbody > tr > td.ant-table-cell-fix-right.ant-table-cell-row-hover {
+  background-color: var(--surface-solid) !important;
+  background-image: linear-gradient(var(--hover-bg), var(--hover-bg)) !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr.ant-table-row-selected > td {
+  background: var(--blue-soft) !important;
+}
+
+.ant-table-wrapper .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-left,
+.ant-table-wrapper .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-right {
+  background-color: var(--surface-solid) !important;
+  background-image: linear-gradient(var(--blue-soft), var(--blue-soft)) !important;
+}
+
+.ant-table-wrapper .ant-table-cell-fix-right-first::after {
+  box-shadow: inset -1px 0 0 var(--line) !important;
+}
+
+.ant-table-wrapper .ant-table-cell-fix-left-last::after {
+  box-shadow: inset 1px 0 0 var(--line) !important;
+}
+
+/* ── 分页 ─────────────────────────────────────────────────────── */
+.ant-pagination .ant-pagination-item,
+.ant-pagination .ant-pagination-prev,
+.ant-pagination .ant-pagination-next {
+  border-radius: 8px;
+}
+
+.ant-pagination .ant-pagination-item-active {
+  border-color: var(--blue);
+}
+
+/* ── 表单控件 ─────────────────────────────────────────────────── */
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-input-number,
+.ant-select .ant-select-selector,
+.ant-picker {
+  border-radius: 10px !important;
+}
+
+.ant-input,
+.ant-input-number,
+.ant-picker {
+  background: var(--input-bg);
+}
+
+.ant-input-affix-wrapper {
+  background: var(--input-bg);
+}
+
+.ant-select .ant-select-selector {
+  background: var(--input-bg) !important;
+}
+
+.ant-input:focus,
+.ant-input-focused,
+.ant-input-affix-wrapper-focused,
+.ant-select-focused .ant-select-selector {
+  border-color: var(--blue) !important;
+}
+
+.ant-form-item .ant-form-item-label > label {
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ant-form-item-explain-error {
+  font-size: 11.5px;
+}
+
+/* ── 标签 ─────────────────────────────────────────────────────── */
+.ant-tag {
+  display: inline-flex;
+  height: 21px;
+  align-items: center;
+  margin-inline-end: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 620;
+  line-height: 1;
+}
+
+/* 预设色板 → 珍珠色板：历史上大量使用颜色的语义名，统一收敛到五个色调 */
+.ant-tag-blue,
+.ant-tag-geekblue,
+.ant-tag-cyan,
+.ant-tag-processing,
+.ant-tag-link {
+  color: var(--blue) !important;
+  background: var(--blue-soft) !important;
+}
+
+.ant-tag-green,
+.ant-tag-success,
+.ant-tag-lime {
+  color: var(--leaf-text) !important;
+  background: var(--lime-soft) !important;
+}
+
+.ant-tag-orange,
+.ant-tag-gold,
+.ant-tag-warning,
+.ant-tag-volcano {
+  color: var(--amber) !important;
+  background: var(--amber-soft) !important;
+}
+
+.ant-tag-red,
+.ant-tag-error,
+.ant-tag-magenta {
+  color: var(--red-text) !important;
+  background: var(--red-soft) !important;
+}
+
+.ant-tag-purple,
+.ant-tag-violet {
+  color: var(--violet) !important;
+  background: var(--violet-soft) !important;
+}
+
+.ant-tag-default {
+  color: var(--ink-muted) !important;
+  background: rgba(var(--shade), 0.07) !important;
+}
+
+/* ── 浮层：下拉 / 气泡 / 提示 ──────────────────────────────────── */
+.ant-dropdown .ant-dropdown-menu,
+.ant-select-dropdown,
+.ant-popover .ant-popover-inner {
+  padding: 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-solid);
+  box-shadow: var(--e2), var(--edge);
+}
+
+.ant-dropdown .ant-dropdown-menu-item {
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+.ant-select-dropdown .ant-select-item {
+  border-radius: 8px;
+  font-size: 12.5px;
+}
+
+.ant-tooltip .ant-tooltip-inner {
+  border-radius: 8px;
+  font-size: 11.5px;
+}
+
+/* ── 弹窗与抽屉 ───────────────────────────────────────────────── */
+.ant-modal .ant-modal-content {
+  padding: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  background: var(--surface-solid);
+  box-shadow: var(--e3);
+}
+
+.ant-modal .ant-modal-header {
+  margin-bottom: 12px;
+  background: transparent;
+}
+
+.ant-modal .ant-modal-title {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 680;
+}
+
+.ant-modal .ant-modal-close {
+  color: var(--ink-soft);
+}
+
+.ant-modal .ant-modal-footer {
+  margin-top: 16px;
+}
+
+.ant-drawer .ant-drawer-content {
+  background: var(--surface-solid);
+}
+
+.ant-drawer .ant-drawer-header {
+  border-bottom: 1px solid var(--line);
+}
+
+.ant-drawer .ant-drawer-title {
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 660;
+}
+
+.ant-modal-root .ant-modal-mask,
+.ant-drawer .ant-drawer-mask {
+  background: var(--overlay);
+}
+
+/* ── 页签 / 分段 ──────────────────────────────────────────────── */
+.ant-tabs .ant-tabs-tab {
+  font-size: 12.5px;
+  font-weight: 560;
+}
+
+.ant-tabs .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  font-weight: 640;
+}
+
+.ant-tabs-top > .ant-tabs-nav::before {
+  border-bottom-color: var(--line);
+}
+
+.ant-segmented {
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--groove-bg);
+}
+
+.ant-segmented .ant-segmented-item {
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.ant-segmented .ant-segmented-item-selected {
+  border-radius: 8px;
+  box-shadow: var(--e1), var(--edge);
+}
+
+/* ── 其它零散组件 ─────────────────────────────────────────────── */
+.ant-empty .ant-empty-description {
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+
+.ant-divider {
+  border-color: var(--line);
+}
+
+.ant-descriptions .ant-descriptions-item-label {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.ant-descriptions .ant-descriptions-item-content {
+  color: var(--ink);
+  font-size: 12.5px;
+}
+
+.ant-list .ant-list-item {
+  border-block-end-color: var(--line);
+}
+
+.ant-alert {
+  border-radius: var(--r-md);
+  font-size: 12.5px;
+}
+
+.ant-statistic .ant-statistic-title {
+  color: var(--ink-soft);
+  font-size: 11.5px;
+}
+
+.ant-spin .ant-spin-dot-item {
+  background: var(--blue);
+}
+
+.ant-switch.ant-switch-checked {
+  background: var(--blue);
+}
+
+/* 骨架与加载都不使用默认灰块之外的装饰 */
+.ant-result .ant-result-title {
+  color: var(--ink);
+  font-size: 18px;
+}
+
+.ant-result .ant-result-subtitle {
+  color: var(--ink-muted);
+  font-size: 13px;
+}

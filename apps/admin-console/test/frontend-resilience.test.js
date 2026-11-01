@@ -5,12 +5,21 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const appRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const packageRoot = path.resolve(appRoot, '..', '..', 'packages');
+// 样式入口同时引用本应用文件与 @my-platform/* 共享包，两者都要能解析
+const resolveStylesheet = (fromFile, stylesheet) => {
+  if (!stylesheet.startsWith('@my-platform/')) {
+    return path.resolve(path.dirname(fromFile), stylesheet);
+  }
+  const [, name, ...rest] = stylesheet.split('/');
+  return path.join(packageRoot, name, ...rest);
+};
 const readSource = (...parts) => {
   const filename = path.join(appRoot, ...parts);
   const source = fs.readFileSync(filename, 'utf8');
   if (!filename.endsWith('styles.css')) return source;
   return source.replace(/^@import "([^"]+)";$/gm, (_, stylesheet) =>
-    fs.readFileSync(path.resolve(path.dirname(filename), stylesheet), 'utf8'));
+    fs.readFileSync(resolveStylesheet(filename, stylesheet), 'utf8'));
 };
 const readConsoleSource = () => [
   'App.jsx',

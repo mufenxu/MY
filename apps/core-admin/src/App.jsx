@@ -1,7 +1,8 @@
 import { Suspense, lazy, memo, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router';
-import { App as AntApp, Button, ConfigProvider, Result, Spin, theme } from 'antd';
+import { App as AntApp, Button, ConfigProvider, Result, Spin, theme as antdTheme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
+import { control, font, radius, resolvePalette } from '@my-platform/pearl-tokens';
 import ErrorBoundary from './components/ErrorBoundary';
 import api from './utils/api';
 import { APP_BASE_PATH, IS_PLATFORM_SSO, redirectToPlatformLogin } from './utils/runtime';
@@ -31,7 +32,7 @@ const RouteFallback = memo(() => (
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'var(--bg-color, #F5F7FB)'
+      background: 'var(--canvas)'
     }}
   >
     <Spin size="large" />
@@ -57,21 +58,112 @@ const ExternalAppRedirect = ({ href }) => {
   return <RouteFallback />;
 };
 
+/**
+ * 把珍珠令牌映射到 antd 主题。
+ * 色值来自 @my-platform/pearl-tokens，CSS 变量与这里保持同一套数值。
+ */
+const buildPearlTheme = (dark) => {
+  const palette = resolvePalette(dark ? 'dark' : 'light');
+  return {
+    algorithm: dark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+    token: {
+      colorPrimary: palette.blue,
+      colorSuccess: palette.leafText,
+      colorWarning: palette.amber,
+      colorError: palette.red,
+      colorInfo: palette.blue,
+      colorText: palette.ink,
+      colorTextSecondary: palette.inkMuted,
+      colorTextTertiary: palette.inkSoft,
+      colorTextQuaternary: palette.inkFaint,
+      colorBgBase: palette.canvas,
+      colorBgLayout: palette.canvas,
+      colorBgContainer: palette.surfaceSolid,
+      colorBgElevated: palette.surfaceSolid,
+      colorBorder: palette.lineStrong,
+      colorBorderSecondary: palette.line,
+      colorFillSecondary: palette.hover,
+      colorFillTertiary: palette.hover,
+      colorFillQuaternary: palette.groove,
+      colorSplit: palette.line,
+      borderRadius: radius.sm,
+      borderRadiusLG: radius.md,
+      borderRadiusSM: radius.xs,
+      controlHeight: control.height,
+      fontFamily: font.sans,
+      fontSize: 13,
+      fontSizeLG: 14,
+      boxShadow: dark
+        ? '0 1px 3px rgba(0, 0, 0, 0.32), 0 12px 30px rgba(0, 0, 0, 0.28)'
+        : '0 1px 3px rgba(46, 58, 62, 0.06), 0 12px 30px rgba(46, 58, 62, 0.055)',
+      boxShadowSecondary: dark
+        ? '0 2px 6px rgba(0, 0, 0, 0.36), 0 22px 50px rgba(0, 0, 0, 0.42)'
+        : '0 2px 6px rgba(46, 58, 62, 0.07), 0 22px 50px rgba(46, 58, 62, 0.08)',
+      wireframe: false,
+    },
+    components: {
+      Button: {
+        controlHeight: control.height,
+        borderRadius: radius.sm,
+        fontWeight: 600,
+        primaryShadow: 'none',
+        defaultShadow: 'none',
+        dangerShadow: 'none',
+        paddingInline: 14,
+      },
+      Input: {
+        controlHeight: control.height,
+        paddingInline: 12,
+        activeShadow: `0 0 0 3px ${dark ? 'rgba(76, 141, 255, 0.34)' : 'rgba(35, 109, 233, 0.22)'}`,
+      },
+      InputNumber: { controlHeight: control.height },
+      Select: {
+        controlHeight: control.height,
+        optionSelectedBg: dark ? 'rgba(76, 141, 255, 0.16)' : 'rgba(35, 109, 233, 0.1)',
+      },
+      Table: {
+        headerBg: palette.groove,
+        headerColor: palette.inkSoft,
+        headerSplitColor: 'transparent',
+        rowHoverBg: palette.hover,
+        borderColor: palette.line,
+        cellPaddingBlock: 10,
+        cellPaddingInline: 14,
+        headerBorderRadius: radius.sm,
+      },
+      Card: { borderRadiusLG: radius.lg, headerHeight: 50, paddingLG: 18 },
+      Modal: { borderRadiusLG: radius.lg, paddingContentHorizontalLG: 18 },
+      Tabs: { titleFontSize: 13, horizontalItemPadding: '10px 0' },
+      Segmented: {
+        itemSelectedBg: palette.surfaceSolid,
+        trackBg: palette.groove,
+        itemSelectedColor: palette.ink,
+      },
+      Tag: { borderRadiusSM: 999 },
+      Pagination: { itemActiveBg: palette.surfaceSolid },
+      Tooltip: { colorBgSpotlight: dark ? '#2a2f32' : '#17191d' },
+      Divider: { colorSplit: palette.line },
+    },
+  };
+};
+
 function App() {
+  const shellPreview = new URLSearchParams(window.location.search).has('shellshot'); // TEMP-SHELLSHOT
   const [session, setSession] = useState(() => ({
-    ready: false,
-    authenticated: false,
+    ready: shellPreview,
+    authenticated: shellPreview,
     error: null,
   }));
   const [sessionRetry, setSessionRetry] = useState(0);
   const [isDarkMode, setIsDarkMode] = useState(
-    localStorage.getItem('theme') === 'dark' || document.documentElement.classList.contains('dark')
+    localStorage.getItem('theme') === 'dark' || document.documentElement.getAttribute('data-theme') === 'dark'
   );
 
   useEffect(() => {
-    const handleThemeChange = () => {
-      setIsDarkMode(localStorage.getItem('theme') === 'dark' || document.documentElement.classList.contains('dark'));
-    };
+    const readTheme = () => (
+      localStorage.getItem('theme') === 'dark' || document.documentElement.getAttribute('data-theme') === 'dark'
+    );
+    const handleThemeChange = () => setIsDarkMode(readTheme());
     window.addEventListener('themeChanged', handleThemeChange);
 
     // 网络断线检测
@@ -88,6 +180,7 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (shellPreview) return undefined; // TEMP-SHELLSHOT
     let cancelled = false;
     api.get('/users/me', { skipAuthRedirect: true })
       .then((response) => {
@@ -152,30 +245,7 @@ function App() {
   }
 
   return (
-    <ConfigProvider
-      locale={zhCN}
-      theme={{
-        algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
-        token: {
-          colorPrimary: '#4A7CF7',
-          colorSuccess: '#38B2AC',
-          colorWarning: '#F6AD55',
-          colorError: '#F56565',
-          colorInfo: '#4A7CF7',
-          borderRadius: 12,
-          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif"
-        },
-        components: {
-          Button: {
-            controlHeight: 42,
-            borderRadius: 16,
-          },
-          Input: {
-            controlHeight: 42,
-          }
-        }
-      }}
-    >
+    <ConfigProvider locale={zhCN} theme={buildPearlTheme(isDarkMode)}>
       <AntApp component={false}>
         <FeedbackBinder />
         <ErrorBoundary homePath={IS_PLATFORM_SSO ? '/console' : '/'}>

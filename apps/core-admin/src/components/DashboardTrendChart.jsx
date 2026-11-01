@@ -1,4 +1,3 @@
-import { Typography } from 'antd';
 import {
     Area,
     AreaChart,
@@ -10,26 +9,16 @@ import {
     YAxis,
 } from 'recharts';
 
-const { Text } = Typography;
-
 const TrendTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
 
     return (
-        <div
-            style={{
-                background: 'var(--component-bg)',
-                padding: 12,
-                border: '1px solid var(--border-color)',
-                borderRadius: 12,
-                boxShadow: 'var(--box-shadow)',
-            }}
-        >
-            <Text strong style={{ display: 'block', marginBottom: 8 }}>{label}</Text>
+        <div className="chart-tip">
+            <strong>{label}</strong>
             {payload.map((item) => (
-                <div key={item.dataKey} style={{ color: item.color, fontSize: 12 }}>
-                    {item.name}: {item.value}
-                </div>
+                <span key={item.dataKey} style={{ color: item.color }}>
+                    {item.name}：{item.value}
+                </span>
             ))}
         </div>
     );
@@ -37,38 +26,45 @@ const TrendTooltip = ({ active, payload, label }) => {
 
 const DashboardTrendChart = ({ data }) => (
     <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
+        <AreaChart data={data} margin={{ top: 8, right: 8, left: -22, bottom: 8 }}>
             <defs>
                 <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4A7CF7" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="#4A7CF7" stopOpacity={0} />
+                    <stop offset="5%" stopColor="var(--blue)" stopOpacity={0.18} />
+                    <stop offset="95%" stopColor="var(--blue)" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="colorOrders" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#5CC9A7" stopOpacity={0.1} />
-                    <stop offset="95%" stopColor="#5CC9A7" stopOpacity={0} />
+                    <stop offset="5%" stopColor="var(--leaf-text)" stopOpacity={0.18} />
+                    <stop offset="95%" stopColor="var(--leaf-text)" stopOpacity={0} />
                 </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F5F7FB" />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--line)" />
             <XAxis
                 dataKey="date"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: '#A3AED0', fontSize: 12 }}
-                dy={10}
+                tick={{ fill: 'var(--ink-faint)', fontSize: 11 }}
+                dy={8}
             />
             <YAxis
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: '#A3AED0', fontSize: 12 }}
+                tick={{ fill: 'var(--ink-faint)', fontSize: 11 }}
+                width={44}
             />
-            <Tooltip content={<TrendTooltip />} cursor={{ stroke: '#4A7CF7', strokeWidth: 1 }} />
-            <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: 20 }} />
+            <Tooltip content={<TrendTooltip />} cursor={{ stroke: 'var(--blue)', strokeWidth: 1 }} />
+            <Legend
+                verticalAlign="top"
+                align="right"
+                iconType="circle"
+                iconSize={7}
+                wrapperStyle={{ paddingBottom: 14, fontSize: 11 }}
+            />
             <Area
                 name="新用户"
                 type="monotone"
                 dataKey="users"
-                stroke="#4A7CF7"
-                strokeWidth={3}
+                stroke="var(--blue)"
+                strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#colorUsers)"
                 animationDuration={900}
@@ -77,8 +73,8 @@ const DashboardTrendChart = ({ data }) => (
                 name="新订单"
                 type="monotone"
                 dataKey="orders"
-                stroke="#5CC9A7"
-                strokeWidth={3}
+                stroke="var(--leaf-text)"
+                strokeWidth={2}
                 fillOpacity={1}
                 fill="url(#colorOrders)"
                 animationDuration={900}

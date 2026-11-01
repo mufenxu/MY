@@ -1,23 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Table, Button, Space, Modal, Form, Input, Select, Typography, Popconfirm, Tag, InputNumber, Row, Col, Card, List } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Select, Popconfirm, InputNumber, Row, Col, Pagination, Tooltip } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, AppstoreOutlined, ReloadOutlined } from '@ant-design/icons';
 import api from '../utils/api';
-import useIsMobile from '../hooks/useIsMobile';
+import { useResponsive } from '../hooks/useIsMobile';
 import { message } from '../utils/feedback';
 
-const { Text } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
 
 const CourseCategoryConfig = () => {
-    const isMobile = useIsMobile();
-    const isTablet = window.innerWidth <= 1024;
+    const { isMobile } = useResponsive();
     const [categories, setCategories] = useState([]);
     const [platforms, setPlatforms] = useState([]);
     const [loading, setLoading] = useState(false);
     const [total, setTotal] = useState(0);
     const [query, setQuery] = useState({ page: 1, limit: 15 });
-    
+
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [form] = Form.useForm();
     const [editingId, setEditingId] = useState(null);
@@ -110,134 +108,173 @@ const CourseCategoryConfig = () => {
         {
             title: '排序',
             dataIndex: 'sort',
-            width: 80,
+            width: 72,
             align: 'center'
         },
         {
             title: '平台名字',
             dataIndex: 'name',
-            render: (text) => <Text strong style={{ color: '#4A7CF7' }}>{text}</Text>
+            render: (text) => <strong className="cell-strong" style={{ color: 'var(--blue)' }}>{text}</strong>
         },
         {
-            title: '查询接口 (代号)',
+            title: '查询接口',
             dataIndex: 'getnoun',
             render: (text, record) => (
-                <Space direction="vertical" size={0}>
-                    <Text type="secondary" style={{fontSize: 12}}>通道: {record.queryplat || '自营'}</Text>
-                    <Tag color="cyan">查: {text}</Tag>
-                </Space>
+                <div className="cell-stack">
+                    <span className="cell-sub">通道 {record.queryplat || '自营'}</span>
+                    <span className="tag tone-teal">查 {text}</span>
+                </div>
             )
         },
         {
-            title: '交单接口 (代号)',
+            title: '交单接口',
             dataIndex: 'noun',
             render: (text, record) => (
-                <Space direction="vertical" size={0}>
-                    <Text type="secondary" style={{fontSize: 12}}>通道: {record.docking || '自营'}</Text>
-                    <Tag color="blue">交: {text}</Tag>
-                </Space>
+                <div className="cell-stack">
+                    <span className="cell-sub">通道 {record.docking || '自营'}</span>
+                    <span className="tag tone-info">交 {text}</span>
+                </div>
             )
         },
         {
             title: '免查课',
             dataIndex: 'nock',
-            render: (val) => val === 1 ? <Tag color="orange">是的</Tag> : '-'
+            width: 92,
+            render: (val) => (val === 1 ? <span className="tag tone-warn">免查课</span> : <span className="faint">—</span>)
         },
         {
             title: '状态',
             dataIndex: 'status',
-            render: (val) => val === 1 ? <Tag color="success">上架中</Tag> : <Tag color="default">已下架</Tag>
+            width: 96,
+            render: (val) => (
+                <span className={`tag tone-${val === 1 ? 'ok' : 'neutral'}`}>{val === 1 ? '上架中' : '已下架'}</span>
+            )
         },
         {
             title: '创建时间',
             dataIndex: 'createdAt',
-            render: (val) => new Date(val).toLocaleDateString()
+            width: 110,
+            render: (val) => <span className="cell-mono">{new Date(val).toLocaleDateString()}</span>
         },
         {
             title: '操作',
             key: 'action',
+            width: 92,
+            align: 'right',
             render: (_, record) => (
-                <Space size="middle">
-                    <Button type="primary" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
+                <span className="row-actions">
+                    <Tooltip title="编辑">
+                        <button
+                            type="button"
+                            className="icon-action"
+                            onClick={() => handleEdit(record)}
+                            aria-label={`编辑平台：${record.name}`}
+                        >
+                            <EditOutlined />
+                        </button>
+                    </Tooltip>
                     <Popconfirm title="确定要删除此分类吗？" onConfirm={() => handleDelete(record._id)}>
-                        <Button type="primary" danger size="small" icon={<DeleteOutlined />}>删除</Button>
+                        <button
+                            type="button"
+                            className="icon-action danger"
+                            aria-label={`删除平台：${record.name}`}
+                        >
+                            <DeleteOutlined />
+                        </button>
                     </Popconfirm>
-                </Space>
-            ),
-            align: 'right'
+                </span>
+            )
         },
     ];
 
     return (
-        <Card 
-            title={
-                <Space>
-                    <AppstoreOutlined style={{ color: '#4A7CF7' }}/>
-                    <span style={{ fontWeight: 'bold', fontSize: isMobile ? 15 : 16 }}>网课分类配置</span>
-                    {!isMobile && <span style={{ fontSize: 13, color: 'var(--text-tertiary)', fontWeight: 'normal' }}>(小程序前端可用列表)</span>}
-                </Space>
-            } 
-            extra={!isMobile && (
-                <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+        <section className="panel">
+            <div className="toolbar-row">
+                <h2 className="panel-title">
+                    <AppstoreOutlined />
+                    网课分类
+                </h2>
+                <span className="toolbar-spacer" />
+                <span className="toolbar-count">共 {total} 个平台</span>
+                <Tooltip title="刷新列表">
+                    <button type="button" className="icon-action" onClick={fetchData} aria-label="刷新列表">
+                        <ReloadOutlined spin={loading} />
+                    </button>
+                </Tooltip>
+                <button type="button" className="btn btn-sm btn-primary" onClick={handleAdd}>
+                    <PlusOutlined />
                     添加平台
-                </Button>
-            )}
-            bordered={false} 
-            style={{ borderRadius: 12, boxShadow: 'var(--card-shadow)', margin: 0 }}
-            headStyle={{ paddingBottom: isMobile ? 8 : 16 }}
-        >
-            <div style={{ marginBottom: 16 }}>
-                <Text type="secondary" style={{ fontSize: 13 }}>用于配置在小程序中给用户展现的网课列表分类及其对应的后端通道查课下单标识参数等。</Text>
+                </button>
             </div>
 
-            {isMobile || isTablet ? (
-                <div style={{ paddingBottom: 16 }}>
-                    {isMobile && (
-                        <Button type="primary" block icon={<PlusOutlined />} onClick={handleAdd} style={{ marginBottom: 16, borderRadius: 8 }}>
-                            添加网课分类
-                        </Button>
+            <p className="settings-note" style={{ margin: '0 16px 10px' }}>
+                这里配置小程序里展示的网课分类，以及它们对应的后端查课、交单通道参数。
+            </p>
+
+            {isMobile ? (
+                <div className="panel-body">
+                    {loading ? (
+                        <div className="ops-loading">正在加载平台…</div>
+                    ) : categories.length === 0 ? (
+                        <div className="ops-empty">还没有配置平台</div>
+                    ) : (
+                        <div className="view-stack">
+                            {categories.map((item) => (
+                                <article key={item._id} className="list-card">
+                                    <div className="list-card-head">
+                                        <span className="list-card-title" style={{ color: 'var(--blue)' }}>{item.name}</span>
+                                        <span className={`tag tone-${item.status === 1 ? 'ok' : 'neutral'}`}>
+                                            {item.status === 1 ? '上架中' : '已下架'}
+                                        </span>
+                                    </div>
+                                    <div className="cell-tags">
+                                        <span className="tag tone-teal">查 {item.getnoun}（{item.queryplat || '自营'}）</span>
+                                        <span className="tag tone-info">交 {item.noun}（{item.docking || '自营'}）</span>
+                                        {item.nock === 1 && <span className="tag tone-warn">免查课</span>}
+                                    </div>
+                                    <p className="cell-sub">
+                                        排序 {item.sort} · 定价 ¥{item.price || 0}
+                                    </p>
+                                    <div className="list-card-foot">
+                                        <span className="cell-sub">{new Date(item.createdAt).toLocaleDateString()}</span>
+                                        <span className="row-actions">
+                                            <button
+                                                type="button"
+                                                className="icon-action"
+                                                onClick={() => handleEdit(item)}
+                                                aria-label={`编辑平台：${item.name}`}
+                                            >
+                                                <EditOutlined />
+                                            </button>
+                                            <Popconfirm title="确定要删除此分类吗？" onConfirm={() => handleDelete(item._id)}>
+                                                <button
+                                                    type="button"
+                                                    className="icon-action danger"
+                                                    aria-label={`删除平台：${item.name}`}
+                                                >
+                                                    <DeleteOutlined />
+                                                </button>
+                                            </Popconfirm>
+                                        </span>
+                                    </div>
+                                </article>
+                            ))}
+                        </div>
                     )}
-                    <List
-                        dataSource={categories}
-                        loading={loading}
-                        renderItem={item => (
-                            <Card size="small" style={{ marginBottom: 12, borderRadius: 12, border: '1px solid var(--border-color)' }} bodyStyle={{ padding: 12 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, alignItems: 'center' }}>
-                                    <div style={{ fontWeight: 'bold', color: '#4A7CF7', fontSize: 14 }}>{item.name}</div>
-                                    <Tag color={item.status === 1 ? 'success' : 'default'} style={{ margin: 0 }}>
-                                        {item.status === 1 ? '上架中' : '已下架'}
-                                    </Tag>
-                                </div>
-                                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
-                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
-                                        <Tag color="cyan" style={{ margin: 0 }}>查: {item.getnoun} ({item.queryplat || '自营'})</Tag>
-                                        <Tag color="blue" style={{ margin: 0 }}>交: {item.noun} ({item.docking || '自营'})</Tag>
-                                    </div>
-                                    <div style={{ marginTop: 4 }}>
-                                        排序: {item.sort} | 定价: ¥{item.price || 0} {item.nock === 1 && <Tag color="orange" style={{ marginLeft: 6 }}>免查课</Tag>}
-                                    </div>
-                                </div>
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                                    <Button size="small" type="primary" icon={<EditOutlined />} onClick={() => handleEdit(item)}>编辑</Button>
-                                    <Popconfirm title="确定要删除此分类吗？" onConfirm={() => handleDelete(item._id)}>
-                                        <Button size="small" danger icon={<DeleteOutlined />}>删除</Button>
-                                    </Popconfirm>
-                                </div>
-                            </Card>
-                        )}
-                        pagination={{
-                            current: query.page,
-                            pageSize: query.limit,
-                            total: total,
-                            simple: true,
-                            onChange: (page, pageSize) => handleTableChange({ current: page, pageSize })
-                        }}
+                    <Pagination
+                        style={{ marginTop: 12, textAlign: 'center' }}
+                        size="small"
+                        current={query.page}
+                        pageSize={query.limit}
+                        total={total}
+                        simple
+                        onChange={(page, pageSize) => handleTableChange({ current: page, pageSize })}
                     />
                 </div>
             ) : (
-                <Table 
-                    columns={columns} 
-                    dataSource={categories} 
+                <Table
+                    columns={columns}
+                    dataSource={categories}
                     rowKey="_id"
                     loading={loading}
                     scroll={{ x: 'max-content' }}
@@ -245,10 +282,11 @@ const CourseCategoryConfig = () => {
                         current: query.page,
                         pageSize: query.limit,
                         total: total,
-                        showSizeChanger: true
+                        showSizeChanger: true,
+                        showTotal: (count) => `共 ${count} 个平台`,
+                        style: { padding: '12px 16px' },
                     }}
                     onChange={handleTableChange}
-                    style={{ borderRadius: 12, overflow: 'hidden' }}
                 />
             )}
 
@@ -257,15 +295,11 @@ const CourseCategoryConfig = () => {
                 open={isModalVisible}
                 onOk={handleModalOk}
                 onCancel={() => setIsModalVisible(false)}
-                width={700}
-                style={{ top: 20 }}
+                width={isMobile ? '94%' : 700}
+                style={{ top: isMobile ? 12 : 32 }}
                 destroyOnClose
             >
-                <Form
-                    form={form}
-                    layout="vertical"
-                    style={{ marginTop: 8 }}
-                >
+                <Form form={form} layout="vertical" style={{ marginTop: 8 }}>
                     <Form.Item label="排序" name="sort">
                         <InputNumber style={{ width: '100%' }} placeholder="商品排序从小到大" />
                     </Form.Item>
@@ -280,7 +314,7 @@ const CourseCategoryConfig = () => {
                         </Col>
                         <Col span={12}>
                             <Form.Item label="首选价格" name="suo">
-                                <Input placeholder="0为不锁死" />
+                                <Input placeholder="0 为不锁死" />
                             </Form.Item>
                         </Col>
                     </Row>
@@ -300,7 +334,7 @@ const CourseCategoryConfig = () => {
                             </Form.Item>
                         </Col>
                     </Row>
-                    
+
                     <Row gutter={16}>
                         <Col span={12}>
                             <Form.Item label="交单通道" name="docking">
@@ -326,11 +360,11 @@ const CourseCategoryConfig = () => {
 
                     <Form.Item label="免查课" name="nock">
                         <Select>
-                            <Option value={1}>是 (直接下单无选课)</Option>
-                            <Option value={0}>否 (需要先查询课程表)</Option>
+                            <Option value={1}>是（直接下单无选课）</Option>
+                            <Option value={0}>否（需要先查询课程表）</Option>
                         </Select>
                     </Form.Item>
-                    
+
                     <Form.Item label="状态" name="status">
                         <Select>
                             <Option value={1}>上架</Option>
@@ -343,7 +377,7 @@ const CourseCategoryConfig = () => {
                     </Form.Item>
                 </Form>
             </Modal>
-        </Card>
+        </section>
     );
 };
 

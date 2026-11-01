@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Card, Table, Tag, Space, Button, Input, Select, Modal, Tooltip, Typography, Form, Divider, Switch, List, Row, Col } from 'antd';
+import { Table, Input, Select, Modal, Tooltip, Typography, Form, Switch, Row, Col, Pagination } from 'antd';
 import { SyncOutlined, DeleteOutlined, FileTextOutlined, PlusOutlined, EditOutlined, EyeOutlined, EyeInvisibleOutlined, SearchOutlined, WarningOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import useIsMobile from '../hooks/useIsMobile';
@@ -7,6 +7,19 @@ import { message } from '../utils/feedback';
 
 const { Option } = Select;
 const ORDER_REFRESH_TIMEOUT_MS = 120000;
+
+/** 订单状态：文案与色调取自统一映射，避免各处自行拼颜色 */
+const ORDER_STATUS = {
+    Pending: { label: '待处理', tone: 'warn' },
+    Submitting: { label: '提交中', tone: 'info' },
+    Processing: { label: '进行中', tone: 'info' },
+    Completed: { label: '已完成', tone: 'ok' },
+    Failed: { label: '失败', tone: 'danger' },
+    Cancelled: { label: '已取消', tone: 'neutral' },
+    Refushing: { label: '重新处理', tone: 'violet' },
+    ReconcilePending: { label: '需要确认', tone: 'warn' },
+    Unknown: { label: '状态未知', tone: 'neutral' },
+};
 
 const CourseOrders = () => {
     const isMobile = useIsMobile();
@@ -222,62 +235,46 @@ const CourseOrders = () => {
     };
 
     const getStatusTag = (status, text) => {
-        const statusMap = {
-            'Pending': { color: 'orange', label: '待处理' },
-            'Submitting': { color: 'processing', label: '提交中' },
-            'Processing': { color: 'processing', label: '进行中' },
-            'Completed': { color: 'success', label: '已完成' },
-            'Failed': { color: 'error', label: '失败' },
-            'Cancelled': { color: 'default', label: '已取消' },
-            'Refushing': { color: 'magenta', label: '重新处理' },
-            'ReconcilePending': { color: 'warning', label: '待人工核对' },
-            'Unknown': { color: 'default', label: '结果未知' }
-        };
-        const friendlyLabels = {
-            ReconcilePending: '需要确认',
-            Unknown: '状态未知',
-        };
-        const st = statusMap[status] || { color: 'default', label: '未知状态' };
-        return <Tag color={st.color}>{friendlyLabels[status] || text || st.label}</Tag>;
+        const meta = ORDER_STATUS[status] || { label: '未知状态', tone: 'neutral' };
+        return <span className={`tag tone-${meta.tone}`}>{text || meta.label}</span>;
     };
 
     const columns = [
         {
             title: '订单',
             dataIndex: 'tradeNo',
-            width: 140,
+            width: 150,
             render: (text, record) => (
-                <div style={{ lineHeight: 1.4 }}>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: 11, marginBottom: 2 }}>下单时间：</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                        {new Date(record.createTime).toLocaleDateString()} {new Date(record.createTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </div>
-                    <Text 
-                        copyable={{ text: text, tooltips: ['点击复制单号', '复制成功'] }} 
-                        style={{ fontSize: 11, color: '#BFBFBF', fontFamily: 'monospace' }}
+                <div className="cell-stack">
+                    <span className="cell-sub">
+                        {new Date(record.createTime).toLocaleDateString()}{' '}
+                        {new Date(record.createTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    <Typography.Text
+                        copyable={{ text, tooltips: ['点击复制单号', '复制成功'] }}
+                        className="cell-mono"
                     >
-                        {text.slice(0, 6)}...{text.slice(-4)}
-                    </Text>
+                        {text.slice(0, 6)}…{text.slice(-4)}
+                    </Typography.Text>
                 </div>
             )
         },
         {
             title: '用户',
             dataIndex: ['userId', 'nickName'],
-            width: 100,
-            render: (text) => (
-                <Text style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{text || '系统/游客'}</Text>
-            )
+            width: 104,
+            render: (text) => <span className="muted">{text || '系统/游客'}</span>
         },
         {
             title: '账号',
             dataIndex: 'account',
-            width: 160,
+            width: 168,
             render: (text, record) => (
-                <div>
-                    <div>{record.school && <Tag color="blue">{record.school}</Tag>}</div>
-                    <div style={{ marginTop: 4 }}><b>{text}</b></div>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>密码已保存</div>
+                <div className="cell-stack">
+                    <strong className="cell-strong">{text}</strong>
+                    <span className="cell-sub">
+                        {record.school || '未标注学校'} · 密码已保存
+                    </span>
                 </div>
             )
         },
@@ -286,355 +283,323 @@ const CourseOrders = () => {
             dataIndex: 'courseName',
             width: 260,
             render: (text, record) => (
-                <div>
-                    <div style={{ fontWeight: 'bold', color: '#4A7CF7', marginBottom: 4 }}>
-                        {text || (record.isManual ? '待刷新同步...' : '未知课程')}
+                <div className="cell-stack">
+                    <strong className="cell-strong">
+                        {text || (record.isManual ? '待刷新同步…' : '未知课程')}
+                    </strong>
+                    <div className="cell-tags">
+                        <span className="tag tone-violet">{record.platformName || record.platformCode}</span>
+                        {record.isManual && <span className="tag tone-info">手动录入</span>}
+                        {record.isHidden && <span className="tag tone-danger">已隐藏</span>}
                     </div>
-                    <Space size={4} wrap>
-                        <Tag color="purple" style={{ margin: 0 }}>{record.platformName || record.platformCode}</Tag>
-                        {record.isManual && <Tag color="cyan" style={{ margin: 0 }}>手动录入</Tag>}
-                        {record.isHidden && <Tag color="red" style={{ margin: 0 }} icon={<EyeInvisibleOutlined />}>已隐藏</Tag>}
-                    </Space>
                 </div>
             )
         },
         {
             title: '进度',
             dataIndex: 'progress',
-            width: 100,
-            render: (text) => <b style={{ color: '#52c41a', fontSize: 14 }}>{text}</b>
+            width: 96,
+            render: (text) => <strong className="cell-progress">{text}</strong>
         },
         {
             title: '状态',
             key: 'status',
-            width: 160,
+            width: 156,
             render: (_, record) => (
-                <Space direction="vertical" size={4}>
+                <div className="cell-stack">
                     {getStatusTag(record.status, record.statusText)}
-                    {record.remarks && <div style={{ fontSize: 12, color: 'gray', whiteSpace: 'normal', maxWidth: 140 }}>{record.remarks}</div>}
-                </Space>
+                    {record.remarks && <span className="cell-sub cell-wrap">{record.remarks}</span>}
+                </div>
             )
         },
-        // 移除原有的下单时间列，因为它已经合并到“订单参考”列中了
         {
             title: '操作',
             key: 'action',
             fixed: isMobile ? undefined : 'right',
-            width: 120,
+            width: 168,
+            align: 'right',
             render: (_, record) => (
-                <Space size="small">
+                <span className="row-actions">
                     <Tooltip title={record.status === 'ReconcilePending' ? '仅查询上游状态，不会重新提交订单' : '从上游实时获取更新状态'}>
-                        <Button 
-                            type="dashed" 
-                            size="small" 
-                            icon={<SyncOutlined />} 
+                        <button
+                            type="button"
+                            className="icon-action"
                             onClick={() => handleRefreshStatus([record.tradeNo])}
                             disabled={record.status === 'Submitting'}
+                            aria-label="刷新订单进度"
                         >
-                            刷新
-                        </Button>
+                            <SyncOutlined />
+                        </button>
                     </Tooltip>
-                    <Tooltip title={record.isHidden ? "显示在小程序订单列表" : "隐藏此订单"}>
-                        <Button 
-                            type="text" 
-                            size="small" 
-                            icon={record.isHidden ? <EyeOutlined /> : <EyeInvisibleOutlined />} 
+                    <Tooltip title={record.isHidden ? '显示在小程序订单列表' : '隐藏此订单'}>
+                        <button
+                            type="button"
+                            className="icon-action"
                             onClick={() => handleToggleVisibility(record)}
                             aria-label={record.isHidden ? '在小程序显示订单' : '在小程序隐藏订单'}
-                        />
+                        >
+                            {record.isHidden ? <EyeOutlined /> : <EyeInvisibleOutlined />}
+                        </button>
                     </Tooltip>
                     <Tooltip title="编辑订单信息">
-                        <Button 
-                            type="text" 
-                            size="small" 
-                            icon={<EditOutlined />} 
+                        <button
+                            type="button"
+                            className="icon-action"
                             onClick={() => openEditModal(record)}
                             aria-label="编辑订单"
-                        />
+                        >
+                            <EditOutlined />
+                        </button>
                     </Tooltip>
-                    <Button 
-                        type="text" 
-                        danger 
-                        size="small" 
-                        icon={<DeleteOutlined />} 
+                    <button
+                        type="button"
+                        className="icon-action danger"
                         onClick={() => handleDelete(record.tradeNo)}
-                    />
-                </Space>
+                        aria-label="删除订单"
+                    >
+                        <DeleteOutlined />
+                    </button>
+                </span>
             ),
         },
     ];
 
-    const { Text } = Typography;
-
     return (
-        <Card 
-            title={
-                <Space>
-                    <FileTextOutlined style={{ color: '#4A7CF7' }}/>
-                        <span style={{ fontWeight: 'bold' }}>订单</span>
-                </Space>
-            } 
-            bordered={false} 
-            className="fade-in"
-            style={{ borderRadius: 12, boxShadow: 'var(--card-shadow)', margin: isMobile ? '0 -10px' : '0' }}
-        >
-            <div style={{ marginBottom: 20, display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                <Input 
-                    placeholder="搜索账号或学号"
-                    prefix={<SearchOutlined style={{ color: '#A3AED0', marginRight: 8 }} />}
-                    onChange={(e) => handleSearch(e.target.value, 'account')}
-                    style={{ 
-                        flex: '1 1 200px', 
-                        maxWidth: isMobile ? '100%' : 260,
-                        border: 'none',
-                        boxShadow: 'var(--card-shadow)',
-                        background: 'var(--component-bg)',
-                        borderRadius: 30
-                    }} 
-                    allowClear
-                />
-                <Input 
-                    placeholder="搜索订单号"
-                    prefix={<SearchOutlined style={{ color: '#A3AED0', marginRight: 8 }} />}
-                    onChange={(e) => handleSearch(e.target.value, 'tradeNo')}
-                    style={{ 
-                        flex: '1 1 200px', 
-                        maxWidth: isMobile ? '100%' : 280,
-                        border: 'none',
-                        boxShadow: 'var(--card-shadow)',
-                        background: 'var(--component-bg)',
-                        borderRadius: 30
-                    }} 
-                    allowClear
-                />
-                <Select
-                    placeholder="全部状态"
-                    style={{ flex: '1 1 120px', maxWidth: isMobile ? 'calc(50% - 6px)' : 140 }}
-                    allowClear
-                    onChange={(val) => handleSearch(val || '', 'status')}
-                >
-                    <Option value="Pending">待处理</Option>
-                    <Option value="Submitting">提交中</Option>
-                    <Option value="Processing">进行中</Option>
-                    <Option value="Completed">已完成</Option>
-                    <Option value="Failed">失败</Option>
-                    <Option value="Refushing">重新处理</Option>
-                    <Option value="ReconcilePending">需要确认</Option>
-                    <Option value="Unknown">状态未知</Option>
-                </Select>
-                
-                <Button 
-                    type="primary" 
-                    icon={<SyncOutlined />} 
-                    loading={refreshing}
-                    onClick={() => handleRefreshStatus()}
-                    disabled={selectedRowKeys.length === 0}
-                    style={{ flex: isMobile ? '1 1 calc(50% - 6px)' : 'none' }}
-                >
-                    刷新进度 ({selectedRowKeys.length})
-                </Button>
+        <div className="page-view fade-in">
+            <section className="panel">
+                <div className="toolbar-row">
+                    <Input
+                        prefix={<SearchOutlined style={{ color: 'var(--ink-faint)' }} />}
+                        placeholder="搜索账号或学号"
+                        onChange={(event) => handleSearch(event.target.value, 'account')}
+                        allowClear
+                    />
+                    <Input
+                        prefix={<SearchOutlined style={{ color: 'var(--ink-faint)' }} />}
+                        placeholder="搜索订单号"
+                        onChange={(event) => handleSearch(event.target.value, 'tradeNo')}
+                        allowClear
+                    />
+                    <Select
+                        placeholder="全部状态"
+                        style={{ minWidth: 132 }}
+                        allowClear
+                        onChange={(value) => handleSearch(value || '', 'status')}
+                    >
+                        <Option value="Pending">待处理</Option>
+                        <Option value="Submitting">提交中</Option>
+                        <Option value="Processing">进行中</Option>
+                        <Option value="Completed">已完成</Option>
+                        <Option value="Failed">失败</Option>
+                        <Option value="Refushing">重新处理</Option>
+                        <Option value="ReconcilePending">需要确认</Option>
+                        <Option value="Unknown">状态未知</Option>
+                    </Select>
+                    <span className="toolbar-spacer" />
+                    <span className="toolbar-count">共 {total} 笔订单</span>
+                    <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => handleRefreshStatus()}
+                        disabled={refreshing || selectedRowKeys.length === 0}
+                    >
+                        <SyncOutlined spin={refreshing} />
+                        刷新进度（{selectedRowKeys.length}）
+                    </button>
+                    <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        onClick={openCreateModal}
+                    >
+                        <PlusOutlined />
+                        添加订单
+                    </button>
+                </div>
 
-                <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={openCreateModal}
-                    block={isMobile}
-                    style={{ background: '#722ED1', borderColor: '#722ED1', flex: isMobile ? '1 1 100%' : 'none' }}
-                >
-                    添加订单
-                </Button>
-            </div>
-
-            {!isMobile ? (
-                <Table 
-                    rowSelection={{
-                        selectedRowKeys,
-                        onChange: setSelectedRowKeys,
-                        getCheckboxProps: (record) => ({
-                            disabled: record.status === 'Submitting',
-                            name: record.tradeNo,
-                        }),
-                    }}
-                    columns={columns} 
-                    dataSource={orders} 
-                    rowKey="tradeNo"
-                    loading={loading}
-                    scroll={{ x: 'max-content' }}
-                    pagination={{
-                        current: query.page,
-                        pageSize: query.limit,
-                        total: total,
-                        showSizeChanger: true,
-                    }}
-                    onChange={handleTableChange}
-                />
-            ) : (
-                <div style={{ paddingBottom: 20 }}>
-                    <List
-                        loading={loading}
-                        itemLayout="vertical"
+                {!isMobile ? (
+                    <Table
+                        rowSelection={{
+                            selectedRowKeys,
+                            onChange: setSelectedRowKeys,
+                            getCheckboxProps: (record) => ({
+                                disabled: record.status === 'Submitting',
+                                name: record.tradeNo,
+                            }),
+                        }}
+                        columns={columns}
                         dataSource={orders}
+                        rowKey="tradeNo"
+                        loading={loading}
+                        scroll={{ x: 'max-content' }}
                         pagination={{
                             current: query.page,
                             pageSize: query.limit,
                             total: total,
-                            simple: true,
-                            onChange: (page, pageSize) => {
-                                handleTableChange({ current: page, pageSize });
-                            }
+                            showSizeChanger: true,
+                            showTotal: (count) => `共 ${count} 笔订单`,
+                            style: { padding: '12px 16px' },
                         }}
-                        renderItem={(record) => (
-                            <Card 
-                                size="small" 
-                                style={{ marginBottom: 16, borderRadius: 12, border: '1px solid var(--border-color)' }}
-                                bodyStyle={{ padding: 12 }}
-                            >
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                                    <div style={{ flex: 1, marginRight: 8 }}>
-                                        <div style={{ fontWeight: 'bold', color: 'var(--text-primary)', fontSize: 15, marginBottom: 4 }}>
-                                            {record.courseName || (record.isManual ? '待刷新同步...' : '未知课程')}
-                                        </div>
-                                        <Space size={4} wrap>
-                                            <Tag color="purple" style={{ fontSize: 10, margin: 0 }}>{record.platformName || record.platformCode}</Tag>
-                                            {record.school && <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>{record.school}</Tag>}
-                                            {record.isManual && <Tag color="cyan" style={{ fontSize: 10, margin: 0 }}>录入</Tag>}
-                                        </Space>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        {getStatusTag(record.status, record.statusText)}
-                                    </div>
-                                </div>
-
-                                <div style={{ background: 'var(--bg-color)', padding: '10px', borderRadius: 8, marginBottom: 12 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                        <Text type="secondary" style={{ fontSize: 12 }}>授权账号</Text>
-                                        <Text strong style={{ fontSize: 13 }}>{record.account}</Text>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                                        <Text type="secondary" style={{ fontSize: 12 }}>当前进度</Text>
-                                        <Text style={{ color: '#52c41a', fontWeight: 'bold' }}>{record.progress}</Text>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                        <Text type="secondary" style={{ fontSize: 12 }}>内部单号</Text>
-                                        <Text type="secondary" style={{ fontSize: 11, fontFamily: 'monospace' }}>{record.tradeNo.slice(-8)} (末8位)</Text>
-                                    </div>
-                                </div>
-
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                    <Text type="secondary" style={{ fontSize: 11 }}>
-                                        {new Date(record.createTime).toLocaleDateString()} 下单
-                                    </Text>
-                                    <Space>
-                                        <Button 
-                                            size="small" 
-                                            icon={<SyncOutlined />} 
-                                            onClick={() => handleRefreshStatus([record.tradeNo])}
-                                            disabled={record.status === 'Submitting'}
-                                        >
-                                            刷新
-                                        </Button>
-                                        <Button 
-                                            size="small" 
-                                            icon={<EditOutlined />} 
-                                            onClick={() => openEditModal(record)}
-                                            aria-label="编辑订单"
-                                        />
-                                        <Button 
-                                            size="small" 
-                                            danger 
-                                            icon={<DeleteOutlined />} 
-                                            onClick={() => handleDelete(record.tradeNo)}
-                                            aria-label="删除订单"
-                                        />
-                                    </Space>
-                                </div>
-                            </Card>
-                        )}
+                        onChange={handleTableChange}
                     />
-                </div>
-            )}
+                ) : (
+                    <div className="panel-body">
+                        {loading ? (
+                            <div className="ops-loading">正在加载订单…</div>
+                        ) : orders.length === 0 ? (
+                            <div className="ops-empty">没有匹配的订单</div>
+                        ) : (
+                            <div className="view-stack">
+                                {orders.map((record) => (
+                                    <article key={record.tradeNo} className="list-card">
+                                        <div className="list-card-head">
+                                            <span className="list-card-title">
+                                                {record.courseName || (record.isManual ? '待刷新同步…' : '未知课程')}
+                                            </span>
+                                            {getStatusTag(record.status, record.statusText)}
+                                        </div>
+                                        <div className="cell-tags">
+                                            <span className="tag tone-violet">
+                                                {record.platformName || record.platformCode}
+                                            </span>
+                                            {record.school && <span className="tag tone-info">{record.school}</span>}
+                                            {record.isManual && <span className="tag tone-neutral">手动录入</span>}
+                                            {record.isHidden && <span className="tag tone-danger">已隐藏</span>}
+                                        </div>
+                                        <dl className="list-meta">
+                                            <div>
+                                                <dt>授权账号</dt>
+                                                <dd>{record.account}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>当前进度</dt>
+                                                <dd className="cell-progress">{record.progress}</dd>
+                                            </div>
+                                            <div>
+                                                <dt>内部单号</dt>
+                                                <dd className="cell-mono">{record.tradeNo.slice(-8)}（末 8 位）</dd>
+                                            </div>
+                                        </dl>
+                                        <div className="list-card-foot">
+                                            <span className="cell-sub">
+                                                {new Date(record.createTime).toLocaleDateString()} 下单
+                                            </span>
+                                            <span className="row-actions">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm"
+                                                    onClick={() => handleRefreshStatus([record.tradeNo])}
+                                                    disabled={record.status === 'Submitting'}
+                                                >
+                                                    <SyncOutlined />
+                                                    刷新
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="icon-action"
+                                                    onClick={() => openEditModal(record)}
+                                                    aria-label="编辑订单"
+                                                >
+                                                    <EditOutlined />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="icon-action danger"
+                                                    onClick={() => handleDelete(record.tradeNo)}
+                                                    aria-label="删除订单"
+                                                >
+                                                    <DeleteOutlined />
+                                                </button>
+                                            </span>
+                                        </div>
+                                    </article>
+                                ))}
+                            </div>
+                        )}
+                        <Pagination
+                            style={{ marginTop: 12, textAlign: 'center' }}
+                            size="small"
+                            current={query.page}
+                            pageSize={query.limit}
+                            total={total}
+                            simple
+                            onChange={(page, pageSize) => handleTableChange({ current: page, pageSize })}
+                        />
+                    </div>
+                )}
+            </section>
 
-            {/* ===== 新建/编辑订单弹窗 ===== */}
+            {/* ===== 新建 / 编辑订单 ===== */}
             <Modal
                 title={
-                    <Space style={{ fontSize: 16, fontWeight: 700 }}>
-                        {editingOrder ? <EditOutlined style={{ color: '#4A7CF7' }} /> : <PlusOutlined style={{ color: '#722ED1' }} />}
+                    <span className="panel-title">
+                        {editingOrder ? <EditOutlined /> : <PlusOutlined />}
                         <span>{editingOrder ? '修改订单' : '添加订单'}</span>
-                    </Space>
+                    </span>
                 }
                 open={createModalOpen}
-                onCancel={() => { setCreateModalOpen(false); setEditingOrder(null); }}
+                onCancel={() => {
+                    setCreateModalOpen(false);
+                    setEditingOrder(null);
+                }}
                 onOk={handleSubmitOrder}
                 confirmLoading={createLoading}
                 okText={editingOrder ? '保存' : '添加'}
                 cancelText="取消"
                 width={isMobile ? '94%' : 680}
-                style={{ top: isMobile ? 12 : 50, borderRadius: 20 }}
-                styles={{ body: { maxHeight: '70vh', overflowY: 'auto', padding: '16px 8px 8px 8px' } }}
+                style={{ top: isMobile ? 12 : 48 }}
+                styles={{ body: { maxHeight: '70vh', overflowY: 'auto', paddingTop: 4 } }}
                 destroyOnClose
             >
-                <div style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>
-                    {editingOrder 
-                        ? `正在编辑订单：${editingOrder.tradeNo}。修改完成后点击保存立即生效。` 
-                        : '把其他渠道的订单添加进来，方便统一查看和刷新进度。'
-                    }
-                    {!editingOrder && (
-                        <div style={{
-                            marginTop: 10,
-                            padding: '12px 16px',
-                            background: 'linear-gradient(135deg, rgba(254, 249, 195, 0.6) 0%, rgba(254, 243, 199, 0.6) 100%)',
-                            borderLeft: '4px solid #f59e0b',
-                            borderRadius: 12,
-                            boxShadow: '0 4px 12px rgba(245, 158, 11, 0.05)',
-                            color: '#b45309',
-                            fontSize: 12,
-                            lineHeight: 1.5
-                        }}>
-                            <span style={{ fontWeight: 700 }}>提示：</span>
-                            填好登录账号和平台订单号后，保存并点击“刷新”，系统会自动更新课程和进度。
-                        </div>
-                    )}
-                </div>
+                <p className="settings-note" style={{ marginBottom: 14 }}>
+                    {editingOrder
+                        ? `正在编辑订单：${editingOrder.tradeNo}。修改完成后点击保存立即生效。`
+                        : '把其他渠道的订单添加进来，方便统一查看和刷新进度。'}
+                </p>
+
+                {!editingOrder && (
+                    <div className="hint is-warn" style={{ marginBottom: 16 }}>
+                        <strong>提示</strong>
+                        <span>填好登录账号和平台订单号后保存，再点「刷新」，系统会自动更新课程和进度。</span>
+                    </div>
+                )}
+
                 <Form form={createForm} layout="vertical" requiredMark="optional">
-                    <Divider orientation="left" plain style={{ fontSize: 12, color: '#722ED1', fontWeight: 600 }}>需要填写</Divider>
-                    
+                    <p className="section-label">需要填写</p>
+
                     <Row gutter={16}>
                         <Col xs={24} sm={12}>
-                            <Form.Item 
-                                name="account" 
-                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>登录账号（学号或手机号）</span>}
+                            <Form.Item
+                                name="account"
+                                label="登录账号（学号或手机号）"
                                 rules={[{ required: true, message: '请输入账号' }]}
                             >
-                                <Input placeholder="请输入登录账号" style={{ borderRadius: 8 }} />
+                                <Input placeholder="请输入登录账号" />
                             </Form.Item>
                         </Col>
-                        
+
                         <Col xs={24} sm={12}>
-                            <Form.Item 
-                                name="password" 
-                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>登录密码</span>} 
+                            <Form.Item
+                                name="password"
+                                label="登录密码"
                                 rules={editingOrder ? [] : [{ required: true, message: '请输入密码' }]}
                             >
-                                <Input.Password placeholder={editingOrder ? "留空则不修改密码" : "请输入登录密码"} visibilityToggle style={{ borderRadius: 8 }} />
+                                <Input.Password
+                                    placeholder={editingOrder ? '留空则不修改密码' : '请输入登录密码'}
+                                    visibilityToggle
+                                />
                             </Form.Item>
                         </Col>
                     </Row>
 
                     <Row gutter={16}>
                         <Col xs={24} sm={12}>
-                            <Form.Item 
-                                name="categoryId" 
-                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>平台</span>}
+                            <Form.Item
+                                name="categoryId"
+                                label="平台"
                                 rules={[{ required: true, message: '请选择平台分类' }]}
                             >
-                                <Select 
-                                    placeholder="请选择平台"
-                                    showSearch
-                                    optionFilterProp="children"
-                                    style={{ width: '100%' }}
-                                    dropdownStyle={{ borderRadius: 12 }}
-                                >
-                                    {categories.map(cat => (
+                                <Select placeholder="请选择平台" showSearch optionFilterProp="children" style={{ width: '100%' }}>
+                                    {categories.map((cat) => (
                                         <Option key={cat._id} value={cat._id}>
                                             {cat.name}
                                         </Option>
@@ -644,67 +609,56 @@ const CourseOrders = () => {
                         </Col>
 
                         <Col xs={24} sm={12}>
-                            <Form.Item 
-                                name="remoteOid" 
-                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>平台订单号</span>}
-                                tooltip="用于自动刷新进度的平台订单编号"
-                            >
-                                <Input placeholder="例如: 578050" style={{ borderRadius: 8 }} />
+                            <Form.Item name="remoteOid" label="平台订单号" tooltip="用于自动刷新进度的平台订单编号">
+                                <Input placeholder="例如：578050" />
                             </Form.Item>
                         </Col>
                     </Row>
 
-                    <Divider orientation="left" plain style={{ fontSize: 12, color: 'var(--text-tertiary)', fontWeight: 600 }}>其他信息（一般不用填）</Divider>
+                    <p className="section-label">其他信息（一般不用填）</p>
 
                     <Row gutter={16}>
                         <Col xs={24} sm={12}>
-                            <Form.Item 
-                                name="remoteOrderId" 
-                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>平台流水号</span>}
-                                tooltip="平台返回的另一种订单编号，可不填"
-                            >
-                                <Input placeholder="可不填" style={{ borderRadius: 8 }} />
+                            <Form.Item name="remoteOrderId" label="平台流水号" tooltip="平台返回的另一种订单编号，可不填">
+                                <Input placeholder="可不填" />
                             </Form.Item>
                         </Col>
 
                         <Col xs={24} sm={12}>
-                            <Form.Item 
-                                name="courseId" 
-                                label={<span style={{ fontWeight: 600, fontSize: 12 }}>课程编号</span>}
-                            >
-                                <Input placeholder="可不填" style={{ borderRadius: 8 }} />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                    
-                    <Row gutter={16}>
-                        <Col xs={24} sm={12}>
-                            <Form.Item name="courseName" label={<span style={{ fontWeight: 600, fontSize: 12 }}>课程名称</span>}>
-                                <Input placeholder="不填会自动获取" style={{ borderRadius: 8 }} />
-                            </Form.Item>
-                        </Col>
-
-                        <Col xs={24} sm={12}>
-                            <Form.Item name="school" label={<span style={{ fontWeight: 600, fontSize: 12 }}>学校</span>}>
-                                <Input placeholder="不填会自动获取" style={{ borderRadius: 8 }} />
+                            <Form.Item name="courseId" label="课程编号">
+                                <Input placeholder="可不填" />
                             </Form.Item>
                         </Col>
                     </Row>
 
                     <Row gutter={16}>
                         <Col xs={24} sm={12}>
-                            <Form.Item name="userId" label={<span style={{ fontWeight: 600, fontSize: 12 }}>关联用户</span>}>
-                                <Input placeholder="不填则归到当前账号" style={{ borderRadius: 8 }} />
+                            <Form.Item name="courseName" label="课程名称">
+                                <Input placeholder="不填会自动获取" />
                             </Form.Item>
                         </Col>
 
                         <Col xs={24} sm={12}>
-                            <Form.Item name="status" label={<span style={{ fontWeight: 600, fontSize: 12 }}>订单状态</span>} initialValue="Processing">
-                                <Select dropdownStyle={{ borderRadius: 12 }}>
+                            <Form.Item name="school" label="学校">
+                                <Input placeholder="不填会自动获取" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Row gutter={16}>
+                        <Col xs={24} sm={12}>
+                            <Form.Item name="userId" label="关联用户">
+                                <Input placeholder="不填则归到当前账号" />
+                            </Form.Item>
+                        </Col>
+
+                        <Col xs={24} sm={12}>
+                            <Form.Item name="status" label="订单状态" initialValue="Processing">
+                                <Select>
                                     <Option value="Pending" disabled>待处理</Option>
                                     <Option value="Submitting" disabled>提交中</Option>
-                                    <Option value="Processing">进行中 (Processing)</Option>
-                                    <Option value="Completed">已完成 (Completed)</Option>
+                                    <Option value="Processing">进行中（Processing）</Option>
+                                    <Option value="Completed">已完成（Completed）</Option>
                                     <Option value="Failed">失败</Option>
                                     <Option value="ReconcilePending" disabled>需要确认</Option>
                                     <Option value="Unknown" disabled>状态未知</Option>
@@ -713,20 +667,20 @@ const CourseOrders = () => {
                         </Col>
                     </Row>
 
-                    <Form.Item name="remarks" label={<span style={{ fontWeight: 600, fontSize: 12 }}>备注</span>}>
-                        <Input.TextArea rows={2} placeholder="可不填" style={{ borderRadius: 8 }} />
+                    <Form.Item name="remarks" label="备注">
+                        <Input.TextArea rows={2} placeholder="可不填" />
                     </Form.Item>
 
-                    <Form.Item name="isHidden" valuePropName="checked" style={{ marginBottom: 0 }}>
-                        <Space style={{ display: 'flex', width: '100%', padding: '10px 12px', background: 'var(--bg-color)', borderRadius: 10 }}>
-                            <Switch size="small" /> 
-                            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>不在用户端显示这笔订单</span>
-                        </Space>
-                    </Form.Item>
+                    <div className="settings-inline" style={{ marginBottom: 4 }}>
+                        <Form.Item name="isHidden" valuePropName="checked" noStyle>
+                            <Switch size="small" />
+                        </Form.Item>
+                        <span className="settings-note">不在用户端显示这笔订单</span>
+                    </div>
                 </Form>
             </Modal>
 
-            {/* ===== 删除订单二次确认弹窗 (完全居中、高度对称美化版) ===== */}
+            {/* ===== 删除订单二次确认 ===== */}
             <Modal
                 open={deleteModalOpen}
                 onCancel={() => setDeleteModalOpen(false)}
@@ -734,92 +688,41 @@ const CourseOrders = () => {
                 width={isMobile ? '90%' : 400}
                 centered
                 destroyOnClose
-                styles={{
-                    content: {
-                        borderRadius: 20,
-                        padding: '32px 24px 24px 24px',
-                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-                        background: 'var(--component-bg)'
-                    }
-                }}
             >
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
-                    {/* 警示图标 */}
-                    <div style={{
-                        width: 56,
-                        height: 56,
-                        borderRadius: '50%',
-                        backgroundColor: 'rgba(255, 77, 79, 0.08)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginBottom: 16
-                    }}>
-                        <WarningOutlined style={{ fontSize: 26, color: '#ff4d4f' }} />
+                <div style={{ textAlign: 'center' }}>
+                    <span className="danger-glyph">
+                        <WarningOutlined />
+                    </span>
+                    <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 680 }}>确定要删除此订单吗？</h3>
+                    <div className="hint is-danger" style={{ marginBottom: 12, textAlign: 'left' }}>
+                        <strong>删除后不能恢复</strong>
+                        <span>这笔订单记录会被删除，用户端也无法再查询。</span>
                     </div>
-
-                    {/* 居中标题 */}
-                    <Typography.Title level={5} style={{ margin: '0 0 12px 0', fontWeight: 700, color: 'var(--text-primary)', fontSize: 16 }}>
-                        确定要删除此订单吗？
-                    </Typography.Title>
-
-                    {/* 精致且高显眼的渐变色警告卡片 */}
-                    <div style={{
-                        width: '100%',
-                        padding: '12px 14px',
-                        background: 'linear-gradient(135deg, rgba(255, 77, 79, 0.03) 0%, rgba(255, 77, 79, 0.07) 100%)',
-                        border: '1px solid rgba(255, 77, 79, 0.12)',
-                        borderRadius: 12,
-                        marginBottom: 16,
-                        textAlign: 'left'
-                    }}>
-                        <div style={{ color: '#ff4d4f', fontWeight: 700, fontSize: 12, marginBottom: 4 }}>
-                            ⚠️ 删除后不能恢复
-                        </div>
-                        <div style={{ color: '#ff4d4f', fontSize: 11, lineHeight: 1.5 }}>
-                            这笔订单记录会被删除，用户端也无法再查询。
-                        </div>
-                    </div>
-
-                    {/* 建议 */}
-                    <Typography.Text type="secondary" style={{ fontSize: 11, lineHeight: 1.5, marginBottom: 24, display: 'block', padding: '0 4px' }}>
-                        如果只是退单，建议把状态改为“已取消”，这样还能保留记录。
-                    </Typography.Text>
-
-                    {/* 完美对称的按钮 */}
-                    <div style={{ display: 'flex', gap: 12, width: '100%' }}>
-                        <Button 
+                    <p className="settings-note" style={{ marginBottom: 20 }}>
+                        如果只是退单，建议把状态改为「已取消」，这样还能保留记录。
+                    </p>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ flex: 1 }}
                             onClick={() => setDeleteModalOpen(false)}
-                            style={{ 
-                                flex: 1, 
-                                height: 38, 
-                                borderRadius: 8,
-                                fontWeight: 600,
-                                border: '1px solid var(--border-color)',
-                                color: 'var(--text-secondary)'
-                            }}
                         >
                             取消
-                        </Button>
-                        <Button 
-                            type="primary" 
-                            danger 
-                            loading={deleteLoading}
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-danger"
+                            style={{ flex: 1 }}
+                            disabled={deleteLoading}
                             onClick={handleConfirmDelete}
-                            style={{ 
-                                flex: 1, 
-                                height: 38, 
-                                borderRadius: 8,
-                                fontWeight: 600,
-                                boxShadow: '0 4px 12px rgba(255, 77, 79, 0.15)'
-                            }}
                         >
-                            确认删除
-                        </Button>
+                            {deleteLoading ? '删除中…' : '确认删除'}
+                        </button>
                     </div>
                 </div>
             </Modal>
-        </Card>
+        </div>
     );
 };
 

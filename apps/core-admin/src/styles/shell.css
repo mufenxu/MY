@@ -1,0 +1,558 @@
+/* ==========================================================================
+   外壳：侧栏 / 顶栏 / 页签 / 内容区
+   桌面 236px 侧栏，平板收缩为 72px 图标栏，手机隐藏侧栏改用抽屉。
+   ========================================================================== */
+
+.app-shell {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--ink);
+  background: var(--canvas);
+}
+
+/* ── 侧栏 ─────────────────────────────────────────────────────── */
+.app-rail {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  width: var(--rail-w);
+  flex: none;
+  flex-direction: column;
+  min-height: 0;
+  padding: 12px 10px 10px;
+  border-right: 1px solid var(--line-strong);
+  background: var(--rail-bg);
+  backdrop-filter: blur(22px) saturate(1.1);
+  -webkit-backdrop-filter: blur(22px) saturate(1.1);
+  transition: width 0.22s var(--ease-premium);
+}
+
+.app-shell[data-collapsed="true"] .app-rail {
+  width: 72px;
+  padding-inline: 9px;
+}
+
+.rail-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px 14px;
+}
+
+.app-shell[data-collapsed="true"] .rail-brand {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.brand-mark {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 11px;
+  background: var(--surface);
+  box-shadow: var(--edge), var(--e1);
+}
+
+.brand-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.brand-copy strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13.5px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-copy small {
+  overflow: hidden;
+  color: var(--ink-faint);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-shell[data-collapsed="true"] .brand-copy {
+  display: none;
+}
+
+.rail-nav {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 2px 0 8px;
+}
+
+.rail-group-label {
+  padding: 12px 9px 5px;
+  color: var(--ink-faint);
+  font-size: 10px;
+  font-weight: 640;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.app-shell[data-collapsed="true"] .rail-group-label {
+  overflow: hidden;
+  width: 100%;
+  height: 1px;
+  margin: 10px 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  color: transparent;
+  text-indent: -999px;
+}
+
+.rail-item {
+  display: flex;
+  width: 100%;
+  height: 38px;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: 560;
+  text-align: left;
+  transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.rail-item .anticon {
+  flex: none;
+  font-size: 17px;
+  opacity: 0.85;
+}
+
+.rail-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-item:hover {
+  color: var(--ink);
+  background: var(--hover-bg);
+}
+
+.rail-item.is-active {
+  border-color: var(--line-strong);
+  color: var(--blue);
+  background: var(--surface);
+  box-shadow: var(--edge), var(--e1);
+  font-weight: 640;
+}
+
+.rail-item.is-active .anticon {
+  opacity: 1;
+}
+
+.app-shell[data-collapsed="true"] .rail-item {
+  justify-content: center;
+  padding: 0;
+}
+
+.app-shell[data-collapsed="true"] .rail-item-label {
+  display: none;
+}
+
+.rail-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.rail-user {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 6px;
+  border-radius: 11px;
+}
+
+.rail-user:hover {
+  background: var(--hover-bg);
+}
+
+.rail-user-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.rail-user-copy strong {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 640;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-user-copy small {
+  color: var(--ink-faint);
+  font-size: 10.5px;
+}
+
+.app-shell[data-collapsed="true"] .rail-user {
+  justify-content: center;
+  padding: 4px 0;
+}
+
+.app-shell[data-collapsed="true"] .rail-user-copy {
+  display: none;
+}
+
+/* ── 主区 ─────────────────────────────────────────────────────── */
+.app-main {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.app-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  height: 56px;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 14px 0 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--rail-bg);
+  backdrop-filter: blur(22px) saturate(1.1);
+  -webkit-backdrop-filter: blur(22px) saturate(1.1);
+}
+
+.topbar-left,
+.topbar-right {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.topbar-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-crumb {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+.topbar-crumb b {
+  color: var(--ink);
+  font-weight: 620;
+}
+
+.icon-btn {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  color: var(--ink-muted);
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+.icon-btn .anticon {
+  font-size: 16px;
+}
+
+.icon-btn:hover {
+  border-color: var(--line);
+  color: var(--ink);
+  background: var(--surface-solid);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.icon-btn.is-label {
+  width: auto;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.app-avatar-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.app-avatar-trigger:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--e1);
+}
+
+.app-avatar-trigger:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+/* ── 页签 ─────────────────────────────────────────────────────── */
+.app-tabs {
+  display: flex;
+  height: 46px;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-bottom: 1px solid var(--line);
+  background: var(--canvas);
+  scrollbar-width: none;
+}
+
+.app-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.app-tab {
+  display: inline-flex;
+  height: 38px;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+  font-weight: 560;
+  transition: background 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+.app-tab svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.8;
+}
+
+.app-tab:hover {
+  color: var(--ink);
+  background: var(--hover-bg);
+}
+
+.app-tab.is-active {
+  border-color: var(--line-strong);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--edge), var(--e1);
+  font-weight: 640;
+}
+
+.app-tab.is-active svg {
+  color: var(--blue);
+  opacity: 1;
+}
+
+.app-tab:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.app-tab-close {
+  display: inline-flex;
+  width: 17px;
+  height: 17px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  color: var(--ink-faint);
+}
+
+.app-tab-close svg {
+  width: 10px;
+  height: 10px;
+}
+
+.app-tab-close:hover {
+  color: var(--red-text);
+  background: var(--red-soft);
+}
+
+.app-tab-divider {
+  width: 1px;
+  height: 16px;
+  flex: none;
+  background: var(--line-strong);
+}
+
+.app-tab-tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding-left: 6px;
+}
+
+/* ── 内容区 ───────────────────────────────────────────────────── */
+.app-content {
+  min-height: 0;
+  flex: 1;
+  padding: 14px 16px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.route-content-shell {
+  position: relative;
+  display: block;
+  min-height: 0;
+}
+
+.route-content-shell.is-pending {
+  opacity: 0.72;
+  transition: opacity 0.16s ease;
+}
+
+.route-pending {
+  position: absolute;
+  top: -6px;
+  right: 0;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-muted);
+  background: var(--surface-solid);
+  font-size: 11px;
+}
+
+.route-inline-loading {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--ink-muted);
+  font-size: 12.5px;
+}
+
+/* ── 手机抽屉 ─────────────────────────────────────────────────── */
+.app-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  border: 0;
+  background: var(--overlay);
+  backdrop-filter: blur(2px);
+  animation: drawer-fade 0.18s ease both;
+}
+
+.app-drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 100;
+  display: flex;
+  width: min(268px, 82vw);
+  flex-direction: column;
+  padding: 12px 10px calc(12px + env(safe-area-inset-bottom));
+  border-right: 1px solid var(--line-strong);
+  background: var(--surface-solid);
+  box-shadow: var(--e3);
+  animation: drawer-in 0.24s var(--ease-premium) both;
+}
+
+@keyframes drawer-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+}
+
+@media (max-width: 768px) {
+  .app-topbar {
+    height: 52px;
+    padding: 0 8px;
+  }
+
+  .app-tabs {
+    height: 42px;
+    padding: 0 8px;
+  }
+
+  .app-tab {
+    height: 34px;
+    padding: 0 9px;
+  }
+
+  .app-content {
+    padding: 10px 10px calc(14px + env(safe-area-inset-bottom));
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .app-rail,
+  .app-topbar {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--surface-solid);
+  }
+}

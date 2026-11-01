@@ -1,4 +1,9 @@
 /* ==========================================================================
+   珍珠玻璃（Pearl Glass）通用组件：按钮 / 表单 / 面板 / 表格 / 标签 / 分页 / 空态
+   两个 Web 后台共用同一套类名，页面级样式留在各应用自己的 CSS 里。
+   ========================================================================== */
+
+/* ==========================================================================
    组件层 · 按钮 / 字段 / 分段 / 标签 / 面板 / 表格 / 读数 / 浮层
    同时桥接历史类名，让尚未改写的视图直接落到新语汇上。
    ========================================================================== */
@@ -568,10 +573,28 @@
   background: var(--amber-soft);
 }
 
+.tag.tone-violet {
+  color: var(--violet);
+  background: var(--violet-soft);
+}
+
+.tag.tone-teal {
+  color: var(--teal);
+  background: var(--teal-soft);
+}
+
+.tag.tone-neutral {
+  color: var(--ink-muted);
+  background: rgba(var(--shade), 0.07);
+}
+
 .tag.tone-ok .tag-dot,
 .tag.tone-info .tag-dot,
 .tag.tone-danger .tag-dot,
-.tag.tone-warn .tag-dot {
+.tag.tone-warn .tag-dot,
+.tag.tone-violet .tag-dot,
+.tag.tone-teal .tag-dot,
+.tag.tone-neutral .tag-dot {
   background: currentColor;
   box-shadow: none;
 }
@@ -701,8 +724,7 @@
 .ops-panel,
 .cockpit-panel,
 .notify-view-panel,
-.security-auth-panel,
-.platform-control-view > .ops-panel {
+.security-auth-panel {
   border: 1px solid var(--line-strong);
   border-radius: var(--r-lg);
   background: var(--surface);

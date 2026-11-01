@@ -1,6 +1,6 @@
-import React, { Suspense, useState, useEffect, useCallback, useMemo, useRef, useTransition } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import api from '../utils/api';
-import { Layout, Menu, Button, Drawer, Dropdown, Breadcrumb, Tooltip, Spin } from 'antd';
+import { Dropdown, Spin, Tooltip } from 'antd';
 import {
     UserOutlined,
     SettingOutlined,
@@ -18,19 +18,19 @@ import {
     ReloadOutlined,
     HomeOutlined,
     SunOutlined,
-    MoonOutlined
+    MoonOutlined,
+    ShoppingOutlined,
+    RightOutlined,
 } from '@ant-design/icons';
 import { useNavigate, useLocation, Outlet } from 'react-router';
 import UserAvatar from './UserAvatar';
 import { IS_PLATFORM_SSO, logoutPlatformSession } from '../utils/runtime';
 import { message } from '../utils/feedback';
 
-const { Sider, Content } = Layout;
-
 const InlineRouteFallback = () => (
     <div className="route-inline-loading">
         <Spin size="small" />
-        <span>加载中...</span>
+        <span>加载中…</span>
     </div>
 );
 
@@ -40,181 +40,92 @@ const TAB_CONFIG = {
     '/users': { label: '用户', icon: <UserOutlined /> },
     '/notifications': { label: '通知', icon: <BellOutlined /> },
     '/audit-logs': { label: '操作记录', icon: <FileTextOutlined /> },
-    '/course-orders': { label: '订单', icon: <FileTextOutlined /> },
+    '/course-orders': { label: '订单', icon: <ShoppingOutlined /> },
     '/settings': { label: '设置', icon: <SettingOutlined /> },
 };
 
 const MENU_ITEMS = [
     { key: '/dashboard', icon: <DashboardOutlined />, label: '首页' },
-    { key: '/course-orders', icon: <FileTextOutlined />, label: '订单' },
+    { key: '/course-orders', icon: <ShoppingOutlined />, label: '订单' },
     { key: '/query', icon: <AppstoreOutlined />, label: '查询' },
     { key: '/air-energy', icon: <FireOutlined />, label: '空气能' },
     { key: '/users', icon: <UserOutlined />, label: '用户' },
     { key: '/settings', icon: <SettingOutlined />, label: '设置' },
 ];
 
-const TABLE_HEAVY_ROUTES = new Set([
-    '/dashboard',
-    '/air-energy',
-    '/users',
-    '/audit-logs',
-    '/course-orders',
-]);
+/** 品牌标记：轨道 + 柠檬绿节点，与珍珠语汇的单一强调色一致 */
+const BrandMark = () => (
+    <span className="brand-mark" aria-hidden="true">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="1.7" strokeLinecap="round">
+            <circle cx="12" cy="12" r="4.1" />
+            <ellipse cx="12" cy="12" rx="9.1" ry="4.4" transform="rotate(-26 12 12)" strokeOpacity="0.5" />
+            <circle cx="18.4" cy="7.4" r="1.7" fill="var(--lime)" stroke="none" />
+        </svg>
+    </span>
+);
 
-const SidebarContent = ({
-    collapsed,
-    currentUser,
-    openKeys,
-    onOpenChange,
-    selectedPath,
-    menuItems,
-    onMenuClick,
-    onClose,
-    onLogout,
-    isMobile = false
-}) => {
+const RailNav = ({ selectedPath, onNavigate, collapsed }) => (
+    <nav className="rail-nav" aria-label="管理模块">
+        <div className="rail-group-label">工作台</div>
+        {MENU_ITEMS.map((item) => (
+            <button
+                key={item.key}
+                type="button"
+                className={`rail-item ${selectedPath === item.key ? 'is-active' : ''}`}
+                onClick={() => onNavigate(item.key)}
+                aria-current={selectedPath === item.key ? 'page' : undefined}
+                title={collapsed ? item.label : undefined}
+            >
+                {item.icon}
+                <span className="rail-item-label">{item.label}</span>
+            </button>
+        ))}
+    </nav>
+);
+
+/** 侧栏内容：桌面侧栏与手机抽屉共用同一套结构 */
+const RailContent = ({ collapsed, currentUser, selectedPath, onNavigate, onClose, onLogout, isMobile }) => {
     const avatarSeed = currentUser.userId || currentUser._id || currentUser.nickName || 'admin';
     const displayName = currentUser.nickName || '我的后台';
-    const userMeta = '个人管理';
-
-    if (isMobile) {
-        return (
-            <div
-                className="main-sidebar-content main-sidebar-content-mobile"
-                style={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    padding: '12px 0 0'
-                }}
-            >
-                <div className="main-sidebar-mobile-top">
-                    <div className="main-sidebar-user main-sidebar-user-mobile-card">
-                        <div className="main-sidebar-user-main">
-                            <UserAvatar
-                                seed={avatarSeed}
-                                label={displayName}
-                                avatarUrl={currentUser.avatarUrl}
-                                shape="square"
-                                size={42}
-                                style={{
-                                    borderRadius: 14,
-                                    boxShadow: '0 10px 20px rgba(67, 24, 255, 0.14)',
-                                    border: '1px solid var(--border-color)',
-                                }}
-                            />
-                            <div className="main-sidebar-user-copy">
-                                <span className="main-sidebar-user-name">{displayName}</span>
-                                {userMeta && <span className="main-sidebar-user-meta">{userMeta}</span>}
-                            </div>
-                        </div>
-                        <Button
-                            type="text"
-                            icon={<CloseOutlined />}
-                            onClick={onClose}
-                            className="main-sidebar-mobile-close"
-                            aria-label="关闭侧边栏"
-                        />
-                    </div>
-                </div>
-
-                <div className="main-sidebar-mobile-menu-wrap">
-                    <div className="main-sidebar-mobile-section-label">功能</div>
-                    <Menu
-                        className="main-sidebar-menu-mobile"
-                        mode="inline"
-                        openKeys={openKeys}
-                        onOpenChange={onOpenChange}
-                        selectedKeys={[selectedPath]}
-                        items={menuItems}
-                        onClick={onMenuClick}
-                        inlineIndent={20}
-                        style={{
-                            borderRight: 0,
-                            background: 'transparent'
-                        }}
-                        theme="light"
-                    />
-                </div>
-
-                <div className="main-sidebar-mobile-footer">
-                    <Button
-                        block
-                        danger
-                        type="primary"
-                        icon={<LogoutOutlined />}
-                        onClick={onLogout}
-                        className="main-sidebar-mobile-logout"
-                    >
-                        退出登录
-                    </Button>
-                </div>
-            </div>
-        );
-    }
 
     return (
-        <div
-            className="main-sidebar-content"
-            style={{
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                padding: '20px 0'
-            }}
-        >
-            <div className="main-sidebar-user" style={{
-                padding: '0 24px 30px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: collapsed ? 'center' : 'flex-start',
-                gap: 12
-            }}>
-                <UserAvatar
-                    seed={avatarSeed}
-                    label={displayName}
-                    avatarUrl={currentUser.avatarUrl}
-                    shape="square"
-                    size={40}
-                    style={{
-                        borderRadius: 12,
-                        boxShadow: '0 10px 20px rgba(67, 24, 255, 0.15)',
-                        border: '1px solid var(--border-color)',
-                    }}
-                />
-                {!collapsed && (
-                    <span style={{
-                        color: 'var(--text-primary)',
-                        fontSize: 22,
-                        fontWeight: 700,
-                        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif",
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        maxWidth: 160
-                    }}>
-                        {displayName}
-                    </span>
+        <>
+            <div className="rail-brand">
+                <BrandMark />
+                <span className="brand-copy">
+                    <strong>星轨控制台</strong>
+                    <small>综合业务管理</small>
+                </span>
+                {isMobile && (
+                    <button type="button" className="icon-btn" onClick={onClose} aria-label="关闭导航菜单" style={{ marginLeft: 'auto' }}>
+                        <CloseOutlined />
+                    </button>
                 )}
             </div>
 
-            <Menu
-                className="main-sidebar-menu"
-                mode="inline"
-                openKeys={openKeys}
-                onOpenChange={onOpenChange}
-                selectedKeys={[selectedPath]}
-                items={menuItems}
-                onClick={onMenuClick}
-                inlineIndent={24}
-                style={{
-                    borderRight: 0,
-                    background: 'transparent',
-                    padding: '0 12px'
-                }}
-                theme="light"
-            />
-        </div>
+            <RailNav selectedPath={selectedPath} onNavigate={onNavigate} collapsed={collapsed} />
+
+            <div className="rail-foot">
+                <button type="button" className="rail-user" onClick={() => onNavigate('/settings')} title="账号设置">
+                    <UserAvatar
+                        seed={avatarSeed}
+                        label={displayName}
+                        avatarUrl={currentUser.avatarUrl}
+                        shape="square"
+                        size={30}
+                    />
+                    <span className="rail-user-copy">
+                        <strong>{displayName}</strong>
+                        <small>综合管理</small>
+                    </span>
+                    {!collapsed && <RightOutlined style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--ink-faint)' }} />}
+                </button>
+                <button type="button" className="rail-item" onClick={onLogout}>
+                    <LogoutOutlined />
+                    <span className="rail-item-label">退出登录</span>
+                </button>
+            </div>
+        </>
     );
 };
 
@@ -222,19 +133,15 @@ const MainLayout = () => {
     const [collapsed, setCollapsed] = useState(false);
     const [drawerVisible, setDrawerVisible] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-    const [isTablet, setIsTablet] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
-    const [isDarkMode, setIsDarkMode] = useState(() => {
-        return localStorage.getItem('theme') === 'dark';
-    });
+    const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
     const [openTabs, setOpenTabs] = useState(['/dashboard']);
     const [refreshKey, setRefreshKey] = useState(0);
-    const [manualOpenKeys, setManualOpenKeys] = useState([]);
     const [viewportWidth, setViewportWidth] = useState(() => (typeof window === 'undefined' ? 375 : window.innerWidth));
     const [isPending, startTransition] = useTransition();
     const tabRefs = useRef(new Map());
-    
-    // 浠庢湰鍦板瓨鍌ㄨ鍙栧綋鍓嶇櫥褰曠敤鎴蜂俊鎭?
+
+    // 当前登录用户来自本地缓存，登录态本身由 HttpOnly Cookie 承担
     const [currentUser] = useState(() => {
         try {
             return JSON.parse(localStorage.getItem('user')) || {};
@@ -247,7 +154,6 @@ const MainLayout = () => {
     const location = useLocation();
 
     const currentPath = location.pathname;
-    const isTableHeavyRoute = useMemo(() => TABLE_HEAVY_ROUTES.has(currentPath), [currentPath]);
     const currentTabConfig = TAB_CONFIG[currentPath] || { label: '页面', icon: <HomeOutlined /> };
     const pageTitle = currentTabConfig.label;
     const visibleTabs = useMemo(() => {
@@ -256,14 +162,6 @@ const MainLayout = () => {
         }
         return openTabs;
     }, [openTabs, currentPath]);
-    const mobileDrawerWidth = useMemo(() => {
-        return Math.min(200, viewportWidth * 0.68);
-    }, [viewportWidth]);
-
-    const breadcrumbItems = [
-        { title: '首页' },
-        { title: pageTitle }
-    ];
 
     useEffect(() => {
         let previousWidth = null;
@@ -273,20 +171,16 @@ const MainLayout = () => {
             previousWidth = width;
             setViewportWidth(width);
             if (width <= 768) {
-                // 鎵嬫満绔細闅愯棌渚ф爮锛屽惎鐢ㄦ娊灞?
+                // 手机：隐藏侧栏，改用抽屉
                 setIsMobile(true);
-                setIsTablet(false);
-                setCollapsed(false); 
+                setCollapsed(false);
             } else if (width <= 1024) {
-                // 骞虫澘绔細鏄剧ず鏀剁缉渚ф爮
+                // 平板：显示收缩后的图标栏
                 setIsMobile(false);
-                setIsTablet(true);
                 setDrawerVisible(false);
                 setCollapsed(true);
             } else {
-                // 妗岄潰绔細鏄剧ず瀹屾暣渚ф爮
                 setIsMobile(false);
-                setIsTablet(false);
                 setDrawerVisible(false);
                 setCollapsed(false);
             }
@@ -297,31 +191,32 @@ const MainLayout = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // 鐩戝惉鍏ㄥ睆鍙樺寲
     useEffect(() => {
-        const handleFullscreenChange = () => {
-            setIsFullscreen(!!document.fullscreenElement);
-        };
+        const handleFullscreenChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
         document.addEventListener('fullscreenchange', handleFullscreenChange);
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
     }, []);
 
-    // 鐩戝惉鍜屽簲鐢ㄦ殫榛戞ā寮?
+    // 深浅主题：同时驱动珍珠令牌（data-theme）与 antd（dark 类 + 上层 algorithm）
     useEffect(() => {
-        if (isDarkMode) {
-            document.documentElement.classList.add('dark');
-            localStorage.setItem('theme', 'dark');
-            // 鍙互閽堝鎬у湴鏇挎崲鏌愪簺妗嗘灦鐨勪富棰樺彉閲忥紝鐩墠宸插湪 CSS 涓€氳繃 .dark 瑕嗙洊
-        } else {
-            document.documentElement.classList.remove('dark');
-            localStorage.setItem('theme', 'light');
-        }
+        const root = document.documentElement;
+        root.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
+        root.classList.toggle('dark', isDarkMode);
+        localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
         window.dispatchEvent(new Event('themeChanged'));
     }, [isDarkMode]);
 
-    const toggleTheme = useCallback(() => {
-        setIsDarkMode(prev => !prev);
-    }, []);
+    // 抽屉打开时允许 Esc 关闭
+    useEffect(() => {
+        if (!drawerVisible) return undefined;
+        const handleKey = (event) => {
+            if (event.key === 'Escape') setDrawerVisible(false);
+        };
+        document.addEventListener('keydown', handleKey);
+        return () => document.removeEventListener('keydown', handleKey);
+    }, [drawerVisible]);
+
+    const toggleTheme = useCallback(() => setIsDarkMode((prev) => !prev), []);
 
     const handleLogout = useCallback(async () => {
         try {
@@ -341,11 +236,8 @@ const MainLayout = () => {
     }, [navigate]);
 
     const toggleFullscreen = useCallback(() => {
-        if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen();
-        } else {
-            document.exitFullscreen();
-        }
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+        else document.exitFullscreen();
     }, []);
 
     const returnToPlatformConsole = useCallback(() => {
@@ -357,28 +249,27 @@ const MainLayout = () => {
     }, []);
 
     const navigateSoftly = useCallback((path) => {
-        startTransition(() => {
-            navigate(path);
-        });
+        startTransition(() => navigate(path));
     }, [navigate]);
 
-    const handleTabClick = (path) => {
-        if (TAB_CONFIG[path] && !openTabs.includes(path)) {
-            setOpenTabs(prev => [...prev, path]);
-        }
+    const handleTabClick = useCallback((path) => {
+        setOpenTabs((prev) => (TAB_CONFIG[path] && !prev.includes(path) ? [...prev, path] : prev));
         navigateSoftly(path);
-    };
+    }, [navigateSoftly]);
+
+    const handleNavigate = useCallback((path) => {
+        handleTabClick(path);
+        setDrawerVisible(false);
+    }, [handleTabClick]);
 
     const handleTabClose = (event, path) => {
         event.stopPropagation();
         if (path === '/dashboard') return;
-        const newTabs = visibleTabs.filter(t => t !== path);
+        const newTabs = visibleTabs.filter((tab) => tab !== path);
         const closedIndex = visibleTabs.indexOf(path);
         const focusPath = newTabs[Math.min(closedIndex, newTabs.length - 1)] || '/dashboard';
         setOpenTabs(newTabs);
-        if (currentPath === path) {
-            navigateSoftly(focusPath);
-        }
+        if (currentPath === path) navigateSoftly(focusPath);
         window.requestAnimationFrame(() => tabRefs.current.get(focusPath)?.focus());
     };
 
@@ -401,330 +292,231 @@ const MainLayout = () => {
         handleTabClick(nextPath);
         window.requestAnimationFrame(() => tabRefs.current.get(nextPath)?.focus());
     };
-    const routeOpenKeys = useMemo(() => {
-        const keysToOpen = [];
-        MENU_ITEMS.forEach(item => {
-            if (item.children?.some(child => child.key === location.pathname)) {
-                keysToOpen.push(item.key);
-            }
-        });
-        return keysToOpen;
-    }, [location.pathname]);
-    const mergedOpenKeys = Array.from(new Set([...manualOpenKeys, ...routeOpenKeys]));
-
-    const handleOpenChange = (keys) => {
-        setManualOpenKeys(keys);
-    };
-
-    const handleMenuClick = ({ key }) => {
-        if (TAB_CONFIG[key] && !openTabs.includes(key)) {
-            setOpenTabs(prev => [...prev, key]);
-        }
-        navigateSoftly(key);
-        if (isMobile) {
-            setDrawerVisible(false);
-        }
-    };
 
     const userMenuItems = [
+        {
+            key: 'settings',
+            icon: <SettingOutlined />,
+            label: '账号设置',
+            onClick: () => handleNavigate('/settings'),
+        },
         {
             key: 'logout',
             icon: <LogoutOutlined />,
             label: '退出登录',
             danger: true,
-            onClick: handleLogout
-        }
+            onClick: handleLogout,
+        },
     ];
 
+    const railCollapsed = !isMobile && collapsed;
+
     return (
-        <Layout
-            className={isTableHeavyRoute ? 'main-admin-shell main-admin-shell-perf' : 'main-admin-shell'}
-            style={{ minHeight: '100vh', background: 'var(--bg-color)' }}
-        >
+        <div className="app-shell" data-collapsed={railCollapsed ? 'true' : 'false'}>
             {!isMobile && (
-                <Sider
-                    trigger={null}
-                    collapsible
-                    collapsed={collapsed}
-                    width={240}
-                    theme="light"
-                    style={{
-                        overflow: 'auto',
-                        height: '100vh',
-                        position: 'fixed',
-                        left: 0,
-                        top: 0,
-                        bottom: 0,
-                        zIndex: 1001,
-                        borderRadius: '0 0 24px 0', 
-                        borderRight: 'none',
-                        boxShadow: '10px 0 35px rgba(112, 144, 176, 0.12), inset -2px 0 5px rgba(112, 144, 176, 0.05)', 
-                        background: 'var(--component-bg)',
-                        transform: 'translateZ(0)'
-                    }}
-                >
-                    <SidebarContent
-                        collapsed={collapsed}
+                <aside className="app-rail">
+                    <RailContent
+                        collapsed={railCollapsed}
                         currentUser={currentUser}
-                        openKeys={mergedOpenKeys}
-                        onOpenChange={handleOpenChange}
-                        selectedPath={location.pathname}
-                        menuItems={MENU_ITEMS}
-                        onMenuClick={handleMenuClick}
+                        selectedPath={currentPath}
+                        onNavigate={handleNavigate}
                         onClose={() => setDrawerVisible(false)}
                         onLogout={handleLogout}
-                        isMobile={false}
                     />
-                </Sider>
+                </aside>
             )}
 
-            <Drawer
-                className="main-mobile-drawer"
-                placement="left"
-                onClose={() => setDrawerVisible(false)}
-                open={drawerVisible}
-                bodyStyle={{ padding: 0, background: 'var(--component-bg)' }}
-                width={mobileDrawerWidth}
-                closable={false}
-                style={{ zIndex: 1100 }}
-            >
-                <SidebarContent
-                    collapsed={collapsed}
-                    currentUser={currentUser}
-                    openKeys={mergedOpenKeys}
-                    onOpenChange={handleOpenChange}
-                    selectedPath={location.pathname}
-                    menuItems={MENU_ITEMS}
-                    onMenuClick={handleMenuClick}
-                    onClose={() => setDrawerVisible(false)}
-                    onLogout={handleLogout}
-                    isMobile
-                />
-            </Drawer>
+            {isMobile && drawerVisible && (
+                <>
+                    <button
+                        type="button"
+                        className="app-drawer-backdrop"
+                        onClick={() => setDrawerVisible(false)}
+                        aria-label="关闭导航菜单"
+                    />
+                    <div className="app-drawer" role="dialog" aria-modal="true" aria-label="导航菜单">
+                        <RailContent
+                            collapsed={false}
+                            currentUser={currentUser}
+                            selectedPath={currentPath}
+                            onNavigate={handleNavigate}
+                            onClose={() => setDrawerVisible(false)}
+                            onLogout={handleLogout}
+                            isMobile
+                        />
+                    </div>
+                </>
+            )}
 
-            <Layout style={{
-                marginLeft: isMobile ? 0 : (collapsed ? 80 : 240),
-                transition: 'margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                background: 'var(--bg-color)',
-            }}>
-                {/* ===== SoybeanAdmin 椋庢牸椤舵爮 ===== */}
-                <div className="soybean-header-wrapper" style={{
-                    position: 'sticky',
-                    top: 0,
-                    zIndex: 1000,
-                    overflow: 'hidden',
-                    background: 'var(--component-bg)',
-                    borderRadius: '0 0 28px 28px', 
-                    borderBottom: 'none', 
-                    boxShadow: '0 15px 35px rgba(112, 144, 176, 0.1), inset 0 -3px 6px rgba(112, 144, 176, 0.05)',
-                    transform: 'translateZ(0)'
-                }}>
-                    {/* 绗竴灞傦細闈㈠寘灞?+ 宸ュ叿鏍?*/}
-                    <div className="soybean-header-bar" style={{
-                        height: isMobile ? 48 : (isTablet ? 52 : 56),
-                        padding: isMobile ? '0 10px' : '0 20px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        borderBottom: '1px solid rgba(0, 0, 0, 0.04)',
-                    }}>
-                        {/* 宸︿晶锛氭姌鍙犳寜閽?+ 闈㈠寘灞?*/}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            {isMobile ? (
-                                <Button
-                                    type="text"
-                                    icon={<MenuUnfoldOutlined />}
-                                    onClick={() => setDrawerVisible(true)}
-                                    className="soybean-header-icon-btn"
-                                    aria-label="打开导航菜单"
-                                />
-                            ) : (
-                                <Button
-                                    type="text"
-                                    icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                                    onClick={() => setCollapsed(!collapsed)}
-                                    className="soybean-header-icon-btn"
-                                    aria-label={collapsed ? '展开导航栏' : '收起导航栏'}
-                                />
-                            )}
-                            {/* 鎵嬫満绔樉绀虹畝娲侀〉闈㈡爣棰橈紝骞虫澘/妗岄潰鏄剧ず闈㈠寘灞?*/}
-                            {isMobile ? (
-                                <span style={{
-                                    fontSize: 15,
-                                    fontWeight: 600,
-                                    color: 'var(--text-primary)',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    maxWidth: Math.max(112, viewportWidth - 230)
-                                }}>
-                                    {pageTitle}
-                                </span>
-                            ) : (
-                                <Breadcrumb
-                                    items={breadcrumbItems}
-                                    className="soybean-breadcrumb"
-                                />
-                            )}
-                        </div>
+            <div className="app-main">
+                <header className="app-topbar">
+                    <div className="topbar-left">
+                        {isMobile ? (
+                            <button
+                                type="button"
+                                className="icon-btn"
+                                onClick={() => setDrawerVisible(true)}
+                                aria-label="打开导航菜单"
+                            >
+                                <MenuUnfoldOutlined />
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                className="icon-btn"
+                                onClick={() => setCollapsed((prev) => !prev)}
+                                aria-label={collapsed ? '展开导航栏' : '收起导航栏'}
+                            >
+                                {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+                            </button>
+                        )}
 
-                        {/* 鍙充晶锛氬伐鍏峰浘鏍?+ 澶村儚 */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                            {IS_PLATFORM_SSO && (
-                                <Tooltip title="返回统一服务控制台">
-                                    <Button
-                                        type="text"
-                                        icon={<AppstoreOutlined />}
-                                        onClick={returnToPlatformConsole}
-                                        className="soybean-header-icon-btn platform-console-return"
-                                        aria-label="返回统一服务控制台"
-                                    >
-                                        {!isMobile && '统一控制台'}
-                                    </Button>
-                                </Tooltip>
-                            )}
-                            <Tooltip title={isDarkMode ? '切换到白天模式' : '切换到黑夜模式'}>
-                                <Button
-                                    type="text"
-                                    icon={isDarkMode ? <SunOutlined /> : <MoonOutlined />}
-                                    onClick={toggleTheme}
-                                    className="soybean-header-icon-btn"
-                                    aria-label={isDarkMode ? '切换到白天模式' : '切换到黑夜模式'}
-                                />
-                            </Tooltip>
-                            {!isMobile && (
-                                <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
-                                    <Button
-                                        type="text"
-                                        icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
-                                        onClick={toggleFullscreen}
-                                        className="soybean-header-icon-btn"
-                                        aria-label={isFullscreen ? '退出全屏' : '进入全屏'}
-                                    />
-                                </Tooltip>
-                            )}
-                            {!isMobile && (
-                                <Tooltip title="打开统一通知控制中心">
-                                    <Button
-                                        type="text"
-                                        icon={<BellOutlined />}
-                                        className="soybean-header-icon-btn"
-                                        aria-label="打开统一通知控制中心"
-                                        onClick={openNotificationConsole}
-                                    />
-                                </Tooltip>
-                            )}
-                            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
-                                <button className="soybean-header-avatar-trigger" type="button" aria-label="打开用户菜单">
-                                    <UserAvatar
-                                        seed={currentUser.userId || currentUser._id || currentUser.nickName || 'admin'}
-                                        label={currentUser.nickName || currentUser.userId || 'admin'}
-                                        avatarUrl={currentUser.avatarUrl}
-                                        className="soybean-header-avatar"
-                                        style={{ border: '1px solid var(--border-color)' }}
-                                        size={isMobile ? 30 : 34}
-                                    />
-                                </button>
-                            </Dropdown>
-                        </div>
+                        {isMobile ? (
+                            <span className="topbar-title" style={{ maxWidth: Math.max(120, viewportWidth - 220) }}>
+                                {pageTitle}
+                            </span>
+                        ) : (
+                            <div className="topbar-crumb">
+                                <span>首页</span>
+                                <span aria-hidden="true">/</span>
+                                <b>{pageTitle}</b>
+                            </div>
+                        )}
                     </div>
 
-                    {/* 绗簩灞傦細澶氭爣绛鹃〉 */}
-                    <div className="soybean-tabs-bar" role="tablist" aria-label="已打开的管理页面" style={{
-                        height: isMobile ? 36 : (isTablet ? 44 : 54),
-                        padding: isMobile ? '0 8px' : '0 16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        overflowX: 'auto',
-                        overflowY: 'hidden',
-                        backgroundColor: 'var(--component-bg)', // 纭繚鑳屾櫙鑹?
-                    }}>
-                        {visibleTabs.map((path, index) => {
-                            const config = TAB_CONFIG[path];
-                            if (!config) return null;
-                            const isActive = path === currentPath;
-                            const isClosable = config.closable !== false;
-                            
-                            const nextPath = visibleTabs[index + 1];
-                            const isNextActive = nextPath === currentPath;
-                            const showDivider = !isActive && !isNextActive && index !== visibleTabs.length - 1;
-
-                            return (
-                                <React.Fragment key={path}>
-                                    <button
-                                        ref={(node) => {
-                                            if (node) tabRefs.current.set(path, node);
-                                            else tabRefs.current.delete(path);
-                                        }}
-                                        type="button"
-                                        id={`core-admin-tab-${path.slice(1)}`}
-                                        className={`soybean-tab-item ${isActive ? 'soybean-tab-active' : ''}`}
-                                        onClick={() => handleTabClick(path)}
-                                        onKeyDown={(event) => handleTabKeyDown(event, path, index)}
-                                        role="tab"
-                                        tabIndex={isActive ? 0 : -1}
-                                        aria-selected={isActive}
-                                        aria-controls="core-admin-route-panel"
-                                        aria-current={isActive ? 'page' : undefined}
-                                        aria-label={isClosable ? `${config.label}，按 Delete 关闭页签` : config.label}
-                                    >
-                                        <span className="soybean-tab-icon">{config.icon}</span>
-                                        <span className="soybean-tab-label">{config.label}</span>
-                                        {isClosable && (
-                                            <span
-                                                className="soybean-tab-close"
-                                                onClick={(e) => handleTabClose(e, path)}
-                                                aria-hidden="true"
-                                            >
-                                                <CloseOutlined />
-                                            </span>
-                                        )}
-                                    </button>
-                                    {showDivider && (
-                                        <div style={{ width: 1, height: 16, backgroundColor: '#e5e7eb', flexShrink: 0 }}></div>
-                                    )}
-                                </React.Fragment>
-                            );
-                        })}
-                        {/* 鍙充晶鍒锋柊鎸夐挳 */}
-                        <div style={{ marginLeft: 'auto', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-                            <Tooltip title="刷新当前页">
-                                <Button
-                                    type="text"
-                                    icon={<ReloadOutlined />}
-                                    size="small"
-                                    className="soybean-header-icon-btn"
-                                    onClick={() => {
-                                        setRefreshKey(prev => prev + 1);
-                                    }}
-                                    style={{ fontSize: 13 }}
-                                    aria-label="刷新当前页"
-                                />
+                    <div className="topbar-right">
+                        {IS_PLATFORM_SSO && (
+                            <Tooltip title="返回统一服务控制台">
+                                <button
+                                    type="button"
+                                    className={isMobile ? 'icon-btn' : 'icon-btn is-label'}
+                                    onClick={returnToPlatformConsole}
+                                    aria-label="返回统一服务控制台"
+                                >
+                                    <AppstoreOutlined />
+                                    {!isMobile && <span>统一控制台</span>}
+                                </button>
                             </Tooltip>
-                        </div>
+                        )}
+                        <Tooltip title={isDarkMode ? '切换到白天模式' : '切换到黑夜模式'}>
+                            <button
+                                type="button"
+                                className="icon-btn"
+                                onClick={toggleTheme}
+                                aria-label={isDarkMode ? '切换到白天模式' : '切换到黑夜模式'}
+                            >
+                                {isDarkMode ? <SunOutlined /> : <MoonOutlined />}
+                            </button>
+                        </Tooltip>
+                        {!isMobile && (
+                            <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
+                                <button
+                                    type="button"
+                                    className="icon-btn"
+                                    onClick={toggleFullscreen}
+                                    aria-label={isFullscreen ? '退出全屏' : '进入全屏'}
+                                >
+                                    {isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+                                </button>
+                            </Tooltip>
+                        )}
+                        {!isMobile && (
+                            <Tooltip title="打开统一通知控制中心">
+                                <button
+                                    type="button"
+                                    className="icon-btn"
+                                    onClick={openNotificationConsole}
+                                    aria-label="打开统一通知控制中心"
+                                >
+                                    <BellOutlined />
+                                </button>
+                            </Tooltip>
+                        )}
+                        <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
+                            <button className="app-avatar-trigger" type="button" aria-label="打开用户菜单">
+                                <UserAvatar
+                                    seed={currentUser.userId || currentUser._id || currentUser.nickName || 'admin'}
+                                    label={currentUser.nickName || currentUser.userId || 'admin'}
+                                    avatarUrl={currentUser.avatarUrl}
+                                    size={isMobile ? 29 : 31}
+                                />
+                            </button>
+                        </Dropdown>
+                    </div>
+                </header>
+
+                <div className="app-tabs" role="tablist" aria-label="已打开的管理页面">
+                    {visibleTabs.map((path, index) => {
+                        const config = TAB_CONFIG[path];
+                        if (!config) return null;
+                        const isActive = path === currentPath;
+                        const isClosable = config.closable !== false;
+                        const nextPath = visibleTabs[index + 1];
+                        const showDivider = !isActive && nextPath !== currentPath && index !== visibleTabs.length - 1;
+
+                        return (
+                            <React.Fragment key={path}>
+                                <button
+                                    ref={(node) => {
+                                        if (node) tabRefs.current.set(path, node);
+                                        else tabRefs.current.delete(path);
+                                    }}
+                                    type="button"
+                                    id={`core-admin-tab-${path.slice(1)}`}
+                                    className={`app-tab ${isActive ? 'is-active' : ''}`}
+                                    onClick={() => handleTabClick(path)}
+                                    onKeyDown={(event) => handleTabKeyDown(event, path, index)}
+                                    role="tab"
+                                    tabIndex={isActive ? 0 : -1}
+                                    aria-selected={isActive}
+                                    aria-controls="core-admin-route-panel"
+                                    aria-current={isActive ? 'page' : undefined}
+                                    aria-label={isClosable ? `${config.label}，按 Delete 关闭页签` : config.label}
+                                >
+                                    {config.icon}
+                                    <span>{config.label}</span>
+                                    {isClosable && (
+                                        <span
+                                            className="app-tab-close"
+                                            onClick={(event) => handleTabClose(event, path)}
+                                            aria-hidden="true"
+                                        >
+                                            <CloseOutlined />
+                                        </span>
+                                    )}
+                                </button>
+                                {showDivider && <span className="app-tab-divider" aria-hidden="true" />}
+                            </React.Fragment>
+                        );
+                    })}
+
+                    <div className="app-tab-tools">
+                        <Tooltip title="刷新当前页">
+                            <button
+                                type="button"
+                                className="icon-btn"
+                                onClick={() => setRefreshKey((prev) => prev + 1)}
+                                aria-label="刷新当前页"
+                                style={{ width: 28, height: 28 }}
+                            >
+                                <ReloadOutlined />
+                            </button>
+                        </Tooltip>
                     </div>
                 </div>
 
-
-
-                <Content style={{
-                    minHeight: 280,
-                    overflow: 'initial',
-                    padding: isMobile
-                        ? '6px 8px calc(14px + env(safe-area-inset-bottom))'
-                        : (isTablet ? '8px 12px 16px' : '12px 16px 16px'),
-                }}>
+                <main className="app-content">
                     <div
                         id="core-admin-route-panel"
-                        className={`route-content-shell ${isPending ? 'route-content-shell-pending' : ''}`}
+                        className={`route-content-shell ${isPending ? 'is-pending' : ''}`}
                         role="tabpanel"
                         aria-labelledby={`core-admin-tab-${currentPath.slice(1)}`}
                         aria-busy={isPending}
                     >
                         {isPending && (
-                            <div className="route-pending-indicator">
+                            <div className="route-pending">
                                 <Spin size="small" />
+                                <span>切换中</span>
                             </div>
                         )}
                         <div className="fade-in" key={`${location.pathname}-${refreshKey}`}>
@@ -733,9 +525,9 @@ const MainLayout = () => {
                             </Suspense>
                         </div>
                     </div>
-                </Content>
-            </Layout>
-        </Layout>
+                </main>
+            </div>
+        </div>
     );
 };
 

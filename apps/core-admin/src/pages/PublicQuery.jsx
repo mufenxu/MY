@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Input, Button, Card, Progress, Empty, Tag, Typography, Spin } from 'antd';
+import { Input, Spin } from 'antd';
 import {
   CheckCircleOutlined,
   ClockCircleFilled,
@@ -19,7 +19,6 @@ import { message } from '../utils/feedback';
 import api from '../utils/api';
 import './PublicQuery.css';
 
-const { Title, Text } = Typography;
 const PUBLIC_REFRESH_TIMEOUT_MS = 30000;
 
 const queryTypes = [
@@ -127,197 +126,201 @@ const PublicQuery = () => {
 
   return (
     <main className="record-query-page">
-      <section className="record-hero" aria-labelledby="record-query-title">
-        <div className="record-hero-copy">
-          <div className="brand-mark">
-            <span className="brand-mark-icon"><SafetyCertificateOutlined /></span>
-            <span>星轨记录工具</span>
-            <Button
-              type="text"
-              size="small"
-              icon={<ArrowLeftOutlined />}
-              onClick={() => { window.location.assign('/dashboard'); }}
-              style={{ marginLeft: 'auto' }}
-            >
-              返回管理台
-            </Button>
-          </div>
+      <div className="record-query-inner">
+        <section className="record-hero" aria-labelledby="record-query-title">
+          <div className="record-hero-copy">
+            <div className="brand-mark">
+              <span className="brand-mark-icon"><SafetyCertificateOutlined /></span>
+              <span>星轨记录工具</span>
+              <button
+                type="button"
+                className="btn btn-sm btn-text record-back"
+                onClick={() => { window.location.assign('/dashboard'); }}
+              >
+                <ArrowLeftOutlined />
+                返回管理台
+              </button>
+            </div>
 
-          <Title id="record-query-title" level={1} className="record-title">
-            学习记录自查
-          </Title>
+            <h1 id="record-query-title" className="record-title">学习记录自查</h1>
 
-          <Text className="record-subtitle">
-            通过手机号、学号或记录编号核验已记录的状态信息。
-          </Text>
+            <p className="record-subtitle">
+              通过手机号、学号或记录编号核验已记录的状态信息。
+            </p>
 
-          <div className="record-support-list" aria-label="可查询类型">
-            {queryTypes.map((item) => (
-              <span className="support-pill" key={item.label}>
-                {item.icon}
-                {item.label}
-              </span>
-            ))}
-          </div>
+            <div className="record-support-list" aria-label="可查询类型">
+              {queryTypes.map((item) => (
+                <span className="support-pill" key={item.label}>
+                  {item.icon}
+                  {item.label}
+                </span>
+              ))}
+            </div>
 
-          <div className="notice-strip">
-            <InfoCircleOutlined />
-            <div className="notice-copy">
-              <span>页面信息可能存在延迟，具体情况请以原平台页面展示为准。</span>
-              <strong>如果此页面显示已完成，但实际页面仍未完成，请联系我协助核验记录。</strong>
+            <div className="notice-strip">
+              <InfoCircleOutlined />
+              <div className="notice-copy">
+                <span>页面信息可能存在延迟，具体情况请以原平台页面展示为准。</span>
+                <strong>如果此页面显示已完成，但实际页面仍未完成，请联系我协助核验记录。</strong>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="record-query-panel" aria-label="记录查询">
-          <div className="panel-heading">
-            <div>
-              <span className="panel-kicker">Record Lookup</span>
-              <h2>记录查询</h2>
+          <div className="record-query-panel" aria-label="记录查询">
+            <div className="panel-heading">
+              <div>
+                <span className="panel-kicker">Record Lookup</span>
+                <h2>记录查询</h2>
+              </div>
+              <span className="panel-heading-icon"><FileSearchOutlined /></span>
             </div>
-            <FileSearchOutlined />
-          </div>
 
-          <div className="query-input-row">
-            <Input
-              size="large"
-              placeholder="请输入手机号 / 学号 / 记录编号"
-              value={query}
-              allowClear
-              onChange={(e) => setQuery(e.target.value)}
-              onPressEnter={handleSearch}
-              prefix={<SearchOutlined className="query-input-icon" />}
-              className="record-search-input"
-            />
-            <Button
-              type="primary"
-              size="large"
-              loading={loading}
-              onClick={handleSearch}
-              className="record-search-button"
-              icon={<SearchOutlined />}
-            >
-              查询
-            </Button>
-          </div>
-
-          <div className="query-helper-grid">
-            <div>
-              <span>支持</span>
-              <strong>手机号 / 学号 / 编号</strong>
+            <div className="query-input-row">
+              <Input
+                size="large"
+                placeholder="请输入手机号 / 学号 / 记录编号"
+                value={query}
+                allowClear
+                onChange={(e) => setQuery(e.target.value)}
+                onPressEnter={handleSearch}
+                prefix={<SearchOutlined className="query-input-icon" />}
+                className="record-search-input"
+              />
+              <button
+                type="button"
+                className="btn btn-primary record-search-button"
+                onClick={handleSearch}
+                disabled={loading}
+              >
+                {loading ? <SyncOutlined spin /> : <SearchOutlined />}
+                查询
+              </button>
             </div>
-            <div>
-              <span>结果</span>
-              <strong>仅供自查参考</strong>
+
+            <div className="query-helper-grid">
+              <div>
+                <span>支持</span>
+                <strong>手机号 / 学号 / 编号</strong>
+              </div>
+              <div>
+                <span>结果</span>
+                <strong>仅供自查参考</strong>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section className="record-results-section" aria-label="查询结果">
-        {loading ? (
-          <div className="record-loading">
-            <Spin size="large" tip="正在获取记录信息..." />
-          </div>
-        ) : results === null ? (
-          <div className="record-empty-intro">
-            <CheckCircleOutlined />
-            <span>输入信息后即可查看记录状态</span>
-          </div>
-        ) : results.length > 0 ? (
-          <div className="record-list">
-            <div className="record-list-head">
-              <span className="record-list-title">查询结果</span>
-              <span className="record-list-count">共 {results.length} 条记录</span>
+        <section className="record-results-section" aria-label="查询结果">
+          {loading ? (
+            <div className="record-loading">
+              <Spin size="large" />
+              <span>正在获取记录信息…</span>
             </div>
-            {results.map((order, index) => {
-              const isCompleted = order.statusText?.includes('完成');
-              const isRefreshing = refreshingId === order.tradeNo;
+          ) : results === null ? (
+            <div className="record-empty-intro">
+              <CheckCircleOutlined />
+              <span>输入信息后即可查看记录状态</span>
+            </div>
+          ) : results.length > 0 ? (
+            <div className="record-list">
+              <div className="record-list-head">
+                <span className="record-list-title">查询结果</span>
+                <span className="record-list-count">共 {results.length} 条记录</span>
+              </div>
+              {results.map((order, index) => {
+                const isCompleted = order.statusText?.includes('完成');
+                const isRefreshing = refreshingId === order.tradeNo;
+                const percent = parseProgress(order.progress);
 
-              return (
-                <Card
-                  key={order.tradeNo || index}
-                  className={`record-result-card${isCompleted ? ' is-complete' : ''}`}
-                  hoverable
-                >
-                  <div className="result-card-top">
-                    <div>
-                      <Title level={4} ellipsis={{ tooltip: order.courseName }} className="result-title">
-                        {order.courseName || '未知记录'}
-                      </Title>
-                      <Text className="result-time">最后更新 {formatTime(order.updateTime)}</Text>
+                return (
+                  <article
+                    key={order.tradeNo || index}
+                    className={`record-result-card${isCompleted ? ' is-complete' : ''}`}
+                  >
+                    <div className="result-card-top">
+                      <div className="result-card-heading">
+                        <h3 className="result-title" title={order.courseName}>
+                          {order.courseName || '未知记录'}
+                        </h3>
+                        <span className="result-time">最后更新 {formatTime(order.updateTime)}</span>
+                      </div>
+                      <span className={`tag tone-${isCompleted ? 'ok' : 'info'}`}>
+                        {order.statusText || '进行中'}
+                      </span>
                     </div>
-                    <Tag color={isCompleted ? 'success' : 'processing'} className="result-status">
-                      {order.statusText || '进行中'}
-                    </Tag>
-                  </div>
 
-                  <div className="result-progress">
-                    <div className="progress-copy">
-                      <span>记录状态</span>
-                      <strong>{order.progress || '0%'}</strong>
+                    <div className="result-progress">
+                      <div className="progress-copy">
+                        <span>记录状态</span>
+                        <strong>{order.progress || '0%'}</strong>
+                      </div>
+                      <div
+                        className="record-progress-bar"
+                        role="progressbar"
+                        aria-valuenow={percent}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                      >
+                        <span
+                          className={`record-progress-fill${isCompleted ? ' is-complete' : ''}`}
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
                     </div>
-                    <Progress
-                      percent={parseProgress(order.progress)}
-                      strokeColor={{
-                        '0%': '#2563eb',
-                        '100%': '#0f766e',
-                      }}
-                      strokeWidth={12}
-                      className="record-progress-bar"
-                      status={isCompleted ? 'success' : 'active'}
-                    />
-                  </div>
 
-                  {order.remarks && (
-                    <div className="result-remarks">
-                      <InfoCircleOutlined />
-                      <Text>{order.remarks}</Text>
-                    </div>
-                  )}
+                    {order.remarks && (
+                      <div className="result-remarks">
+                        <InfoCircleOutlined />
+                        <span>{order.remarks}</span>
+                      </div>
+                    )}
 
-                  <div className="result-meta">
-                    <div className="meta-item">
-                      <UserOutlined />
-                      <span>关联账号</span>
-                      <strong>{order.account || '未记录'}</strong>
+                    <div className="result-meta">
+                      <div className="meta-item">
+                        <UserOutlined />
+                        <span>关联账号</span>
+                        <strong>{order.account || '未记录'}</strong>
+                      </div>
+                      <div className="meta-item">
+                        <FieldTimeOutlined />
+                        <span>记录编号</span>
+                        <strong title={order.tradeNo}>{order.tradeNo || '未记录'}</strong>
+                      </div>
+                      <div className="meta-item">
+                        <ClockCircleFilled />
+                        <span>记录时间</span>
+                        <strong>{formatTime(order.createTime || order.updateTime)}</strong>
+                      </div>
                     </div>
-                    <div className="meta-item">
-                      <FieldTimeOutlined />
-                      <span>记录编号</span>
-                      <strong title={order.tradeNo}>{order.tradeNo || '未记录'}</strong>
-                    </div>
-                    <div className="meta-item">
-                      <ClockCircleFilled />
-                      <span>记录时间</span>
-                      <strong>{formatTime(order.createTime || order.updateTime)}</strong>
-                    </div>
-                  </div>
 
-                  <div className="result-actions">
-                    <button
-                      disabled={isRefreshing}
-                      onClick={() => handleRefresh(order.tradeNo)}
-                      className={`refresh-record-button${isRefreshing ? ' is-loading' : ''}`}
-                    >
-                      <SyncOutlined spin={isRefreshing} />
-                      {isRefreshing ? '刷新中...' : '刷新记录'}
-                    </button>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="record-empty-state">
-            <Empty description="未发现相关记录，请检查输入是否正确" />
-          </div>
-        )}
-      </section>
+                    <div className="result-actions">
+                      <button
+                        type="button"
+                        disabled={isRefreshing}
+                        onClick={() => handleRefresh(order.tradeNo)}
+                        className="btn btn-primary btn-sm refresh-record-button"
+                      >
+                        <SyncOutlined spin={isRefreshing} />
+                        {isRefreshing ? '刷新中…' : '刷新记录'}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="record-empty-state">
+              <FileSearchOutlined />
+              <strong>未发现相关记录</strong>
+              <span>请检查手机号、学号或记录编号是否输入正确。</span>
+            </div>
+          )}
+        </section>
 
-      <footer className="record-footer">
-        © 2024 星轨记录工具 · 个人学习记录自查页面
-      </footer>
+        <footer className="record-footer">
+          © 2024 星轨记录工具 · 个人学习记录自查页面
+        </footer>
+      </div>
     </main>
   );
 };
