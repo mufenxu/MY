@@ -65,11 +65,11 @@
                         </div>
                         <el-button class="import-question-btn" plain @click="openBatchDialog">
                             <el-icon><Upload /></el-icon>
-                            <span>批量导入</span>
+                            <span class="btn-label">批量导入</span>
                         </el-button>
                         <el-button v-if="canBatchGenerateAi" class="ai-batch-entry" plain @click="openAiBatchDialog">
                             <el-icon><MagicStick /></el-icon>
-                            <span>批量AI解析</span>
+                            <span class="btn-label">批量AI解析</span>
                         </el-button>
                         <el-button class="edit-info-btn" link @click="openEditDialog">
                             <el-icon><Edit /></el-icon>
@@ -83,7 +83,7 @@
             </el-header>
 
             <el-container class="editor-workbench">
-                <el-aside width="286px" class="paper-overview">
+                <el-aside class="paper-overview">
                     <section class="overview-card overview-progress">
                         <div class="overview-card-head">
                             <span>完成度</span>
@@ -161,6 +161,7 @@
                             >
                                 {{ index + 1 }}
                             </button>
+                            <span v-if="questions.length === 0" class="question-map-empty">暂无题目</span>
                         </div>
                     </section>
                 </el-aside>
@@ -258,7 +259,7 @@
                     </div>
                 </el-main>
 
-                <el-aside width="440px" class="prop-aside">
+                <el-aside class="prop-aside">
                     <div v-if="selectedIndex >= 0 && questions[selectedIndex]" class="prop-panel">
                         <div class="prop-header">
                             <div class="prop-header-main">
@@ -384,7 +385,7 @@
                         </div>
                     </div>
                     <div v-else class="empty-prop">
-                        <el-icon size="48" color="#c7d2e4"><Edit /></el-icon>
+                        <el-icon size="30"><Edit /></el-icon>
                         <strong>选择一道题目开始编辑</strong>
                         <span>左侧题号导航可快速定位，未完成题会有状态提示。</span>
                     </div>
@@ -1233,15 +1234,7 @@ import {
 
 const route = useRoute();
 const router = useRouter();
-const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
-const EXAM_DETAIL_SCOPE_CLASS = 'exam-detail-scope';
 const RESPONSIVE_EDITOR_BREAKPOINT = 1080;
-
-if (typeof document !== 'undefined') {
-    document.body.classList.add(EXAM_DETAIL_BODY_CLASS);
-    // 旧世代 admin 样式只在编辑页生效，见 <style> 顶部说明
-    document.documentElement.classList.add(EXAM_DETAIL_SCOPE_CLASS);
-}
 
 const authType = session.getAuthType();
 const isConsoleMode = authType === 'console';
@@ -1600,20 +1593,16 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
     window.removeEventListener('beforeunload', handleBeforeUnload);
-    document.documentElement.classList.remove(EXAM_DETAIL_SCOPE_CLASS);
     cleanupExamDetailData();
     cleanupBatchImport();
 });
 </script>
 
 <style>
-/* 编辑器仍沿用旧的 admin 世代样式：这些文件已整体挂到 html.exam-detail-scope 下，
-   只在本页生效，不会随 SPA 路由切回后台时污染珍珠样式。 */
-@import '@/assets/css/admin.legacy.css';
-@import '@/assets/css/admin-redesign.legacy.css';
-@import '@/assets/css/admin-premium.legacy.css';
-@import '@/assets/css/exam-detail.css';
-@import '@/assets/css/exam-detail-redesign.css';
-@import '@/assets/css/exam-detail-premium.css';
-@import '@/assets/css/exam-detail-workbench.css';
+/* 编辑器与后台共用珍珠令牌与 Element Plus 桥接；本页专属布局在 pearl-exam.css。
+   两条 import 与 DashboardView 指向同一模块，打包后只保留一份。 */
+@import '@my-platform/pearl-tokens/tokens.css';
+@import '@my-platform/pearl-tokens/components.css';
+@import '@/assets/css/pearl-admin.css';
+@import '@/assets/css/pearl-exam.css';
 </style>

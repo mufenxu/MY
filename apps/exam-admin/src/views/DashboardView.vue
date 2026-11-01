@@ -1914,7 +1914,6 @@ const QuestionQualityView = defineAsyncComponent(() => import('@/components/Ques
 const route = useRoute();
 const router = useRouter();
 const faviconUrl = resolveAppUrl('/favicon.png');
-const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
 
 // Interceptors are configured globally in main.js via setupHttp
 
@@ -2733,7 +2732,6 @@ const EXAM_DETAIL_BODY_CLASS = 'exam-detail-active';
         };
         // --- Lifecycle ---
         onMounted(async () => {
-            document.body.classList.remove(EXAM_DETAIL_BODY_CLASS);
             const runtime = await loadRuntimeConfig();
             Object.assign(runtimeConfig.scanLogin, runtime.scanLogin || {});
             if (hasSession) {

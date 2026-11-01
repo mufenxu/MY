@@ -1,14 +1,7 @@
+import { refValue } from './refUtils.js';
 import { computed, nextTick, onBeforeUnmount, reactive } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { isPersistedQuestion } from './questionUtils.js';
-
-function isRefLike(value) {
-    return value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'value');
-}
-
-function refValue(value) {
-    return isRefLike(value) ? value.value : value;
-}
 
 function waitForNextFrame() {
     return new Promise((resolve) => {

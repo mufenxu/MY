@@ -184,6 +184,16 @@
 .el-button.is-text,
 .el-button.is-link {
     font-weight: 600;
+    /* 文字按钮不该带实心按钮的彩色光晕，尤其是 24px 的图标按钮 */
+    box-shadow: none;
+}
+
+.el-button--primary.is-plain,
+.el-button--primary.is-text,
+.el-button--primary.is-link,
+.el-button--danger.is-text,
+.el-button--danger.is-link {
+    box-shadow: none;
 }
 
 .el-button.is-circle {

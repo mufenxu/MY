@@ -1,4 +1,5 @@
 import { computed, nextTick, reactive, ref } from 'vue';
+import { isRefLike } from './refUtils.js';
 import { ElMessage } from 'element-plus';
 import { parseQuestions, formatForExamDetail, readQuestionsFromSpreadsheetFile } from '../../utils/batchImport.js';
 import {
@@ -52,10 +53,6 @@ function clearWindowTimer(timerId) {
 function setWindowTimer(callback, delay) {
     if (typeof window !== 'undefined') return window.setTimeout(callback, delay);
     return setTimeout(callback, delay);
-}
-
-function isRefLike(value) {
-    return value && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, 'value');
 }
 
 export function useBatchImport({ canEdit, existingQuestions } = {}) {
