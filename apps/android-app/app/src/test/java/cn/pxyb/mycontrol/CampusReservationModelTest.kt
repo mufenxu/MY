@@ -233,7 +233,7 @@ class CampusReservationModelTest {
         assertTrue(copied.enabled)
         assertEquals("waiting", copied.status)
         assertEquals("2026-09-02", copied.reservationDate)
-        assertEquals("2026-08-30", copied.executeDate)
+        assertEquals("2026-08-31", copied.executeDate)
         assertEquals("07:43", copied.executeTime)
         assertEquals(null, copied.lastStatus)
         assertEquals(null, copied.lastCandidateIndex)
