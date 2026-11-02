@@ -40,7 +40,7 @@ async function parseResponse(response) {
     const text = await response.text();
     if (!text) return null;
     const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json') || /^[[\{]/.test(text.trim())) {
+    if (contentType.includes('application/json') || /^[[{]/.test(text.trim())) {
         return JSON.parse(text);
     }
     return text;

@@ -48,8 +48,8 @@ const parseAnswer = (answerText) => {
         String(text || '').replace(/[Ａ-Ｈａ-ｈ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0)).toUpperCase();
 
     const choiceCandidate = normalizeAnswerLetters(raw)
-        .replace(/[（(【\[].*$/, '').replace(/[）)】\]]/g, '').replace(/选项/g, '')
-        .replace(/[和及与]/g, ',').replace(/[，、；;\/|。.]/g, ',').replace(/\s+/g, '').trim();
+        .replace(/[（(【[].*$/, '').replace(/[）)】\]]/g, '').replace(/选项/g, '')
+        .replace(/[和及与]/g, ',').replace(/[，、；;/|。.]/g, ',').replace(/\s+/g, '').trim();
 
     if (/[A-H]/.test(choiceCandidate) && /^[A-H,]+$/.test(choiceCandidate)) {
         return choiceCandidate.split(',').flatMap((t) => t.split('')).filter((ch) => /^[A-H]$/.test(ch));
@@ -83,19 +83,19 @@ const detectTypeFromMeta = (question, meta) => {
 const extractContentFromHeaderMeta = (meta) => {
     const cleaned = String(meta || '')
         .replace(/[（(]\s*\d+\s*分\s*[）)]/g, '')
-        .replace(/^\s*[【\[\(（]?\s*(单选题?|多选题?|判断题?|填空题?)\s*[】\]\)）]?\s*[:：、.．]?\s*/i, '')
+        .replace(/^\s*[【[(（]?\s*(单选题?|多选题?|判断题?|填空题?)\s*[】\]）]?\s*[:：、.．]?\s*/i, '')
         .replace(/^[：:、]\s*/, '').trim();
-    if (!cleaned || /^[【\[\(（]?\s*(单选题?|多选题?|判断题?|填空题?)\s*[】\]\)）]?$/i.test(cleaned)) return '';
+    if (!cleaned || /^[【[(（]?\s*(单选题?|多选题?|判断题?|填空题?)\s*[】\]）]?$/i.test(cleaned)) return '';
     return cleaned;
 };
 
 const getTypeHeaderMeta = (line) => {
     const text = String(line || '').trim();
     if (!text) return '';
-    if (/^[【\[\(（]?\s*(单选题?|多选题?|判断题?|填空题?)\s*[】\]\)）]?\s*$/i.test(text)) {
+    if (/^[【[(（]?\s*(单选题?|多选题?|判断题?|填空题?)\s*[】\]）]?\s*$/i.test(text)) {
         return text;
     }
-    const wrappedMatch = text.match(/^[【\[\(（]\s*(单选题?|多选题?|判断题?|填空题?)\s*[】\]\)）]\s*[:：、.．]?\s*(.*)$/i);
+    const wrappedMatch = text.match(/^[【[(（]\s*(单选题?|多选题?|判断题?|填空题?)\s*[】\]）]\s*[:：、.．]?\s*(.*)$/i);
     if (wrappedMatch) return text;
     const plainMatch = text.match(/^(单选题?|多选题?|判断题?|填空题?)\s*(?:[:：、.．]|\s+)\s*(.*)$/i);
     return plainMatch ? text : '';
@@ -115,9 +115,9 @@ const isOptionHeaderLine = (line) => /^(?:选项|备选项|选项如下)\s*[:：
 const isScoreLine = (line) => /^本题得分\s*[:：]/.test(line) || /^得分\s*[:：]/.test(line);
 const isQuestionContentLine = (line) => /^(?:题目|题干|问题|question|q)\s*[:：]\s*(.+)$/i.test(line);
 const isLikelyOptionLine = (line) => (
-    /^[\(（\[]?[A-HＡ-Ｈ][\)）\]】]?\s*[\.．:：、]\s*.+$/.test(line) ||
-    /^[\(（\[]?[A-HＡ-Ｈ][\)）\]】]\s*.+$/.test(line) ||
-    /^选项\s*[A-HＡ-Ｈ]\s*[\.．:：、]?\s*.+$/i.test(line)
+    /^[(（[]?[A-HＡ-Ｈ][)）\]】]?\s*[.．:：、]\s*.+$/.test(line) ||
+    /^[(（[]?[A-HＡ-Ｈ][)）\]】]\s*.+$/.test(line) ||
+    /^选项\s*[A-HＡ-Ｈ]\s*[.．:：、]?\s*.+$/i.test(line)
 );
 const isPotentialImplicitContentLine = (line) => (
     !isAnswerLine(line) &&
@@ -167,7 +167,7 @@ const mapJudgeAnswerToAB = (rawAnswer, question) => {
 const parseInlineOptions = (line, question, expectingOptions) => {
     if (!question) return false;
     let foundOption = false;
-    const markerRegex = /([A-HＡ-Ｈ])\s*[\.．:：、\)）\]】]\s*/g;
+    const markerRegex = /([A-HＡ-Ｈ])\s*[.．:：、)）\]】]\s*/g;
     const markers = [];
     let markerMatch = null;
     while ((markerMatch = markerRegex.exec(line)) !== null) {
@@ -181,8 +181,8 @@ const parseInlineOptions = (line, question, expectingOptions) => {
         }
         if (foundOption) return true;
     }
-    let singleMatch = line.match(/^[\(（\[]?([A-HＡ-Ｈ])[\)）\]】]?\s*[\.．:：、]\s*(.+)$/);
-    if (!singleMatch) singleMatch = line.match(/^[\(（\[]?([A-HＡ-Ｈ])[\)）\]】]\s*(.+)$/);
+    let singleMatch = line.match(/^[(（[]?([A-HＡ-Ｈ])[)）\]】]?\s*[.．:：、]\s*(.+)$/);
+    if (!singleMatch) singleMatch = line.match(/^[(（[]?([A-HＡ-Ｈ])[)）\]】]\s*(.+)$/);
     if (singleMatch) return appendOption(question, singleMatch[1], singleMatch[2]);
     const relaxedMatch = line.match(/^([A-HＡ-Ｈ])\s+(.+)$/);
     if (relaxedMatch) {
@@ -190,7 +190,7 @@ const parseInlineOptions = (line, question, expectingOptions) => {
             (question.content && question.answer.length === 0 && !question.analysis);
         if (canUseRelaxed) return appendOption(question, relaxedMatch[1], relaxedMatch[2]);
     }
-    const withPrefixMatch = line.match(/^选项\s*([A-HＡ-Ｈ])\s*[\.．:：、]?\s*(.+)$/i);
+    const withPrefixMatch = line.match(/^选项\s*([A-HＡ-Ｈ])\s*[.．:：、]?\s*(.+)$/i);
     if (withPrefixMatch) return appendOption(question, withPrefixMatch[1], withPrefixMatch[2]);
     return false;
 };
@@ -199,7 +199,7 @@ const normalizeSpreadsheetHeader = (value) => String(value || '')
     .trim()
     .toLowerCase()
     .replace(/\s+/g, '')
-    .replace(/[：:。．.、，,；;（）()\[\]【】"'“”‘’_-]/g, '');
+    .replace(/[：:。．.、，,；;（）()[\]【】"'“”‘’_-]/g, '');
 
 const normalizeSpreadsheetCell = (value) => String(value ?? '')
     .replace(/\r\n?/g, '\n')
@@ -569,9 +569,9 @@ export function parseQuestions(text) {
             continue;
         }
         if (isScoreLine(line)) continue;
-        let headerMatch = line.match(/^(\d+)\s*[\.．、\)）]\s*(.*)$/);
-        if (!headerMatch) headerMatch = line.match(/^第\s*(\d+)\s*题\s*[\.．、\)）]?\s*(.*)$/);
-        if (!headerMatch) headerMatch = line.match(/^[\(（](\d+)[\)）]\s*(.*)$/);
+        let headerMatch = line.match(/^(\d+)\s*[.．、)）]\s*(.*)$/);
+        if (!headerMatch) headerMatch = line.match(/^第\s*(\d+)\s*题\s*[.．、)）]?\s*(.*)$/);
+        if (!headerMatch) headerMatch = line.match(/^[(（](\d+)[)）]\s*(.*)$/);
         if (headerMatch) {
             saveCurrentQuestion();
             currentQuestion = createQuestion(lineNumber);

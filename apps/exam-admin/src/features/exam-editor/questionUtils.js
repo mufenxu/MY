@@ -94,7 +94,7 @@ export const normalizeQuestionContentForQuality = (content) => String(content ||
     .trim()
     .toLowerCase()
     .replace(/\s+/g, '')
-    .replace(/[，。；;,.!！?？:：、（）()【】\[\]“”"‘’']/g, '');
+    .replace(/[，。；;,.!！?？:：、（）()【】[\]“”"‘’']/g, '');
 
 export const getSelectedAnswerLabels = (question) => {
     if (question.type === 'fill') {
