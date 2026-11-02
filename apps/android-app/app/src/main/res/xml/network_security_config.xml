@@ -18,7 +18,10 @@
     </domain-config>
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="false">7n.pxyb.cn</domain>
-        <pin-set>
+        <!-- 与 pxyb.cn 同一组 CA，也必须带 expiration：本域承载更新清单 latest.json，
+             一旦 CA 轮换而 pin 未同步，更新通道会先于业务接口失效，用户连补救的包都下不到。
+             两个域的 pin 值与 core/network 的 HttpClientProvider 必须三方同步。 -->
+        <pin-set expiration="2027-04-01">
             <pin digest="SHA-256">Wt2ZC+IE3Cpf6hRflokHnxyZR+ZD82TqFkj1/fmYndc=</pin>
             <pin digest="SHA-256">ViiHLiRf5mFIuAut6snED2JS5kL6lZWuzks+ili4/UY=</pin>
         </pin-set>

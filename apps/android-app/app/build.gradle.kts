@@ -1,3 +1,4 @@
+import com.android.build.api.variant.BuildConfigField
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.security.KeyStore
 import java.security.MessageDigest
@@ -21,11 +22,29 @@ val releaseSigningConfigured = releaseSigningProperties.all { !it.isNullOrBlank(
 require(releaseSigningConfigured || releaseSigningProperties.all { it.isNullOrBlank() }) {
     "Android release signing properties must either all be configured or all be omitted."
 }
-val releaseSigningFingerprint = if (releaseSigningConfigured) {
-    val store = KeyStore.getInstance(file(releaseSigningProperties[0]!!), releaseSigningProperties[2]!!.toCharArray())
-    val certificate = requireNotNull(store.getCertificate(releaseSigningProperties[1])) { "Release signing certificate is missing." }
-    MessageDigest.getInstance("SHA-256").digest(certificate.encoded).joinToString("") { "%02x".format(it) }
-} else ""
+val releaseSigningStoreFile = releaseSigningProperties[0]?.let { file(it) }
+
+/**
+ * 签名证书指纹改为惰性计算。
+ *
+ * 原先在配置阶段直接读 keystore 并做 SHA-256：每次 sync / 每次构建都要跑一遍文件 IO，
+ * 而且 configuration-cache 看不到这次读取（换 keystore 不会让缓存失效）。
+ * 现在只在生成 BuildConfig 时取值，指纹作为该任务的输入参与 up-to-date 判定。
+ */
+val releaseSigningFingerprint = providers.provider {
+    if (!releaseSigningConfigured) {
+        ""
+    } else {
+        val store = KeyStore.getInstance(
+            requireNotNull(releaseSigningStoreFile),
+            requireNotNull(releaseSigningProperties[2]).toCharArray(),
+        )
+        val certificate = requireNotNull(store.getCertificate(releaseSigningProperties[1])) {
+            "Release signing certificate is missing."
+        }
+        MessageDigest.getInstance("SHA-256").digest(certificate.encoded).joinToString("") { "%02x".format(it) }
+    }
+}
 
 android {
     namespace = "cn.pxyb.mycontrol"
@@ -39,7 +58,6 @@ android {
         versionName = appVersionName.get()
         // 关键 UI 流程（登录、更新、预约）此前没有任何设备侧回归防护，这里补上入口。
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "APP_SIGNING_CERT_SHA256", "\"$releaseSigningFingerprint\"")
 
         buildConfigField("String", "PLATFORM_BASE_URL", "\"https://pxyb.cn\"")
         buildConfigField(
@@ -66,7 +84,8 @@ android {
                 keyAlias = releaseSigningProperties[1]
                 storePassword = releaseSigningProperties[2]
                 keyPassword = releaseSigningProperties[3]
-                enableV1Signing = true
+                // minSdk 28，V1（JAR 签名）只对 API < 24 生效，保留纯属增大包体、拖慢安装校验。
+                enableV1Signing = false
                 enableV2Signing = true
                 enableV3Signing = true
                 enableV4Signing = true
@@ -117,6 +136,14 @@ kotlin {
 }
 
 androidComponents {
+    onVariants { variant ->
+        // 签名指纹以 Provider 形式挂到 BuildConfig：配置阶段不再读 keystore，
+        // 指纹变化时由 buildConfig 生成任务的输入比对负责触发重编。
+        variant.buildConfigFields?.put(
+            "APP_SIGNING_CERT_SHA256",
+            releaseSigningFingerprint.map { BuildConfigField("String", "\"$it\"", null) },
+        )
+    }
     finalizeDsl { extension ->
         // 性能采集包使用独立数据目录和本机空端口，避免接触真实账号与线上业务。
         listOf("nonMinifiedRelease", "benchmarkRelease").forEach { name ->
