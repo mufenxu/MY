@@ -122,6 +122,26 @@ data class AppUiState(
         get() = incidents.filter { it.status != "resolved" }
 }
 
+/**
+ * 写入单个分区的加载状态，并同步由分区状态派生的全局字段。
+ *
+ * [AppUiState.offlineMode] 与 [AppUiState.cachedAtMillis] 不是独立维护的：它们始终由
+ * 「当前还有哪些分区依赖缓存」推出。因此任何改动分区状态的路径都必须走这里，
+ * 否则界面会出现「数据已经刷新、离线横幅还挂着」「场景页控件一直禁用」这类错位。
+ */
+internal fun AppUiState.withSectionLoadState(
+    section: DataSection,
+    transform: (SectionLoadState) -> SectionLoadState,
+): AppUiState {
+    val sections = sectionLoadStates + (section to transform(sectionLoadStates[section] ?: SectionLoadState()))
+    val fallbackSections = sections.values.filter { it.cacheFallback }
+    return copy(
+        sectionLoadStates = sections,
+        offlineMode = fallbackSections.isNotEmpty(),
+        cachedAtMillis = fallbackSections.mapNotNull { it.cachedAtMillis }.minOrNull(),
+    )
+}
+
 internal fun AppUiState.isRefreshing(vararg sections: DataSection): Boolean =
     sections.any { sectionLoadStates[it]?.refreshing == true }
 

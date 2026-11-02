@@ -54,6 +54,7 @@ import cn.pxyb.mycontrol.ui.feature.account.AccountSecurityStateHolder
 import cn.pxyb.mycontrol.ui.feature.account.toAccountManagementUiState
 import cn.pxyb.mycontrol.ui.feature.assistant.AssistantChatMessageUi
 import cn.pxyb.mycontrol.ui.feature.assistant.AssistantChatUiState
+import cn.pxyb.mycontrol.ui.feature.assistant.buildAssistantChatContext
 import cn.pxyb.mycontrol.ui.feature.auth.toEntryUiState
 import cn.pxyb.mycontrol.ui.feature.auth.toQrLoginUiState
 import cn.pxyb.mycontrol.ui.feature.campus.CampusDataStateHolder
@@ -101,7 +102,6 @@ import cn.pxyb.mycontrol.update.AppUpdateManager
 import cn.pxyb.mycontrol.widget.CourseWidgetProvider
 import cn.pxyb.mycontrol.widget.MyControlWidgetProvider
 import java.io.File
-import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -124,7 +124,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 
 enum class QrScanDestination { Login, Authenticator, WaterValve, Unsupported }
 
@@ -1316,7 +1315,7 @@ class AppViewModel(
         assistantChatMutable.update { it.copy(messages = history, sending = true, error = null) }
         accountRequestScope.launch {
             try {
-                val context = buildAssistantContext(current)
+                val context = buildAssistantChatContext(current, campusData.state.value)
                 val turns = history.map { AssistantChatTurn(role = it.role, content = it.content) }
                 val reply = api.withRequestMetadata(allowCache = false) { api.assistantChat(turns, context) }.value
                 assistantChatMutable.update { state ->
@@ -1385,49 +1384,6 @@ class AppViewModel(
         error is ApiException && error.code == "PLATFORM_SESSION_REQUIRED" -> "登录会话已失效，请重新登录。"
         error is ApiException -> error.message ?: "请求失败，请稍后再试。"
         else -> "网络异常，请稍后再试。"
-    }
-
-    private fun buildAssistantContext(state: AppUiState): JSONObject = JSONObject().apply {
-        put("date", LocalDate.now().toString())
-        put("generatedAt", System.currentTimeMillis())
-        state.assistantSnapshot?.let { snapshot ->
-            put("nextActionTitle", snapshot.nextAction.title)
-            put("nextActionDetail", snapshot.nextAction.detail)
-            put("nextActionDestination", snapshot.nextAction.destination.deepLinkValue)
-            put("morningBrief", snapshot.morningBrief)
-            put("eveningBrief", snapshot.eveningBrief)
-        }
-        val pendingTodos = state.todoSnapshot.tasks.filter { !it.completed }
-        if (pendingTodos.isNotEmpty()) {
-            put("pendingTodoCount", pendingTodos.size)
-            put("pendingTodos", pendingTodos.take(8).joinToString("；") { it.title })
-        }
-        val courses = campusData.state.value.timetable?.courses.orEmpty()
-        if (courses.isNotEmpty()) {
-            put("timetable", courses.take(12).joinToString("；") { course ->
-                "${course.dayName} ${course.timeRange} ${course.courseName} @ ${course.location}"
-            })
-        }
-        val activeIncidents = state.activeIncidents
-        if (activeIncidents.isNotEmpty()) {
-            put("incidents", activeIncidents.take(6).joinToString("；") { "${it.severity} ${it.title}" })
-        }
-        val unreadAlerts = state.alerts.activeUnreadCount()
-        put("unreadAlertCount", unreadAlerts)
-        if (unreadAlerts > 0) {
-            put(
-                "recentAlerts",
-                state.alerts.filter { !it.read && !it.isSnoozedAt() }.take(6).joinToString("；") { it.title },
-            )
-        }
-        campusData.state.value.resourceExpiries.takeIf { it.isNotEmpty() }?.let { expiries ->
-            put("resourceExpiries", expiries.take(6).joinToString("；") { "${it.type} ${it.name} 于 ${it.expiresAt} 到期" })
-        }
-        state.backup?.let { backup ->
-            put("backupAgeHours", backup.ageHours?.toString() ?: "未知")
-            put("backupRpoState", backup.rpoState)
-            put("backupValidCount", backup.validBackups)
-        }
     }
 
     fun openGlobalSearchResult(item: GlobalSearchItem) {
@@ -2098,11 +2054,24 @@ class AppViewModel(
     fun runDiagnostics() = runAction("diagnostics", "所有者一键巡检已完成。") {
         val diagnostics = api.runDiagnostics()
         val current = mutableState.value
-        val overview = runCatching { api.overview(force = true) }.getOrDefault(current.overview)
-        val incidents = runCatching { api.incidents() }.getOrDefault(current.incidents)
-        val backup = runCatching { api.backupQuality() }.getOrDefault(current.backup)
-        val iot = runCatching { api.iot.dashboard() }.getOrDefault(current.iot)
-        val resources = runCatching { api.resourceExpiries() }.getOrDefault(campusData.state.value.resourceExpiries)
+        val refreshed = mutableListOf<DataSection>()
+
+        // 巡检会顺带重新拉取若干分区；只有真的拿到新数据的才算「已刷新」，
+        // 失败的仍然回落到旧值并留给下一次常规刷新去补，避免把失败误记成最新。
+        suspend fun <T> fetch(section: DataSection, fallback: T, request: suspend () -> T): T =
+            try {
+                request().also { refreshed += section }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                fallback
+            }
+
+        val overview = fetch(DataSection.Overview, current.overview) { api.overview(force = true) }
+        val incidents = fetch(DataSection.Incidents, current.incidents) { api.incidents() }
+        val backup = fetch(DataSection.Backup, current.backup) { api.backupQuality() }
+        val iot = fetch(DataSection.Iot, current.iot) { api.iot.dashboard() }
+        val resources = fetch(DataSection.Resources, campusData.state.value.resourceExpiries) { api.resourceExpiries() }
         campusData.setResourceExpiries(resources)
         mutableState.update {
             it.copy(
@@ -2113,6 +2082,7 @@ class AppViewModel(
                 iot = iot,
             )
         }
+        sectionRefresh.recordExternalRefresh(refreshed)
         publishWidget()
     }
 
@@ -2120,12 +2090,14 @@ class AppViewModel(
         runAction("backup", "备份任务已进入执行队列。", confirmation) {
         api.triggerBackup()
         mutableState.update { it.copy(backup = api.backupQuality()) }
+        sectionRefresh.recordExternalRefresh(listOf(DataSection.Backup))
     }
 
     fun triggerCt8(confirmation: suspend () -> Boolean) =
         runAction("ct8", "CT8 任务已提交。", confirmation) {
         api.triggerCt8()
         mutableState.update { it.copy(ct8 = api.ct8()) }
+        sectionRefresh.recordExternalRefresh(listOf(DataSection.Ct8))
     }
 
     fun runIotScene(id: String, confirmation: suspend () -> Boolean) = scenes.runIotScene(id, confirmation)

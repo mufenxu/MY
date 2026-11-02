@@ -8,6 +8,7 @@ import cn.pxyb.mycontrol.data.shouldInvalidatePlatformSession
 import cn.pxyb.mycontrol.ui.AppUiState
 import cn.pxyb.mycontrol.ui.DataSection
 import cn.pxyb.mycontrol.ui.SectionLoadState
+import cn.pxyb.mycontrol.ui.withSectionLoadState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -96,6 +97,34 @@ internal class SectionRefreshController(
         updateRefreshingState()
     }
 
+    /**
+     * 聚合操作自行取数（一键巡检、触发备份/CT8）后补记分区状态。
+     *
+     * 这些路径不走 [launchRefresh]，数据是同步拿到的，但它同样代表「该分区已是最新」。
+     * 不登记的话分区会停在旧的 `updatedAtMillis` 与 `fromCache` 上：概览页继续挂离线横幅，
+     * 场景页因为 `fromCache` 继续禁用控制，而界面显示的数据其实已经刷新过了。
+     *
+     * 只应传入确实取到新数据的分区；失败的请求仍由 [launchRefresh] 的错误路径负责。
+     */
+    suspend fun recordExternalRefresh(sections: Collection<DataSection>) {
+        if (sections.isEmpty()) return
+        val fromCache = api.isOffline()
+        val cachedAt = api.cachedAtMillis()
+        val now = System.currentTimeMillis()
+        sections.forEach { section ->
+            lastRefreshElapsedMs[section] = SystemClock.elapsedRealtime()
+            updateSectionLoadState(section) {
+                it.copy(
+                    error = null,
+                    updatedAtMillis = now,
+                    fromCache = fromCache,
+                    cachedAtMillis = cachedAt,
+                    cacheFallback = fromCache,
+                )
+            }
+        }
+    }
+
     fun cancelRefreshes() {
         refreshJobs.values.toList().forEach { it.cancel() }
         refreshJobs.clear()
@@ -132,15 +161,7 @@ internal class SectionRefreshController(
         section: DataSection,
         transform: (SectionLoadState) -> SectionLoadState,
     ) {
-        mutableState.update { current ->
-            val sections = current.sectionLoadStates + (section to transform(current.sectionLoadStates[section] ?: SectionLoadState()))
-            val fallbackSections = sections.values.filter { it.cacheFallback }
-            current.copy(
-                sectionLoadStates = sections,
-                offlineMode = fallbackSections.isNotEmpty(),
-                cachedAtMillis = fallbackSections.mapNotNull { it.cachedAtMillis }.minOrNull(),
-            )
-        }
+        mutableState.update { it.withSectionLoadState(section, transform) }
     }
 
     private companion object {
