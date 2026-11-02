@@ -6,3 +6,6 @@
 /core/network/build/
 /core/security/build/
 /baselineprofile/build/
+# 解包 / 反编译工具会在模块根目录吐出包名目录（如 androidx/），别让它再进仓库
+/androidx/
+*.class
