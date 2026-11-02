@@ -3,7 +3,6 @@ package cn.pxyb.mycontrol.ui.feature.profile
 import androidx.compose.runtime.Immutable
 import cn.pxyb.mycontrol.data.AlertPreferences
 import cn.pxyb.mycontrol.data.PlatformUser
-import cn.pxyb.mycontrol.data.ReleaseData
 import cn.pxyb.mycontrol.data.SecurityData
 import cn.pxyb.mycontrol.data.WebLoginLink
 import cn.pxyb.mycontrol.data.activeUnreadCount
@@ -52,7 +51,6 @@ data class ProfileUiState(
     val user: PlatformUser?,
     val security: SecurityData?,
     val alertPreferences: AlertPreferences = AlertPreferences(),
-    val latestRelease: ReleaseData? = null,
     val appUpdate: AppUpdateUiState = AppUpdateUiState(),
     val webLoginLink: WebLoginLink? = null,
     val cacheStorageInfo: CacheStorageInfo = CacheStorageInfo(),
@@ -70,7 +68,6 @@ internal fun AppUiState.toProfileUiState() = ProfileUiState(
     user = user,
     security = security,
     alertPreferences = alertPreferences,
-    latestRelease = releases,
     appUpdate = appUpdate,
     webLoginLink = webLoginLink,
     cacheStorageInfo = cacheStorageInfo,

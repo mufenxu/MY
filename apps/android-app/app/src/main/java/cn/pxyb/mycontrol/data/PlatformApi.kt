@@ -238,22 +238,6 @@ class PlatformApi(
         }
     }
 
-    suspend fun releases(): ReleaseData = withContext(Dispatchers.IO) {
-        val json = execute("/api/releases").json
-        ReleaseData(
-            builds = json.optJSONArray("builds").platformObjects().map { item ->
-                ReleaseBuild(
-                    id = item.optString("id"),
-                    status = item.optString("status", "unknown"),
-                    conclusion = item.optString("conclusion", item.optString("status", "unknown")),
-                    revision = item.optString("revision", item.optString("sha", "")),
-                    createdAt = item.nullableString("createdAt") ?: item.nullableString("startedAt"),
-                    components = item.optJSONArray("artifacts").platformObjects().mapNotNull { it.nullableString("component") },
-                )
-            },
-        )
-    }
-
     suspend fun androidReleases(): AndroidReleaseCatalog = withContext(Dispatchers.IO) {
         parseAndroidReleaseCatalog(execute("/api/android-releases").json)
     }

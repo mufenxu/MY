@@ -83,8 +83,8 @@ internal fun AutoReservationPanel(
     }
 
     // 删除确认弹窗升级为 AppDialog
-    if (taskToDelete != null) {
-        val target = taskToDelete!!
+    val target = taskToDelete
+    if (target != null) {
         AppDialog(
             onDismissRequest = { taskToDelete = null },
             icon = Icons.Outlined.Delete,

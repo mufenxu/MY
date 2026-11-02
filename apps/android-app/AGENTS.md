@@ -53,6 +53,7 @@
 ## 5. 组件与视觉令牌（唯一来源）
 
 - **颜色令牌**：只能取自 `ui/theme/Color.kt` 与 `ColorTokens`，严禁在页面内硬编码 `Color(0x...)`。品牌操作使用 `MaterialTheme.colorScheme.primary/onPrimary`；状态使用 `ColorTokens` 的成组前景/底色；扫描器等业务专用色也集中定义在 `Color.kt`。`Theme.kt` 直接组装最终深浅配色，不再二次覆盖。
+  - **例外（与 `check:android-design` 的扫描范围一致）**：`ui/startup` 与 `ui/navigation` 不在业务页面扫描范围内。启动页在 Theme 生效前就要出首帧，自带深/浅两套固定渐变底，无法读 `colorScheme`；这类自绘视觉允许保留字面量，但必须像 `StartupAnimation.kt` 的 `StartupPalette` 那样**集中成一个文件内的私有色板**，不得散落在绘制表达式中。
 - **字体与形状**：排版样式使用 `MaterialTheme.typography`（由 `AppTypography` 注入），业务页面不覆盖数值字号。正文用 `body*`、辅助标签用 `label*`、大数值或验证码用 `display*`；圆角规范使用 `AppShapes`（独立卡片统一为 20.dp 圆角）。
 - **长内容与特殊排版**：通用组件不覆盖数值字号；七列课表的紧凑规格取自 `Type.kt` 中的 `AppTimetableTypography`，头像和收拢页头保留按尺寸计算的字号。指标值与单位允许换行，详情行按实际文字宽度切换上下排布，默认完整显示；仅次要信息或业务明确指定行数时允许省略。
 - **可点击详情行**：复制行显式保留 48dp 最小高度，提供“复制”提示、点击/长按操作语义和短暂“已复制”反馈；非交互详情不增加按钮热区。

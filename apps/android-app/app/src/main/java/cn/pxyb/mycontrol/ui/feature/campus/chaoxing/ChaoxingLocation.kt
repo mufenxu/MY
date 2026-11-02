@@ -45,7 +45,9 @@ internal suspend fun currentChaoxingLocation(context: Context): ChaoxingLocation
                 if (!continuation.isActive) return
                 remaining--
                 if (location != null && location.hasAccuracy() && location.accuracy > 0 && System.currentTimeMillis() - location.time in 0..120000) {
-                    if (best == null || location.accuracy < best!!.accuracy) best = location
+                    // 局部变量让智能转换生效：best 是可变的，直接比较拿不到非空类型。
+                    val currentBest = best
+                    if (currentBest == null || location.accuracy < currentBest.accuracy) best = location
                 }
                 if ((best?.accuracy ?: Float.MAX_VALUE) <= 100 || remaining == 0) {
                     continuation.resume(best)

@@ -61,8 +61,9 @@ object PersonalReminderScheduler {
             manager.enqueueUniqueWork(key, ExistingWorkPolicy.REPLACE, request)
         }
         todos.tasks.filter { !it.completed && it.reminderStatus != "dismissed" && it.reminderAt != null }.forEach {
-            add("todo:${it.id}:${it.reminderAt}", "todo", it.id, "待办提醒：${it.title}", "截止时间临近，打开今日工作台处理。",
-                it.reminderAt!!, (it.dueAt ?: it.reminderAt) + TimeUnit.DAYS.toMillis(1))
+            val reminderAt = it.reminderAt ?: return@forEach
+            add("todo:${it.id}:$reminderAt", "todo", it.id, "待办提醒：${it.title}", "截止时间临近，打开今日工作台处理。",
+                reminderAt, (it.dueAt ?: reminderAt) + TimeUnit.DAYS.toMillis(1))
         }
         if (timetable != null) (0..7).forEach { offset ->
             val date = LocalDate.now().plusDays(offset.toLong())

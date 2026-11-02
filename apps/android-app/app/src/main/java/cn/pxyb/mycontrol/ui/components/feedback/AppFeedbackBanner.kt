@@ -127,15 +127,17 @@ fun AppFeedbackBanner(
     }
     val isAutoDismissable = dismissDeadline != Long.MAX_VALUE &&
         type != AppFeedbackType.Error
+    // 自动关闭成立时一定有时长；把它收进一个非空局部值，后续使用时无需再写空断言。
+    val autoDismissMillis = dismissTimeout?.takeIf { it > 0L }
 
     // 内部自主控制显示与隐藏
     var isVisible by remember(message, type, dismissDeadline) { mutableStateOf(true) }
 
     // 倒计时动画（1f -> 0f）：重建时从剩余时间对应的进度继续
     val progressAnim = remember(message, type, dismissDeadline) {
-        val initial = if (isAutoDismissable) {
+        val initial = if (isAutoDismissable && autoDismissMillis != null) {
             val remaining = (dismissDeadline - System.currentTimeMillis()).coerceAtLeast(0L)
-            (remaining.toFloat() / dismissTimeout!!.toFloat()).coerceIn(0f, 1f)
+            (remaining.toFloat() / autoDismissMillis.toFloat()).coerceIn(0f, 1f)
         } else {
             1f
         }
@@ -151,8 +153,9 @@ fun AppFeedbackBanner(
 
     // 触觉反馈联动：同一条提示被回收重建时不重复震动
     val hapticDue = remember(message, type, dismissDeadline) {
-        !isAutoDismissable ||
-            System.currentTimeMillis() - (dismissDeadline - dismissTimeout!!) < HAPTIC_FRESH_WINDOW_MS
+        val timeout = autoDismissMillis
+        timeout == null ||
+            System.currentTimeMillis() - (dismissDeadline - timeout) < HAPTIC_FRESH_WINDOW_MS
     }
     LaunchedEffect(message, type, hapticDue) {
         if (!hapticDue) return@LaunchedEffect

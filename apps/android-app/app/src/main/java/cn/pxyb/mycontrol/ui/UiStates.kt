@@ -18,7 +18,6 @@ import cn.pxyb.mycontrol.data.PlatformTask
 import cn.pxyb.mycontrol.data.PlatformUser
 import cn.pxyb.mycontrol.data.QrLoginTarget
 import cn.pxyb.mycontrol.data.QuickScenePreference
-import cn.pxyb.mycontrol.data.ReleaseData
 import cn.pxyb.mycontrol.data.SecurityData
 import cn.pxyb.mycontrol.data.TodoSnapshot
 import cn.pxyb.mycontrol.data.TotpEnrollment
@@ -30,7 +29,7 @@ import cn.pxyb.mycontrol.ui.navigation.WorkspaceDestination
 import cn.pxyb.mycontrol.ui.state.ActionUiState
 import cn.pxyb.mycontrol.update.AppUpdateUiState
 
-enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Releases, Backup, Iot, IotInsights, Ct8, Security, Todos, Campus, CampusGpa, CampusLife, CampusEnergy, CampusFreeClassrooms, FreeClassrooms, Resources, Notifications, Reservation, DailyNews }
+enum class DataSection { Overview, ExternalApplications, Incidents, Tasks, Backup, Iot, IotInsights, Ct8, Security, Todos, Campus, CampusGpa, CampusLife, CampusEnergy, CampusFreeClassrooms, FreeClassrooms, Resources, Notifications, Reservation, DailyNews }
 
 @Immutable
 data class SectionLoadState(
@@ -43,6 +42,13 @@ data class SectionLoadState(
     val cacheFallback: Boolean = false,
 )
 
+/**
+ * 跨界面共享的会话与导航状态。
+ *
+ * `@Immutable` 是对 Compose 的承诺：集合字段必须整体替换（走 `copy(...)`），
+ * 不允许对已发布实例里的 List/Map/Set 做原地 add/remove —— 那样重组会被跳过，
+ * 且编译期与运行期都不会报错。领域数据请优先放进 `ui/feature/<域>/` 的 StateHolder。
+ */
 @Immutable
 data class AppUiState(
     val booting: Boolean = true,
@@ -72,7 +78,6 @@ data class AppUiState(
     val externalApplications: List<ExternalApplication> = emptyList(),
     val incidents: List<IncidentInfo> = emptyList(),
     val tasks: List<PlatformTask> = emptyList(),
-    val releases: ReleaseData? = null,
     val appUpdate: AppUpdateUiState = AppUpdateUiState(),
     val backup: BackupQuality? = null,
     val iot: IotData? = null,

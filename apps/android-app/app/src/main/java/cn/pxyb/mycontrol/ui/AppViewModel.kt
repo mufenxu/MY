@@ -105,6 +105,7 @@ import java.time.LocalDate
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelChildren
@@ -125,9 +126,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-@OptIn(kotlinx.coroutines.FlowPreview::class)
 enum class QrScanDestination { Login, Authenticator, WaterValve, Unsupported }
 
+// debounce 仍是 FlowPreview API，集中在这里声明一次，避免每个调用点各自标注。
+@OptIn(FlowPreview::class)
 class AppViewModel(
     application: Application,
     private val savedStateHandle: SavedStateHandle,
@@ -1738,8 +1740,9 @@ class AppViewModel(
             assistantOpen -> {
                 // AI 助手使用现有工作台状态作为上下文，无需额外拉取。
             }
-            workspaceDestination in setOf(WorkspaceDestination.Today, WorkspaceDestination.Timetable, WorkspaceDestination.Campus, WorkspaceDestination.Todos) ->
-                refreshWorkspaceSection(activeWorkspaceSection ?: workspaceDestination!!, force)
+            // 显式判空让参数智能转换，避免分支体内再写空断言。
+            workspaceDestination != null && workspaceDestination in setOf(WorkspaceDestination.Today, WorkspaceDestination.Timetable, WorkspaceDestination.Campus, WorkspaceDestination.Todos) ->
+                refreshWorkspaceSection(activeWorkspaceSection ?: workspaceDestination, force)
             workspaceDestination == WorkspaceDestination.Scenes -> refreshIot(force)
             workspaceDestination == WorkspaceDestination.Projects -> refreshCt8(force)
             workspaceDestination == WorkspaceDestination.Notifications -> {
@@ -1849,11 +1852,6 @@ class AppViewModel(
         mutableState.update { it.copy(tasks = tasks) }
         initialTasksLoaded = true
         evaluateAlerts()
-    }
-
-    private fun refreshReleases(force: Boolean = false) = launchRefresh(DataSection.Releases, force) {
-        val releases = api.releases()
-        mutableState.update { it.copy(releases = releases) }
     }
 
     private fun refreshBackup(force: Boolean = false) = launchRefresh(DataSection.Backup, force) {
@@ -2229,7 +2227,9 @@ class AppViewModel(
         val previous = mutableState.value.assistantSnapshot
         val snapshotChanged = previous == null || snapshot.copy(generatedAtMillis = previous.generatedAtMillis) != previous
         // 同一分钟内内容未变时复用快照，跨分钟仍更新时间以保留日报的新鲜度判断。
-        val saveSnapshot = snapshotChanged || previous!!.generatedAtMillis / 60_000 != snapshot.generatedAtMillis / 60_000
+        // 用可空分钟数比较：previous 为 null 时两侧天然不等，不必再依赖非空断言或短路顺序。
+        val previousMinute = previous?.generatedAtMillis?.div(60_000)
+        val saveSnapshot = snapshotChanged || previousMinute != snapshot.generatedAtMillis / 60_000
         val (newGuardianAlerts, storedAlerts) = withContext(Dispatchers.IO) {
             sessionStore.withRequestSession(session) {
                 val existingAlerts = personalStore.readAlerts()

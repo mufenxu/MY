@@ -57,6 +57,32 @@ import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import kotlinx.coroutines.launch
 
 /**
+ * 启动动画专用色板。
+ *
+ * 启动页在 Theme 生效前就要出第一帧，且自带深/浅两套固定渐变底，不能直接读 `colorScheme`，
+ * 所以这些值不属于主题令牌。集中在这里是为了改动时只需看一处，也避免字面量散落在绘制代码中。
+ */
+private object StartupPalette {
+    // 深/浅两套底的三重渐变（中段与末端取自下方中性色阶）
+    val DarkBackdropStart = Color(0xFF0B101D)
+    val DarkBackdropEnd = Color(0xFF080C14)
+    val LightBackdropMiddle = Color(0xFFF1F5F9)
+    // 中性色阶：同一个色值在深浅两套里分别充当文字、卡片底、描边，按色阶命名比按角色命名更不容易误导
+    val InkDeepest = Color(0xFF0F172A)
+    val InkStrong = Color(0xFF1E293B)
+    val InkOutline = Color(0xFF334155)
+    val InkMuted = Color(0xFF475569)
+    val InkSoft = Color(0xFF94A3B8)
+    val PaperBrightest = Color(0xFFF8FAFC)
+    val PaperLine = Color(0xFFE2E8F0)
+    val PaperPure = Color(0xFFFFFFFF)
+    // 强调色
+    val AccentSky = Color(0xFF38BDF8)
+    val AccentEmerald = Color(0xFF34D399)
+    val AccentEmeraldDeep = Color(0xFF10B981)
+}
+
+/**
  * 现代化 App 启动 Splash 开屏动画 (Ultra-Modern Dynamic Splash System)
  * 具备自适应智能就绪响应、动态极光流光底衬、全息悬浮晶体徽章、星轨粒子与沉浸式揭幕退场。
  * 使用绘制层和图形变换呈现动效，实际帧耗时由设备性能基准验证。
@@ -104,15 +130,15 @@ fun ModernAnimatedSplashScreen(
     val bgGradient = remember(isDark) {
         if (isDark) {
             listOf(
-                Color(0xFF0B101D),
-                Color(0xFF0F172A),
-                Color(0xFF080C14),
+                StartupPalette.DarkBackdropStart,
+                StartupPalette.InkDeepest,
+                StartupPalette.DarkBackdropEnd,
             )
         } else {
             listOf(
-                Color(0xFFF8FAFC),
-                Color(0xFFF1F5F9),
-                Color(0xFFE2E8F0),
+                StartupPalette.PaperBrightest,
+                StartupPalette.LightBackdropMiddle,
+                StartupPalette.PaperLine,
             )
         }
     }
@@ -272,7 +298,7 @@ fun ModernAnimatedSplashScreen(
 
                     // 细微能量轨道环
                     drawCircle(
-                        color = if (isDark) Color(0xFF38BDF8).copy(alpha = 0.18f) else primaryColor.copy(alpha = 0.15f),
+                        color = if (isDark) StartupPalette.AccentSky.copy(alpha = 0.18f) else primaryColor.copy(alpha = 0.15f),
                         radius = ringRadius,
                         center = centerPt,
                         style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx()),
@@ -283,7 +309,7 @@ fun ModernAnimatedSplashScreen(
                     val photon1X = centerPt.x + ringRadius * kotlin.math.cos(rad1).toFloat()
                     val photon1Y = centerPt.y + ringRadius * kotlin.math.sin(rad1).toFloat()
                     drawCircle(
-                        color = if (isDark) Color(0xFF38BDF8) else primaryColor,
+                        color = if (isDark) StartupPalette.AccentSky else primaryColor,
                         radius = 2.5.dp.toPx(),
                         center = Offset(photon1X, photon1Y),
                     )
@@ -293,7 +319,7 @@ fun ModernAnimatedSplashScreen(
                     val photon2X = centerPt.x + ringRadius * kotlin.math.cos(rad2).toFloat()
                     val photon2Y = centerPt.y + ringRadius * kotlin.math.sin(rad2).toFloat()
                     drawCircle(
-                        color = if (isDark) Color(0xFF34D399) else secondaryColor,
+                        color = if (isDark) StartupPalette.AccentEmerald else secondaryColor,
                         radius = 2.dp.toPx(),
                         center = Offset(photon2X, photon2Y),
                     )
@@ -319,15 +345,15 @@ fun ModernAnimatedSplashScreen(
                             brush = if (isDark) {
                                 Brush.linearGradient(
                                     colors = listOf(
-                                        Color(0xFF1E293B),
-                                        Color(0xFF0F172A),
+                                        StartupPalette.InkStrong,
+                                        StartupPalette.InkDeepest,
                                     )
                                 )
                             } else {
                                 Brush.linearGradient(
                                     colors = listOf(
-                                        Color(0xFFFFFFFF),
-                                        Color(0xFFF8FAFC),
+                                        StartupPalette.PaperPure,
+                                        StartupPalette.PaperBrightest,
                                     )
                                 )
                             }
@@ -337,15 +363,15 @@ fun ModernAnimatedSplashScreen(
                             brush = Brush.linearGradient(
                                 colors = if (isDark) {
                                     listOf(
-                                        Color(0xFF38BDF8).copy(alpha = 0.6f),
-                                        Color(0xFF10B981).copy(alpha = 0.3f),
-                                        Color(0xFF334155).copy(alpha = 0.4f),
+                                        StartupPalette.AccentSky.copy(alpha = 0.6f),
+                                        StartupPalette.AccentEmeraldDeep.copy(alpha = 0.3f),
+                                        StartupPalette.InkOutline.copy(alpha = 0.4f),
                                     )
                                 } else {
                                     listOf(
-                                        Color(0xFFFFFFFF),
+                                        StartupPalette.PaperPure,
                                         primaryColor.copy(alpha = 0.35f),
-                                        Color(0xFFE2E8F0),
+                                        StartupPalette.PaperLine,
                                     )
                                 }
                             ),
@@ -400,7 +426,7 @@ fun ModernAnimatedSplashScreen(
                         fontSize = 27.sp,
                         letterSpacing = 2.4.sp,
                     ),
-                    color = if (isDark) Color(0xFFF8FAFC) else Color(0xFF0F172A),
+                    color = if (isDark) StartupPalette.PaperBrightest else StartupPalette.InkDeepest,
                 )
 
                 Spacer(Modifier.height(10.dp))
@@ -408,10 +434,10 @@ fun ModernAnimatedSplashScreen(
                 // 微胶囊芯片状态徽章 (Cyber-pill Chip Badge)
                 Surface(
                     shape = chipShape,
-                    color = if (isDark) Color(0xFF1E293B).copy(alpha = 0.75f) else Color(0xFFFFFFFF).copy(alpha = 0.85f),
+                    color = if (isDark) StartupPalette.InkStrong.copy(alpha = 0.75f) else StartupPalette.PaperPure.copy(alpha = 0.85f),
                     border = BorderStroke(
                         width = 1.dp,
-                        color = if (isDark) Color(0xFF334155).copy(alpha = 0.8f) else Color(0xFFE2E8F0),
+                        color = if (isDark) StartupPalette.InkOutline.copy(alpha = 0.8f) else StartupPalette.PaperLine,
                     ),
                     shadowElevation = if (isDark) 2.dp else 1.dp,
                     modifier = Modifier.padding(horizontal = 4.dp),
@@ -428,7 +454,7 @@ fun ModernAnimatedSplashScreen(
                                     scaleX = ambientPulse
                                     scaleY = ambientPulse
                                 }
-                                .background(Color(0xFF10B981), CircleShape)
+                                .background(StartupPalette.AccentEmeraldDeep, CircleShape)
                         )
                         Spacer(Modifier.width(7.dp))
                         Text(
@@ -438,7 +464,7 @@ fun ModernAnimatedSplashScreen(
                                 fontSize = 11.5.sp,
                                 letterSpacing = 0.6.sp,
                             ),
-                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
+                            color = if (isDark) StartupPalette.InkSoft else StartupPalette.InkMuted,
                         )
                     }
                 }
@@ -452,7 +478,7 @@ fun ModernAnimatedSplashScreen(
                         .height(2.5.dp)
                         .clip(CircleShape)
                         .background(
-                            if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+                            if (isDark) StartupPalette.InkStrong else StartupPalette.PaperLine
                         ),
                 ) {
                     Box(
@@ -464,8 +490,8 @@ fun ModernAnimatedSplashScreen(
                                 brush = Brush.horizontalGradient(
                                     colors = listOf(
                                         primaryColor,
-                                        Color(0xFF38BDF8),
-                                        Color(0xFF34D399),
+                                        StartupPalette.AccentSky,
+                                        StartupPalette.AccentEmerald,
                                     )
                                 )
                             )

@@ -590,7 +590,6 @@ private fun PlatformWebScreen(
                         settings.apply {
                             javaScriptEnabled = true
                             domStorageEnabled = true
-                            databaseEnabled = true
                             useWideViewPort = true
                             loadWithOverviewMode = true
                             setSupportZoom(true)

@@ -118,7 +118,10 @@ private fun GlassNavigationBar(
         // matchParentSize 让玻璃层不参与测量，避免超大取样子层把胶囊撑满。
         Box(Modifier.matchParentSize()) {
             if (useGlass) {
-                BackdropGlassLayer(glassBackdrop!!, barOrigin, barSize)
+                // useGlass 已排除 null 情况，这里用局部值让智能转换生效。
+                glassBackdrop?.let { backdrop ->
+                    BackdropGlassLayer(backdrop, barOrigin, barSize)
+                }
             }
             Box(
                 Modifier.matchParentSize().drawWithContent {

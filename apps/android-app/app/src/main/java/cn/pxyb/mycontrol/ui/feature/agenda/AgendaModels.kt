@@ -88,7 +88,8 @@ fun buildAgenda(
     val startOfDay = agendaInstant(date, 0)
     val endOfDay = agendaInstant(date.plusDays(1), 0)
     todos.filter { !it.completed && it.dueAt != null && it.dueAt >= startOfDay && it.dueAt < endOfDay }.forEach {
-        result += AgendaItem("todo:${it.id}", it.title, it.courseRef?.name.orEmpty(), it.dueAt!!, it.dueAt, "待办截止", false)
+        val dueAt = it.dueAt ?: return@forEach
+        result += AgendaItem("todo:${it.id}", it.title, it.courseRef?.name.orEmpty(), dueAt, dueAt, "待办截止", false)
     }
     return result.sortedWith(compareBy(AgendaItem::start, AgendaItem::id))
 }

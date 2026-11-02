@@ -208,21 +208,6 @@ data class TaskData(
 )
 
 @Immutable
-data class ReleaseBuild(
-    val id: String,
-    val status: String,
-    val conclusion: String,
-    val revision: String,
-    val createdAt: String?,
-    val components: List<String>,
-)
-
-@Immutable
-data class ReleaseData(
-    val builds: List<ReleaseBuild>,
-)
-
-@Immutable
 data class AndroidReleaseDraft(
     val id: String,
     val versionName: String,
