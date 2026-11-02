@@ -23,11 +23,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -38,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import cn.pxyb.mycontrol.ui.components.clipboard.rememberAppClipboard
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
 import kotlinx.coroutines.delay
 
@@ -54,7 +53,7 @@ fun AppDetailRow(
     canCopy: Boolean = false,
     maxLines: Int = Int.MAX_VALUE,
 ) {
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = rememberAppClipboard()
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
     val accessibilityManager = LocalAccessibilityManager.current
@@ -78,7 +77,7 @@ fun AppDetailRow(
         }
     }
     val copyValue = {
-        clipboardManager.setText(AnnotatedString(value))
+        clipboard.copy(value, label = label)
         AppHaptics.tick(haptics)
         copied = true
     }

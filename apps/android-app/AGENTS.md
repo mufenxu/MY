@@ -156,6 +156,7 @@
 | | `AppConfirmDialog` | 标准二次确认弹窗，危险操作必须走此组件而非自绘 |
 | | `AppDialogForm` | 弹窗内表单容器，统一字段间距与校验提示位 |
 | **`ui.components.interaction`** | `pressFeedback` | 统一按压弹性微缩放修饰符，自带触觉反馈；禁止各页面自行实现缩放动画 |
+| **`ui.components.clipboard`** | `rememberAppClipboard` / `copyEphemeralText` | 全应用唯一的剪贴板入口。页面用 `rememberAppClipboard()` 拿 `copy(text, label, sensitive)` 与 `readText()`；验证码、恢复密钥这类一次性凭据用 `copyEphemeralText` 到期自动清理。禁止再直接用 `ClipboardManager` 或已弃用的 `LocalClipboardManager` |
 | **`util`** | `QrUtils` | 集中统一的 Data URL Base64 二维码安全解析工具，杜绝各 Screen 私有重复实现 |
 | | `DateTimeUtils` | 集中统一的平台时间、分钟值和相对时间格式化；仅需日末端点的业务显式传入 `allowEndOfDay = true` 解析 `24:00` |
 | | `BoundedInput` / `DeviceAuthentication` | 输入长度与格式边界校验、设备生物特征/凭据认证包装 |

@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppDangerButton
+import cn.pxyb.mycontrol.ui.components.clipboard.copyEphemeralText
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
@@ -124,7 +125,7 @@ fun AuthenticatorCloudPanel(
       },
     ) {
       if (!acknowledged) AppPanel(onClick = {
-        copyAuthenticatorCode(context, recovery, 60_000L, label = "验证器恢复密钥")
+        copyEphemeralText(context, recovery, label = "验证器恢复密钥", clearAfterMillis = 60_000L)
         recoveryCopied = true
       }) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

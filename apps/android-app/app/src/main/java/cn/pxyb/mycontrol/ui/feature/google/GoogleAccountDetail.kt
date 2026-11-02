@@ -29,13 +29,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.data.GoogleAliasRecord
+import cn.pxyb.mycontrol.ui.components.clipboard.rememberAppClipboard
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogSize
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
@@ -86,7 +85,7 @@ internal fun GoogleAccountDetail(
     onDeleteAlias: (GoogleAliasRecord) -> Unit,
     scrollable: Boolean = true,
 ) {
-    val clipboard = LocalClipboardManager.current
+    val clipboard = rememberAppClipboard()
     val scrollState = rememberScrollState()
     Column(
         modifier = Modifier
@@ -110,7 +109,7 @@ internal fun GoogleAccountDetail(
                         AppHeaderIconButton(
                             icon = Icons.Outlined.ContentCopy,
                             contentDescription = "复制主邮箱",
-                            onClick = { clipboard.setText(AnnotatedString(account.primaryEmail)) },
+                            onClick = { clipboard.copy(account.primaryEmail, label = "主邮箱") },
                         )
                     }
                     if (account.displayName.isNotBlank()) {
@@ -189,7 +188,7 @@ internal fun GoogleAccountDetail(
                     GoogleAliasRow(
                         alias = alias,
                         busy = busy,
-                        onCopy = { clipboard.setText(AnnotatedString(alias.address)) },
+                        onCopy = { clipboard.copy(alias.address, label = "别名地址") },
                         onEdit = { onEditAlias(alias) },
                         onDelete = { onDeleteAlias(alias) },
                     )

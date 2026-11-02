@@ -1,23 +1,17 @@
 package cn.pxyb.mycontrol.ui.feature.authenticator
 
 import androidx.compose.ui.platform.LocalDensity
+import cn.pxyb.mycontrol.ui.components.clipboard.copyEphemeralText
 import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
 import cn.pxyb.mycontrol.ui.components.layout.adaptiveGridColumnCount
 import cn.pxyb.mycontrol.ui.components.layout.appContentWidth
 import cn.pxyb.mycontrol.ui.components.layout.appGridItems
 
 import android.Manifest
-import android.content.ClipData
-import android.content.ClipDescription
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
-import android.os.Handler
-import android.os.Looper
-import android.os.PersistableBundle
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -88,7 +82,6 @@ import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.scanner.QrCameraPreview
-import java.util.UUID
 import kotlinx.coroutines.delay
 import cn.pxyb.mycontrol.ui.components.feedback.AppLinearProgressIndicator
 
@@ -316,7 +309,12 @@ private fun AuthenticatorEntryCard(
 
     val copyCode = {
         val now = System.currentTimeMillis()
-        copyAuthenticatorCode(context, Authenticator.generate(entry, now), Authenticator.remainingSeconds(entry, now) * 1000L)
+        copyEphemeralText(
+            context,
+            Authenticator.generate(entry, now),
+            label = "动态验证码",
+            clearAfterMillis = Authenticator.remainingSeconds(entry, now) * 1000L,
+        )
         copied = true
     }
     val largeFont = LocalDensity.current.fontScale > 1.3f
@@ -419,26 +417,6 @@ private fun AuthenticatorEntryCard(
             }
         }
     }
-}
-
-internal fun copyAuthenticatorCode(context: Context, code: String, lifetimeMillis: Long, label: String = "动态验证码") {
-    val clipboard = context.getSystemService(ClipboardManager::class.java)
-    val clipId = UUID.randomUUID().toString()
-    val idKey = "cn.pxyb.mycontrol.clip_id"
-    val sensitiveKey = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        ClipDescription.EXTRA_IS_SENSITIVE
-    } else "android.content.extra.IS_SENSITIVE"
-    val clip = ClipData.newPlainText(label, code).apply {
-        description.extras = PersistableBundle().apply {
-            putBoolean(sensitiveKey, true)
-            putString(idKey, clipId)
-        }
-    }
-    clipboard.setPrimaryClip(clip)
-    Handler(Looper.getMainLooper()).postDelayed({
-        // 仅清理这次复制的验证码，保留用户随后复制的内容。
-        if (clipboard.primaryClipDescription?.extras?.getString(idKey) == clipId) clipboard.clearPrimaryClip()
-    }, lifetimeMillis.coerceIn(1000L, 60_000L))
 }
 
 private fun formatTotpCode(code: String): String = when (code.length) {

@@ -24,9 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -41,6 +39,7 @@ import cn.pxyb.mycontrol.data.MediaDownloadTask
 import cn.pxyb.mycontrol.data.MediaDownloadTasks
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
+import cn.pxyb.mycontrol.ui.components.clipboard.rememberAppClipboard
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
@@ -103,7 +102,7 @@ fun MediaDownloadScreen(
     onLinkCopied: (String) -> Unit,
 ) {
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
+    val clipboard = rememberAppClipboard()
     val scope = rememberCoroutineScope()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val taskStore = remember(context) { MediaDownloadTasks(context.applicationContext) }
@@ -121,7 +120,7 @@ fun MediaDownloadScreen(
     // 提示挂在列表项上，页面级记住出现时间，滚动回收重建后按同一时间点继续倒计时。
     val messageShownAt = rememberFeedbackShownAt(state.message)
 
-    fun readClipboard(): String = runCatching { clipboard.getText()?.text }.getOrNull().orEmpty()
+    suspend fun readClipboard(): String = clipboard.readText()
     fun openNew(source: String? = null) {
         if (source != null) onShareTextChange(source)
         showNew = true
@@ -146,7 +145,7 @@ fun MediaDownloadScreen(
         }
     }
     fun copyLink(label: String, url: String) {
-        clipboard.setText(AnnotatedString(url))
+        clipboard.copy(url, label = label)
         onLinkCopied(label)
     }
     fun queueDownload(pending: PendingMediaDownload) {
@@ -316,7 +315,7 @@ fun MediaDownloadScreen(
                     placeholder = "粘贴链接或整段分享文案", leadingIcon = Icons.Outlined.Link, singleLine = false, maxLines = 3)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     AppSecondaryButton(text = "粘贴", icon = Icons.Outlined.ContentPaste, modifier = Modifier.weight(1f), enabled = !state.parsing && !queuing,
-                        onClick = { onPasteClipboard(readClipboard()) })
+                        onClick = { scope.launch { onPasteClipboard(readClipboard()) } })
                     AppButton(text = "解析视频", icon = Icons.Outlined.Search, loading = state.parsing,
                         enabled = !state.parsing && !queuing, modifier = Modifier.weight(1f), onClick = onParse)
                 }

@@ -25,9 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,6 +34,7 @@ import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppInlineDangerButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
+import cn.pxyb.mycontrol.ui.components.clipboard.rememberAppClipboard
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
@@ -61,7 +60,7 @@ fun LoginSessionsScreen(
     onCreateDesktopMagicLink: ((String?, String?) -> Unit) -> Unit,
 ) {
     val context = LocalContext.current
-    val clipboard = LocalClipboardManager.current
+    val clipboard = rememberAppClipboard()
     val security = state.security
     var revokeTarget by remember { mutableStateOf<SecuritySession?>(null) }
     var loginUrl by remember { mutableStateOf<String?>(null) }
@@ -175,7 +174,8 @@ fun LoginSessionsScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     AppDialogSecondaryButton("关闭", { loginUrl = null }, Modifier.weight(1f))
                     AppDialogPrimaryButton("复制链接", {
-                        clipboard.setText(AnnotatedString(url))
+                        // 免密登录链接等同于一次性凭据，标记为敏感，避免进入剪贴板历史预览。
+                        clipboard.copy(url, label = "登录链接", sensitive = true)
                         Toast.makeText(context, "已复制登录链接", Toast.LENGTH_SHORT).show()
                         loginUrl = null
                     }, Modifier.weight(1f))
