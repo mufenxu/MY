@@ -121,7 +121,7 @@
   gap: 8px;
   margin-top: 18px;
   padding: 10px 12px;
-  border-left: 3px solid var(--amber);
+  border: 1px solid color-mix(in srgb, var(--amber) 32%, var(--line-strong));
   border-radius: var(--r-sm);
   background: var(--amber-soft);
   color: var(--amber);

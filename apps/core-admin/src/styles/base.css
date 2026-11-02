@@ -225,14 +225,14 @@ a:focus-visible,
   font-weight: 560;
 }
 
-/* 提示块：中性说明 / 警告 / 危险三种语义 */
+/* 提示块：中性说明 / 警告 / 危险三种语义。
+   语义靠「整体边框着色 + 底色 + 标题前的圆形图标」表达，不使用左侧色条。 */
 .hint {
   display: flex;
   flex-direction: column;
   gap: 3px;
   padding: 10px 12px;
   border: 1px solid var(--line-strong);
-  border-left: 3px solid var(--ink-faint);
   border-radius: var(--r-sm);
   background: var(--groove-bg);
   color: var(--ink-muted);
@@ -247,7 +247,7 @@ a:focus-visible,
 }
 
 .hint.is-warn {
-  border-left-color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 32%, var(--line-strong));
   background: var(--amber-soft);
   color: var(--amber);
 }
@@ -257,13 +257,40 @@ a:focus-visible,
 }
 
 .hint.is-danger {
-  border-left-color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 32%, var(--line-strong));
   background: var(--red-soft);
   color: var(--red-text);
 }
 
 .hint.is-danger strong {
   color: var(--red-text);
+}
+
+/* 标题前的语义图标：警告与危险各一枚实心圆点，替代原左色条 */
+.hint.is-warn strong::before,
+.hint.is-danger strong::before {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: 1px;
+}
+
+.hint.is-warn strong::before {
+  background: var(--amber);
+  content: '!';
+}
+
+.hint.is-danger strong::before {
+  background: var(--red);
+  content: '×';
 }
 
 /* 统计条：桌面等宽、平板两列、手机一列 */
