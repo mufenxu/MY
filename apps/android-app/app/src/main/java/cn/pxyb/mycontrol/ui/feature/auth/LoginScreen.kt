@@ -145,6 +145,8 @@ internal fun LoginScreen(
         derivedStateOf { imeInsets.getBottom(density) > 0 }
     }
     val showFooter = adaptive.heightSizeClass != WindowHeightSizeClass.Compact
+    // 横屏手机等紧凑高度下不展示插图，否则表单会被挤出首屏。
+    val showHero = adaptive.heightSizeClass != WindowHeightSizeClass.Compact
 
     if (showBotChallenge) LoginBotChallengeDialog(
         onDismiss = { showBotChallenge = false },
@@ -185,7 +187,14 @@ internal fun LoginScreen(
                                 .verticalScroll(rememberScrollState()),
                             contentAlignment = Alignment.Center,
                         ) {
-                            LoginHeader()
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                LoginHero(size = 300.dp)
+                                Spacer(Modifier.height(28.dp))
+                                LoginHeader()
+                            }
                         }
 
                         Surface(
@@ -353,6 +362,11 @@ internal fun LoginScreen(
                         verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
+                        if (showHero) {
+                            LoginHero(size = 140.dp)
+                            Spacer(Modifier.height(24.dp))
+                        }
+
                         LoginHeader()
 
                         Spacer(Modifier.height(28.dp))
