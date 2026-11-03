@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:left="19dp"
-        android:top="19dp"
-        android:right="19dp"
-        android:bottom="19dp">
+    <!-- 前景图已按 108dp 画布预合成：场景占中央 72dp（自适应图标可视视口），
+         底板倒角与外圈亮边已在出图时裁掉，这里不要再加 inset，否则会露底。 -->
+    <item>
         <bitmap
-            android:src="@drawable/platform_logo"
+            android:src="@drawable/ic_launcher_scene"
             android:gravity="fill" />
     </item>
 </layer-list>

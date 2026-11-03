@@ -155,7 +155,7 @@ internal fun BrandMark(compact: Boolean = false) {
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
         ) {
             androidx.compose.foundation.Image(
-                painter = painterResource(R.drawable.platform_logo),
+                painter = painterResource(R.drawable.brand_mark),
                 contentDescription = "智控中心",
                 modifier = Modifier
                     .padding(6.dp)

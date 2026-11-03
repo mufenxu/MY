@@ -381,7 +381,7 @@ fun ModernAnimatedSplashScreen(
                 ) {
                     // Logo 图像
                     androidx.compose.foundation.Image(
-                        painter = painterResource(cn.pxyb.mycontrol.R.drawable.platform_logo),
+                        painter = painterResource(cn.pxyb.mycontrol.R.drawable.brand_mark),
                         contentDescription = "智控中心 Logo",
                         modifier = Modifier.size(54.dp),
                     )

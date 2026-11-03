@@ -526,7 +526,7 @@ private fun ModernProfileCard(
                         modifier = Modifier.size(50.dp),
                     ) {
                         androidx.compose.foundation.Image(
-                            painter = painterResource(R.drawable.platform_logo),
+                            painter = painterResource(R.drawable.brand_mark),
                             contentDescription = "用户头像",
                             modifier = Modifier.clip(CircleShape).padding(7.dp).fillMaxSize(),
                         )

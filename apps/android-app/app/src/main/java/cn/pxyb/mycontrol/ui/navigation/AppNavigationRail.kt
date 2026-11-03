@@ -112,7 +112,7 @@ fun AppNavigationRail(
                     border = BorderStroke(0.6.dp, primaryColor.copy(alpha = 0.2f)),
                 ) {
                     Image(
-                        painter = painterResource(R.drawable.platform_logo),
+                        painter = painterResource(R.drawable.brand_mark),
                         contentDescription = "智控中心",
                         modifier = Modifier
                             .padding(6.dp)

@@ -165,7 +165,7 @@ fun AccountManagementScreen(
                                         modifier = Modifier.size(76.dp)
                                     ) {
                                         Image(
-                                            painter = painterResource(R.drawable.platform_logo),
+                                            painter = painterResource(R.drawable.brand_mark),
                                             contentDescription = "头像",
                                             modifier = Modifier
                                                 .clip(CircleShape)
@@ -326,7 +326,7 @@ fun AccountManagementScreen(
                                 modifier = Modifier.size(62.dp)
                             ) {
                                 Image(
-                                    painter = painterResource(R.drawable.platform_logo),
+                                    painter = painterResource(R.drawable.brand_mark),
                                     contentDescription = "头像",
                                     modifier = Modifier
                                         .clip(CircleShape)
