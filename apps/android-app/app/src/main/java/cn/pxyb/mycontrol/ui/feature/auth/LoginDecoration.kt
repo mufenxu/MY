@@ -1,7 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.auth
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,8 +15,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.Icon
@@ -32,20 +29,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.shadow.Shadow
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.BuildConfig
@@ -112,71 +103,6 @@ internal fun LoginAmbientBackground() {
                 }
             }
     )
-}
-
-/**
- * 登录页插图：场景图自带白色圆角底板，这里只补一层与卡片同源的投影，
- * 深色主题下整体压暗，避免整块亮面在暗背景上过曝。装饰性内容，不参与读屏。
- */
-@Composable
-internal fun LoginHero(size: Dp, modifier: Modifier = Modifier) {
-    val dark = isAppInDarkTheme()
-    val shadowColor = if (dark) ColorTokens.LoginCardShadowDark else ColorTokens.LoginCardShadowLight
-    androidx.compose.foundation.Image(
-        painter = painterResource(R.drawable.login_hero),
-        contentDescription = null,
-        contentScale = ContentScale.Fit,
-        modifier = modifier
-            .size(size)
-            // 13% 与图片底板自身的圆角一致（13 / 100 走的是百分比重载）。
-            .dropShadow(
-                shape = RoundedCornerShape(13),
-                shadow = Shadow(
-                    radius = 24.dp,
-                    spread = (-8).dp,
-                    offset = DpOffset(0.dp, 10.dp),
-                    color = shadowColor.copy(alpha = if (dark) 0.40f else 0.16f),
-                ),
-            )
-            .graphicsLayer { alpha = if (dark) 0.86f else 1f },
-    )
-}
-
-@Composable
-internal fun LoginHeader() {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Surface(
-            modifier = Modifier.size(56.dp),
-            shape = MaterialTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.primaryContainer,
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                androidx.compose.foundation.Image(
-                    painter = painterResource(R.drawable.platform_logo),
-                    contentDescription = "智控中心",
-                    modifier = Modifier.size(40.dp),
-                )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Text(
-            "登录智控中心",
-            style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-
-        Text(
-            "你的应用与日常，一处掌握",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-    }
 }
 
 @Composable

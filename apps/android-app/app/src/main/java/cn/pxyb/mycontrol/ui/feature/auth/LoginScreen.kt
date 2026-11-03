@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -145,8 +146,6 @@ internal fun LoginScreen(
         derivedStateOf { imeInsets.getBottom(density) > 0 }
     }
     val showFooter = adaptive.heightSizeClass != WindowHeightSizeClass.Compact
-    // 横屏手机等紧凑高度下不展示插图，否则表单会被挤出首屏。
-    val showHero = adaptive.heightSizeClass != WindowHeightSizeClass.Compact
 
     if (showBotChallenge) LoginBotChallengeDialog(
         onDismiss = { showBotChallenge = false },
@@ -156,7 +155,7 @@ internal fun LoginScreen(
     if (state.loginRecoveryCodes.isNotEmpty()) RecoveryCodesDialog(state.loginRecoveryCodes, onRecoveryCodesSaved, requireAcknowledgement = true)
 
     Box(modifier = Modifier.fillMaxSize()) {
-        LoginAmbientBackground()
+        LoginBackdrop()
 
         Column(
             modifier = Modifier
@@ -187,13 +186,15 @@ internal fun LoginScreen(
                                 .verticalScroll(rememberScrollState()),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
+                            // 背景视频是动态的，品牌文字直接压在画面上对比度不可控，
+                            // 垫一层半透明表面把可读性固定下来。
+                            Surface(
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
                             ) {
-                                LoginHero(size = 300.dp)
-                                Spacer(Modifier.height(28.dp))
-                                LoginHeader()
+                                Box(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+                                    BrandMark()
+                                }
                             }
                         }
 
@@ -353,24 +354,15 @@ internal fun LoginScreen(
                         }
                     }
                 } else {
+                    // 竖屏让卡片沉到底部，把上半屏留给背景视频里的漂浮元素。
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .align(Alignment.Center)
+                            .align(Alignment.BottomCenter)
                             .verticalScroll(rememberScrollState())
                             .padding(vertical = 24.dp),
-                        verticalArrangement = Arrangement.Center,
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        if (showHero) {
-                            LoginHero(size = 140.dp)
-                            Spacer(Modifier.height(24.dp))
-                        }
-
-                        LoginHeader()
-
-                        Spacer(Modifier.height(28.dp))
-
                         Surface(
                             modifier = Modifier
                                 .widthIn(max = 440.dp)

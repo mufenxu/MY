@@ -196,6 +196,11 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.svg)
     implementation(libs.coil.network.okhttp)
+
+    // 登录页背景视频：ExoPlayer 的 REPEAT_MODE_ONE 是预载式无缝循环，
+    // 系统 VideoView/MediaPlayer 的 setLooping 每次回到 0 秒都会顿一下。
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
     implementation(project(":core:network"))
     implementation(project(":core:security"))
     implementation(libs.mlkit.barcode.scanning)
