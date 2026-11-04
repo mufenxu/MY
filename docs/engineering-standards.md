@@ -236,7 +236,9 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 
 ## 12. 脚本约定（`scripts/`）
 
-按职责分组：`workspace/` 管理安装、审计和环境；`checks/` 提供结构、契约、性能与冒烟检查；`release/` 管理镜像和 Android 发布；`database/` 管理备份、恢复与迁移；`security/` 管理密钥工具；`dev/` 提供本地开发入口；共享工具及规则放在 `lib/`。调用入口保留根 `package.json` 的命令名称。
+按职责分组：`workspace/` 管理安装、审计、环境与本地清理；`checks/` 提供结构、契约、性能与冒烟检查；`release/` 管理镜像和 Android 发布；`database/` 管理备份、恢复与迁移；`security/` 管理密钥工具；`dev/` 提供本地开发入口；共享工具及规则放在 `lib/`。调用入口保留根 `package.json` 的命令名称。
+
+- 临时文件统一由 `npm run clean`（`scripts/workspace/clean-workspace.mjs`）清理：只删 `.gitignore` 覆盖的临时目录与构建产物，`node_modules`、`.env`、`.workbuddy/memory`、`.workbuddy/artifacts` 永不删除。新增临时目录时加到该脚本的清单里，不要另写清理命令。
 
 - Node 脚本一律 `.mjs`（根 `package.json` 无 `"type"` 字段），使用 ESM，不使用 `require(`。Android 签名保留既有 PowerShell 与 Java 工具。
 - 命名 kebab-case、动词开头（`check-*`、`verify-*`、`backup-*`、`resolve-*`）。

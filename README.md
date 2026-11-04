@@ -64,6 +64,16 @@ npm run check
 
 The root `check` script chains every per-project gate (consoles, website, workspace scripts, packages, release, backup, MongoDB, supply chain, topology, gateway, all services, both miniapps) with `&&`, so the first failure stops the run. CI runs the same command on Node 24. See [docs/engineering-standards.md](./docs/engineering-standards.md) for what each gate must contain.
 
+## Housekeeping
+
+```powershell
+npm run clean               # 临时目录：.tmp-*、debug 产物、services/core-api/logs
+npm run clean:all           # 再清构建产物：Android build/.gradle、前端 dist
+npm run clean -- --dry-run  # 只打印会删什么
+```
+
+Only gitignored, regenerable paths are touched. `node_modules`, `.env`, `.workbuddy/memory`, `.workbuddy/artifacts` and every tracked source file are never removed. Android artifacts are rebuilt by CI, so clearing them locally costs nothing but a local `./gradlew` rebuild.
+
 ## Containers
 
 Production keeps the public gateway separate from every business runtime and from the privileged backup runner:

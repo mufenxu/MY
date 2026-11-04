@@ -9,9 +9,12 @@
 .agents/
 .codex-logs/
 
-# Temporary browser profiles and screenshots
-/.tmp-chrome/
-/.tmp-shot/
+# Temporary scratch directories (browser profiles, screenshots, one-off debug output)
+# 已清理：npm run clean；根目录下所有 .tmp-* 都会被忽略并纳入清理范围
+/.tmp-*/
+
+# Agent scratch space；memory/ 与 artifacts/ 是项目资产，继续入库
+/.workbuddy/tmp/
 
 # Runtime data
 **/data/
