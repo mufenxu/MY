@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 前景为 864px 满幅位图，已按 108dp 画布预合成：主体宽 64dp，落在 66dp 安全圆内，
+     换图时保持同样的安全区比例，否则圆形遮罩的启动器会切掉图形两端。 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/launcher_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />

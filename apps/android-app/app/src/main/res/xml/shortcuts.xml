@@ -3,7 +3,7 @@
     <shortcut
         android:shortcutId="today"
         android:enabled="true"
-        android:icon="@drawable/ic_launcher_foreground"
+        android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/shortcut_today"
         android:shortcutLongLabel="@string/shortcut_today_long">
         <intent
@@ -15,7 +15,7 @@
     <shortcut
         android:shortcutId="devices"
         android:enabled="true"
-        android:icon="@drawable/ic_launcher_foreground"
+        android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/shortcut_devices"
         android:shortcutLongLabel="@string/shortcut_devices_long">
         <intent
@@ -27,7 +27,7 @@
     <shortcut
         android:shortcutId="notifications"
         android:enabled="true"
-        android:icon="@drawable/ic_launcher_foreground"
+        android:icon="@mipmap/ic_launcher"
         android:shortcutShortLabel="@string/shortcut_notifications"
         android:shortcutLongLabel="@string/shortcut_notifications_long">
         <intent

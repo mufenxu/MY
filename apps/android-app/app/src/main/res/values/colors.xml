@@ -1,6 +1,6 @@
 <resources>
-    <!-- 与 ic_launcher_scene.png 的底板底色一致，避免启动器视差时露色差。 -->
-    <color name="launcher_background">#F3F3F3</color>
+    <!-- 与 ic_launcher_foreground.png 的底板底色一致（#E9EFF5），避免启动器视差时露色差。 -->
+    <color name="launcher_background">#E9EFF5</color>
     <color name="splash_background">#F6F8FD</color>
     <color name="widget_background">#F8FAFC</color>
     <color name="widget_border">#DCE3EC</color>
