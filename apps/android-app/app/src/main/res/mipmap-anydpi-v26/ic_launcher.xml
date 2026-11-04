@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- 前景为 864px 满幅位图，已按 108dp 画布预合成：主体宽 64dp，落在 66dp 安全圆内，
-     换图时保持同样的安全区比例，否则圆形遮罩的启动器会切掉图形两端。 -->
+     换图时保持同样的安全区比例，否则圆形遮罩的启动器会切掉图形两端。
+     monochrome 是主题图标（Android 13+）用的单色剪影，几何与前景同尺寸同位置，
+     由系统按壁纸取色平涂；缺这一层时开关主题图标后本应用仍显示彩色。 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/launcher_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
 </adaptive-icon>
 
