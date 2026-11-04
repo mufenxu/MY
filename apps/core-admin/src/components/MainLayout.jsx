@@ -53,14 +53,10 @@ const MENU_ITEMS = [
     { key: '/settings', icon: <SettingOutlined />, label: '设置' },
 ];
 
-/** 品牌标记：轨道 + 柠檬绿节点，与珍珠语汇的单一强调色一致 */
+/** 品牌标记：统一使用平台应用图标（透明底无限环） */
 const BrandMark = () => (
     <span className="brand-mark" aria-hidden="true">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="1.7" strokeLinecap="round">
-            <circle cx="12" cy="12" r="4.1" />
-            <ellipse cx="12" cy="12" rx="9.1" ry="4.4" transform="rotate(-26 12 12)" strokeOpacity="0.5" />
-            <circle cx="18.4" cy="7.4" r="1.7" fill="var(--lime)" stroke="none" />
-        </svg>
+        <img src="/favicon.svg" alt="" />
     </span>
 );
 

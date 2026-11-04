@@ -219,7 +219,7 @@ button:focus, button:active, button:focus-visible {
 
 .brand-logo:hover .logo-box {
   transform: scale(1.08) rotate(-3deg);
-  filter: drop-shadow(0 4px 12px rgba(217, 119, 36, 0.3));
+  filter: drop-shadow(0 4px 12px rgba(11, 111, 214, 0.3));
 }
 
 .brand-info {

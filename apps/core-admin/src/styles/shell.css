@@ -61,6 +61,14 @@
   box-shadow: var(--edge), var(--e1);
 }
 
+/* 品牌标记内是透明底的应用图标，等比缩放不裁切 */
+.brand-mark img {
+  display: block;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
 .brand-copy {
   display: flex;
   min-width: 0;

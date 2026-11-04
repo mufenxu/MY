@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getNavigationGroup, NAV_GROUPS, resolveConsoleView } from './navigation.js';
+import { PLATFORM_BRAND_ICON } from './brand.js';
 import { requestJson } from './api.js';
 import { ViewLoadingFallback, ViewModuleBoundary, getGreeting, NAVIGATION_ICONS, VIEW_ICONS } from './shared.jsx';
 import { OverviewView } from './OverviewView.jsx';
@@ -412,7 +413,7 @@ export function Dashboard({ session, onLogout }) {
           inert={commandOpen || undefined}
         >
           <div className="rail-brand">
-            <span className="brand-mark" aria-hidden="true"><img src="/assets/console-avatar.jpg" alt="" /></span>
+            <span className="brand-mark" aria-hidden="true"><img src={PLATFORM_BRAND_ICON} alt="" /></span>
             <span className="brand-text">
               <strong className="brand-name">MY 平台</strong>
               <small className="brand-sub">统一服务控制台</small>
@@ -561,7 +562,7 @@ export function Dashboard({ session, onLogout }) {
             </div>
 
             <div className="user-chip" title={`${username} · ${environmentLabel}`}>
-              <span className="avatar" aria-hidden="true"><img src="/assets/console-avatar.jpg" alt="" /></span>
+              <span className="avatar" aria-hidden="true"><img src={PLATFORM_BRAND_ICON} alt="" /></span>
               <span className="user-meta">
                 <span className="user-name">{username}</span>
                 <span className="user-role">{session.authDisabled ? '本地调试' : '超级管理员'}</span>
