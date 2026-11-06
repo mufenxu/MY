@@ -249,6 +249,47 @@ test('direct external applications launch straight to the configured URL without
   });
 });
 
+test('editing a direct application saves a plain HTTP launch URL instead of rejecting it', async () => {
+  const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };
+  const externalApplicationStore = createMemoryExternalApplicationStore();
+  const app = createApp({ config, externalApplicationStore });
+
+  await withFetchServer(app, async (origin) => {
+    const createdResponse = await fetch(`${origin}/api/external-apps`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' },
+      body: JSON.stringify({
+        kind: 'direct',
+        name: '内网后台',
+        launchUrl: 'https://intranet.example.com',
+        requiredRole: 'viewer',
+        openMode: 'webview',
+        enabled: true,
+      }),
+    });
+    assert.equal(createdResponse.status, 201);
+    const created = await createdResponse.json();
+
+    const updateResponse = await fetch(`${origin}/api/external-apps/${created.application.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'X-Platform-Request': 'console' },
+      body: JSON.stringify({
+        kind: 'direct',
+        name: '内网后台',
+        launchUrl: 'http://intranet.example.com',
+        healthUrl: null,
+        requiredRole: 'viewer',
+        openMode: 'webview',
+        enabled: true,
+        autoLogin: null,
+      }),
+    });
+    assert.equal(updateResponse.status, 200);
+    const updated = await updateResponse.json();
+    assert.equal(updated.application.launchUrl, 'http://intranet.example.com/');
+  });
+});
+
 test('unauthenticated OAuth authorization starts at the dedicated identity login page', async () => {
   const config = {
     ...loadConfig({ NODE_ENV: 'development' }),

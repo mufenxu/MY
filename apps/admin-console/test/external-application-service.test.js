@@ -76,6 +76,36 @@ test('direct applications need only a name and URL and reject auto-login', () =>
   }, { isProduction: true }), /直接打开类型/);
 });
 
+test('direct applications accept plain HTTP launches while identity flows still require HTTPS', () => {
+  const normalized = normalizeExternalApplicationInput({
+    kind: 'direct',
+    name: '蜜雪后台',
+    launchUrl: 'http://mxwk.online',
+    requiredRole: 'viewer',
+    openMode: 'webview',
+    enabled: true,
+  }, { isProduction: true });
+  assert.equal(normalized.launchUrl, 'http://mxwk.online/');
+  assert.equal(normalized.autoLogin, null);
+  assert.equal(normalizeExternalApplicationInput({
+    kind: 'direct',
+    name: '蜜雪后台',
+    launchUrl: 'http://mxwk.online',
+    healthUrl: 'http://mxwk.online/healthz',
+    requiredRole: 'viewer',
+    openMode: 'webview',
+  }, { isProduction: true }).healthUrl, 'http://mxwk.online/healthz');
+
+  assert.throws(() => normalizeExternalApplicationInput({
+    kind: 'oidc',
+    name: '蜜雪后台',
+    redirectUris: ['https://a.example.com/auth/my/callback'],
+    launchUrl: 'http://mxwk.online',
+    requiredRole: 'viewer',
+    openMode: 'webview',
+  }, { isProduction: true }), /HTTPS/);
+});
+
 test('role access follows existing viewer operator super-admin order', () => {
   const application = { requiredRole: 'operator', enabled: true };
   assert.equal(roleCanAccessExternalApplication('viewer', application), false);

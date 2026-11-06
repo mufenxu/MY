@@ -65,13 +65,16 @@ export function normalizeExternalApplicationInput(input, { isProduction = true, 
   if (!ROLE_LEVELS[requiredRole]) throw new TypeError('访问角色无效。');
   const openMode = String(input.openMode || 'webview').trim().toLowerCase();
   if (!OPEN_MODES.has(openMode)) throw new TypeError('打开方式无效。');
+  // 直接打开类型只是把网址交给 App 的 WebView / 浏览器，平台不向该地址发送任何凭据，
+  // 校园内网系统多为纯 HTTP，所以这里允许明文地址；OIDC 与自动登录仍强制 HTTPS。
+  const launchAllowsInsecure = direct || Boolean(autoLogin);
   return {
     kind,
     name,
     description: String(input.description || '').trim().slice(0, 500),
     redirectUris: normalizedRedirects,
-    launchUrl: secureHttpUrl(input.launchUrl, '启动地址', { isProduction, allowInsecure: Boolean(autoLogin) }),
-    healthUrl: secureHttpUrl(input.healthUrl, '健康检查地址', { isProduction, optional: true }),
+    launchUrl: secureHttpUrl(input.launchUrl, '启动地址', { isProduction, allowInsecure: launchAllowsInsecure }),
+    healthUrl: secureHttpUrl(input.healthUrl, '健康检查地址', { isProduction, optional: true, allowInsecure: direct }),
     requiredRole,
     openMode,
     enabled: input.enabled !== false,

@@ -429,6 +429,9 @@ class PlatformWebActivity : ComponentActivity() {
             webViewInstance?.visibility = View.INVISIBLE
         }
         webViewInstance?.onPause()
+        // 把内存中的 Cookie 同步落盘。WebView 的自动持久化有几十秒延迟，进程在后台被
+        // 系统回收时未落盘的会话 Cookie 会直接丢失，表现为“过一段时间网站又要重新登录”。
+        if (webViewInstance != null) runCatching { CookieManager.getInstance().flush() }
         super.onPause()
     }
 

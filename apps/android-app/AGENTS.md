@@ -125,6 +125,7 @@
 - **用户可见文案保持规范中文**（保留产品名、标准代码或国际协议字段原样）。
 - **依赖组装统一走 `AppContainer`**（`AppContainer.kt`，2026-11 引入）：SessionStore、PlatformApi、各 Preferences/Store 等跨域共享组件只在容器创建一次，AppViewModel、MainActivity 从 `MyControlApplication.container` 获取，禁止在业务组件内再次 `new`（Worker 等后台组件同理）。带跨域回调 wiring 的 StateHolder/Controller 仍在 AppViewModel 组装——它们的回调绑定 AppViewModel 私有状态，不属于容器职责。不引入 Hilt/Koin：单 module 应用下手工容器性价比最高。
 - **PlatformApi 收敛为纯网关**：业务方法按域拆到 `OperationsRepository`（运维域：overview/incidents/tasks/backup/ct8/diagnostics）、`CampusRepository`、`IotRepository` 等；新增接口先归域，不再往 PlatformApi 平铺方法。各域数据模型与解析函数就近放在对应 Repository 文件内（private 顶层函数），需要跨文件复用时才提升为 internal。
+- **平台会话与内置浏览器登录态必须解耦**：`SessionStore.clear()` 默认只清平台会话；只有「用户主动退出登录」和「换账号」才允许清 WebView 的 Cookie 与网页本地存储（`WebSessionStore.clear()`）。会话过期、401、refresh 失败、密钥损坏都属于同一账号内的会话重建，**严禁**顺手清浏览器数据，否则用户每次重登 App 都要把所有网站重输一遍。WebView 所在 Activity 的 `onPause()` 必须调用 `CookieManager.flush()`，否则进程被系统回收时未落盘的会话 Cookie 会丢。
 
 ## 10. 标准公共组件库体系 (Component Library)
 

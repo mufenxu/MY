@@ -220,3 +220,12 @@ test('backup view manages scheduled and S3-compatible offsite backups without ex
   assert.match(styles, /\.offsite-layout/);
   assert.match(styles, /\.col-remote/);
 });
+
+test('external application editor reports save failures inside the dialog', () => {
+  const view = readSource('src', 'client', 'ExternalApplicationsView.jsx');
+
+  assert.match(view, /function ApplicationEditor\(\{ application, busy, error, onClose, onSave \}\)/);
+  assert.match(view, /error && <div className="error-banner" role="alert">/);
+  assert.match(view, /<ApplicationEditor application=\{editor\} busy=\{Boolean\(busyId\)\} error=\{error\}/);
+  assert.match(view, /onClick=\{\(\) => openEditor\(application\)\}/);
+});

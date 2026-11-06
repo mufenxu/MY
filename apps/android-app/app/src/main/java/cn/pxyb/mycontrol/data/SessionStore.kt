@@ -137,6 +137,7 @@ class SessionStore(context: Context) {
             val plaintext = credentials.encode()
             val payload = try { encrypt(plaintext, SecretKeySpec(dek, "AES"), associatedData) } finally { plaintext.fill(0) }
             val previousAlias = preferences.getString(KEY_DEVICE_KEY_ALIAS, null)
+            val previousUsername = readLastUsername().takeIf(String::isNotBlank)
             check(preferences.edit()
                 .putInt(KEY_STORAGE_VERSION, STORAGE_VERSION)
                 .putString(KEY_ACTIVE_USERNAME, username).putString("last_username", username)
@@ -151,7 +152,9 @@ class SessionStore(context: Context) {
             activeDataKey = dek.copyOf()
             activeCredentials = credentials
             if (previousAlias != credentials.deviceKeyAlias) DeviceProof.delete(previousAlias)
-            WebSessionStore.clear()
+            // 只有换账号才清空内置浏览器的登录态。同一账号在会话过期后重新登录必须保留，
+            // 否则“隔夜重登 App”会把所有第三方站点的 Cookie 一起清掉。
+            if (previousUsername != null && !previousUsername.equals(username, ignoreCase = true)) WebSessionStore.clear()
         } finally { dek.fill(0) }
     }
 
@@ -182,12 +185,19 @@ class SessionStore(context: Context) {
         deviceId
     }
 
-    fun clear(deleteDeviceKey: Boolean = true) = synchronized(sessionLock) {
+    /**
+     * 清空平台会话。
+     *
+     * [clearWebSessions] 决定是否同时清空内置浏览器（WebView）的 Cookie 与网页本地存储，
+     * 只允许“用户主动退出登录”传 true。会话过期、401、密钥损坏等同一账号内的会话重建
+     * 不得波及第三方站点的登录态，否则用户每次重新登录 App 都要重新登录所有网站。
+     */
+    fun clear(deleteDeviceKey: Boolean = true, clearWebSessions: Boolean = false) = synchronized(sessionLock) {
         if (deleteDeviceKey) DeviceProof.delete(preferences.getString(KEY_DEVICE_KEY_ALIAS, null))
         clearMemory()
         advanceGeneration()
         clearSessionData()
-        WebSessionStore.clear()
+        if (clearWebSessions) WebSessionStore.clear()
     }
 
     private fun clearSessionData(store: SharedPreferences = preferences) {

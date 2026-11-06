@@ -252,10 +252,15 @@ class PlatformAuthRepository internal constructor(private val http: PlatformHttp
             http.currentSession().also { session ->
                 sessionStore.withRequestSession(session) {
                     snapshotStore.clear(scope = session.accountScope)
-                    sessionStore.clear(deleteDeviceKey = false)
+                    // 主动退出登录视为“交出设备”，连同内置浏览器的 Cookie 一起清掉；
+                    // 会话过期/401 走 SessionStore.clear 的默认参数，不影响网站登录态。
+                    sessionStore.clear(deleteDeviceKey = false, clearWebSessions = true)
                 }
             }
         }
+        // 必须在会话锁外等待：清理任务在主线程执行，持锁挂起会阻塞其它读到会话的线程。
+        // 等它真正落盘，避免紧接着登录另一个账号时仍带着上一个账号的站点登录态。
+        WebSessionStore.awaitCleared()
         onLocalSessionCleared()
         withContext(Dispatchers.IO) {
             runCatching {

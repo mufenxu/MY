@@ -85,9 +85,10 @@ function roleLabel(role) {
   return ROLE_OPTIONS.find((option) => option.value === role)?.label || role;
 }
 
-function ApplicationEditor({ application, busy, onClose, onSave }) {
+function ApplicationEditor({ application, busy, error, onClose, onSave }) {
   const [form, setForm] = useState(() => formFromApplication(application));
   const direct = form.kind === 'direct';
+  const insecureLaunchUrl = direct && /^http:\/\//i.test(form.launchUrl.trim());
 
   function update(key, value) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -125,6 +126,7 @@ function ApplicationEditor({ application, busy, onClose, onSave }) {
         </header>
         <form className="external-app-form" onSubmit={submit}>
           <div className="modal-body external-app-form-scroll">
+            {error && <div className="error-banner" role="alert"><CircleAlert size={17} aria-hidden="true" /><span>{error}</span></div>}
             <div className="external-app-form-grid">
               <div className="external-app-kind-field external-app-span" role="radiogroup" aria-label="接入方式">
                 <span>接入方式</span>
@@ -141,7 +143,7 @@ function ApplicationEditor({ application, busy, onClose, onSave }) {
                 </div>
               </div>
               <label className="external-app-field"><span>应用名称<em className="req">*</em></span><input required maxLength={100} value={form.name} onChange={(event) => update('name', event.target.value)} /></label>
-              <label className="external-app-field"><span>{direct ? '访问网址' : '启动地址'}<em className="req">*</em></span><input required type="url" placeholder={direct ? 'https://example.com' : (form.autoLoginEnabled ? 'http://example.com/index/index.php（登录后首页）' : 'https://app.example.com/auth/my/start')} value={form.launchUrl} onChange={(event) => update('launchUrl', event.target.value)} /></label>
+              <label className="external-app-field"><span>{direct ? '访问网址' : '启动地址'}<em className="req">*</em></span><input required type="url" placeholder={direct ? 'https://example.com' : (form.autoLoginEnabled ? 'http://example.com/index/index.php（登录后首页）' : 'https://app.example.com/auth/my/start')} value={form.launchUrl} onChange={(event) => update('launchUrl', event.target.value)} />{insecureLaunchUrl && <small className="external-app-note">该地址未启用 HTTPS，App 内打开时请确认站点可信。</small>}</label>
               <label className="external-app-field external-app-span"><span>应用说明</span><textarea maxLength={500} value={form.description} onChange={(event) => update('description', event.target.value)} /></label>
               {!direct && (
                 <>
@@ -241,6 +243,11 @@ export default function ExternalApplicationsView({ session }) {
     [applications],
   );
 
+  function openEditor(application) {
+    setError('');
+    setEditor(application);
+  }
+
   async function saveApplication(form) {
     const editing = editor || null;
     setBusyId(editing?.id || 'create');
@@ -318,11 +325,11 @@ export default function ExternalApplicationsView({ session }) {
           <div className="external-app-toolbar-actions">
             <a className="btn btn-secondary btn-sm" href="/docs/external-auth" target="_blank" rel="noreferrer"><BookOpen size={15} aria-hidden="true" />接入文档</a>
             <button className="btn btn-secondary btn-sm" type="button" disabled={refreshing} onClick={() => load(true)}><RefreshCw className={refreshing ? 'spin' : ''} size={15} aria-hidden="true" />刷新应用状态</button>
-            {superAdmin && <button className="btn btn-primary btn-sm" type="button" onClick={() => setEditor(null)}><Plus size={15} aria-hidden="true" />接入应用</button>}
+            {superAdmin && <button className="btn btn-primary btn-sm" type="button" onClick={() => openEditor(null)}><Plus size={15} aria-hidden="true" />接入应用</button>}
           </div>
         </div>
 
-        {error && <div className="error-banner" role="alert"><CircleAlert size={17} aria-hidden="true" /><span>{error}</span></div>}
+        {error && editor === undefined && <div className="error-banner" role="alert"><CircleAlert size={17} aria-hidden="true" /><span>{error}</span></div>}
 
         {loading ? (
           <div className="view-loading large"><LoaderCircle className="spin" size={20} aria-hidden="true" /><span>正在加载外部应用</span></div>
@@ -357,7 +364,7 @@ export default function ExternalApplicationsView({ session }) {
                     </button>
                     {superAdmin && (
                       <div className="row-actions">
-                        <button className="icon-action" type="button" title="编辑应用" aria-label={`编辑应用：${application.name}`} onClick={() => setEditor(application)}><Pencil size={15} aria-hidden="true" /></button>
+                        <button className="icon-action" type="button" title="编辑应用" aria-label={`编辑应用：${application.name}`} onClick={() => openEditor(application)}><Pencil size={15} aria-hidden="true" /></button>
                         {application.kind !== 'direct' && <button className="icon-action" type="button" title="轮换客户端密钥" aria-label={`轮换客户端密钥：${application.name}`} onClick={() => rotateSecret(application)}><KeyRound size={15} aria-hidden="true" /></button>}
                         <button className="icon-action danger" type="button" title="删除应用" aria-label={`删除应用：${application.name}`} onClick={() => setDeleteTarget(application)}><Trash2 size={15} aria-hidden="true" /></button>
                       </div>
@@ -370,7 +377,7 @@ export default function ExternalApplicationsView({ session }) {
         )}
       </div>
 
-      {editor !== undefined && <ApplicationEditor application={editor} busy={Boolean(busyId)} onClose={() => setEditor(undefined)} onSave={saveApplication} />}
+      {editor !== undefined && <ApplicationEditor application={editor} busy={Boolean(busyId)} error={error} onClose={() => setEditor(undefined)} onSave={saveApplication} />}
       <SecretDialog result={secretResult} onClose={() => setSecretResult(null)} />
       <ConfirmDialog open={Boolean(deleteTarget)} title="删除外部应用" description="删除后该项目将无法继续使用 MY 登录。" detail={deleteTarget?.name} confirmLabel="删除应用" busy={busyId === deleteTarget?.id} onCancel={() => setDeleteTarget(null)} onConfirm={deleteApplication} />
     </section>
