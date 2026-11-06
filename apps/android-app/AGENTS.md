@@ -123,6 +123,8 @@
 - **严禁混用状态跳转与路由栈**：二级路由必须登记在 `parentTabForSubScreen`。
 - **领域状态必须自带 StateHolder**：`AppUiState` 只保留跨界面共享的会话与导航字段；单一业务域的数据、加载标记与忙碌标记放进 `ui/feature/<域>/` 下继承 `FeatureStateHolder` 的状态类，界面订阅该域的 `xxxState`，不要从大状态里读平铺字段。新增或迁移领域时照 `GitHubProjectsStateHolder` 的写法：私有 `mutableState`、`loadXxx()` 带 `canRequest` 守卫、失败经 `handleRequestFailure` 触发会话失效、`clearPendingState` 复位忙碌标记。领域状态搬出 `AppUiState` 后，界面投影改为显式接收该域状态（`toXxxUiState(domain: XxxUiState)`），并在 `AppViewModel` 用带 `source` 参数的 `deriveState` 组合派生；不要再把领域字段拷回大状态做中转。
 - **用户可见文案保持规范中文**（保留产品名、标准代码或国际协议字段原样）。
+- **依赖组装统一走 `AppContainer`**（`AppContainer.kt`，2026-11 引入）：SessionStore、PlatformApi、各 Preferences/Store 等跨域共享组件只在容器创建一次，AppViewModel、MainActivity 从 `MyControlApplication.container` 获取，禁止在业务组件内再次 `new`（Worker 等后台组件同理）。带跨域回调 wiring 的 StateHolder/Controller 仍在 AppViewModel 组装——它们的回调绑定 AppViewModel 私有状态，不属于容器职责。不引入 Hilt/Koin：单 module 应用下手工容器性价比最高。
+- **PlatformApi 收敛为纯网关**：业务方法按域拆到 `OperationsRepository`（运维域：overview/incidents/tasks/backup/ct8/diagnostics）、`CampusRepository`、`IotRepository` 等；新增接口先归域，不再往 PlatformApi 平铺方法。各域数据模型与解析函数就近放在对应 Repository 文件内（private 顶层函数），需要跨文件复用时才提升为 internal。
 
 ## 10. 标准公共组件库体系 (Component Library)
 

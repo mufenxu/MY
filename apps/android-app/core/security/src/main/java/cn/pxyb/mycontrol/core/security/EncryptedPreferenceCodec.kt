@@ -19,12 +19,24 @@ class EncryptedPreferenceCodec(
     private val preferences: SharedPreferences,
     private val keyAlias: String,
 ) {
+    /**
+     * 读取并顺手迁移旧明文：迁移失败立即删除明文并记录。
+     *
+     * 旧行为是迁移失败时静默返回明文——明文会永久留在磁盘上，加密编解码器
+     * 等于留下不加密的后门。当前所有使用方存的都是可重建的缓存/快照数据
+     * （响应快照、学习日志、待办来源等），删除明文后下次请求自然重建，
+     * 符合本类的加密契约。
+     */
     fun read(key: String): String? {
         val stored = preferences.getString(key, null) ?: return null
         if (stored.startsWith(PREFIX)) return decrypt(stored)
 
-        // Migrate existing plaintext snapshots without making first startup destructive.
-        runCatching { preferences.edit().putString(key, encrypt(stored)).apply() }
+        val migrated = runCatching { encrypt(stored) }.getOrElse { error ->
+            android.util.Log.e(TAG, "加密迁移失败，删除明文 key=$key", error)
+            preferences.edit().remove(key).apply()
+            return null
+        }
+        preferences.edit().putString(key, migrated).apply()
         return stored
     }
 
@@ -74,5 +86,6 @@ class EncryptedPreferenceCodec(
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val IV_SIZE = 12
         const val PREFIX = "enc:v1:"
+        const val TAG = "EncryptedPreferenceCodec"
     }
 }

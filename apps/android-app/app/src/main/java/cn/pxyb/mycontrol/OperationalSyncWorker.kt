@@ -77,8 +77,8 @@ class OperationalSyncWorker(
                 }
 
                 // 提醒、待办和课程保持 15 分钟同步；概要、设备和安全巡检每小时更新。
-                val incidents = optionalSync { api.incidents() }
-                val tasks = optionalSync { api.tasks().tasks }
+                val incidents = optionalSync { api.operations.incidents() }
+                val tasks = optionalSync { api.operations.tasks().tasks }
                 val syncedTodo = optionalSync { TodoRepository(applicationContext, api, sessionStore).sync(refresh = true).snapshot }
                 val timetable = optionalSync { api.campus.campusTimetable() }
                 val resources = optionalSync { api.resourceExpiries() }
@@ -103,9 +103,9 @@ class OperationalSyncWorker(
                             energy.optJSONObject("wallet")?.optJSONObject("account")?.optString("remainingSum")?.let { cn.pxyb.mycontrol.ui.feature.campus.energy.energyNumber(it) })
                     }
                 }
-                val overview = optionalSync { api.overview() }
+                val overview = optionalSync { api.operations.overview() }
                 val iot = optionalSync { api.iot.dashboard(includeAutomations = false) }
-                val backup = optionalSync { api.backupQuality() }
+                val backup = optionalSync { api.operations.backupQuality() }
                 val security = optionalSync { api.auth.security() }
                 sessionStore.withRequestSession(session) {
                     val assistant = if (timetable != null && syncedTodo != null && incidents != null &&

@@ -6,12 +6,16 @@ import android.os.Bundle
 import cn.pxyb.mycontrol.data.SessionStore
 
 class MyControlApplication : Application() {
+    lateinit var container: AppContainer
+        private set
+
     override fun onCreate() {
         super.onCreate()
+        container = AppContainer(this)
         // 放在最前面：越早安装，越能覆盖启动阶段的崩溃。
         cn.pxyb.mycontrol.data.CrashReporter.install(this)
         cn.pxyb.mycontrol.data.RuntimeSecurity.initialize(this)
-        AppSessionLifecycle.initialize(this)
+        AppSessionLifecycle.initialize(this, container.sessionStore)
     }
 }
 
@@ -22,8 +26,8 @@ internal object AppSessionLifecycle : Application.ActivityLifecycleCallbacks {
     @Volatile var isForeground = false
         private set
 
-    fun initialize(application: Application) {
-        sessionStore = SessionStore(application)
+    fun initialize(application: Application, store: SessionStore) {
+        sessionStore = store
         application.registerActivityLifecycleCallbacks(this)
     }
 

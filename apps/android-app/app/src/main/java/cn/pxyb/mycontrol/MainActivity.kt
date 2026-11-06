@@ -44,7 +44,6 @@ import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.lifecycleScope
 import cn.pxyb.mycontrol.data.AppPreferences
 import cn.pxyb.mycontrol.data.AppThemePreference
-import cn.pxyb.mycontrol.data.SessionStore
 import cn.pxyb.mycontrol.ui.AppViewModel
 import cn.pxyb.mycontrol.ui.MyControlApp
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
@@ -58,9 +57,10 @@ import kotlinx.coroutines.withTimeout
 
 class MainActivity : ComponentActivity() {
     private val appViewModel: AppViewModel by viewModels()
+    private val container get() = (application as MyControlApplication).container
     private val credentialManager by lazy { CredentialManager.create(this) }
-    private val alertNotifier by lazy { AlertNotifier(this) }
-    private val sessionStore by lazy { SessionStore(this) }
+    private val alertNotifier by lazy { container.alertNotifier }
+    private val sessionStore by lazy { container.sessionStore }
     private val nfcAdapter by lazy { NfcAdapter.getDefaultAdapter(this) }
     private var pendingNfcScene: Pair<String, String>? = null
     private var notificationsEnabled = mutableStateOf(false)

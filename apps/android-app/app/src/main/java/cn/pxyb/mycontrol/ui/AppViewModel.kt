@@ -133,16 +133,17 @@ class AppViewModel(
     application: Application,
     private val savedStateHandle: SavedStateHandle,
 ) : AndroidViewModel(application) {
-    private val sessionStore = SessionStore(application)
-    private val googleAccountStore = GoogleAccountStore(application)
-    private val homePreferences = HomePreferences(application)
-    private val assistantPreferences = AssistantPreferences(application)
-    private val personalStore = PersonalWorkspaceStore(application)
-    private val snapshotStore = ResponseSnapshotStore(application)
-    private val api = PlatformApi(sessionStore, snapshotStore)
+    private val container = (application as cn.pxyb.mycontrol.MyControlApplication).container
+    private val sessionStore = container.sessionStore
+    private val googleAccountStore = container.googleAccountStore
+    private val homePreferences = container.homePreferences
+    private val assistantPreferences = container.assistantPreferences
+    private val personalStore = container.personalStore
+    private val snapshotStore = container.snapshotStore
+    private val api = container.api
     private val networkDiagnostics = NetworkDiagnostics(api)
-    private val alertNotifier by lazy { AlertNotifier(application) }
-    private val androidCalendarSync = AndroidCalendarSync(application)
+    private val alertNotifier by lazy { container.alertNotifier }
+    private val androidCalendarSync = container.androidCalendarSync
     private val mutableState = MutableStateFlow(
         AppUiState(
             booting = true,
@@ -172,7 +173,7 @@ class AppViewModel(
         onMessage = { message -> mutableState.update { it.copy(message = message) } },
         onWebLoginLink = { link -> mutableState.update { it.copy(webLoginLink = link) } },
     )
-    private val appUpdateManager = AppUpdateManager(application)
+    private val appUpdateManager = container.appUpdateManager
     private val appUpdates = AppUpdateStateHolder(viewModelScope, appUpdateManager) { message ->
         mutableState.update { it.copy(message = message, error = null) }
     }
@@ -1773,10 +1774,10 @@ class AppViewModel(
     }
 
     private fun refreshOverview(force: Boolean) = launchRefresh(DataSection.Overview, force, preloadCache = {
-        val overview = api.overview()
+        val overview = api.operations.overview()
         mutableState.update { it.copy(overview = overview) }
     }) {
-        val overview = api.overview(force)
+        val overview = api.operations.overview(force)
         mutableState.update { it.copy(overview = overview) }
         publishWidget()
     }
@@ -1790,10 +1791,10 @@ class AppViewModel(
         }
 
     private fun refreshIncidents(force: Boolean = false) = launchRefresh(DataSection.Incidents, force, preloadCache = {
-        val incidents = api.incidents()
+        val incidents = api.operations.incidents()
         mutableState.update { it.copy(incidents = incidents) }
     }) {
-        val incidents = api.incidents()
+        val incidents = api.operations.incidents()
         mutableState.update { it.copy(incidents = incidents) }
         initialIncidentsLoaded = true
         publishWidget()
@@ -1801,17 +1802,17 @@ class AppViewModel(
     }
 
     private fun refreshTasks(force: Boolean = false) = launchRefresh(DataSection.Tasks, force, preloadCache = {
-        val tasks = api.tasks().tasks
+        val tasks = api.operations.tasks().tasks
         mutableState.update { it.copy(tasks = tasks) }
     }) {
-        val tasks = api.tasks().tasks
+        val tasks = api.operations.tasks().tasks
         mutableState.update { it.copy(tasks = tasks) }
         initialTasksLoaded = true
         evaluateAlerts()
     }
 
     private fun refreshBackup(force: Boolean = false) = launchRefresh(DataSection.Backup, force) {
-        val backup = api.backupQuality()
+        val backup = api.operations.backupQuality()
         mutableState.update { it.copy(backup = backup) }
     }
 
@@ -1947,7 +1948,7 @@ class AppViewModel(
     }
 
     private fun refreshCt8(force: Boolean = false) = launchRefresh(DataSection.Ct8, force) {
-        val ct8 = api.ct8()
+        val ct8 = api.operations.ct8()
         mutableState.update { it.copy(ct8 = ct8) }
     }
 
@@ -2052,7 +2053,7 @@ class AppViewModel(
     fun deleteIotRule(id: String, confirmation: suspend () -> Boolean) = scenes.deleteIotRule(id, confirmation)
 
     fun runDiagnostics() = runAction("diagnostics", "所有者一键巡检已完成。") {
-        val diagnostics = api.runDiagnostics()
+        val diagnostics = api.operations.runDiagnostics()
         val current = mutableState.value
         val refreshed = mutableListOf<DataSection>()
 
@@ -2067,9 +2068,9 @@ class AppViewModel(
                 fallback
             }
 
-        val overview = fetch(DataSection.Overview, current.overview) { api.overview(force = true) }
-        val incidents = fetch(DataSection.Incidents, current.incidents) { api.incidents() }
-        val backup = fetch(DataSection.Backup, current.backup) { api.backupQuality() }
+        val overview = fetch(DataSection.Overview, current.overview) { api.operations.overview(force = true) }
+        val incidents = fetch(DataSection.Incidents, current.incidents) { api.operations.incidents() }
+        val backup = fetch(DataSection.Backup, current.backup) { api.operations.backupQuality() }
         val iot = fetch(DataSection.Iot, current.iot) { api.iot.dashboard() }
         val resources = fetch(DataSection.Resources, campusData.state.value.resourceExpiries) { api.resourceExpiries() }
         campusData.setResourceExpiries(resources)
@@ -2088,15 +2089,15 @@ class AppViewModel(
 
     fun triggerBackup(confirmation: suspend () -> Boolean) =
         runAction("backup", "备份任务已进入执行队列。", confirmation) {
-        api.triggerBackup()
-        mutableState.update { it.copy(backup = api.backupQuality()) }
+        api.operations.triggerBackup()
+        mutableState.update { it.copy(backup = api.operations.backupQuality()) }
         sectionRefresh.recordExternalRefresh(listOf(DataSection.Backup))
     }
 
     fun triggerCt8(confirmation: suspend () -> Boolean) =
         runAction("ct8", "CT8 任务已提交。", confirmation) {
-        api.triggerCt8()
-        mutableState.update { it.copy(ct8 = api.ct8()) }
+        api.operations.triggerCt8()
+        mutableState.update { it.copy(ct8 = api.operations.ct8()) }
         sectionRefresh.recordExternalRefresh(listOf(DataSection.Ct8))
     }
 
@@ -2104,20 +2105,20 @@ class AppViewModel(
 
     fun addIncidentNote(id: String, note: String) =
         runAction("incident-note:$id", "处理记录已保存。") {
-            api.updateIncident(id, "note", note)
-            mutableState.update { it.copy(incidents = api.incidents()) }
+            api.operations.updateIncident(id, "note", note)
+            mutableState.update { it.copy(incidents = api.operations.incidents()) }
         }
 
     fun muteIncident(id: String, confirmation: suspend () -> Boolean) =
         runAction("incident-mute:$id", "该问题已静音 1 小时。", confirmation) {
-            api.updateIncident(id, "mute", muteMinutes = 60)
-            mutableState.update { it.copy(incidents = api.incidents()) }
+            api.operations.updateIncident(id, "mute", muteMinutes = 60)
+            mutableState.update { it.copy(incidents = api.operations.incidents()) }
         }
 
     fun resolveIncident(id: String, note: String, confirmation: suspend () -> Boolean) =
         runAction("incident-resolve:$id", "该问题已标记解决。", confirmation) {
-            api.updateIncident(id, "resolve", note)
-            mutableState.update { it.copy(incidents = api.incidents()) }
+            api.operations.updateIncident(id, "resolve", note)
+            mutableState.update { it.copy(incidents = api.operations.incidents()) }
         }
 
     fun controlIotRelay(
