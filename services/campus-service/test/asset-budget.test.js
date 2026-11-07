@@ -8,11 +8,17 @@ const budgets = {
   "public/academic-integrations.css": 8 * 1024,
   "public/admin.js": 4 * 1024,
   "public/sms-login.js": 8 * 1024,
-  "public/libroom-page.js": 16 * 1024,
+  "public/reservation-hub.js": 8 * 1024,
+  "public/reservation-hub.css": 10 * 1024,
+  "public/libroom-page.js": 21 * 1024,
   "public/libroom-page.css": 8 * 1024,
+  "public/libroom-records-page.js": 17 * 1024,
+  "public/libroom-auto-page.js": 14 * 1024,
+  "public/library-seat-page.js": 48 * 1024,
+  "public/library-seat-page.css": 6 * 1024,
   "public/browser-check.js": 4 * 1024,
   "public/styles.css": 243 * 1024,
-  "public/index.html": 41 * 1024,
+  "public/index.html": 42 * 1024,
   "public/assets/hgu-emblem.png": 50 * 1024
 };
 

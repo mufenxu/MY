@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Features
+
+- Merge the web reservation area into one `预约` navigation entry with `研讨间` and `图书馆座位` top-level tabs, so the mobile quick nav keeps seven items instead of adding a second reservation entry.
+- Add a discussion-room records tab with cancel, end-of-use and reschedule; reschedule follows the upstream cancel-then-recreate flow and states that warning before the second confirmation.
+- Add slot-based room lookup on the discussion-room booking tab, reusing `spaces?date&startTime&endTime` (and `excludeReservationId` while rescheduling).
+- Add a library-seat workspace: overview and area cards, seat list, a floor plan rendered from `querySeatLayout` coordinates, per-seat timeline, seat booking, current-use check-in/leave/stop, today/history/breach/door records and waitlist task management.
+- Link the campus identity code from the reservation tabs by reusing the existing `#campus` card instead of duplicating it.
+
 ### Compatibility
 
 - Keep the teaching-evaluation actions on one mobile row and render eight-digit water codes as a single tabular-number line without overflowing narrow screens.
@@ -15,6 +23,8 @@
 ### Engineering
 
 - Serialize campus-session operations per user and query the UWC water code before its bill, preventing simultaneous token recovery from surfacing a false “account logged in elsewhere” error on first load.
+- Split the reservation UI into `reservation-hub.js`, `libroom-page.js`, `libroom-records-page.js`, `libroom-auto-page.js` and `library-seat-page.js`, each with its own stylesheet, and register them in `check`, `lint` and the static asset budgets.
+- Keep reservation state in memory only; nothing is written to `localStorage`, so switching platform accounts in the same browser cannot leak another user's school reservations.
 - Add browser-storage and server integration regressions for WebView reopen persistence, 30-day expiry, cookie-free WeChat login, stale-cookie recovery and regular-browser isolation.
 - Document the compatibility invariants that must be preserved when changing authentication, cookies or browser asset loading. This implementation supersedes the navigation-based workaround recorded in 0.2.3.
 

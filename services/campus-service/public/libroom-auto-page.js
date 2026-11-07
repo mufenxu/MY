@@ -2,7 +2,7 @@
 
 (function initLibroomAutoPage() {
   const api = window.HguCampusApi;
-  const section = document.querySelector("#reservation");
+  const section = document.querySelector("#resvLibroomAuto");
   if (typeof api !== "function" || !section) return;
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const date = (offset = 0) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(Date.now() + offset * 86400000));
@@ -82,6 +82,8 @@
   async function load() { try { tasks = await api("/api/campus/libroom/auto-reservations"); render(); } catch (error) { n.tasks.innerHTML = `<p class="libroom-status" data-tone="error">${esc(error.message || "自动预约任务加载失败。")}</p>`; } }
   async function loadSpaces() { try { const payload = await api("/api/campus/libroom/spaces"); const queue = [payload]; const found = []; while (queue.length) { const item = queue.shift(); if (Array.isArray(item)) { if (item.some((space) => Number(space?.id ?? space?.area_id) > 0)) found.push(...item); item.forEach((child) => queue.push(child)); } else if (item && typeof item === "object") Object.values(item).forEach((child) => queue.push(child)); } spaces = found.map((space) => ({ id: Number(space.id ?? space.area_id ?? space.areaId), name: `${String(space.name ?? space.area_name ?? space.areaName ?? `空间 ${space.id}`)}（${bookableStart} - ${bookableEnd}）` })).filter((space) => space.id > 0); } catch { spaces = []; } }
   n.date.min = date(); n.executeDate.min = date(); n.date.addEventListener("input", () => { if (!editing) n.executeDate.value = defaultExecuteDate(n.date.value); syncExecuteDateBounds(); }); n.executeDate.addEventListener("input", updateExecuteDateWeekday); n.candidates.addEventListener("input", validateCandidates); n.add.onclick = () => candidateRow(); n.cancel.onclick = () => { n.form.hidden = true; status(""); }; n.create.onclick = () => { editing = ""; n.formTitle.textContent = "新建自动预约任务"; fill(); n.form.hidden = false; n.form.scrollIntoView({ behavior: "smooth", block: "start" }); }; n.form.onsubmit = async (event) => { event.preventDefault(); validateCandidates(); if (!n.form.reportValidity()) return; n.save.disabled = true; status("正在保存自动预约任务..."); try { const path = editing ? `/api/campus/libroom/auto-reservations/${encodeURIComponent(editing)}` : "/api/campus/libroom/auto-reservations"; await api(path, { method: editing ? "PUT" : "POST", body: value() }); n.form.hidden = true; status("自动预约任务已保存。", "ok"); await load(); } catch (error) { status(error.message || "自动预约任务保存失败。", "error"); } finally { n.save.disabled = false; } };
-  function route() { if (window.location.hash === "#reservation") { loadSpaces().then(load); } }
-  window.addEventListener("hashchange", route); route();
+  function route() { loadSpaces().then(load); }
+  document.addEventListener("resv:activate", (event) => { if (event.detail?.view === "libroom" && event.detail?.tab === "auto") route(); });
+  document.addEventListener("resv:refresh", (event) => { if (event.detail?.view === "libroom" && event.detail?.tab === "auto") route(); });
+  if (window.HguReservation?.isRoute() && window.HguReservation.state().tab === "auto") route();
 })();

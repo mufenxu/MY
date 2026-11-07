@@ -1,0 +1,915 @@
+"use strict";
+
+// 图书馆座位：查询座位 / 我的预约 / 候补预约三个页签。
+// 挂载点由 reservation-hub.js 提供：#resvSeatQuery、#resvSeatRecords、#resvSeatWaitlist。
+(function initLibrarySeatPage() {
+  const api = window.HguCampusApi;
+  const queryMount = document.querySelector("#resvSeatQuery");
+  const recordsMount = document.querySelector("#resvSeatRecords");
+  const waitlistMount = document.querySelector("#resvSeatWaitlist");
+  if (typeof api !== "function" || !queryMount || !recordsMount || !waitlistMount) return;
+
+  if (!document.querySelector("link[data-library-seat-page]")) {
+    const stylesheet = document.createElement("link");
+    stylesheet.rel = "stylesheet";
+    stylesheet.href = "./library-seat-page.css?v=20261107-seat-v1";
+    stylesheet.dataset.librarySeatPage = "1";
+    document.head.append(stylesheet);
+  }
+
+  const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+  const pad2 = (value) => String(value).padStart(2, "0");
+  const minuteText = (minutes) => `${pad2(Math.floor(Number(minutes) / 60))}:${pad2(Number(minutes) % 60)}`;
+  const clampMinute = (value) => Math.max(0, Math.min(1440, Math.trunc(Number(value) || 0)));
+  const weekdayText = (value) => {
+    const parsed = new Date(`${value}T12:00:00+08:00`);
+    if (!value || Number.isNaN(parsed.getTime())) return "";
+    return new Intl.DateTimeFormat("zh-CN", { timeZone: "Asia/Shanghai", weekday: "short" }).format(parsed);
+  };
+  const localDate = (offset = 0) => new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit"
+  }).format(new Date(Date.now() + offset * 86400000));
+
+  const SCHOOL_HINT = '学校账号未连接或已过期，请先到 <a href="#campus">一卡通</a> 页面连接学校账号。';
+
+  function errorText(error) {
+    if (!error) return "操作失败。";
+    if (error.code === "SCHOOL_ACCOUNT_REQUIRED") return SCHOOL_HINT;
+    return esc(error.message || "操作失败。");
+  }
+
+  function setStatus(node, message, tone = "") {
+    if (!node) return;
+    node.innerHTML = message;
+    node.dataset.tone = tone;
+  }
+
+  const shared = {
+    overview: null,
+    dates: [],
+    venues: []
+  };
+
+  async function ensureOverview() {
+    if (shared.overview) return shared.overview;
+    shared.overview = await api("/api/campus/library-seat/overview");
+    shared.venues = Array.isArray(shared.overview?.venues) ? shared.overview.venues : [];
+    shared.dates = (Array.isArray(shared.overview?.dates) ? shared.overview.dates : []).filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item));
+    if (!shared.dates.length) shared.dates = [localDate(0), localDate(1), localDate(2)];
+    return shared.overview;
+  }
+
+  function startMinuteOptions() {
+    const options = [];
+    for (let minute = 480; minute <= 1320; minute += 15) options.push(minute);
+    return options;
+  }
+
+  const DURATIONS = [
+    { value: 60, label: "1 小时" },
+    { value: 90, label: "1.5 小时" },
+    { value: 120, label: "2 小时" },
+    { value: 180, label: "3 小时" },
+    { value: 240, label: "4 小时" }
+  ];
+
+  /* ------------------------------------------------------------------ 查询座位 */
+
+  queryMount.innerHTML = `
+    <section class="resv-panel">
+      <div class="resv-panel-head">
+        <div><h3>查询空闲座位</h3><p>先选场馆和时段，再进入阅览区查看平面图或座位列表。</p></div>
+        <div class="resv-actions"><button id="seatQueryButton" type="button">查询座位</button></div>
+      </div>
+      <div class="resv-fields">
+        <label class="resv-field"><span>场馆</span><select id="seatVenue"></select></label>
+        <label class="resv-field"><span>楼层</span><select id="seatFloor"></select></label>
+        <label class="resv-field"><span>日期</span><select id="seatDate"></select></label>
+        <label class="resv-field"><span>开始时间</span><select id="seatStart"></select></label>
+        <label class="resv-field"><span>使用时长</span><select id="seatDuration">${DURATIONS.map((item) => `<option value="${item.value}"${item.value === 120 ? " selected" : ""}>${item.label}</option>`).join("")}</select></label>
+        <div class="resv-field"><span>筛选</span><div class="resv-actions"><label class="resv-check"><input id="seatWindow" type="checkbox">靠窗</label><label class="resv-check"><input id="seatPower" type="checkbox">有电源</label></div></div>
+      </div>
+      <p id="seatQueryStatus" class="resv-status" role="status" aria-live="polite"></p>
+      <div id="seatMetrics" class="resv-metrics"></div>
+    </section>
+    <section id="seatAreasPanel" class="resv-panel" hidden>
+      <div class="resv-panel-head"><div><h3>阅览区</h3><p id="seatAreasHint"></p></div></div>
+      <div id="seatAreas" class="resv-grid"></div>
+    </section>
+    <section id="seatSeatsPanel" class="resv-panel" hidden>
+      <div class="resv-panel-head">
+        <div><h3 id="seatAreaTitle">座位</h3><p id="seatAreaMeta"></p></div>
+        <div class="resv-switch is-small"><button type="button" data-seat-view="plan" class="is-active">平面图</button><button type="button" data-seat-view="grid">列表</button></div>
+      </div>
+      <div id="seatPlanWrap" class="seat-plan-wrap" hidden>
+        <div id="seatPlan" class="seat-plan"></div>
+        <p class="resv-muted">平面图按学校返回的座位布局坐标等比绘制，颜色表示所选时段是否空闲。</p>
+      </div>
+      <div id="seatGrid" class="seat-grid"></div>
+      <p id="seatPlanHint" class="resv-status"></p>
+    </section>
+    <section id="seatBookPanel" class="resv-panel" hidden>
+      <div class="resv-panel-head">
+        <div><h3>预约座位</h3><p id="seatBookMeta"></p></div>
+        <button id="seatBookClose" class="ghost" type="button">取消选择</button>
+      </div>
+      <div id="seatTimeline" class="seat-timeline"></div>
+      <p class="resv-notice">提交后请按学校规定时间签到，超时未签到会被记为违约。</p>
+      <div class="resv-actions"><button id="seatBookButton" type="button">提交预约</button><button id="seatBookGoRecords" class="ghost" type="button">查看我的预约</button></div>
+      <p id="seatBookStatus" class="resv-status" role="status" aria-live="polite"></p>
+    </section>`;
+
+  const q = {
+    venue: queryMount.querySelector("#seatVenue"), floor: queryMount.querySelector("#seatFloor"),
+    date: queryMount.querySelector("#seatDate"), start: queryMount.querySelector("#seatStart"),
+    duration: queryMount.querySelector("#seatDuration"), window: queryMount.querySelector("#seatWindow"),
+    power: queryMount.querySelector("#seatPower"), button: queryMount.querySelector("#seatQueryButton"),
+    status: queryMount.querySelector("#seatQueryStatus"), metrics: queryMount.querySelector("#seatMetrics"),
+    areasPanel: queryMount.querySelector("#seatAreasPanel"), areasHint: queryMount.querySelector("#seatAreasHint"),
+    areas: queryMount.querySelector("#seatAreas"), seatsPanel: queryMount.querySelector("#seatSeatsPanel"),
+    areaTitle: queryMount.querySelector("#seatAreaTitle"), areaMeta: queryMount.querySelector("#seatAreaMeta"),
+    planWrap: queryMount.querySelector("#seatPlanWrap"), plan: queryMount.querySelector("#seatPlan"),
+    grid: queryMount.querySelector("#seatGrid"), planHint: queryMount.querySelector("#seatPlanHint"),
+    bookPanel: queryMount.querySelector("#seatBookPanel"), bookMeta: queryMount.querySelector("#seatBookMeta"),
+    timeline: queryMount.querySelector("#seatTimeline"), bookButton: queryMount.querySelector("#seatBookButton"),
+    bookClose: queryMount.querySelector("#seatBookClose"), bookGoRecords: queryMount.querySelector("#seatBookGoRecords"),
+    bookStatus: queryMount.querySelector("#seatBookStatus")
+  };
+
+  const queryState = {
+    venueId: "", floorId: "", date: "", startMinute: 540, duration: 120,
+    areas: [], area: null, seats: [], layout: null, view: "plan", seat: null,
+    sequence: 0, loaded: false, loading: false
+  };
+
+  function currentWindow() {
+    const start = clampMinute(queryState.startMinute);
+    const end = Math.min(1440, start + Number(queryState.duration || 60));
+    return { start, end };
+  }
+
+  function fillOverviewSelects() {
+    q.venue.innerHTML = shared.venues.map((venue) => `<option value="${esc(venue.id)}">${esc(venue.name)}</option>`).join("");
+    q.date.innerHTML = shared.dates.map((date) => `<option value="${esc(date)}">${esc(date)}（${esc(weekdayText(date))}）</option>`).join("");
+    q.start.innerHTML = startMinuteOptions().map((minute) => `<option value="${minute}"${minute === queryState.startMinute ? " selected" : ""}>${minuteText(minute)}</option>`).join("");
+    q.duration.value = String(queryState.duration);
+    queryState.venueId = shared.venues[0]?.id || "";
+    queryState.date = shared.dates[0] || localDate(0);
+    q.venue.value = queryState.venueId;
+    q.date.value = queryState.date;
+    q.start.value = String(queryState.startMinute);
+    fillFloorSelect();
+  }
+
+  function fillFloorSelect() {
+    const venue = shared.venues.find((item) => String(item.id) === String(queryState.venueId));
+    const floors = Array.isArray(venue?.floors) ? venue.floors : [];
+    q.floor.innerHTML = '<option value="">全部楼层</option>' + floors.map((floor) => `<option value="${esc(floor.id)}">${esc(floor.name)}</option>`).join("");
+    queryState.floorId = "";
+    q.floor.value = "";
+  }
+
+  function renderMetrics(areas) {
+    const total = areas.reduce((sum, area) => sum + (Number(area.seatTotal) || 0), 0);
+    const free = areas.reduce((sum, area) => sum + (Number(area.seatFree) || 0), 0);
+    const rate = total > 0 ? Math.round((free / total) * 1000) / 10 : 0;
+    q.metrics.innerHTML = [
+      ["阅览区", `${areas.length} 个`], ["总座位", `${total}`], ["可预约", `${free}`], ["可用率", `${rate}%`]
+    ].map(([label, value]) => `<div class="resv-metric"><span>${label}</span><strong>${esc(value)}</strong></div>`).join("");
+  }
+
+  function renderAreas() {
+    if (!queryState.areas.length) {
+      q.areasPanel.hidden = false;
+      q.areasHint.textContent = "该条件下没有返回阅览区，试试换时段或取消筛选。";
+      q.areas.innerHTML = '<div class="resv-empty">暂无可选阅览区。</div>';
+      return;
+    }
+    q.areasPanel.hidden = false;
+    const { start, end } = currentWindow();
+    q.areasHint.textContent = `${queryState.date}（${weekdayText(queryState.date)}） ${minuteText(start)} - ${minuteText(end)} · 共 ${queryState.areas.length} 个阅览区`;
+    q.areas.innerHTML = queryState.areas.map((area) => {
+      const active = queryState.area && String(queryState.area.id) === String(area.id);
+      return `<article class="seat-area${active ? " is-active" : ""}" data-seat-area="${esc(area.id)}" tabindex="0" role="button">
+        <div class="seat-area-head"><strong>${esc(area.name)}</strong><span class="resv-badge ${Number(area.seatFree) > 0 ? "is-ok" : "is-bad"}">可用 ${Number(area.seatFree) || 0}</span></div>
+        <p class="resv-muted">${esc([area.buildingName, area.floorName].filter(Boolean).join(" · ") || "—")}</p>
+        <div class="seat-area-metrics"><span>总座位 <b>${Number(area.seatTotal) || 0}</b></span><span>最长 <b>${Number(area.maxMinute) > 0 ? `${Math.round(Number(area.maxMinute) / 60 * 10) / 10}h` : "--"}</b></span></div>
+      </article>`;
+    }).join("");
+    q.areas.querySelectorAll("[data-seat-area]").forEach((card) => {
+      const open = () => selectArea(card.dataset.seatArea);
+      card.addEventListener("click", open);
+      card.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          open();
+        }
+      });
+    });
+  }
+
+  async function runQuery() {
+    const { start, end } = currentWindow();
+    q.button.disabled = true;
+    setStatus(q.status, "正在查询阅览区...");
+    queryState.sequence += 1;
+    const token = queryState.sequence;
+    try {
+      const params = new URLSearchParams({
+        venueId: queryState.venueId, date: queryState.date, startMinute: String(start), endMinute: String(end),
+        pageSize: "100", currentPage: "1", power: String(q.power.checked), window: String(q.window.checked)
+      });
+      if (queryState.floorId) params.set("floorId", queryState.floorId);
+      const payload = await api(`/api/campus/library-seat/areas?${params.toString()}`);
+      if (token !== queryState.sequence) return;
+      queryState.areas = Array.isArray(payload?.areas) ? payload.areas : [];
+      queryState.area = null;
+      queryState.seats = [];
+      queryState.layout = null;
+      queryState.seat = null;
+      q.seatsPanel.hidden = true;
+      q.bookPanel.hidden = true;
+      renderMetrics(queryState.areas);
+      renderAreas();
+      const total = Number(payload?.paging?.total) || queryState.areas.length;
+      setStatus(q.status, total > queryState.areas.length
+        ? `共 ${total} 个阅览区，这里显示前 ${queryState.areas.length} 个。`
+        : `查询到 ${queryState.areas.length} 个阅览区。`, "ok");
+    } catch (error) {
+      if (token !== queryState.sequence) return;
+      queryState.areas = [];
+      renderMetrics([]);
+      q.areasPanel.hidden = true;
+      setStatus(q.status, errorText(error), "error");
+    } finally {
+      if (token === queryState.sequence) q.button.disabled = false;
+    }
+  }
+
+  async function selectArea(areaId) {
+    const area = queryState.areas.find((item) => String(item.id) === String(areaId));
+    if (!area) return;
+    queryState.area = area;
+    queryState.seat = null;
+    q.bookPanel.hidden = true;
+    renderAreas();
+    q.seatsPanel.hidden = false;
+    q.areaTitle.textContent = area.name;
+    const { start, end } = currentWindow();
+    q.areaMeta.textContent = `${[area.buildingName, area.floorName].filter(Boolean).join(" · ") || "阅览区"} · ${queryState.date} ${minuteText(start)} - ${minuteText(end)}`;
+    q.grid.innerHTML = '<div class="resv-empty">正在查询座位...</div>';
+    setStatus(q.planHint, "");
+    const token = ++queryState.sequence;
+    try {
+      const params = new URLSearchParams({
+        roomId: String(area.id), date: queryState.date, startMinute: String(start), endMinute: String(end)
+      });
+      const seatsPromise = api(`/api/campus/library-seat/seats?${params.toString()}`);
+      const layoutPromise = api(`/api/campus/library-seat/layout?roomId=${encodeURIComponent(area.id)}`).catch(() => null);
+      const [seats, layout] = await Promise.all([seatsPromise, layoutPromise]);
+      if (token !== queryState.sequence) return;
+      queryState.seats = Array.isArray(seats) ? seats : [];
+      queryState.layout = layout && Array.isArray(layout.seats) && layout.seats.length ? layout : null;
+      renderSeats();
+    } catch (error) {
+      if (token !== queryState.sequence) return;
+      queryState.seats = [];
+      q.grid.innerHTML = `<div class="resv-empty">${errorText(error)}</div>`;
+    }
+  }
+
+  function seatStatusClass(seat) {
+    if (!seat) return "is-unknown";
+    if (seat.isFree) return "is-free";
+    return String(seat.status || "").toUpperCase() === "IN_USE" ? "is-used" : "is-locked";
+  }
+
+  function seatByLabel() {
+    const map = new Map();
+    queryState.seats.forEach((seat) => {
+      map.set(String(seat.label), seat);
+      map.set(String(seat.id), seat);
+    });
+    return map;
+  }
+
+  function renderSeats() {
+    const seats = queryState.seats;
+    const freeCount = seats.filter((seat) => seat.isFree).length;
+    const usePlan = queryState.view === "plan" && queryState.layout;
+    q.planWrap.hidden = !usePlan;
+    q.grid.hidden = Boolean(usePlan);
+    queryMount.querySelectorAll("[data-seat-view]").forEach((item) => {
+      item.classList.toggle("is-active", item.dataset.seatView === (usePlan ? "plan" : "grid"));
+    });
+    if (!seats.length && !usePlan) {
+      q.grid.innerHTML = '<div class="resv-empty">该时段没有返回座位数据。</div>';
+      return;
+    }
+    if (usePlan) renderPlan();
+    else {
+      q.grid.innerHTML = seats.map((seat) => `<button type="button" class="seat-chip ${seatStatusClass(seat)}${queryState.seat && queryState.seat.id === seat.id ? " is-selected" : ""}" data-seat-id="${esc(seat.id)}"${seat.isFree ? "" : " disabled"}>
+        <span class="seat-chip-label">${esc(seat.label)}</span><span class="seat-chip-status">${esc(seat.statusText || "未知")}</span>
+      </button>`).join("");
+      bindSeatClicks(q.grid);
+    }
+    setStatus(q.planHint, `共 ${seats.length} 个座位，该时段空闲 ${freeCount} 个。${queryState.layout ? "" : "（该阅览区未返回平面布局）"}`);
+  }
+
+  function renderPlan() {
+    const seats = queryState.layout?.seats || [];
+    const xs = seats.map((seat) => Number(seat.left)).filter((value) => Number.isFinite(value));
+    const ys = seats.map((seat) => Number(seat.top)).filter((value) => Number.isFinite(value));
+    if (!xs.length || !ys.length) {
+      queryState.layout = null;
+      renderSeats();
+      return;
+    }
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const spanX = maxX - minX || 1;
+    const spanY = maxY - minY || 1;
+    const pad = 5;
+    const lookup = seatByLabel();
+    q.plan.innerHTML = seats.map((item) => {
+      const seat = lookup.get(String(item.id)) || lookup.get(String(item.label));
+      const left = pad + ((Number(item.left) - minX) / spanX) * (100 - pad * 2);
+      const top = pad + ((Number(item.top) - minY) / spanY) * (100 - pad * 2);
+      const selected = seat && queryState.seat && queryState.seat.id === seat.id;
+      return `<button type="button" class="seat-dot ${seatStatusClass(seat)}${selected ? " is-selected" : ""}" data-seat-id="${esc(seat ? seat.id : item.id)}" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%" title="${esc(seat ? `${seat.label} · ${seat.statusText}` : `${item.label} · 状态未知`)}"${seat && seat.isFree ? "" : " disabled"}><span>${esc(item.label)}</span></button>`;
+    }).join("");
+    bindSeatClicks(q.plan);
+  }
+
+  function bindSeatClicks(root) {
+    root.querySelectorAll("[data-seat-id]").forEach((button) => {
+      button.addEventListener("click", () => selectSeat(button.dataset.seatId));
+    });
+  }
+
+  async function selectSeat(seatId) {
+    const seat = queryState.seats.find((item) => String(item.id) === String(seatId));
+    if (!seat || !seat.isFree) return;
+    queryState.seat = seat;
+    renderSeats();
+    q.bookPanel.hidden = false;
+    const { start, end } = currentWindow();
+    q.bookMeta.textContent = `${queryState.area?.name || "阅览区"} · ${seat.label} · ${queryState.date} ${minuteText(start)} - ${minuteText(end)}`;
+    setStatus(q.bookStatus, "");
+    q.timeline.innerHTML = '<p class="resv-muted">正在读取该座位当天的时间轴...</p>';
+    q.bookPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    try {
+      const payload = await api(`/api/campus/library-seat/timeline?seatId=${encodeURIComponent(seat.id)}&date=${encodeURIComponent(queryState.date)}`);
+      renderTimeline(payload);
+    } catch (error) {
+      q.timeline.innerHTML = `<p class="resv-muted">${errorText(error)}</p>`;
+    }
+  }
+
+  function renderTimeline(payload) {
+    const free = Array.isArray(payload?.free) ? payload.free : [];
+    const marks = Array.isArray(payload?.marks) ? payload.marks : [];
+    if (!free.length) {
+      q.timeline.innerHTML = '<p class="resv-muted">该座位当天没有返回可预约时间轴。</p>';
+      return;
+    }
+    q.timeline.innerHTML = `
+      <p class="resv-muted">当天可预约区间（绿色为可预约）：</p>
+      <div class="seat-timeline-track">${free.map((item) => `<span class="seat-timeline-free" style="left:${Number(item.left).toFixed(2)}%;width:${Number(item.width).toFixed(2)}%"></span>`).join("")}${marks.map((item) => `<span class="seat-timeline-mark" style="left:${Number(item.left).toFixed(2)}%" title="${esc(item.label || "")}"></span>`).join("")}</div>
+      <div class="seat-timeline-axis"><span>08:00</span><span>12:00</span><span>16:00</span><span>22:00</span></div>`;
+  }
+
+  async function submitSeatBooking() {
+    if (!queryState.seat) return;
+    const { start, end } = currentWindow();
+    q.bookButton.disabled = true;
+    setStatus(q.bookStatus, "正在提交预约...");
+    try {
+      await api("/api/campus/library-seat/reservations", {
+        method: "POST",
+        body: { seatId: queryState.seat.id, date: queryState.date, startMinute: start, endMinute: end, capToken: "" }
+      });
+      setStatus(q.bookStatus, "预约提交成功，请按时签到。", "ok");
+      queryState.seat = null;
+      q.bookPanel.hidden = true;
+      if (queryState.area) await selectArea(queryState.area.id);
+    } catch (error) {
+      setStatus(q.bookStatus, errorText(error), "error");
+    } finally {
+      q.bookButton.disabled = false;
+    }
+  }
+
+  function markQueryStale() {
+    if (!queryState.areas.length && !queryState.seat) return;
+    queryState.areas = [];
+    queryState.area = null;
+    queryState.seat = null;
+    queryState.layout = null;
+    queryState.seats = [];
+    q.areasPanel.hidden = true;
+    q.seatsPanel.hidden = true;
+    q.bookPanel.hidden = true;
+    q.metrics.innerHTML = "";
+    setStatus(q.status, "查询条件已变化，请重新点击“查询座位”。", "warning");
+  }
+
+  q.venue.addEventListener("change", () => {
+    queryState.venueId = q.venue.value;
+    fillFloorSelect();
+    markQueryStale();
+  });
+  q.floor.addEventListener("change", () => { queryState.floorId = q.floor.value; markQueryStale(); });
+  q.date.addEventListener("change", () => { queryState.date = q.date.value; markQueryStale(); });
+  q.start.addEventListener("change", () => { queryState.startMinute = Number(q.start.value); markQueryStale(); });
+  q.duration.addEventListener("change", () => { queryState.duration = Number(q.duration.value); markQueryStale(); });
+  q.window.addEventListener("change", markQueryStale);
+  q.power.addEventListener("change", markQueryStale);
+  q.button.addEventListener("click", runQuery);
+  q.bookButton.addEventListener("click", submitSeatBooking);
+  q.bookClose.addEventListener("click", () => {
+    queryState.seat = null;
+    q.bookPanel.hidden = true;
+    renderSeats();
+  });
+  q.bookGoRecords.addEventListener("click", () => window.HguReservation?.activate("seat", "records"));
+  queryMount.querySelectorAll("[data-seat-view]").forEach((button) => {
+    button.addEventListener("click", () => {
+      queryState.view = button.dataset.seatView;
+      queryMount.querySelectorAll("[data-seat-view]").forEach((item) => item.classList.toggle("is-active", item === button));
+      if (queryState.area) renderSeats();
+    });
+  });
+
+  async function initQuery() {
+    if (queryState.loaded || queryState.loading) return;
+    queryState.loading = true;
+    q.venue.innerHTML = '<option value="">正在加载场馆...</option>';
+    setStatus(q.status, "正在读取图书馆座位配置...");
+    try {
+      await ensureOverview();
+      queryState.loaded = true;
+      fillOverviewSelects();
+      setStatus(q.status, shared.venues.length ? "选择条件后点击“查询座位”。" : "学校接口没有返回场馆配置。", shared.venues.length ? "" : "warning");
+      if (shared.venues.length) await runQuery();
+    } catch (error) {
+      setStatus(q.status, errorText(error), "error");
+    } finally {
+      queryState.loading = false;
+    }
+  }
+
+  /* ------------------------------------------------------------------ 我的预约 */
+
+  recordsMount.innerHTML = `
+    <section id="seatCurrentPanel" class="resv-panel" hidden>
+      <div class="resv-panel-head"><div><h3>当前使用中</h3><p id="seatCurrentMeta"></p></div><span id="seatCurrentBadge" class="resv-badge is-info">使用中</span></div>
+      <div class="resv-actions"><button id="seatCheckIn" class="ghost" type="button">签到</button><button id="seatLeave" class="ghost" type="button">暂离</button><button id="seatStop" class="ghost" type="button">结束使用</button></div>
+      <p id="seatCurrentStatus" class="resv-status"></p>
+    </section>
+    <section class="resv-panel">
+      <div class="resv-panel-head">
+        <div><h3>我的座位预约</h3><p>今日预约可取消并查看变更记录；历史、违约与门禁记录用于自查。</p></div>
+        <div class="resv-actions"><button id="seatRecordsReload" class="ghost" type="button">刷新</button></div>
+      </div>
+      <div class="resv-tabs" role="tablist" aria-label="座位预约记录">
+        <button type="button" role="tab" data-seat-record-tab="today" class="is-active">今日预约</button>
+        <button type="button" role="tab" data-seat-record-tab="history">历史预约</button>
+        <button type="button" role="tab" data-seat-record-tab="breaches">违约记录</button>
+        <button type="button" role="tab" data-seat-record-tab="doors">门禁记录</button>
+      </div>
+      <div id="seatRecordsBody" class="resv-list"></div>
+      <p id="seatRecordsStatus" class="resv-status" role="status" aria-live="polite"></p>
+    </section>`;
+
+  const r = {
+    currentPanel: recordsMount.querySelector("#seatCurrentPanel"), currentMeta: recordsMount.querySelector("#seatCurrentMeta"),
+    currentBadge: recordsMount.querySelector("#seatCurrentBadge"), checkIn: recordsMount.querySelector("#seatCheckIn"),
+    leave: recordsMount.querySelector("#seatLeave"), stop: recordsMount.querySelector("#seatStop"),
+    currentStatus: recordsMount.querySelector("#seatCurrentStatus"), reload: recordsMount.querySelector("#seatRecordsReload"),
+    body: recordsMount.querySelector("#seatRecordsBody"), status: recordsMount.querySelector("#seatRecordsStatus")
+  };
+
+  const recordsState = { tab: "today", loaded: false, historyPage: 0, breachPage: 0, historyDone: false, breachDone: false, doorDate: localDate(0) };
+
+  function recordCard(record, { cancellable = false } = {}) {
+    const meta = [
+      record.date ? `${record.date}（${weekdayText(record.date)}）` : "",
+      record.startTime && record.endTime ? `${record.startTime} - ${record.endTime}` : "",
+      record.location || ""
+    ].filter(Boolean).join(" · ");
+    const seat = record.seatLabel ? `座位 ${record.seatLabel}` : "";
+    return `<article class="resv-item" data-record="${esc(record.id)}">
+      <div class="resv-item-head"><span class="resv-item-title">${esc([record.buildName, record.roomName, seat].filter(Boolean).join(" · ") || "座位预约")}</span><span class="resv-badge${record.status === "USING" ? " is-info" : ""}">${esc(record.statusText || record.status || "未知")}</span></div>
+      <p class="resv-item-meta">${esc(meta || "—")}</p>
+      ${record.message ? `<p class="resv-item-meta">${esc(record.message)}</p>` : ""}
+      <div class="resv-item-actions">
+        ${cancellable ? `<button class="ghost" type="button" data-record-cancel="${esc(record.id)}">取消预约</button>` : ""}
+        <button class="ghost" type="button" data-record-life="${esc(record.id)}">变更记录</button>
+      </div>
+      <div class="resv-item-meta" data-record-life-body hidden></div>
+    </article>`;
+  }
+
+  function bindRecordActions() {
+    r.body.querySelectorAll("[data-record-cancel]").forEach((button) => {
+      button.addEventListener("click", () => cancelRecord(button.dataset.recordCancel, button));
+    });
+    r.body.querySelectorAll("[data-record-life]").forEach((button) => {
+      button.addEventListener("click", () => loadLife(button.dataset.recordLife, button));
+    });
+  }
+
+  async function cancelRecord(id, button) {
+    if (!window.confirm("确定取消这条座位预约吗？取消次数按学校规则扣除。")) return;
+    button.disabled = true;
+    setStatus(r.status, "正在取消预约...");
+    try {
+      const payload = await api(`/api/campus/library-seat/reservations/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+      const remaining = payload?.remainingCancelCount;
+      setStatus(r.status, Number.isFinite(Number(remaining)) ? `预约已取消，本月剩余取消次数 ${remaining} 次。` : "预约已取消。", "ok");
+      await loadCurrentUse();
+      await loadRecordTab(recordsState.tab, true);
+    } catch (error) {
+      setStatus(r.status, errorText(error), "error");
+      button.disabled = false;
+    }
+  }
+
+  async function loadLife(id, button) {
+    const body = button.closest("[data-record]")?.querySelector("[data-record-life-body]");
+    if (!body) return;
+    if (!body.hidden) {
+      body.hidden = true;
+      return;
+    }
+    button.disabled = true;
+    try {
+      const list = await api(`/api/campus/library-seat/reservations/${encodeURIComponent(id)}/life`);
+      body.hidden = false;
+      body.innerHTML = Array.isArray(list) && list.length
+        ? list.map((item) => `<div>· ${esc(item.stageName || "变更")} ${esc(item.createdDate || "")} ${esc(item.sourceName || "")}</div>`).join("")
+        : "暂无变更记录。";
+    } catch (error) {
+      body.hidden = false;
+      body.innerHTML = errorText(error);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  async function loadCurrentUse() {
+    try {
+      const current = await api("/api/campus/library-seat/current-use");
+      if (!current) {
+        r.currentPanel.hidden = true;
+        return;
+      }
+      r.currentPanel.hidden = false;
+      r.currentBadge.textContent = current.statusText || "使用中";
+      r.currentMeta.textContent = [
+        [current.buildName, current.roomName, current.seatLabel ? `座位 ${current.seatLabel}` : ""].filter(Boolean).join(" · "),
+        current.date ? `${current.date} ${current.startTime || ""} - ${current.endTime || ""}` : "",
+        current.awayRange ? `暂离 ${current.awayRange}` : ""
+      ].filter(Boolean).join(" · ");
+    } catch {
+      r.currentPanel.hidden = true;
+    }
+  }
+
+  async function loadRecordTab(tab, force = false) {
+    recordsState.tab = tab;
+    if (tab === "today") {
+      r.body.innerHTML = '<div class="resv-empty">正在加载今日预约...</div>';
+      try {
+        const list = await api("/api/campus/library-seat/reservations");
+        r.body.innerHTML = Array.isArray(list) && list.length
+          ? list.map((record) => recordCard(record, { cancellable: record.status !== "USING" })).join("")
+          : '<div class="resv-empty">今天没有座位预约。</div>';
+        bindRecordActions();
+        setStatus(r.status, Array.isArray(list) && list.length ? `共 ${list.length} 条预约。` : "");
+      } catch (error) {
+        r.body.innerHTML = `<div class="resv-empty">${errorText(error)}</div>`;
+      }
+      return;
+    }
+    if (tab === "history") {
+      if (force) {
+        recordsState.historyPage = 0;
+        recordsState.historyDone = false;
+      }
+      await loadPaged("history");
+      return;
+    }
+    if (tab === "breaches") {
+      if (force) {
+        recordsState.breachPage = 0;
+        recordsState.breachDone = false;
+      }
+      await loadPaged("breaches");
+      return;
+    }
+    await loadDoors();
+  }
+
+  async function loadPaged(kind) {
+    const isHistory = kind === "history";
+    const page = isHistory ? recordsState.historyPage : recordsState.breachPage;
+    const done = isHistory ? recordsState.historyDone : recordsState.breachDone;
+    if (done) return;
+    const append = page > 0;
+    if (!append) r.body.innerHTML = `<div class="resv-empty">正在加载${isHistory ? "历史预约" : "违约记录"}...</div>`;
+    try {
+      const payload = isHistory
+        ? await api(`/api/campus/library-seat/reservations/history?page=${page}&size=10`)
+        : await api(`/api/campus/library-seat/breaches?page=${page}&size=10`);
+      const records = Array.isArray(payload?.records) ? payload.records : [];
+      const total = Number(payload?.total) || records.length;
+      const html = records.map((record) => recordCard(record)).join("");
+      if (append) {
+        r.body.querySelectorAll("[data-load-more]").forEach((button) => button.remove());
+        r.body.insertAdjacentHTML("beforeend", html);
+      } else {
+        r.body.innerHTML = html || `<div class="resv-empty">没有${isHistory ? "历史预约" : "违约记录"}。</div>`;
+      }
+      const nextPage = page + 1;
+      const hasMore = records.length >= 10 && nextPage * 10 < total;
+      if (hasMore) {
+        r.body.insertAdjacentHTML("beforeend", `<button class="ghost" type="button" data-load-more="1">加载更多（已显示 ${(page + 1) * records.length} / ${total}）</button>`);
+        r.body.querySelector("[data-load-more]").addEventListener("click", () => {
+          if (isHistory) recordsState.historyPage = nextPage;
+          else recordsState.breachPage = nextPage;
+          loadPaged(kind);
+        });
+      } else if (isHistory) recordsState.historyDone = true;
+      else recordsState.breachDone = true;
+      bindRecordActions();
+      setStatus(r.status, `共 ${total} 条记录。`);
+    } catch (error) {
+      r.body.innerHTML = `<div class="resv-empty">${errorText(error)}</div>`;
+    }
+  }
+
+  async function loadDoors() {
+    r.body.innerHTML = `<div class="resv-actions"><label class="resv-field"><span>日期</span><input id="seatDoorDate" type="date" value="${esc(recordsState.doorDate)}"></label><button id="seatDoorQuery" class="ghost" type="button">查询</button></div><div id="seatDoorList" class="resv-list"><div class="resv-empty">正在加载门禁记录...</div></div>`;
+    const input = r.body.querySelector("#seatDoorDate");
+    const list = r.body.querySelector("#seatDoorList");
+    const query = async () => {
+      recordsState.doorDate = input.value || localDate(0);
+      list.innerHTML = '<div class="resv-empty">正在加载...</div>';
+      try {
+        const rows = await api(`/api/campus/library-seat/door-logs?date=${encodeURIComponent(recordsState.doorDate)}`);
+        list.innerHTML = Array.isArray(rows) && rows.length
+          ? rows.map((row) => `<article class="resv-item"><div class="resv-item-head"><span class="resv-item-title">${esc(row.doorName || "门禁")}</span><span class="resv-badge${row.direction === 0 ? " is-ok" : ""}">${esc(row.directionText)}</span></div><p class="resv-item-meta">${esc(row.dateTime || "")}</p></article>`).join("")
+          : '<div class="resv-empty">该日期没有门禁记录。</div>';
+        setStatus(r.status, "");
+      } catch (error) {
+        list.innerHTML = `<div class="resv-empty">${errorText(error)}</div>`;
+      }
+    };
+    r.body.querySelector("#seatDoorQuery").addEventListener("click", query);
+    await query();
+  }
+
+  async function runCurrentAction(kind) {
+    const labels = { checkIn: "签到", leave: "暂离", stop: "结束使用" };
+    const button = kind === "checkIn" ? r.checkIn : kind === "leave" ? r.leave : r.stop;
+    button.disabled = true;
+    setStatus(r.currentStatus, `正在${labels[kind]}...`);
+    try {
+      await api(`/api/campus/library-seat/current-use/${kind === "checkIn" ? "check-in" : kind}`, { method: "POST" });
+      setStatus(r.currentStatus, `${labels[kind]}成功。`, "ok");
+      await loadCurrentUse();
+      await loadRecordTab(recordsState.tab, true);
+    } catch (error) {
+      setStatus(r.currentStatus, errorText(error), "error");
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  recordsMount.querySelectorAll("[data-seat-record-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      recordsMount.querySelectorAll("[data-seat-record-tab]").forEach((item) => item.classList.toggle("is-active", item === button));
+      loadRecordTab(button.dataset.seatRecordTab, true);
+    });
+  });
+  r.reload.addEventListener("click", () => {
+    loadCurrentUse();
+    loadRecordTab(recordsState.tab, true);
+  });
+  r.checkIn.addEventListener("click", () => runCurrentAction("checkIn"));
+  r.leave.addEventListener("click", () => runCurrentAction("leave"));
+  r.stop.addEventListener("click", () => runCurrentAction("stop"));
+
+  async function initRecords() {
+    if (recordsState.loaded) return;
+    recordsState.loaded = true;
+    setStatus(r.status, "");
+    await loadCurrentUse();
+    await loadRecordTab(recordsState.tab);
+  }
+
+  /* ------------------------------------------------------------------ 候补预约 */
+
+  waitlistMount.innerHTML = `
+    <section class="resv-panel">
+      <div class="resv-panel-head">
+        <div><h3>新建候补任务</h3><p>在指定时段和座位号范围内持续监听，一旦有座位释放就自动提交预约。</p></div>
+      </div>
+      <form id="seatWaitlistForm" class="resv-fields">
+        <label class="resv-field"><span>场馆</span><select id="seatWaitlistVenue" required></select></label>
+        <label class="resv-field"><span>楼层</span><select id="seatWaitlistFloor" required></select></label>
+        <label class="resv-field"><span>日期</span><select id="seatWaitlistDate" required></select></label>
+        <label class="resv-field"><span>开始时间</span><select id="seatWaitlistStart" required></select></label>
+        <label class="resv-field"><span>使用时长</span><select id="seatWaitlistDuration">${DURATIONS.map((item) => `<option value="${item.value}"${item.value === 120 ? " selected" : ""}>${item.label}</option>`).join("")}</select></label>
+        <label class="resv-field"><span>最小座位号</span><input id="seatWaitlistMin" type="number" min="1" max="999" value="1" required></label>
+        <label class="resv-field"><span>最大座位号</span><input id="seatWaitlistMax" type="number" min="1" max="999" value="45" required></label>
+        <label class="resv-field"><span>指定座位号 <small>可选</small></span><input id="seatWaitlistLabels" placeholder="逗号分隔，例如 8,12,15"></label>
+        <label class="resv-check"><input id="seatWaitlistEnabled" type="checkbox" checked>创建后立即启用</label>
+        <div class="resv-actions"><button id="seatWaitlistSubmit" type="submit">创建候补任务</button></div>
+      </form>
+      <p id="seatWaitlistStatus" class="resv-status" role="status" aria-live="polite"></p>
+    </section>
+    <section class="resv-panel">
+      <div class="resv-panel-head"><div><h3>我的候补任务</h3><p>任务在预约结束时间前持续监听，可随时停用或删除。</p></div><button id="seatWaitlistReload" class="ghost" type="button">刷新</button></div>
+      <div id="seatWaitlistList" class="resv-list"><div class="resv-empty">打开本页签后自动加载。</div></div>
+    </section>`;
+
+  const w = {
+    venue: waitlistMount.querySelector("#seatWaitlistVenue"), floor: waitlistMount.querySelector("#seatWaitlistFloor"),
+    date: waitlistMount.querySelector("#seatWaitlistDate"), start: waitlistMount.querySelector("#seatWaitlistStart"),
+    duration: waitlistMount.querySelector("#seatWaitlistDuration"), min: waitlistMount.querySelector("#seatWaitlistMin"),
+    max: waitlistMount.querySelector("#seatWaitlistMax"), labels: waitlistMount.querySelector("#seatWaitlistLabels"),
+    enabled: waitlistMount.querySelector("#seatWaitlistEnabled"), form: waitlistMount.querySelector("#seatWaitlistForm"),
+    submit: waitlistMount.querySelector("#seatWaitlistSubmit"), status: waitlistMount.querySelector("#seatWaitlistStatus"),
+    reload: waitlistMount.querySelector("#seatWaitlistReload"), list: waitlistMount.querySelector("#seatWaitlistList")
+  };
+
+  const waitlistState = { loaded: false, loading: false, tasks: [] };
+
+  function fillWaitlistSelects() {
+    w.venue.innerHTML = shared.venues.map((venue) => `<option value="${esc(venue.id)}">${esc(venue.name)}</option>`).join("");
+    w.date.innerHTML = shared.dates.map((date) => `<option value="${esc(date)}">${esc(date)}（${esc(weekdayText(date))}）</option>`).join("");
+    w.start.innerHTML = startMinuteOptions().map((minute) => `<option value="${minute}"${minute === 540 ? " selected" : ""}>${minuteText(minute)}</option>`).join("");
+    fillWaitlistFloors();
+  }
+
+  function fillWaitlistFloors() {
+    const venue = shared.venues.find((item) => String(item.id) === String(w.venue.value));
+    const floors = Array.isArray(venue?.floors) ? venue.floors : [];
+    w.floor.innerHTML = floors.length
+      ? floors.map((floor) => `<option value="${esc(floor.id)}">${esc(floor.name)}</option>`).join("")
+      : '<option value="">该场馆没有楼层信息</option>';
+  }
+
+  function renderWaitlistTasks() {
+    if (!waitlistState.tasks.length) {
+      w.list.innerHTML = '<div class="resv-empty">还没有候补任务。</div>';
+      return;
+    }
+    w.list.innerHTML = waitlistState.tasks.map((task) => {
+      const slotText = `${task.date || ""} ${minuteText(task.startMinute || 0)} - ${minuteText(task.endMinute || 0)}`;
+      const range = Array.isArray(task.seatLabels) && task.seatLabels.length
+        ? `指定 ${task.seatLabels.join("、")} 号`
+        : `座位号 ${task.minLabel} - ${task.maxLabel}`;
+      const tone = task.status === "success" ? "is-ok" : task.status === "expired" ? "is-bad" : task.enabled ? "is-info" : "";
+      return `<article class="resv-item" data-task="${esc(task.id)}">
+        <div class="resv-item-head"><span class="resv-item-title">${esc(task.venueName || "")} ${esc(task.floorName || "")}</span><span class="resv-badge ${tone}">${esc(task.statusText || task.status || "")}</span>${task.enabled ? "" : '<span class="resv-badge">已停用</span>'}</div>
+        <p class="resv-item-meta">${esc(slotText)} · ${esc(range)}</p>
+        <p class="resv-item-meta">最近结果：${esc(task.lastMessage || "尚未执行")}${task.lastSeatLabel ? `（座位 ${esc(task.lastSeatLabel)}）` : ""}${task.consecutiveFailures > 0 ? ` · 连续失败 ${task.consecutiveFailures} 次` : ""}</p>
+        <div class="resv-item-actions"><button class="ghost" type="button" data-task-toggle="${esc(task.id)}">${task.enabled ? "停用" : "启用"}</button><button class="ghost" type="button" data-task-delete="${esc(task.id)}">删除</button></div>
+      </article>`;
+    }).join("");
+    w.list.querySelectorAll("[data-task-toggle]").forEach((button) => {
+      button.addEventListener("click", () => toggleTask(button.dataset.taskToggle, button));
+    });
+    w.list.querySelectorAll("[data-task-delete]").forEach((button) => {
+      button.addEventListener("click", () => deleteTask(button.dataset.taskDelete, button));
+    });
+  }
+
+  async function loadWaitlistTasks() {
+    try {
+      const payload = await api("/api/campus/library-seat/waitlists");
+      waitlistState.tasks = Array.isArray(payload) ? payload : [];
+      renderWaitlistTasks();
+    } catch (error) {
+      w.list.innerHTML = `<div class="resv-empty">${errorText(error)}</div>`;
+    }
+  }
+
+  async function toggleTask(id, button) {
+    const task = waitlistState.tasks.find((item) => String(item.id) === String(id));
+    if (!task) return;
+    button.disabled = true;
+    try {
+      await api(`/api/campus/library-seat/waitlists/${encodeURIComponent(id)}`, { method: "PUT", body: { enabled: !task.enabled } });
+      await loadWaitlistTasks();
+    } catch (error) {
+      setStatus(w.status, errorText(error), "error");
+      button.disabled = false;
+    }
+  }
+
+  async function deleteTask(id, button) {
+    const task = waitlistState.tasks.find((item) => String(item.id) === String(id));
+    if (!window.confirm(`确定删除${task ? `「${task.venueName} ${task.floorName}」的` : "这条"}候补任务吗？`)) return;
+    button.disabled = true;
+    try {
+      await api(`/api/campus/library-seat/waitlists/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await loadWaitlistTasks();
+    } catch (error) {
+      setStatus(w.status, errorText(error), "error");
+      button.disabled = false;
+    }
+  }
+
+  function parseSeatLabels(value) {
+    const text = String(value || "").trim();
+    if (!text) return [];
+    const labels = text.split(/[,，\s]+/).filter(Boolean).map((item) => Number(item));
+    if (labels.some((label) => !Number.isInteger(label) || label < 1 || label > 999)) return null;
+    return [...new Set(labels)].sort((a, b) => a - b);
+  }
+
+  w.venue.addEventListener("change", fillWaitlistFloors);
+  w.reload.addEventListener("click", loadWaitlistTasks);
+  w.form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const venue = shared.venues.find((item) => String(item.id) === String(w.venue.value));
+    const floor = (venue?.floors || []).find((item) => String(item.id) === String(w.floor.value));
+    if (!venue || !floor) {
+      setStatus(w.status, "请选择场馆和楼层。", "error");
+      return;
+    }
+    const labels = parseSeatLabels(w.labels.value);
+    if (labels === null) {
+      setStatus(w.status, "指定座位号需为 1 至 999 的整数，用逗号分隔。", "error");
+      return;
+    }
+    const start = clampMinute(w.start.value);
+    const end = Math.min(1440, start + Number(w.duration.value || 60));
+    w.submit.disabled = true;
+    setStatus(w.status, "正在创建候补任务...");
+    try {
+      await api("/api/campus/library-seat/waitlists", {
+        method: "POST",
+        body: {
+          venueId: venue.id, venueName: venue.name, floorId: floor.id, floorName: floor.name,
+          date: w.date.value, startMinute: start, endMinute: end,
+          minLabel: Number(w.min.value) || 1, maxLabel: Number(w.max.value) || 45,
+          seatLabels: labels, enabled: w.enabled.checked
+        }
+      });
+      setStatus(w.status, "候补任务已创建。", "ok");
+      w.labels.value = "";
+      await loadWaitlistTasks();
+    } catch (error) {
+      setStatus(w.status, errorText(error), "error");
+    } finally {
+      w.submit.disabled = false;
+    }
+  });
+
+  async function initWaitlist() {
+    if (waitlistState.loaded || waitlistState.loading) return;
+    waitlistState.loading = true;
+    w.venue.innerHTML = '<option value="">正在加载场馆...</option>';
+    setStatus(w.status, "正在读取场馆配置...");
+    try {
+      await ensureOverview();
+      waitlistState.loaded = true;
+      fillWaitlistSelects();
+      setStatus(w.status, "");
+      await loadWaitlistTasks();
+    } catch (error) {
+      setStatus(w.status, errorText(error), "error");
+    } finally {
+      waitlistState.loading = false;
+    }
+  }
+
+  /* ------------------------------------------------------------------ 路由 */
+
+  document.addEventListener("resv:activate", (event) => {
+    if (event.detail?.view !== "seat") return;
+    if (event.detail.tab === "query") initQuery();
+    if (event.detail.tab === "records") initRecords();
+    if (event.detail.tab === "waitlist") initWaitlist();
+  });
+  document.addEventListener("resv:refresh", (event) => {
+    if (event.detail?.view !== "seat") return;
+    if (event.detail.tab === "query") {
+      if (queryState.area) selectArea(queryState.area.id);
+      else if (queryState.loaded) runQuery();
+    }
+    if (event.detail.tab === "records") {
+      loadCurrentUse();
+      loadRecordTab(recordsState.tab, true);
+    }
+    if (event.detail.tab === "waitlist") loadWaitlistTasks();
+  });
+})();
