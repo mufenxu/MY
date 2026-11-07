@@ -12,7 +12,7 @@
   if (!document.querySelector("link[data-library-seat-page]")) {
     const stylesheet = document.createElement("link");
     stylesheet.rel = "stylesheet";
-    stylesheet.href = "./library-seat-page.css?v=20261107-seat-v3";
+    stylesheet.href = "./library-seat-page.css?v=20261107-seat-v4";
     stylesheet.dataset.librarySeatPage = "1";
     document.head.append(stylesheet);
   }
@@ -119,7 +119,7 @@
       </div>
       <div id="seatPlanWrap" class="seat-plan-wrap" hidden>
         <div id="seatPlan" class="seat-plan"></div>
-        <p class="resv-muted">平面图按学校返回的座位布局坐标等比绘制，颜色表示所选时段是否空闲。</p>
+        <p id="seatPlanNote" class="resv-muted">平面图按学校返回的座位布局坐标等比绘制，颜色表示所选时段是否空闲。</p>
       </div>
       <div id="seatGrid" class="seat-grid"></div>
       <p id="seatPlanHint" class="resv-status"></p>
@@ -145,6 +145,7 @@
     areas: queryMount.querySelector("#seatAreas"), seatsPanel: queryMount.querySelector("#seatSeatsPanel"),
     areaTitle: queryMount.querySelector("#seatAreaTitle"), areaMeta: queryMount.querySelector("#seatAreaMeta"),
     planWrap: queryMount.querySelector("#seatPlanWrap"), plan: queryMount.querySelector("#seatPlan"),
+    planNote: queryMount.querySelector("#seatPlanNote"),
     grid: queryMount.querySelector("#seatGrid"), planHint: queryMount.querySelector("#seatPlanHint"),
     bookPanel: queryMount.querySelector("#seatBookPanel"), bookMeta: queryMount.querySelector("#seatBookMeta"),
     timeline: queryMount.querySelector("#seatTimeline"), bookButton: queryMount.querySelector("#seatBookButton"),
@@ -155,7 +156,7 @@
   const queryState = {
     venueId: "", floorId: "", date: "", startMinute: 540, duration: 120,
     areas: [], area: null, seats: [], layout: null, view: "plan", seat: null,
-    sequence: 0, loaded: false, loading: false
+    areasExpanded: false, sequence: 0, loaded: false, loading: false
   };
 
   function currentWindow() {
@@ -198,13 +199,18 @@
     if (!queryState.areas.length) {
       q.areasPanel.hidden = false;
       q.areasHint.textContent = "该条件下没有返回阅览区，试试换时段或取消筛选。";
+      q.areas.classList.remove("is-collapsed");
       q.areas.innerHTML = '<div class="resv-empty">暂无可选阅览区。</div>';
       return;
     }
     q.areasPanel.hidden = false;
     const { start, end } = currentWindow();
     q.areasHint.textContent = `${queryState.date}（${weekdayText(queryState.date)}） ${minuteText(start)} - ${minuteText(end)} · 共 ${queryState.areas.length} 个阅览区`;
-    q.areas.innerHTML = queryState.areas.map((area) => {
+    // 选中阅览区后，其余卡片默认收起，免得列表把下面的座位推得太远。
+    const others = queryState.areas.length - 1;
+    const collapsed = Boolean(queryState.area) && others > 0 && !queryState.areasExpanded;
+    q.areas.classList.toggle("is-collapsed", collapsed);
+    const cards = queryState.areas.map((area) => {
       const active = queryState.area && String(queryState.area.id) === String(area.id);
       return `<article class="seat-area${active ? " is-active" : ""}" data-seat-area="${esc(area.id)}" tabindex="0" role="button">
         <div class="seat-area-head"><strong>${esc(area.name)}</strong><span class="resv-badge ${Number(area.seatFree) > 0 ? "is-ok" : "is-bad"}">可用 ${Number(area.seatFree) || 0}</span></div>
@@ -212,6 +218,10 @@
         <div class="seat-area-metrics"><span>总座位 <b>${Number(area.seatTotal) || 0}</b></span><span>最长 <b>${Number(area.maxMinute) > 0 ? `${Math.round(Number(area.maxMinute) / 60 * 10) / 10}h` : "--"}</b></span></div>
       </article>`;
     }).join("");
+    const toggle = queryState.area && others > 0
+      ? `<button type="button" class="seat-areas-toggle" data-seat-areas-toggle aria-expanded="${queryState.areasExpanded}">${collapsed ? `展开其他 ${others} 个阅览区` : "收起其他阅览区"}</button>`
+      : "";
+    q.areas.innerHTML = cards + toggle;
     q.areas.querySelectorAll("[data-seat-area]").forEach((card) => {
       const open = () => selectArea(card.dataset.seatArea);
       card.addEventListener("click", open);
@@ -222,6 +232,13 @@
         }
       });
     });
+    const toggleButton = q.areas.querySelector("[data-seat-areas-toggle]");
+    if (toggleButton) {
+      toggleButton.addEventListener("click", () => {
+        queryState.areasExpanded = !queryState.areasExpanded;
+        renderAreas();
+      });
+    }
   }
 
   async function runQuery() {
@@ -240,6 +257,7 @@
       if (token !== queryState.sequence) return;
       queryState.areas = Array.isArray(payload?.areas) ? payload.areas : [];
       queryState.area = null;
+      queryState.areasExpanded = false;
       queryState.seats = [];
       queryState.layout = null;
       queryState.seat = null;
@@ -267,6 +285,7 @@
     if (!area) return;
     queryState.area = area;
     queryState.seat = null;
+    queryState.areasExpanded = false;
     q.bookPanel.hidden = true;
     renderAreas();
     q.seatsPanel.hidden = false;
@@ -332,6 +351,19 @@
     setStatus(q.planHint, `共 ${seats.length} 个座位，该时段空闲 ${freeCount} 个。${queryState.layout ? "" : "（该阅览区未返回平面布局）"}`);
   }
 
+  // 座位坐标里的最小间距，用来推算「不重叠」需要多大的画布。
+  function coordinateGap(values, span) {
+    const sorted = [...new Set(values.map((value) => Math.round(value * 100) / 100))].sort((a, b) => a - b);
+    if (sorted.length < 2) return span || 1;
+    const floor = Math.max(0.01, span * 0.001);
+    let gap = Infinity;
+    for (let index = 1; index < sorted.length; index += 1) {
+      const diff = sorted[index] - sorted[index - 1];
+      if (diff > floor && diff < gap) gap = diff;
+    }
+    return Number.isFinite(gap) ? gap : (span || 1);
+  }
+
   function renderPlan() {
     const seats = queryState.layout?.seats || [];
     const xs = seats.map((seat) => Number(seat.left)).filter((value) => Number.isFinite(value));
@@ -347,16 +379,45 @@
     const maxY = Math.max(...ys);
     const spanX = maxX - minX || 1;
     const spanY = maxY - minY || 1;
-    const pad = 5;
+
+    // 座位是按真实坐标等比映射的，容器再窄也不能把方块压到互相重叠：
+    // 先按坐标密度算出最小画布，放不下就让容器横向滚动。
+    const hostW = q.plan.clientWidth || q.planWrap.clientWidth || 360;
+    const narrow = hostW < 420;
+    const dotW = narrow ? 30 : 36;
+    const dotH = narrow ? 24 : 30;
+    const gap = narrow ? 2 : 3;
+    const pad = 12;
+
+    const colGap = coordinateGap(xs, spanX);
+    const rowGap = coordinateGap(ys, spanY);
+    const needW = pad * 2 + dotW + (spanX / colGap) * (dotW + gap);
+    const needH = pad * 2 + dotH + (spanY / rowGap) * (dotH + gap);
+    // 只超出容器几个像素时不值得让它滚动，压回容器宽度即可。
+    const fit = (need, host, cap) => {
+      if (need > host && need < host * 1.04) return host;
+      return Math.min(Math.max(need, host, 240), cap);
+    };
+    const width = Math.round(fit(needW, hostW, 2200));
+    const height = Math.round(fit(needH, 240, 1600));
+    const innerW = width - pad * 2;
+    const innerH = height - pad * 2;
+
     const lookup = seatByLabel();
-    q.plan.innerHTML = seats.map((item) => {
+    const dots = seats.map((item) => {
       const seat = lookup.get(String(item.id)) || lookup.get(String(item.label));
-      const left = pad + ((Number(item.left) - minX) / spanX) * (100 - pad * 2);
-      const top = pad + ((Number(item.top) - minY) / spanY) * (100 - pad * 2);
+      const left = pad + ((Number(item.left) - minX) / spanX) * innerW;
+      const top = pad + ((Number(item.top) - minY) / spanY) * innerH;
       const selected = seat && queryState.seat && queryState.seat.id === seat.id;
-      return `<button type="button" class="seat-dot ${seatStatusClass(seat)}${selected ? " is-selected" : ""}" data-seat-id="${esc(seat ? seat.id : item.id)}" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%" title="${esc(seat ? `${seat.label} · ${seat.statusText}` : `${item.label} · 状态未知`)}"${seat && seat.isFree ? "" : " disabled"}><span>${esc(item.label)}</span></button>`;
+      const label = seat ? `${seat.label} · ${seat.statusText}` : `${item.label} · 状态未知`;
+      return `<button type="button" class="seat-dot ${seatStatusClass(seat)}${selected ? " is-selected" : ""}" data-seat-id="${esc(seat ? seat.id : item.id)}" style="left:${left.toFixed(1)}px;top:${top.toFixed(1)}px;width:${dotW}px;height:${dotH}px" title="${esc(label)}"${seat && seat.isFree ? "" : " disabled"}><span>${esc(item.label)}</span></button>`;
     }).join("");
+    q.plan.innerHTML = `<div class="seat-plan-canvas" style="width:${width}px;height:${height}px">${dots}</div>`;
     bindSeatClicks(q.plan);
+    requestAnimationFrame(() => {
+      const scrollable = q.plan.scrollWidth > q.plan.clientWidth + 6;
+      q.planNote.textContent = `平面图按学校返回的座位布局坐标绘制，颜色表示该时段是否空闲。${scrollable ? "座位较密，可左右滑动查看。" : ""}`;
+    });
   }
 
   function bindSeatClicks(root) {

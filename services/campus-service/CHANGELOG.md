@@ -13,12 +13,14 @@
 - Link the campus identity code from the reservation tabs by reusing the existing `#campus` card instead of duplicating it.
 - Time library-seat waitlist tasks to the school's 21:55 release: a task for tomorrow stays idle until today 21:55, then starts scanning, and the scheduler wakes up on that minute instead of on the next polling tick. The date picker always offers tomorrow even before the school publishes it, and the form states the exact start time for the chosen date.
 - Rename that tab to 自动预约任务 across the web console — tab label, panel headings, submit button, empty state, progress and confirmation copy. This is a label change only: the `/api/campus/library-seat/waitlists` routes, payload fields and scheduler behaviour are untouched, so the Android client keeps working against the same contract.
+- Collapse the remaining reading-area cards once one is picked, leaving the selected card plus an “展开其他 N 个阅览区” control, so a ten-area list no longer pushes the seat panel below the fold.
 - Load the discussion-room auto-reservation task list on first paint, so the panel never sits on “正在加载自动预约任务…” when its tab activation event is missed.
 - State the difference between the two automation features in the UI: a discussion-room auto task is a one-shot alarm fired on its run date/time (rooms open three days ahead, run date defaults to target minus three days) and defaults to a `07:00` run time, while a library-seat waitlist task is a continuous watcher that opens at the school's 21:55 release for the next day and keeps scanning until its slot ends.
 
 ### Compatibility
 
 - Fit the overview dashboard to 1280-1499px viewports: the four-column bento now uses shrinkable tracks, switches to a three-column arrangement in that range, and the login panel adapts through container queries instead of fixed field widths.
+- Draw the library-seat floor plan at its real density: seat tiles are placed in pixels on a canvas sized from the coordinate spacing, so a 188-seat reading area keeps every label legible instead of smearing them into one blob, and the plan scrolls inside its own box when the room is wider than the screen.
 - Reserve the iOS safe-area inset under the fixed bottom navigation, keep form controls at 16px on phones so iOS cannot zoom the page on focus, and cap the confirmation dialog at the viewport height.
 - Keep the teaching-evaluation actions on one mobile row and render eight-digit water codes as a single tabular-number line without overflowing narrow screens.
 - Use `HGU_PUBLIC_ORIGIN` for trusted-proxy HTTPS redirects so a WeChat visit to `hgu.pxyb.cn` cannot be redirected to the loopback upstream host.

@@ -32,6 +32,33 @@
   box-shadow: 0 0 0 1px var(--campus-start) inset;
 }
 
+/* 选中阅览区后收起其余卡片，避免列表把下面的座位推得太远 */
+.resv-grid.is-collapsed .seat-area:not(.is-active) {
+  display: none;
+}
+
+.seat-areas-toggle {
+  grid-column: 1 / -1;
+  justify-self: center;
+  min-height: 38px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  box-shadow: none;
+  transform: none;
+}
+
+.seat-areas-toggle:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  color: var(--text-strong);
+  box-shadow: none;
+  transform: none;
+}
+
 .seat-area-head {
   display: flex;
   align-items: center;
@@ -133,6 +160,7 @@ body.dark-theme .seat-chip.is-free .seat-chip-status {
 .seat-plan-wrap {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .seat-plan-wrap[hidden] {
@@ -142,16 +170,22 @@ body.dark-theme .seat-chip.is-free .seat-chip-status {
 .seat-plan {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
-  min-height: 320px;
+  min-height: 260px;
+  max-height: 68vh;
   border: 1px solid var(--border);
   border-radius: 10px;
   background-color: var(--surface-soft);
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.seat-plan-canvas {
+  position: relative;
   background-image:
     linear-gradient(to right, rgba(148, 163, 184, 0.16) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(148, 163, 184, 0.16) 1px, transparent 1px);
   background-size: 32px 32px;
-  overflow: hidden;
 }
 
 .seat-dot {
