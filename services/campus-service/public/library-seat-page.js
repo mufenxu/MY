@@ -1,6 +1,6 @@
 "use strict";
 
-// 图书馆座位：查询座位 / 我的预约 / 候补预约三个页签。
+// 图书馆座位：查询座位 / 我的预约 / 自动预约任务三个页签。
 // 挂载点由 reservation-hub.js 提供：#resvSeatQuery、#resvSeatRecords、#resvSeatWaitlist。
 (function initLibrarySeatPage() {
   const api = window.HguCampusApi;
@@ -12,7 +12,7 @@
   if (!document.querySelector("link[data-library-seat-page]")) {
     const stylesheet = document.createElement("link");
     stylesheet.rel = "stylesheet";
-    stylesheet.href = "./library-seat-page.css?v=20261107-seat-v2";
+    stylesheet.href = "./library-seat-page.css?v=20261107-seat-v3";
     stylesheet.dataset.librarySeatPage = "1";
     document.head.append(stylesheet);
   }
@@ -728,12 +728,12 @@
     await loadRecordTab(recordsState.tab);
   }
 
-  /* ------------------------------------------------------------------ 候补预约 */
+  /* ------------------------------------------------------------------ 自动预约任务 */
 
   waitlistMount.innerHTML = `
     <section class="resv-panel">
       <div class="resv-panel-head">
-        <div><h3>新建候补任务</h3><p>选好日期和座位范围，到学校放号时间自动开抢；没抢到会继续监听，直到该时段结束。</p></div>
+        <div><h3>新建自动预约任务</h3><p>选好日期和座位范围，到学校放号时间自动开抢；没抢到会继续监听，直到该时段结束。</p></div>
       </div>
       <form id="seatWaitlistForm" class="resv-fields is-waitlist">
         <label class="resv-field"><span>场馆</span><select id="seatWaitlistVenue" required></select></label>
@@ -747,13 +747,13 @@
         <p id="seatWaitlistOpenHint" class="resv-open-hint" role="status"></p>
         <div class="resv-actions is-waitlist-actions">
           <label class="resv-check"><input id="seatWaitlistEnabled" type="checkbox" checked>创建后立即启用</label>
-          <button id="seatWaitlistSubmit" type="submit">创建候补任务</button>
+          <button id="seatWaitlistSubmit" type="submit">创建自动预约任务</button>
         </div>
       </form>
       <p id="seatWaitlistStatus" class="resv-status" role="status" aria-live="polite"></p>
     </section>
     <section class="resv-panel">
-      <div class="resv-panel-head"><div><h3>我的候补任务</h3><p>任务从开抢时间开始监听，可随时停用或删除。</p></div><button id="seatWaitlistReload" class="ghost" type="button">刷新</button></div>
+      <div class="resv-panel-head"><div><h3>我的自动预约任务</h3><p>任务从开抢时间开始监听，可随时停用或删除。</p></div><button id="seatWaitlistReload" class="ghost" type="button">刷新</button></div>
       <div id="seatWaitlistList" class="resv-list"><div class="resv-empty">打开本页签后自动加载。</div></div>
     </section>`;
 
@@ -802,7 +802,7 @@
 
   function renderWaitlistTasks() {
     if (!waitlistState.tasks.length) {
-      w.list.innerHTML = '<div class="resv-empty">还没有候补任务。</div>';
+      w.list.innerHTML = '<div class="resv-empty">还没有自动预约任务。</div>';
       return;
     }
     w.list.innerHTML = waitlistState.tasks.map((task) => {
@@ -865,7 +865,7 @@
 
   async function deleteTask(id, button) {
     const task = waitlistState.tasks.find((item) => String(item.id) === String(id));
-    if (!window.confirm(`确定删除${task ? `「${task.venueName} ${task.floorName}」的` : "这条"}候补任务吗？`)) return;
+    if (!window.confirm(`确定删除${task ? `「${task.venueName} ${task.floorName}」的` : "这条"}自动预约任务吗？`)) return;
     button.disabled = true;
     try {
       await api(`/api/campus/library-seat/waitlists/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -903,7 +903,7 @@
     const start = clampMinute(w.start.value);
     const end = Math.min(1440, start + Number(w.duration.value || 60));
     w.submit.disabled = true;
-    setStatus(w.status, "正在创建候补任务...");
+    setStatus(w.status, "正在创建自动预约任务...");
     try {
       await api("/api/campus/library-seat/waitlists", {
         method: "POST",
@@ -914,7 +914,7 @@
           seatLabels: labels, enabled: w.enabled.checked
         }
       });
-      setStatus(w.status, "候补任务已创建。", "ok");
+      setStatus(w.status, "自动预约任务已创建。", "ok");
       w.labels.value = "";
       await loadWaitlistTasks();
     } catch (error) {

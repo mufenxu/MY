@@ -12,7 +12,9 @@
 - Add a library-seat workspace: overview and area cards, seat list, a floor plan rendered from `querySeatLayout` coordinates, per-seat timeline, seat booking, current-use check-in/leave/stop, today/history/breach/door records and waitlist task management.
 - Link the campus identity code from the reservation tabs by reusing the existing `#campus` card instead of duplicating it.
 - Time library-seat waitlist tasks to the school's 21:55 release: a task for tomorrow stays idle until today 21:55, then starts scanning, and the scheduler wakes up on that minute instead of on the next polling tick. The date picker always offers tomorrow even before the school publishes it, and the form states the exact start time for the chosen date.
-- Default the discussion-room auto-reservation run time to 21:55 and load its task list on first paint, so the panel never sits on “正在加载自动预约任务…” when its tab activation event is missed.
+- Rename that tab to 自动预约任务 across the web console — tab label, panel headings, submit button, empty state, progress and confirmation copy. This is a label change only: the `/api/campus/library-seat/waitlists` routes, payload fields and scheduler behaviour are untouched, so the Android client keeps working against the same contract.
+- Load the discussion-room auto-reservation task list on first paint, so the panel never sits on “正在加载自动预约任务…” when its tab activation event is missed.
+- State the difference between the two automation features in the UI: a discussion-room auto task is a one-shot alarm fired on its run date/time (rooms open three days ahead, run date defaults to target minus three days) and defaults to a `07:00` run time, while a library-seat waitlist task is a continuous watcher that opens at the school's 21:55 release for the next day and keeps scanning until its slot ends.
 
 ### Compatibility
 

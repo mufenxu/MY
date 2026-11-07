@@ -22,8 +22,13 @@ cd apps/android-app && ./gradlew :app:compileDebugKotlin
 
 ## 校园服务网页端「预约」结构（2026-11-07 定，用户拍板）
 
-- 导航只保留一个 `#reservation`「预约」入口（快速导航保持 7 项），页内一级页签分「研讨间 / 图书馆座位」，二级页签：研讨间 = 单次预约 / 已约空间 / 自动任务；座位 = 查询座位 / 我的预约 / 候补预约。
+- 导航只保留一个 `#reservation`「预约」入口（快速导航保持 7 项），页内一级页签分「研讨间 / 图书馆座位」，二级页签：研讨间 = 单次预约 / 已约空间 / 自动任务；座位 = 查询座位 / 我的预约 / 自动预约任务。
 - 外壳由 `public/reservation-hub.js` 建（导航项 + 页签 + `window.HguReservation`），子页分别挂到 `#resvLibroomBook`、`#resvLibroomRecords`、`#resvLibroomAuto`、`#resvSeatQuery`、`#resvSeatRecords`、`#resvSeatWaitlist`。跨模块通知用 `document` 上的 `resv:activate` / `resv:refresh` 事件。
 - 座位平面图用 `/api/campus/library-seat/layout` 的真实坐标，按包围盒归一化到百分比绘制，不做安卓那种写死的二层 1–45 网格。
 - 预约相关状态**一律不写 localStorage/sessionStorage**（多人共用浏览器会串号）。自动任务也没做「本机草稿」。
+- **「研讨间自动任务」和「座位候补预约」是两套东西，别混**（2026-11-07 已踩过一次）：
+  - 研讨间 = **一次性定时闹钟**。字段是「预约目标日期 + 任务运行日期 + 运行时间 + 候选空间列表」；`libroom-auto-reservation.js` 用 `runKey = targetDate:executeDateTexecuteTime` 做幂等锁，到点跑一次就结束（抢到 `succeeded`，抢空 `failed`）。研讨间**可提前 3 天**预约，`defaultExecuteDate` 默认取目标日期前 3 天；网页端默认运行时间 **07:00**（2026-11-07 用户指定，安卓端仍是 08:30，不要跟着改）。
+  - 座位候补 = **时段内持续蹲守**。字段是「日期 + 开始时间 + 时长 + 座位号范围」；`library-seat-waitlist.js` 用 `LIBRARY_SEAT_BOOKING_OPEN_MINUTE = 21:55` 卡住**目标日前一天 21:55** 放号时刻，到点开始扫描，抢不到就 `listening` 继续下一轮，直到时段结束才 `expired`。
+  - **网页端不叫「候补预约」**（2026-11-07 用户要求）：座位的这个页签在 UI 上叫「自动预约任务」，面板/按钮/空态/确认框同步改了。但内部标识符仍是 `waitlist`（`data-resv-tab="waitlist"`、`#resvSeatWaitlist`、`/api/campus/library-seat/waitlists`），**后端接口与字段一律不动**——安卓端 `LibrarySeatReservationScreen.kt` 还叫「候补预约」，那是它自己的文案，网页端改名不得牵动安卓与接口。
+  - 21:55 只属于图书馆座位，别往上套研讨间。
 - `test/asset-budget.test.js` 是硬闸门：`app.js`/`styles.css` 只剩个位数余量，新增前端代码必须走独立文件并同步登记 `package.json` 的 `check`/`lint` 和预算表。

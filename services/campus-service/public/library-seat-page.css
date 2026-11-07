@@ -261,7 +261,7 @@ body.dark-theme .seat-dot.is-free {
   }
 }
 
-/* 候补/定时任务的「开始运行」提示 */
+/* 自动预约任务的「开始运行」提示 */
 .resv-open-hint {
   grid-column: 1 / -1;
   margin: 0;
@@ -285,7 +285,7 @@ body.dark-theme .seat-dot.is-free {
   display: none;
 }
 
-/* 候补任务表单：桌面三列，最后一行让开关与按钮分居两端 */
+/* 自动预约任务表单：桌面三列，最后一行让开关与按钮分居两端 */
 .resv-fields.is-waitlist {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

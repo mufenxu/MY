@@ -67,7 +67,7 @@
       <div class="resv-tabs" role="tablist" aria-label="图书馆座位功能">
         <button type="button" role="tab" data-resv-tab="query" aria-selected="true">查询座位</button>
         <button type="button" role="tab" data-resv-tab="records" aria-selected="false" tabindex="-1">我的预约</button>
-        <button type="button" role="tab" data-resv-tab="waitlist" aria-selected="false" tabindex="-1">候补预约</button>
+        <button type="button" role="tab" data-resv-tab="waitlist" aria-selected="false" tabindex="-1">自动预约任务</button>
       </div>
       <div id="resvSeatQuery" class="resv-tabpanel" role="tabpanel" data-resv-panel="query"></div>
       <div id="resvSeatRecords" class="resv-tabpanel" role="tabpanel" data-resv-panel="records" hidden></div>
