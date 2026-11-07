@@ -8,6 +8,7 @@
   <link rel="apple-touch-icon" href="./assets/hgu-emblem.png">
   <link rel="stylesheet" href="./styles.css?v=20260825-mobile-nav-v2">
   <link rel="stylesheet" href="./academic-integrations.css?v=20260722-schedule-layout-v2">
+  <link rel="stylesheet" href="./ui-refresh.css?v=20261107-sms-login-v1">
 </head>
 <body data-app-locked="true">
   <div class="nebula-glow purple"></div>
@@ -205,42 +206,58 @@
     </section>
 
     <section id="authPanel" class="auth-panel">
-      <div>
-        <h2>连接学校账号</h2>
-        <p id="authStatusText">正在检查会话...</p>
+      <div class="auth-panel-head">
+        <div>
+          <h2>连接学校账号</h2>
+          <p id="authStatusText">正在检查会话...</p>
+        </div>
       </div>
-      <form id="loginForm" class="login-form" autocomplete="off">
-        <input id="usernameInput" name="username" type="text" inputmode="text" placeholder="学号/工号" autocomplete="username">
-        <label class="password-field">
-          <input id="passwordInput" name="password" type="password" placeholder="统一身份认证密码" autocomplete="current-password">
-          <button type="button" class="password-toggle" data-password-toggle="passwordInput" aria-label="显示密码"></button>
-        </label>
-        <label class="remember">
-          <input id="rememberInput" type="checkbox" checked>
-          <span>保持学校登录状态</span>
-        </label>
-        <label class="remember">
-          <input id="autoReloginInput" type="checkbox">
-          <span>每6天自动登录，过期时自动恢复</span>
-        </label>
-        <button id="loginButton" type="submit">登录并保存会话</button>
-      </form>
-      <div class="sms-login">
-        <button id="smsLoginToggle" type="button" class="auth-link">学校要求短信验证？改用短信验证码登录</button>
-        <form id="smsLoginForm" class="login-form" autocomplete="off" hidden>
-          <input id="smsPhoneInput" type="tel" inputmode="numeric" maxlength="11" placeholder="学校绑定的手机号" autocomplete="tel">
-          <div class="sms-code-row">
-            <input id="smsCodeInput" type="text" inputmode="numeric" maxlength="8" placeholder="短信验证码">
-            <button id="smsSendButton" type="button" class="ghost">获取验证码</button>
+
+      <div id="schoolLoginBlock" class="school-login" hidden>
+        <div class="school-login-intro">
+          <span class="school-login-badge" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.6"/><path d="M10.5 18.4h3"/></svg>
+          </span>
+          <div class="school-login-copy">
+            <strong>短信验证码登录</strong>
+            <p>学校统一认证已启用短信二次验证，用绑定的手机号收码即可连接，无需输入密码。</p>
           </div>
-          <p id="smsLoginHint" hidden></p>
-          <button id="smsLoginButton" type="submit">验证并登录</button>
+        </div>
+
+        <form id="smsLoginForm" class="school-form" autocomplete="off" novalidate>
+          <div class="school-field">
+            <label class="school-label" for="smsPhoneInput">学校绑定的手机号</label>
+            <div class="school-control">
+              <span class="school-prefix" aria-hidden="true">+86</span>
+              <input id="smsPhoneInput" name="phone" type="tel" inputmode="numeric" maxlength="11" placeholder="请输入 11 位手机号" autocomplete="tel" enterkeyhint="next">
+            </div>
+          </div>
+          <div class="school-field school-field-code">
+            <label class="school-label" for="smsCodeInput">短信验证码</label>
+            <div class="school-control">
+              <input id="smsCodeInput" name="code" type="text" inputmode="numeric" maxlength="8" placeholder="请输入收到的验证码" autocomplete="one-time-code" enterkeyhint="done">
+              <button id="smsSendButton" class="school-send" type="button">获取验证码</button>
+            </div>
+          </div>
+          <p id="smsLoginHint" class="school-hint" role="status" aria-live="polite" hidden></p>
+          <label class="school-remember">
+            <input id="rememberInput" type="checkbox" checked>
+            <span>保持登录状态</span>
+            <small>关闭浏览器后需要重新验证</small>
+          </label>
+          <button id="smsLoginButton" class="school-submit" type="submit">
+            <span>验证并登录</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h13m-5-6 6 6-6 6"/></svg>
+          </button>
         </form>
+
+        <p class="school-login-foot">验证码由学校统一认证下发，本系统不保存你的学校密码；有效期内各服务自动换票。</p>
       </div>
+
       <div class="auth-actions">
         <button id="logoutButton" type="button" class="ghost">退出学校会话</button>
       </div>
-      <p id="authNote" class="auth-note">开启自动重登后，学校密码将加密保存，用于每6天自动登录及过期恢复。</p>
+      <p id="authNote" class="auth-note">学校统一认证有效期内各服务自动换票，只有统一认证本身失效后才需要重新登录。</p>
     </section>
 
     <section id="study" class="app-section academic-section">

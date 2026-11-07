@@ -80,12 +80,7 @@ const nodes = {
   appLogoutButton: document.querySelector("#appLogoutButton"),
   authPanel: document.querySelector("#authPanel"),
   authStatusText: document.querySelector("#authStatusText"),
-  loginForm: document.querySelector("#loginForm"),
-  usernameInput: document.querySelector("#usernameInput"),
-  passwordInput: document.querySelector("#passwordInput"),
-  rememberInput: document.querySelector("#rememberInput"),
-  autoReloginInput: document.querySelector("#autoReloginInput"),
-  loginButton: document.querySelector("#loginButton"),
+  schoolLoginBlock: document.querySelector("#schoolLoginBlock"),
   logoutButton: document.querySelector("#logoutButton"),
   authNote: document.querySelector("#authNote"),
   status: document.querySelector("#status"),
@@ -412,10 +407,6 @@ document.querySelectorAll("[data-free-preset]").forEach((button) => {
     renderFreeSectionPicker();
     refreshFreeRooms();
   });
-});
-nodes.loginForm.addEventListener("submit", (event) => {
-  event.preventDefault();
-  login();
 });
 nodes.logoutButton.addEventListener("click", () => logout());
 nodes.adminRefreshButton?.addEventListener("click", () => loadAdminData());
@@ -840,58 +831,6 @@ async function loadAuthStatus() {
     renderAuth(error);
   }
 }
-
-const AUTO_RELOGIN_PREFERENCE_KEY = "hgu-auto-relogin";
-
-function rememberAutoReloginChoice(enabled) {
-  localStorage.setItem(AUTO_RELOGIN_PREFERENCE_KEY, enabled ? "1" : "0");
-}
-
-function applyAutoReloginChoice() {
-  const serverEnabled = Boolean(state.auth?.autoRelogin?.enabled);
-  const remembered = localStorage.getItem(AUTO_RELOGIN_PREFERENCE_KEY);
-  nodes.autoReloginInput.checked = serverEnabled || remembered === "1";
-}
-
-let autoReloginChoiceApplied = false;
-
-async function login() {
-  const username = nodes.usernameInput.value.trim();
-  const password = nodes.passwordInput.value;
-  if (!username || !password) {
-    setNotice("请输入学号/工号和统一身份认证密码。", "error");
-    return;
-  }
-
-  nodes.loginButton.disabled = true;
-  nodes.loginButton.textContent = "登录中";
-  setNotice("正在连接学校统一身份认证，并同步学业、校园账户和能耗数据...", "");
-  try {
-    await api("/api/auth/login", {
-      method: "POST",
-      body: {
-        username,
-        password,
-        rememberMe: nodes.rememberInput.checked,
-        autoRelogin: nodes.autoReloginInput.checked
-      }
-    });
-    rememberAutoReloginChoice(nodes.autoReloginInput.checked);
-    nodes.passwordInput.value = "";
-    await loadAuthStatus();
-    await refresh();
-  } catch (error) {
-    setNotice(error.message, "error");
-    // 学校启用短信二次验证后，密码登录必然停在验证码这一步，直接把短信登录通道展开。
-    if (error.code === "CAS_SMS_REQUIRED") {
-      window.HguSmsLogin?.reveal("学校已启用短信二次验证。请输入绑定的手机号，获取验证码后完成连接。");
-    }
-  } finally {
-    nodes.loginButton.disabled = false;
-    nodes.loginButton.textContent = state.auth?.needsLogin ? "重新登录并保存会话" : "登录并保存会话";
-  }
-}
-
 
 async function logout() {
   nodes.logoutButton.disabled = true;
@@ -2581,8 +2520,8 @@ function schoolAuthProblem(auth = {}) {
   if (!auth.hasCookie) {
     return {
       type: "missing",
-      title: "请先登录学校账号",
-      message: "当前系统账号还没有绑定学号/工号。请在连接学校账号区域登录统一身份认证后继续使用。"
+      title: "请先连接学校账号",
+      message: "当前系统账号还没有连接学校账号。用学校绑定的手机号收验证码，完成连接后即可继续使用。"
     };
   }
   if (auth.source !== "env" && !hasSchoolAccount) {
@@ -2590,7 +2529,7 @@ function schoolAuthProblem(auth = {}) {
       type: "unverified",
       // 短信登录只有手机号，学号要等上游返回后才补得上。
       title: "还差学号确认",
-      message: "学校会话已建立，但这次登录没带回学号/工号，系统会自动补齐；长时间不变请用密码重新登录。"
+      message: "学校会话已建立，但这次登录没带回学号/工号，系统会自动补齐；长时间不变请用短信验证码重新连接。"
     };
   }
   if (expired) {
@@ -2630,23 +2569,18 @@ function renderAuth(error) {
     || auth.needsLogin
     || casStatus === "expired"
     || casStatus === "error";
-  const formWasHidden = nodes.loginForm.hidden;
   nodes.authPanel.dataset.connected = auth.hasCookie ? (shouldShowLogin ? "relogin" : "true") : "false";
-  nodes.loginForm.hidden = !shouldShowLogin;
-  if (shouldShowLogin && (formWasHidden || !autoReloginChoiceApplied)) {
-    applyAutoReloginChoice();
-    autoReloginChoiceApplied = true;
-  }
-  if (!shouldShowLogin) autoReloginChoiceApplied = false;
-  nodes.loginButton.textContent = auth.hasCookie && shouldShowLogin ? "重新登录并保存会话" : "登录并保存会话";
+  // 学校账号只保留短信验证码登录，未连接或会话过期时才展开。
+  nodes.schoolLoginBlock.hidden = !shouldShowLogin;
   nodes.logoutButton.hidden = !auth.hasCookie || auth.source === "env";
+  nodes.authPanel.classList.toggle("is-signin", Boolean(shouldShowLogin));
 
   if (error) {
     nodes.authStatusText.textContent = "会话状态检查失败";
     renderSchoolAuthNotice({
       type: "error",
       title: "学校会话检查失败",
-      message: "暂时无法确认学校账号状态，请稍后刷新或重新登录学校账号。"
+      message: "暂时无法确认学校账号状态，请稍后刷新或重新连接学校账号。"
     });
     renderOverview();
     return;
@@ -2654,7 +2588,7 @@ function renderAuth(error) {
   renderSchoolAuthNotice(authProblem);
   if (!auth.hasCookie) {
     nodes.authStatusText.innerHTML = `
-      <span class="auth-login-hint calm">还没有绑定学号/工号。登录统一身份认证后，系统会保存学校账号并同步课表、一卡通、能耗等数据。</span>
+      <span class="auth-login-hint calm">还没有连接学校账号。用学校绑定的手机号收验证码，即可同步课表、一卡通、能耗等数据。</span>
     `;
     renderOverview();
     return;
@@ -2663,7 +2597,7 @@ function renderAuth(error) {
   const source = auth.source === "env" ? "环境变量" : "已保存会话";
   const name = auth.schoolAccount ? `学号/工号 ${auth.schoolAccount}` : "学号未确认";
   const loginMessage = authProblem?.message
-    || (auth.needsLogin ? (auth.loginRequiredMessage || "统一身份认证会话已过期，请在本页面重新登录学校账号。") : "");
+    || (auth.needsLogin ? (auth.loginRequiredMessage || "统一身份认证会话已过期，请在本页面重新连接学校账号。") : "");
   const loginHint = loginMessage
     ? `<span class="auth-login-hint">${escapeHtml(loginMessage)} 本系统会在学校统一认证有效期内保留会话，各服务通过独立票据自动续签。</span>`
     : "";
@@ -2672,10 +2606,7 @@ function renderAuth(error) {
     ${loginHint}
     <span class="auth-session-grid">${authSessionEntries(auth).map(authSessionChip).join("")}</span>
   `;
-  const nextLoginAt = formatSessionDate(auth.autoRelogin?.nextLoginAt);
-  nodes.authNote.textContent = auth.autoRelogin?.enabled
-    ? `已开启自动续期；学校统一认证有效期内各服务自动换票，无需重复登录。${nextLoginAt ? `下次计划：${nextLoginAt}。` : ""}学校密码加密保存在本系统。`
-    : "学校统一认证有效期内各服务自动换票，只有统一认证本身失效后才需要重新登录。";
+  nodes.authNote.textContent = "学校统一认证有效期内各服务自动换票，只有统一认证本身失效后才需要重新登录。";
   renderOverview();
 }
 

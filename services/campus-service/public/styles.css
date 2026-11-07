@@ -549,22 +549,7 @@ body[data-app-locked="true"] #appGate {
   white-space: nowrap;
 }
 
-#smsLoginHint {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--text-muted);
-}
-
-#smsLoginHint[data-tone="ok"] {
-  color: var(--sync-start);
-}
-
-#smsLoginHint[data-tone="error"] {
-  color: #ef4444;
-}
+/* #smsLoginHint 的排版与配色由 ui-refresh.css 的 .school-hint 负责。 */
 
 .password-field {
   position: relative;
@@ -8699,11 +8684,12 @@ body[data-app-locked="true"] #appGate::after {
   }
 }
 
-/* Final overview dashboard and dialog system polish. */
+/* Final overview dashboard and dialog system polish. 四列 bento 在 1280 视口下主区只有 926px，
+   列宽必须可收缩，否则会顶出视口把右侧账号面板截断。 */
 @media (min-width: 1280px) {
   body[data-route="overview"]:not([data-app-locked="true"]) .main-content {
     display: grid !important;
-    grid-template-columns: minmax(210px, 1fr) minmax(210px, 1fr) minmax(210px, 1fr) minmax(380px, 1fr) !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(320px, 1.45fr) !important;
     grid-template-rows: auto auto !important;
     grid-template-areas:
       "study study sync auth"

@@ -4,6 +4,8 @@
 
 ### Features
 
+- Replace the school account form with a single SMS-code sign-in: the 学号/工号 + password fields and the "改用短信验证码登录" toggle are gone, and the code panel is now the only way to connect a school account.
+- Rebuild that panel as a proper card (badge, labelled fields, `+86` prefix, inline 获取验证码 with countdown, remember-me, gradient submit, tone-coloured hints) with light/dark variants.
 - Merge the web reservation area into one `预约` navigation entry with `研讨间` and `图书馆座位` top-level tabs, so the mobile quick nav keeps seven items instead of adding a second reservation entry.
 - Add a discussion-room records tab with cancel, end-of-use and reschedule; reschedule follows the upstream cancel-then-recreate flow and states that warning before the second confirmation.
 - Add slot-based room lookup on the discussion-room booking tab, reusing `spaces?date&startTime&endTime` (and `excludeReservationId` while rescheduling).
@@ -12,6 +14,8 @@
 
 ### Compatibility
 
+- Fit the overview dashboard to 1280-1499px viewports: the four-column bento now uses shrinkable tracks, switches to a three-column arrangement in that range, and the login panel adapts through container queries instead of fixed field widths.
+- Reserve the iOS safe-area inset under the fixed bottom navigation, keep form controls at 16px on phones so iOS cannot zoom the page on focus, and cap the confirmation dialog at the viewport height.
 - Keep the teaching-evaluation actions on one mobile row and render eight-digit water codes as a single tabular-number line without overflowing narrow screens.
 - Use `HGU_PUBLIC_ORIGIN` for trusted-proxy HTTPS redirects so a WeChat visit to `hgu.pxyb.cn` cannot be redirected to the loopback upstream host.
 - Fall back to native form submission in WeChat only when the asynchronous system-login request fails or times out, preserving the persistent header-token flow as the primary path.
@@ -22,6 +26,8 @@
 
 ### Engineering
 
+- Keep the SMS login flow in `sms-login.js` (now linted) with sanitised digits-only input, deadline-based cooldown that survives tab switches, and re-send invalidation when the phone number changes; the password login handler and its auto-relogin preference are removed from `app.js`.
+- Add `ui-refresh.css` for the login card and the cross-page mobile fixes, register it in `index.html` and the asset budgets, and raise the `index.html` budget from 42KB to 44KB for the new markup.
 - Serialize campus-session operations per user and query the UWC water code before its bill, preventing simultaneous token recovery from surfacing a false “account logged in elsewhere” error on first load.
 - Split the reservation UI into `reservation-hub.js`, `libroom-page.js`, `libroom-records-page.js`, `libroom-auto-page.js` and `library-seat-page.js`, each with its own stylesheet, and register them in `check`, `lint` and the static asset budgets.
 - Keep reservation state in memory only; nothing is written to `localStorage`, so switching platform accounts in the same browser cannot leak another user's school reservations.
