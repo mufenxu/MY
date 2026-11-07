@@ -7,6 +7,9 @@ const DEFAULT_MAX_LABEL = 45;
 export const LIBRARY_SEAT_WAITLIST_DEFAULT_MIN_LABEL = DEFAULT_MIN_LABEL;
 export const LIBRARY_SEAT_WAITLIST_DEFAULT_MAX_LABEL = DEFAULT_MAX_LABEL;
 
+// 学校在「目标日前一天 21:55」放出次日座位，早于这个时刻扫描没有意义。
+export const LIBRARY_SEAT_BOOKING_OPEN_MINUTE = 21 * 60 + 55;
+
 function fail(message, code = "INVALID_LIBRARY_SEAT_WAITLIST") {
   const error = new Error(message);
   error.status = 400;
@@ -136,17 +139,29 @@ function taskWindow(task) {
   };
 }
 
+/** 目标日期座位的开抢时刻：前一日 21:55（北京时间）。 */
+export function librarySeatWaitlistOpenMs(date) {
+  const text = stringValue(date);
+  if (!DATE_PATTERN.test(text)) return null;
+  return beijingInstantMs(text, 0) - 86_400_000 + LIBRARY_SEAT_BOOKING_OPEN_MINUTE * 60_000;
+}
+
 export function librarySeatWaitlistRunPlan(task, now = new Date()) {
   const enabled = Boolean(task?.enabled);
   const window = taskWindow(task);
   if (!enabled || !window) {
-    return { due: false, active: false, expired: false, startMs: null, endMs: null };
+    return { due: false, active: false, waiting: false, expired: false, openMs: null, startMs: null, endMs: null };
   }
   const nowMs = now.getTime();
+  const openMs = librarySeatWaitlistOpenMs(task?.date || task?.reservationDate);
+  // 开抢前只等待、不扫描；当天或更早日期的任务开抢时刻已过，等同于立即执行。
+  const waiting = openMs !== null && nowMs < openMs;
   return {
-    due: nowMs < window.endMs,
-    active: nowMs < window.endMs,
+    due: !waiting && nowMs < window.endMs,
+    active: !waiting && nowMs < window.endMs,
+    waiting,
     expired: nowMs >= window.endMs,
+    openMs,
     startMs: window.startMs,
     endMs: window.endMs
   };
@@ -163,6 +178,12 @@ export function librarySeatWaitlistNextScanDelay(tasks = [], now = new Date(), c
   const list = Array.isArray(tasks) ? tasks : [];
   for (const task of list) {
     const plan = librarySeatWaitlistRunPlan(task, now);
+    if (plan.waiting && plan.openMs !== null) {
+      // 快到开抢时刻时精确叫醒，别让 21:55 的号被 10 分钟轮询磨掉。
+      const untilOpenMs = plan.openMs - nowMs;
+      if (untilOpenMs <= slowMs) delay = Math.min(delay, Math.max(1_000, untilOpenMs + 500));
+      continue;
+    }
     if (!plan.due) continue;
     const beforeStartMs = plan.startMs - nowMs;
     const afterStartMs = nowMs - plan.startMs;
@@ -207,6 +228,9 @@ export async function scanLibrarySeatWaitlist({
   maxAttemptsPerScan = 3
 } = {}) {
   const plan = librarySeatWaitlistRunPlan(task, now);
+  if (plan.waiting) {
+    return { status: "waiting", message: "等待 21:55 放号后自动开抢，暂未开始扫描。" };
+  }
   if (!plan.due) return { status: plan.expired ? "expired" : "inactive" };
 
   const areasPayload = await client.listAreas({

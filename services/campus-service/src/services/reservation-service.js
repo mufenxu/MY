@@ -27,6 +27,7 @@ import { readUpstreamFailure, recordUpstreamFailure } from "../lib/failure-coold
 import { isCookieExpired, mergeSessionJars } from "../lib/session-jar.js";
 import { KeyedSerialQueue } from "../lib/keyed-serial-queue.js";
 import {
+  librarySeatWaitlistOpenMs,
   librarySeatWaitlistRunInput,
   librarySeatWaitlistRunPlan,
   librarySeatWaitlistTimes,
@@ -836,6 +837,7 @@ export function createReservationService({
   function librarySeatWaitlistPublic(row) {
     if (!row) return null;
     const status = librarySeatWaitlistStringValue(row.status) || "listening";
+    const openMs = librarySeatWaitlistOpenMs(row.date);
     return {
       id: row.id,
       enabled: Boolean(row.enabled),
@@ -851,6 +853,7 @@ export function createReservationService({
       seatLabels: Array.isArray(row.seat_labels) ? row.seat_labels : [],
       status,
       statusText: librarySeatWaitlistStatusText(status),
+      openAt: Number.isFinite(openMs) ? new Date(openMs).toISOString() : null,
       lastMessage: row.last_message || null,
       lastAreaName: row.last_area_name || "",
       lastSeatLabel: row.last_seat_label || "",
@@ -1044,6 +1047,10 @@ export function createReservationService({
     const plan = librarySeatWaitlistRunPlan(runInput, now);
     const nowValue = now.toISOString();
     if (!plan.due) {
+      // 还没到 21:55 放号时刻的任务只是等待，不能按「已过期」结束掉。
+      if (plan.waiting) {
+        return { status: "waiting", message: "等待 21:55 放号后自动开抢。" };
+      }
       const result = {
         status: "expired",
         message: "候补时段已结束，未能预约成功。",

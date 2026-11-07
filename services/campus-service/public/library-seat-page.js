@@ -12,7 +12,7 @@
   if (!document.querySelector("link[data-library-seat-page]")) {
     const stylesheet = document.createElement("link");
     stylesheet.rel = "stylesheet";
-    stylesheet.href = "./library-seat-page.css?v=20261107-seat-v1";
+    stylesheet.href = "./library-seat-page.css?v=20261107-seat-v2";
     stylesheet.dataset.librarySeatPage = "1";
     document.head.append(stylesheet);
   }
@@ -29,6 +29,21 @@
   const localDate = (offset = 0) => new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit"
   }).format(new Date(Date.now() + offset * 86400000));
+
+  // 学校在目标日期的前一天 21:55 放出次日座位，定时任务就在这个时刻开抢。
+  const SEAT_OPEN_MINUTE = 21 * 60 + 55;
+  const shiftDate = (value, days) => {
+    const parsed = new Date(`${value}T12:00:00+08:00`);
+    if (!value || Number.isNaN(parsed.getTime())) return "";
+    return new Date(parsed.getTime() + days * 86400000).toISOString().slice(0, 10);
+  };
+  const openInfo = (targetDate) => {
+    const openDate = shiftDate(targetDate, -1);
+    if (!openDate) return { openDate: "", text: "", passed: true };
+    const label = openDate === localDate(0) ? "今天" : openDate === localDate(1) ? "明天" : `${openDate}（${weekdayText(openDate)}）`;
+    const openMs = new Date(`${openDate}T21:55:00+08:00`).getTime();
+    return { openDate, text: `${label} ${minuteText(SEAT_OPEN_MINUTE)}`, passed: Number.isFinite(openMs) && Date.now() >= openMs };
+  };
 
   const SCHOOL_HINT = '学校账号未连接或已过期，请先到 <a href="#campus">一卡通</a> 页面连接学校账号。';
 
@@ -54,8 +69,9 @@
     if (shared.overview) return shared.overview;
     shared.overview = await api("/api/campus/library-seat/overview");
     shared.venues = Array.isArray(shared.overview?.venues) ? shared.overview.venues : [];
-    shared.dates = (Array.isArray(shared.overview?.dates) ? shared.overview.dates : []).filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item));
-    if (!shared.dates.length) shared.dates = [localDate(0), localDate(1), localDate(2)];
+    const schoolDates = (Array.isArray(shared.overview?.dates) ? shared.overview.dates : []).filter((item) => /^\d{4}-\d{2}-\d{2}$/.test(item));
+    // 学校 21:55 才放次日号，放号前接口不会返回明天，这里补上，方便提前挂定时任务。
+    shared.dates = [...new Set([...schoolDates, localDate(0), localDate(1)])].sort();
     return shared.overview;
   }
 
@@ -717,24 +733,27 @@
   waitlistMount.innerHTML = `
     <section class="resv-panel">
       <div class="resv-panel-head">
-        <div><h3>新建候补任务</h3><p>在指定时段和座位号范围内持续监听，一旦有座位释放就自动提交预约。</p></div>
+        <div><h3>新建候补任务</h3><p>选好日期和座位范围，到学校放号时间自动开抢；没抢到会继续监听，直到该时段结束。</p></div>
       </div>
-      <form id="seatWaitlistForm" class="resv-fields">
+      <form id="seatWaitlistForm" class="resv-fields is-waitlist">
         <label class="resv-field"><span>场馆</span><select id="seatWaitlistVenue" required></select></label>
         <label class="resv-field"><span>楼层</span><select id="seatWaitlistFloor" required></select></label>
         <label class="resv-field"><span>日期</span><select id="seatWaitlistDate" required></select></label>
         <label class="resv-field"><span>开始时间</span><select id="seatWaitlistStart" required></select></label>
         <label class="resv-field"><span>使用时长</span><select id="seatWaitlistDuration">${DURATIONS.map((item) => `<option value="${item.value}"${item.value === 120 ? " selected" : ""}>${item.label}</option>`).join("")}</select></label>
+        <label class="resv-field"><span>指定座位号 <small>可选</small></span><input id="seatWaitlistLabels" placeholder="逗号分隔，例如 8,12,15"></label>
         <label class="resv-field"><span>最小座位号</span><input id="seatWaitlistMin" type="number" min="1" max="999" value="1" required></label>
         <label class="resv-field"><span>最大座位号</span><input id="seatWaitlistMax" type="number" min="1" max="999" value="45" required></label>
-        <label class="resv-field"><span>指定座位号 <small>可选</small></span><input id="seatWaitlistLabels" placeholder="逗号分隔，例如 8,12,15"></label>
-        <label class="resv-check"><input id="seatWaitlistEnabled" type="checkbox" checked>创建后立即启用</label>
-        <div class="resv-actions"><button id="seatWaitlistSubmit" type="submit">创建候补任务</button></div>
+        <p id="seatWaitlistOpenHint" class="resv-open-hint" role="status"></p>
+        <div class="resv-actions is-waitlist-actions">
+          <label class="resv-check"><input id="seatWaitlistEnabled" type="checkbox" checked>创建后立即启用</label>
+          <button id="seatWaitlistSubmit" type="submit">创建候补任务</button>
+        </div>
       </form>
       <p id="seatWaitlistStatus" class="resv-status" role="status" aria-live="polite"></p>
     </section>
     <section class="resv-panel">
-      <div class="resv-panel-head"><div><h3>我的候补任务</h3><p>任务在预约结束时间前持续监听，可随时停用或删除。</p></div><button id="seatWaitlistReload" class="ghost" type="button">刷新</button></div>
+      <div class="resv-panel-head"><div><h3>我的候补任务</h3><p>任务从开抢时间开始监听，可随时停用或删除。</p></div><button id="seatWaitlistReload" class="ghost" type="button">刷新</button></div>
       <div id="seatWaitlistList" class="resv-list"><div class="resv-empty">打开本页签后自动加载。</div></div>
     </section>`;
 
@@ -745,8 +764,23 @@
     max: waitlistMount.querySelector("#seatWaitlistMax"), labels: waitlistMount.querySelector("#seatWaitlistLabels"),
     enabled: waitlistMount.querySelector("#seatWaitlistEnabled"), form: waitlistMount.querySelector("#seatWaitlistForm"),
     submit: waitlistMount.querySelector("#seatWaitlistSubmit"), status: waitlistMount.querySelector("#seatWaitlistStatus"),
+    openHint: waitlistMount.querySelector("#seatWaitlistOpenHint"),
     reload: waitlistMount.querySelector("#seatWaitlistReload"), list: waitlistMount.querySelector("#seatWaitlistList")
   };
+
+  function syncWaitlistOpenHint() {
+    if (!w.openHint) return;
+    const target = w.date.value;
+    const info = openInfo(target);
+    if (!info.text) {
+      w.openHint.textContent = "";
+      return;
+    }
+    w.openHint.dataset.waiting = info.passed ? "false" : "true";
+    w.openHint.textContent = info.passed
+      ? `学校已放出 ${target} 的座位，任务创建后立即开始监听。`
+      : `开始运行：${info.text}（学校放号时间），到点自动开抢 ${target} 的座位。`;
+  }
 
   const waitlistState = { loaded: false, loading: false, tasks: [] };
 
@@ -755,6 +789,7 @@
     w.date.innerHTML = shared.dates.map((date) => `<option value="${esc(date)}">${esc(date)}（${esc(weekdayText(date))}）</option>`).join("");
     w.start.innerHTML = startMinuteOptions().map((minute) => `<option value="${minute}"${minute === 540 ? " selected" : ""}>${minuteText(minute)}</option>`).join("");
     fillWaitlistFloors();
+    syncWaitlistOpenHint();
   }
 
   function fillWaitlistFloors() {
@@ -776,9 +811,23 @@
         ? `指定 ${task.seatLabels.join("、")} 号`
         : `座位号 ${task.minLabel} - ${task.maxLabel}`;
       const tone = task.status === "success" ? "is-ok" : task.status === "expired" ? "is-bad" : task.enabled ? "is-info" : "";
+      const openAtMs = task.openAt ? Date.parse(task.openAt) : NaN;
+      const waitingForOpen = task.enabled && Number.isFinite(openAtMs) && Date.now() < openAtMs;
+      const openText = Number.isFinite(openAtMs)
+        ? new Intl.DateTimeFormat("zh-CN", {
+          timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false
+        }).format(new Date(openAtMs)).replace(/\//g, "-")
+        : "";
+      const openLabel = openText
+        ? `${openText}（${waitingForOpen ? "学校放号后自动开始" : "已开放，任务按监听中执行"}）`
+        : "立即开始";
+      const headBadge = waitingForOpen
+        ? `<span class="resv-badge is-info">等待 ${esc(openText)} 开抢</span>`
+        : `<span class="resv-badge ${tone}">${esc(task.statusText || task.status || "")}</span>`;
       return `<article class="resv-item" data-task="${esc(task.id)}">
-        <div class="resv-item-head"><span class="resv-item-title">${esc(task.venueName || "")} ${esc(task.floorName || "")}</span><span class="resv-badge ${tone}">${esc(task.statusText || task.status || "")}</span>${task.enabled ? "" : '<span class="resv-badge">已停用</span>'}</div>
+        <div class="resv-item-head"><span class="resv-item-title">${esc(task.venueName || "")} ${esc(task.floorName || "")}</span>${headBadge}${task.enabled ? "" : '<span class="resv-badge">已停用</span>'}</div>
         <p class="resv-item-meta">${esc(slotText)} · ${esc(range)}</p>
+        <p class="resv-item-meta">开抢时间：${esc(openLabel)}</p>
         <p class="resv-item-meta">最近结果：${esc(task.lastMessage || "尚未执行")}${task.lastSeatLabel ? `（座位 ${esc(task.lastSeatLabel)}）` : ""}${task.consecutiveFailures > 0 ? ` · 连续失败 ${task.consecutiveFailures} 次` : ""}</p>
         <div class="resv-item-actions"><button class="ghost" type="button" data-task-toggle="${esc(task.id)}">${task.enabled ? "停用" : "启用"}</button><button class="ghost" type="button" data-task-delete="${esc(task.id)}">删除</button></div>
       </article>`;
@@ -837,6 +886,7 @@
 
   w.venue.addEventListener("change", fillWaitlistFloors);
   w.reload.addEventListener("click", loadWaitlistTasks);
+  w.date.addEventListener("change", syncWaitlistOpenHint);
   w.form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const venue = shared.venues.find((item) => String(item.id) === String(w.venue.value));

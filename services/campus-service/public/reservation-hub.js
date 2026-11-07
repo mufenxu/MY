@@ -6,17 +6,31 @@
 (function initReservationHub() {
   const nav = document.querySelector(".quick-nav");
   const main = document.querySelector(".main-content");
-  if (!nav || !main || document.querySelector("#reservation")) return;
+  if (!nav || !main) return;
+
+  // 旧版本或重复执行可能留下多余的导航项/面板，先归一到「只有一个入口」。
+  const navLinks = [...nav.querySelectorAll('a[href="#reservation"]')];
+  navLinks.slice(1).forEach((node) => node.remove());
+  const existingSections = [...document.querySelectorAll("#reservation")];
+  existingSections.slice(1).forEach((node) => node.remove());
+
+  // 已经由本脚本初始化过（脚本被引入两次）就直接返回。
+  if (existingSections[0] && existingSections[0].querySelector(".resv-switch")) return;
+  // 旧版本留下的残缺面板直接淘汰，按当前结构重建。
+  if (existingSections[0]) {
+    existingSections[0].remove();
+    navLinks[0]?.remove();
+  }
 
   if (!document.querySelector("link[data-resv-hub]")) {
     const stylesheet = document.createElement("link");
     stylesheet.rel = "stylesheet";
-    stylesheet.href = "./reservation-hub.css?v=20261107-hub-v1";
+    stylesheet.href = "./reservation-hub.css?v=20261107-hub-v2";
     stylesheet.dataset.resvHub = "1";
     document.head.append(stylesheet);
   }
 
-  if (!nav.querySelector('a[href="#reservation"]')) {
+  if (!navLinks[0]?.isConnected) {
     const link = document.createElement("a");
     link.href = "#reservation";
     link.innerHTML = '<svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v17H5zM8 2v4M16 2v4M8 10h8M8 14h5"/></svg><span>预约</span>';

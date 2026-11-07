@@ -11,6 +11,8 @@
 - Add slot-based room lookup on the discussion-room booking tab, reusing `spaces?date&startTime&endTime` (and `excludeReservationId` while rescheduling).
 - Add a library-seat workspace: overview and area cards, seat list, a floor plan rendered from `querySeatLayout` coordinates, per-seat timeline, seat booking, current-use check-in/leave/stop, today/history/breach/door records and waitlist task management.
 - Link the campus identity code from the reservation tabs by reusing the existing `#campus` card instead of duplicating it.
+- Time library-seat waitlist tasks to the school's 21:55 release: a task for tomorrow stays idle until today 21:55, then starts scanning, and the scheduler wakes up on that minute instead of on the next polling tick. The date picker always offers tomorrow even before the school publishes it, and the form states the exact start time for the chosen date.
+- Default the discussion-room auto-reservation run time to 21:55 and load its task list on first paint, so the panel never sits on “正在加载自动预约任务…” when its tab activation event is missed.
 
 ### Compatibility
 
@@ -30,6 +32,7 @@
 - Add `ui-refresh.css` for the login card and the cross-page mobile fixes, register it in `index.html` and the asset budgets, and raise the `index.html` budget from 42KB to 44KB for the new markup.
 - Serialize campus-session operations per user and query the UWC water code before its bill, preventing simultaneous token recovery from surfacing a false “account logged in elsewhere” error on first load.
 - Split the reservation UI into `reservation-hub.js`, `libroom-page.js`, `libroom-records-page.js`, `libroom-auto-page.js` and `library-seat-page.js`, each with its own stylesheet, and register them in `check`, `lint` and the static asset budgets.
+- Version every reservation script and stylesheet in `index.html`, because `?v=` responses are served `immutable` for a year: an unbumped URL keeps serving the first copy after an edit. `reservation-hub.js` also normalises its own DOM on start-up (extra `预约` nav entries, stray `#reservation` sections, legacy panels) so a double include can never render two entries.
 - Keep reservation state in memory only; nothing is written to `localStorage`, so switching platform accounts in the same browser cannot leak another user's school reservations.
 - Add browser-storage and server integration regressions for WebView reopen persistence, 30-day expiry, cookie-free WeChat login, stale-cookie recovery and regular-browser isolation.
 - Document the compatibility invariants that must be preserved when changing authentication, cookies or browser asset loading. This implementation supersedes the navigation-based workaround recorded in 0.2.3.

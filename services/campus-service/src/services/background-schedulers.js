@@ -797,6 +797,8 @@ export function createBackgroundSchedulers({
         const now = new Date();
         await mapWithConcurrency(tasks, 2, async (task) => {
           const plan = librarySeatWaitlistRunPlan(task, now);
+          // 还没到 21:55 放号时刻：直接跳过，不换票也不打学校接口。
+          if (plan.waiting) return "waiting";
           const user = await repository.findUserById(task.user_id);
           if (!user || user.disabled) {
             if (plan.expired) {

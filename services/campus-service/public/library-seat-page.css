@@ -260,3 +260,65 @@ body.dark-theme .seat-dot.is-free {
     grid-template-columns: repeat(auto-fill, minmax(66px, 1fr));
   }
 }
+
+/* 候补/定时任务的「开始运行」提示 */
+.resv-open-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.resv-open-hint[data-waiting="true"] {
+  border-color: rgba(14, 165, 233, 0.35);
+  background: rgba(14, 165, 233, 0.1);
+  color: var(--campus-start);
+  font-weight: 600;
+}
+
+.resv-open-hint:empty {
+  display: none;
+}
+
+/* 候补任务表单：桌面三列，最后一行让开关与按钮分居两端 */
+.resv-fields.is-waitlist {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.resv-actions.is-waitlist-actions {
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.resv-actions.is-waitlist-actions button {
+  min-width: 140px;
+}
+
+@media (max-width: 900px) {
+  .resv-fields.is-waitlist {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .resv-fields.is-waitlist {
+    grid-template-columns: 1fr;
+  }
+
+  .resv-actions.is-waitlist-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .resv-actions.is-waitlist-actions button {
+    width: 100%;
+  }
+}
