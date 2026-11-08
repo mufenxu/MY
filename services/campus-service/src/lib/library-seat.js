@@ -40,7 +40,11 @@ function dataOf(payload) {
 }
 
 function upstreamMessage(payload, fallback) {
-  return String(payload?.message || payload?.msg || payload?.error || fallback);
+  const messages = [payload?.message, payload?.msg, payload?.error, payload?.error?.message,
+    payload?.data?.message, payload?.data?.msg, payload?.data?.reason]
+    .filter((value) => typeof value === "string" && value.trim())
+    .map((value) => value.trim());
+  return [...new Set(messages)].join("；").slice(0, 2_000) || fallback;
 }
 
 function stringValue(value, fallback = "") {
@@ -451,16 +455,16 @@ export function createLibrarySeatClient({
       return request(pathname, data, { retry: false, tokenRequired, conflict });
     }
     if (authError) fail(401, upstreamMessage(payload, "座位预约会话已过期，请重新登录学校账号。"), "LIBRARY_SEAT_AUTH_EXPIRED");
-    if (!ok) fail(statusCode || 502, upstreamMessage(payload, `座位预约系统返回 HTTP ${statusCode || 502}。`), "LIBRARY_SEAT_UPSTREAM_HTTP", { retryAfterMs: rawResult?.retryAfterMs || 0 });
-    if (payload && ((payload.code !== undefined && code !== 200 && payload.status !== true) || payload.status === false)) {
-      const message = upstreamMessage(payload, "座位预约系统拒绝了请求。");
-      let errorCode = "LIBRARY_SEAT_UPSTREAM_REJECTED";
-      let status = conflict ? 409 : 502;
+    if (!ok || (payload && ((payload.code !== undefined && code !== 200 && payload.status !== true) || payload.status === false))) {
+      const message = upstreamMessage(payload, ok ? "座位预约系统拒绝了请求。" : `座位预约系统返回 HTTP ${statusCode || 502}。`);
+      let errorCode = ok ? "LIBRARY_SEAT_UPSTREAM_REJECTED" : "LIBRARY_SEAT_UPSTREAM_HTTP";
+      let status = ok ? (conflict ? 409 : 502) : statusCode || 502;
       if (conflict && /未开放|尚未开放|暂未开放|未到.*(?:预约|开放)|不在.*预约时间/.test(message)) errorCode = "LIBRARY_SEAT_NOT_OPEN";
-      else if (conflict && /已被.*(?:预约|占)|座位.*(?:已预约|占用)|seat.*(?:occupied|taken)/i.test(message)) errorCode = "LIBRARY_SEAT_OCCUPIED";
+      else if (conflict && /座位(?:已|被|暂时|暂|当前|已经|\s)*(?:已被[^，。；]*(?:预约|占)|已预约|占用|不可用|不可预约|锁定)|seat.*(?:occupied|taken)/i.test(message)) errorCode = "LIBRARY_SEAT_OCCUPIED";
       else if (/频繁|限流|too many requests/i.test(message)) { errorCode = "LIBRARY_SEAT_RATE_LIMITED"; status = 429; }
       else if (/系统繁忙|服务繁忙|稍后重试/.test(message)) { errorCode = "LIBRARY_SEAT_BUSY"; status = 503; }
-      fail(status, message, errorCode, { upstreamCode: Number.isFinite(code) ? code : null, retryAfterMs: rawResult?.retryAfterMs || 0 });
+      fail(status, message, errorCode, { upstreamCode: Number.isFinite(code) ? code : null,
+        upstreamStatus: statusCode, retryAfterMs: rawResult?.retryAfterMs || 0 });
     }
     return dataOf(payload);
   }

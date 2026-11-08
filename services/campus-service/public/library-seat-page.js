@@ -946,11 +946,19 @@
       const headBadge = waitingForRun
         ? `<span class="resv-badge is-info">等待 ${esc(runText)} 执行</span>`
         : `<span class="resv-badge ${tone}">${esc(task.statusText || task.status || "")}</span>`;
+      const failure = ["failed", "unconfirmed"].includes(task.status) ? task.lastFailure : null;
+      const failureDetails = failure ? [failure.message,
+        failure.areaName && `阅览区：${failure.areaName}`,
+        failure.seatLabel && `座位：${failure.seatLabel} 号`,
+        failure.upstreamCode != null && `学校返回码：${failure.upstreamCode}`,
+        failure.upstreamStatus != null && `HTTP 状态：${failure.upstreamStatus}`]
+        .filter(Boolean).join(" · ") : "";
       return `<article class="resv-item" data-task="${esc(task.id)}">
         <div class="resv-item-head"><span class="resv-item-title">${esc(task.venueName || "")} ${esc(task.floorName || "")}</span>${headBadge}${task.enabled ? "" : '<span class="resv-badge">已停用</span>'}</div>
         <p class="resv-item-meta">${esc(slotText)} · ${esc(range)}</p>
         <p class="resv-item-meta">运行时间：${esc(runText)}${waitingForRun ? "（到点自动执行一次）" : ""}</p>
         <p class="resv-item-meta">最近结果：${esc(task.lastMessage || "尚未执行")}${task.lastSeatLabel ? `（座位 ${esc(task.lastSeatLabel)}）` : ""}${task.timings?.firstRequestDelayMs != null ? ` · 首发延迟 ${esc(task.timings.firstRequestDelayMs)} 毫秒` : ""}</p>
+        ${failureDetails ? `<p class="resv-item-meta">最近异常：${esc(failureDetails)}</p>` : ""}
         <div class="resv-item-actions"><button class="ghost" type="button" data-task-toggle="${esc(task.id)}"${["success", "unconfirmed"].includes(task.status) ? " disabled" : ""}>${task.enabled ? "停用" : "启用"}</button><button class="ghost" type="button" data-task-delete="${esc(task.id)}">删除</button></div>
       </article>`;
     }).join("");

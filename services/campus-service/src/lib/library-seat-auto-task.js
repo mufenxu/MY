@@ -334,7 +334,7 @@ export async function prepareLibrarySeatAutoTaskSeats({ task, client, topology =
     const area = Number(b.areaId === input.preferredAreaId) - Number(a.areaId === input.preferredAreaId);
     return area || a.label - b.label;
   });
-  return { candidates, blocked: new Set(), pending: null };
+  return { candidates, blocked: new Set(), pending: null, topology };
 }
 
 function successfulSeat(candidate) {
@@ -342,20 +342,48 @@ function successfulSeat(candidate) {
     message: librarySeatAutoTaskTierText(candidate.tier, candidate.label), seat: candidate };
 }
 
-async function confirmPendingReservation(prepared, task, client) {
+async function confirmPendingReservation(prepared, task, client, shouldStop = () => false, onFailure = () => {}) {
   const candidate = prepared.pending;
   if (!candidate) return null;
+  let stage = "confirm";
   try {
     const rows = await client.getMyReservations();
     const minute = (text) => {
       const match = String(text || "").match(/(?:^|\s)(\d{1,2}):(\d{2})/);
       return match ? Number(match[1]) * 60 + Number(match[2]) : null;
     };
-    const matched = (Array.isArray(rows) ? rows : []).find((row) => row.seatId === candidate.seatId
-      && row.date === task.date && minute(row.startTime) === task.startMinute && minute(row.endTime) === task.endMinute
+    const active = (Array.isArray(rows) ? rows : []).filter((row) => row.date === task.date
       && ["RESERVE", "CHECK_IN", "LEAVE"].includes(row.status));
-    if (matched) { prepared.pending = null; return successfulSeat(candidate); }
-  } catch {
+    const matched = active.find((row) => row.seatId === candidate.seatId
+      && minute(row.startTime) === task.startMinute && minute(row.endTime) === task.endMinute);
+    if (matched) {
+      prepared.pending = null;
+      prepared.pendingRefused = false;
+      return successfulSeat(candidate);
+    }
+    // 明确拒绝才允许在核对记录和实时空位后换座；超时仍保持待确认。
+    if (prepared.pendingRefused) {
+      if (active.some((row) => minute(row.startTime) < task.endMinute && minute(row.endTime) > task.startMinute)) {
+        prepared.pending = null;
+        prepared.pendingRefused = false;
+        return { status: "failed", message: "所选时段已有有效预约，请查看我的预约，任务已停止重复提交。" };
+      }
+      if (await shouldStop()) {
+        prepared.pending = null;
+        prepared.pendingRefused = false;
+        return { status: "stopped", message: "任务已停止，已取消后续尝试。" };
+      }
+      stage = "availability";
+      const fresh = await prepareLibrarySeatAutoTaskSeats({ task, client });
+      prepared.blocked.add(candidate.seatId);
+      prepared.candidates = fresh.candidates;
+      prepared.topology = false;
+      prepared.pending = null;
+      prepared.pendingRefused = false;
+      return { status: "retry", message: "学校返回预约失败，已核对我的预约并刷新目标时段空位，继续尝试。" };
+    }
+  } catch (error) {
+    onFailure(error, candidate, stage);
     // 查询暂时失败或记录尚未同步时保留待确认状态，避免重复预约。
   }
   return { status: "confirming", message: "预约提交结果待确认，正在核对我的预约，暂不重复提交。" };
@@ -367,6 +395,7 @@ export async function scanLibrarySeatAutoTask({
   now = new Date(),
   prepared,
   onAttempt = () => {},
+  onFailure = () => {},
   shouldStop = () => false,
   maxAreasPerScan = 50,
   maxAttemptsPerScan = 3
@@ -379,7 +408,7 @@ export async function scanLibrarySeatAutoTask({
   if (await shouldStop()) return { status: "stopped", message: "任务已停止，已取消后续尝试。" };
   prepared ||= await prepareLibrarySeatAutoTaskSeats({ task, client, maxAreas: maxAreasPerScan });
   prepared.blocked ||= new Set();
-  if (prepared.pending) return confirmPendingReservation(prepared, task, client);
+  if (prepared.pending) return confirmPendingReservation(prepared, task, client, shouldStop, onFailure);
   let attempts = 0;
   const attemptLimit = Math.max(1, Math.trunc(maxAttemptsPerScan) || 1);
   for (const candidate of prepared.candidates) {
@@ -397,9 +426,17 @@ export async function scanLibrarySeatAutoTask({
       });
       return successfulSeat(candidate);
     } catch (error) {
+      onFailure(error, candidate);
       if (error?.code === "LIBRARY_SEAT_OCCUPIED" || (error?.status === 409 && !error.code)) {
         prepared.blocked.add(candidate.seatId);
+        if (prepared.topology) return { status: "retry", message: "座位已被占用，刷新目标时段空位后继续尝试。" };
         continue;
+      }
+      if (error?.status === 409 && ["LIBRARY_SEAT_UPSTREAM_REJECTED", "LIBRARY_SEAT_UPSTREAM_HTTP"].includes(error?.code)
+        && /^(?:(?:座位)?预约失败|操作失败|请求失败|座位预约系统拒绝了请求|座位预约系统返回 HTTP 409)[。！!]?$/u.test(error.message)) {
+        prepared.pending = candidate;
+        prepared.pendingRefused = true;
+        return confirmPendingReservation(prepared, task, client, shouldStop, onFailure);
       }
       if (["LIBRARY_SEAT_NOT_OPEN", "LIBRARY_SEAT_BUSY", "LIBRARY_SEAT_RATE_LIMITED", "UPSTREAM_CAPACITY_EXCEEDED"].includes(error?.code)
         || error?.status === 429) {
@@ -408,7 +445,8 @@ export async function scanLibrarySeatAutoTask({
       }
       if (error?.status >= 500 || !error?.status || /TIMEOUT|NETWORK/.test(error.code || "")) {
         prepared.pending = candidate;
-        return confirmPendingReservation(prepared, task, client);
+        prepared.pendingRefused = false;
+        return confirmPendingReservation(prepared, task, client, shouldStop, onFailure);
       }
       throw error;
     }

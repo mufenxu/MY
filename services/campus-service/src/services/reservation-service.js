@@ -48,6 +48,7 @@ import {
 } from "../lib/library-seat-auto-task.js";
 import { normalizeHtmlText } from "../lib/academic-parsers.js";
 import { randomUUID } from "node:crypto";
+import { redact } from "../lib/logger.js";
 import { sendCampusNotification } from "../lib/notification-client.js";
 
 export function createReservationService({
@@ -1262,6 +1263,7 @@ export function createReservationService({
       status,
       statusText: librarySeatAutoTaskStatusText(status),
       lastMessage: row.last_message || null,
+      lastFailure: row.last_failure || null,
       lastAreaName: row.last_area_name || "",
       lastSeatLabel: row.last_seat_label || "",
       consecutiveFailures: Number(row.consecutive_failures) || 0,
@@ -1372,6 +1374,7 @@ export function createReservationService({
       changes.status = "scheduled";
       changes.consecutive_failures = 0;
       changes.last_message = null;
+      changes.last_failure = null;
     }
     const row = await repository.updateLibrarySeatAutoTask(userId, existing.id, changes, timestamp);
     preparedLibrarySeatTasks.delete(existing.id);
@@ -1429,6 +1432,17 @@ export function createReservationService({
       const fingerprint = JSON.stringify(input);
       let prepared = preparedLibrarySeatTasks.get(task.id);
       let result;
+      let lastFailure = null;
+      const recordFailure = (error, seat, stage = "submit") => {
+        lastFailure = redact({ stage, code: error?.code || null, status: error?.status || null,
+          message: error?.message || "自动预约执行失败。",
+          upstreamCode: error?.details?.upstreamCode ?? null, upstreamStatus: error?.details?.upstreamStatus ?? null,
+          seatId: seat?.seatId || null, seatLabel: seat?.seatLabel || null,
+          areaId: seat?.areaId || null, areaName: seat?.areaName || null,
+          date: input.date, startMinute: input.startMinute, endMinute: input.endMinute,
+          attempt: prepared?.timings.attempts || 0, at: nowIso() });
+        logger.warn("library_seat_auto_attempt_failed", { taskId: task.id, userId: user.id, ...lastFailure });
+      };
       try {
         if (prepared?.fingerprint !== fingerprint || Date.now() - prepared.preparedAt > 120_000) {
           prepared = await prepareLibrarySeatAutoTask(task, user);
@@ -1446,6 +1460,7 @@ export function createReservationService({
         while (!shouldStop() && Date.now() < deadline && prepared.timings.attempts < 40) {
           const scan = await scanLibrarySeatAutoTask({ task: input, client: prepared.client, prepared,
             now: new Date(), shouldStop: shouldStopScan, onAttempt: () => { prepared.timings.attempts++; },
+            onFailure: recordFailure,
             maxAttemptsPerScan: Math.min(8, 40 - prepared.timings.attempts) });
           if (scan.status === "success") {
             result = { status: "success", message: scan.message, areaName: scan.seat.areaName,
@@ -1456,13 +1471,29 @@ export function createReservationService({
             if (!prepared.pending) result = scan;
             break;
           }
+          if (scan.status === "failed") {
+            result = { status: "failed", message: scan.message };
+            break;
+          }
           if (scan.status === "confirming") {
             await repository.updateLibrarySeatAutoTask(user.id, task.id,
               { status: "confirming", last_message: scan.message }, nowIso());
           }
-          if (scan.status === "empty" && !prepared.pending) {
-            const fresh = await prepareLibrarySeatAutoTaskSeats({ task: input, client: prepared.client });
-            prepared.candidates = fresh.candidates;
+          if (!prepared.pending && (scan.status === "empty"
+            || (scan.status === "retry" && prepared.topology && prepared.blocked.size))) {
+            if (await shouldStopScan()) {
+              result = { status: "stopped", message: "任务已停止，已取消后续尝试。" };
+              break;
+            }
+            try {
+              const fresh = await prepareLibrarySeatAutoTaskSeats({ task: input, client: prepared.client });
+              prepared.candidates = fresh.candidates;
+              prepared.blocked = new Set();
+              prepared.topology = false;
+            } catch (error) {
+              recordFailure(error, null, "availability");
+              if (error?.status && error.status < 500 && error.status !== 429) throw error;
+            }
           }
           const delay = Math.max(LIBRARY_SEAT_AUTO_TASK_RETRY_INTERVAL_MS, Number(scan.retryAfterMs) || 0);
           const remaining = deadline - Date.now();
@@ -1474,6 +1505,7 @@ export function createReservationService({
           : { status: shouldStop() ? "stopped" : "failed", message: shouldStop()
             ? "服务停止，任务已暂停。" : "快速尝试窗口内未能预约成功。" };
       } catch (error) {
+        if (!lastFailure) recordFailure(error, null, prepared ? "run" : "prepare");
         result = { status: "failed", message: error.message || "自动预约执行失败。" };
       } finally {
         if (prepared) {
@@ -1489,9 +1521,10 @@ export function createReservationService({
         }
         preparedLibrarySeatTasks.delete(task.id);
       }
+      result = redact({ ...result, lastFailure });
       await repository.finishLibrarySeatAutoTask(user.id, task.id, result, nowIso(), owner);
       logger.info("library_seat_auto_task_finished", { taskId: task.id, userId: user.id,
-        status: result.status, timings: result.timings || null });
+        status: result.status, message: result.message, lastFailure, timings: result.timings || null });
       return result;
     });
   }

@@ -35,7 +35,7 @@ function redactError(error, depth) {
   return entry;
 }
 
-function redact(value, depth = 0) {
+export function redact(value, depth = 0) {
   if (depth > 5) return "[Truncated]";
   if (value instanceof Error) return redactError(value, depth);
   if (Array.isArray(value)) return value.slice(0, 30).map((item) => redact(item, depth + 1));
