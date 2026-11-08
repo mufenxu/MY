@@ -12,7 +12,7 @@
   if (!document.querySelector("link[data-library-seat-page]")) {
     const stylesheet = document.createElement("link");
     stylesheet.rel = "stylesheet";
-    stylesheet.href = "./library-seat-page.css?v=20261108-seat-v5";
+    stylesheet.href = "./library-seat-page.css?v=20261108-seat-overview-v6";
     stylesheet.dataset.librarySeatPage = "1";
     document.head.append(stylesheet);
   }
@@ -81,6 +81,10 @@
     { value: 240, label: "4 小时" }
   ];
 
+  function defaultFloor(floors) {
+    return floors.find((floor) => /^(?:第)?(?:二|2)(?:层|楼)$|^(?:2F|F2)$/i.test(String(floor.name || "").trim())) || floors[0];
+  }
+
   /* ------------------------------------------------------------------ 查询座位 */
 
   queryMount.innerHTML = `
@@ -105,13 +109,21 @@
       <div id="seatAreas" class="resv-grid"></div>
     </section>
     <section id="seatSeatsPanel" class="resv-panel" hidden>
-      <div class="resv-panel-head">
+      <div class="resv-panel-head seat-plan-head">
         <div><h3 id="seatAreaTitle">座位</h3><p id="seatAreaMeta"></p></div>
+        <button id="seatAreaChange" class="ghost seat-area-change" type="button">更换阅览区</button>
+      </div>
+      <div class="seat-view-toolbar">
         <div class="resv-switch is-small"><button type="button" data-seat-view="plan" class="is-active">平面图</button><button type="button" data-seat-view="grid">列表</button></div>
+        <span id="seatPlanSummary" class="resv-muted"></span>
       </div>
       <div id="seatPlanWrap" class="seat-plan-wrap" hidden>
+        <div class="seat-map-toolbar">
+          <div class="seat-plan-legend"><span><i class="is-free" aria-hidden="true"></i>可预约</span><span><i aria-hidden="true"></i>不可预约</span></div>
+          <div class="seat-plan-zoom"><button type="button" data-seat-zoom="out" aria-label="缩小平面图" disabled>−</button><button type="button" data-seat-zoom="fit">全貌</button><button type="button" data-seat-zoom="in" aria-label="放大平面图">＋</button></div>
+        </div>
         <div id="seatPlan" class="seat-plan"></div>
-        <p id="seatPlanNote" class="resv-muted">平面图按学校返回的座位布局坐标等比绘制，颜色表示所选时段是否空闲。</p>
+        <p id="seatPlanNote" class="resv-muted">默认显示完整布局，可放大查看座位号。</p>
       </div>
       <div id="seatGrid" class="seat-grid"></div>
       <p id="seatPlanHint" class="resv-status"></p>
@@ -136,6 +148,7 @@
     areasPanel: queryMount.querySelector("#seatAreasPanel"), areasHint: queryMount.querySelector("#seatAreasHint"),
     areas: queryMount.querySelector("#seatAreas"), seatsPanel: queryMount.querySelector("#seatSeatsPanel"),
     areaTitle: queryMount.querySelector("#seatAreaTitle"), areaMeta: queryMount.querySelector("#seatAreaMeta"),
+    areaChange: queryMount.querySelector("#seatAreaChange"), planSummary: queryMount.querySelector("#seatPlanSummary"),
     planWrap: queryMount.querySelector("#seatPlanWrap"), plan: queryMount.querySelector("#seatPlan"),
     planNote: queryMount.querySelector("#seatPlanNote"),
     grid: queryMount.querySelector("#seatGrid"), planHint: queryMount.querySelector("#seatPlanHint"),
@@ -147,7 +160,7 @@
 
   const queryState = {
     venueId: "", floorId: "", date: "", startMinute: 540, duration: 120,
-    areas: [], area: null, seats: [], layout: null, view: "plan", seat: null,
+    areas: [], area: null, seats: [], layout: null, view: "plan", planZoom: 1, seat: null,
     areasExpanded: false, sequence: 0, loaded: false, loading: false
   };
 
@@ -174,8 +187,8 @@
     const venue = shared.venues.find((item) => String(item.id) === String(queryState.venueId));
     const floors = Array.isArray(venue?.floors) ? venue.floors : [];
     q.floor.innerHTML = '<option value="">全部楼层</option>' + floors.map((floor) => `<option value="${esc(floor.id)}">${esc(floor.name)}</option>`).join("");
-    queryState.floorId = "";
-    q.floor.value = "";
+    queryState.floorId = String(defaultFloor(floors)?.id || "");
+    q.floor.value = queryState.floorId;
   }
 
   function renderMetrics(areas) {
@@ -188,6 +201,7 @@
   }
 
   function renderAreas() {
+    q.areasPanel.classList.toggle("has-seat-selection", Boolean(queryState.area) && !queryState.areasExpanded);
     if (!queryState.areas.length) {
       q.areasPanel.hidden = false;
       q.areasHint.textContent = "该条件下没有返回阅览区，试试换时段或取消筛选。";
@@ -277,6 +291,7 @@
     if (!area) return;
     queryState.area = area;
     queryState.seat = null;
+    queryState.planZoom = 1;
     queryState.areasExpanded = false;
     q.bookPanel.hidden = true;
     renderAreas();
@@ -298,6 +313,7 @@
       queryState.seats = Array.isArray(seats) ? seats : [];
       queryState.layout = layout && Array.isArray(layout.seats) && layout.seats.length ? layout : null;
       renderSeats();
+      if (window.matchMedia("(max-width: 640px)").matches) q.seatsPanel.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (error) {
       if (token !== queryState.sequence) return;
       queryState.seats = [];
@@ -323,6 +339,7 @@
   function renderSeats() {
     const seats = queryState.seats;
     const freeCount = seats.filter((seat) => seat.isFree).length;
+    q.planSummary.textContent = `${seats.length} 个座位 · 可约 ${freeCount}`;
     const usePlan = queryState.view === "plan" && queryState.layout;
     q.planWrap.hidden = !usePlan;
     q.grid.hidden = Boolean(usePlan);
@@ -340,14 +357,15 @@
       </button>`).join("");
       bindSeatClicks(q.grid);
     }
-    setStatus(q.planHint, `共 ${seats.length} 个座位，该时段空闲 ${freeCount} 个。${queryState.layout ? "" : "（该阅览区未返回平面布局）"}`);
+    setStatus(q.planHint, queryState.layout ? "" : "该阅览区未返回平面布局，已显示座位列表。");
   }
 
   // 座位坐标里的最小间距，用来推算「不重叠」需要多大的画布。
   function coordinateGap(values, span) {
     const sorted = [...new Set(values.map((value) => Math.round(value * 100) / 100))].sort((a, b) => a - b);
     if (sorted.length < 2) return span || 1;
-    const floor = Math.max(0.01, span * 0.001);
+    // 忽略同一列或行的细微坐标偏差，避免把它们当成座位间距。
+    const floor = Math.max(0.01, span * 0.01);
     let gap = Infinity;
     for (let index = 1; index < sorted.length; index += 1) {
       const diff = sorted[index] - sorted[index - 1];
@@ -372,43 +390,38 @@
     const spanX = maxX - minX || 1;
     const spanY = maxY - minY || 1;
 
-    // 座位是按真实坐标等比映射的，容器再窄也不能把方块压到互相重叠：
-    // 先按坐标密度算出最小画布，放不下就让容器横向滚动。
     const hostW = q.plan.clientWidth || q.planWrap.clientWidth || 360;
-    const narrow = hostW < 420;
-    const dotW = narrow ? 30 : 36;
-    const dotH = narrow ? 24 : 30;
-    const gap = narrow ? 2 : 3;
-    const pad = 12;
-
+    const maxH = Math.min(360, Math.max(200, window.innerHeight * 0.4));
+    const pad = 16;
     const colGap = coordinateGap(xs, spanX);
     const rowGap = coordinateGap(ys, spanY);
-    const needW = pad * 2 + dotW + (spanX / colGap) * (dotW + gap);
-    const needH = pad * 2 + dotH + (spanY / rowGap) * (dotH + gap);
-    // 只超出容器几个像素时不值得让它滚动，压回容器宽度即可。
-    const fit = (need, host, cap) => {
-      if (need > host && need < host * 1.04) return host;
-      return Math.min(Math.max(need, host, 240), cap);
-    };
-    const width = Math.round(fit(needW, hostW, 2200));
-    const height = Math.round(fit(needH, 240, 1600));
-    const innerW = width - pad * 2;
-    const innerH = height - pad * 2;
-
+    // 同一个比例缩放横纵坐标，先完整适配可见区域，再由用户放大选座。
+    const fitScale = Math.min((hostW - pad * 2 - 36) / spanX, (maxH - pad * 2 - 30) / spanY);
+    const scale = fitScale * queryState.planZoom;
+    const dotW = Math.max(8, Math.min(36, colGap * scale - 3));
+    const dotH = Math.max(8, Math.min(30, rowGap * scale - 3));
+    const width = Math.ceil(spanX * scale + pad * 2 + dotW);
+    const height = Math.ceil(spanY * scale + pad * 2 + dotH);
+    const scrollLeft = q.plan.scrollLeft;
+    const scrollTop = q.plan.scrollTop;
+    q.plan.style.height = `${Math.max(180, Math.ceil(spanY * fitScale + pad * 2 + 30)) + 2}px`;
     const lookup = seatByLabel();
     const dots = seats.map((item) => {
       const seat = lookup.get(String(item.id)) || lookup.get(String(item.label));
-      const left = pad + ((Number(item.left) - minX) / spanX) * innerW;
-      const top = pad + ((Number(item.top) - minY) / spanY) * innerH;
+      const left = pad + dotW / 2 + (Number(item.left) - minX) * scale;
+      const top = pad + dotH / 2 + (Number(item.top) - minY) * scale;
       const selected = seat && queryState.seat && queryState.seat.id === seat.id;
       const label = seat ? `${seat.label} · ${seat.statusText}` : `${item.label} · 状态未知`;
-      return `<button type="button" class="seat-dot ${seatStatusClass(seat)}${selected ? " is-selected" : ""}" data-seat-id="${esc(seat ? seat.id : item.id)}" style="left:${left.toFixed(1)}px;top:${top.toFixed(1)}px;width:${dotW}px;height:${dotH}px" title="${esc(label)}"${seat && seat.isFree ? "" : " disabled"}><span>${esc(item.label)}</span></button>`;
+      return `<button type="button" class="seat-dot ${seatStatusClass(seat)}${selected ? " is-selected" : ""}" data-seat-id="${esc(seat ? seat.id : item.id)}" style="left:${left.toFixed(1)}px;top:${top.toFixed(1)}px;width:${dotW}px;height:${dotH}px;font-size:${Math.max(8, Math.min(12, dotW * 0.42))}px" title="${esc(label)}" aria-label="${esc(label)}"${seat && seat.isFree ? "" : " disabled"}><span>${esc(item.label)}</span></button>`;
     }).join("");
     q.plan.innerHTML = `<div class="seat-plan-canvas" style="width:${width}px;height:${height}px">${dots}</div>`;
     bindSeatClicks(q.plan);
-    requestAnimationFrame(() => {
-      const scrollable = q.plan.scrollWidth > q.plan.clientWidth + 6;
-      q.planNote.textContent = `平面图按学校返回的座位布局坐标绘制，颜色表示该时段是否空闲。${scrollable ? "座位较密，可左右滑动查看。" : ""}`;
+    q.plan.scrollLeft = queryState.planZoom === 1 ? 0 : scrollLeft;
+    q.plan.scrollTop = queryState.planZoom === 1 ? 0 : scrollTop;
+    q.planNote.textContent = queryState.planZoom === 1 ? "已显示完整布局；可放大查看座位号，点击绿色座位预约。" : "已放大，可滑动查看；点击“全貌”恢复完整布局。";
+    queryMount.querySelectorAll("[data-seat-zoom]").forEach((button) => {
+      button.disabled = (button.dataset.seatZoom === "out" && queryState.planZoom === 1)
+        || (button.dataset.seatZoom === "in" && queryState.planZoom === 4);
     });
   }
 
@@ -497,6 +510,11 @@
   q.window.addEventListener("change", markQueryStale);
   q.power.addEventListener("change", markQueryStale);
   q.button.addEventListener("click", runQuery);
+  q.areaChange.addEventListener("click", () => {
+    queryState.areasExpanded = true;
+    renderAreas();
+    q.areasPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
   q.bookButton.addEventListener("click", submitSeatBooking);
   q.bookClose.addEventListener("click", () => {
     queryState.seat = null;
@@ -510,6 +528,16 @@
       queryMount.querySelectorAll("[data-seat-view]").forEach((item) => item.classList.toggle("is-active", item === button));
       if (queryState.area) renderSeats();
     });
+  });
+  queryMount.querySelectorAll("[data-seat-zoom]").forEach((button) => {
+    button.addEventListener("click", () => {
+      queryState.planZoom = button.dataset.seatZoom === "fit" ? 1
+        : Math.max(1, Math.min(4, queryState.planZoom + (button.dataset.seatZoom === "in" ? 0.5 : -0.5)));
+      renderPlan();
+    });
+  });
+  window.addEventListener("resize", () => {
+    if (!q.planWrap.hidden && q.plan.clientWidth > 0 && queryState.layout) renderPlan();
   });
 
   async function initQuery() {
@@ -797,9 +825,15 @@
         <label class="resv-field"><span>使用时长</span><select id="seatWaitlistDuration">${DURATIONS.map((item) => `<option value="${item.value}"${item.value === 120 ? " selected" : ""}>${item.label}</option>`).join("")}</select></label>
         <label class="resv-field"><span>任务运行日期</span><input id="seatAutoRunDate" type="date" required></label>
         <label class="resv-field"><span>任务运行时间</span><input id="seatAutoRunTime" type="time" step="60" value="21:55" required></label>
-        <label class="resv-field"><span>最小座位号</span><input id="seatWaitlistMin" type="number" min="1" max="999" value="1" required></label>
-        <label class="resv-field"><span>最大座位号</span><input id="seatWaitlistMax" type="number" min="1" max="999" value="45" required></label>
         <label class="resv-field is-wide"><span>指定座位号 <small>可选，填了就先抢这些号</small></span><input id="seatWaitlistLabels" placeholder="逗号分隔，例如 8,12,15；没抢到会自动换相邻号"></label>
+        <fieldset class="seat-auto-range">
+          <legend>换座优先号段</legend>
+          <div class="seat-auto-range-inputs">
+            <label class="resv-field"><span>最小座位号（含）</span><input id="seatWaitlistMin" type="number" min="1" max="999" value="1" aria-describedby="seatAutoRangeHint" required></label>
+            <label class="resv-field"><span>最大座位号（含）</span><input id="seatWaitlistMax" type="number" min="1" max="999" value="45" aria-describedby="seatAutoRangeHint" required></label>
+          </div>
+          <p id="seatAutoRangeHint" class="resv-muted"></p>
+        </fieldset>
         <p id="seatWaitlistOpenHint" class="resv-open-hint" role="status"></p>
         <div class="resv-actions is-waitlist-actions">
           <label class="resv-check"><input id="seatWaitlistEnabled" type="checkbox" checked>创建后立即启用</label>
@@ -823,8 +857,17 @@
     enabled: waitlistMount.querySelector("#seatWaitlistEnabled"), form: waitlistMount.querySelector("#seatWaitlistForm"),
     submit: waitlistMount.querySelector("#seatWaitlistSubmit"), status: waitlistMount.querySelector("#seatWaitlistStatus"),
     openHint: waitlistMount.querySelector("#seatWaitlistOpenHint"),
+    rangeHint: waitlistMount.querySelector("#seatAutoRangeHint"),
     reload: waitlistMount.querySelector("#seatWaitlistReload"), list: waitlistMount.querySelector("#seatWaitlistList")
   };
+
+  function syncSeatRangeHint() {
+    const range = `${w.min.value || "最小号"}～${w.max.value || "最大号"}`;
+    w.rangeHint.textContent = `${range} 号（包含两端）是换座优先范围，不是预约数量。先抢指定号，再换相邻号，再在此范围内从小到大选座；都没抢到时，可换所选楼层其他座位。每次只预约 1 个座位。`;
+  }
+  w.min.addEventListener("input", syncSeatRangeHint);
+  w.max.addEventListener("input", syncSeatRangeHint);
+  syncSeatRangeHint();
 
   function syncWaitlistOpenHint() {
     if (!w.openHint) return;
@@ -879,6 +922,7 @@
     w.floor.innerHTML = floors.length
       ? floors.map((floor) => `<option value="${esc(floor.id)}">${esc(floor.name)}</option>`).join("")
       : '<option value="">该场馆没有楼层信息</option>';
+    w.floor.value = String(defaultFloor(floors)?.id || "");
   }
 
   function renderWaitlistTasks() {
