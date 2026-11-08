@@ -2,6 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CampusRepository, MemoryCampusRepository } from '../src/storage/campus-repository.js';
 
+test('seat auto-task lease prevents duplicate runners and stale result writes', async () => {
+  const repository = new MemoryCampusRepository();
+  await repository.insertLibrarySeatAutoTask({ id: 'seat-task', user_id: 'user-1', enabled: true });
+  assert.ok(await repository.claimLibrarySeatAutoTask('user-1', 'seat-task', 'runner-1', '2026-11-08T13:55:00.000Z', '2026-11-08T13:58:00.000Z'));
+  assert.equal(await repository.claimLibrarySeatAutoTask('user-1', 'seat-task', 'runner-2', '2026-11-08T13:55:01.000Z', '2026-11-08T13:58:01.000Z'), null);
+  await repository.finishLibrarySeatAutoTask('user-1', 'seat-task', { status: 'failed' }, '2026-11-08T13:55:02.000Z', 'runner-2');
+  assert.equal((await repository.getLibrarySeatAutoTask('user-1', 'seat-task')).enabled, true);
+  await repository.finishLibrarySeatAutoTask('user-1', 'seat-task', { status: 'success', seatId: 's8' }, '2026-11-08T13:55:03.000Z', 'runner-1');
+  assert.equal((await repository.getLibrarySeatAutoTask('user-1', 'seat-task')).last_seat_id, 's8');
+  assert.equal(await repository.claimLibrarySeatAutoTask('user-1', 'seat-task', 'runner-3', '2026-11-08T14:00:00.000Z', '2026-11-08T14:03:00.000Z'), null);
+});
+
 test('school session compare-and-set rejects stale writers', async () => {
   const repository = new MemoryCampusRepository();
   const userId = 'user-1';

@@ -8,7 +8,7 @@ import { iterateTaskPages, mapWithConcurrency } from "../lib/bounded-concurrency
 import { cachedLibrarySeatToken } from "../lib/library-seat.js";
 import { buildLibrarySeatReminderPayload, librarySeatReminderPlan } from "../lib/library-seat-reminder.js";
 import { librarySeatWaitlistNextScanDelay, librarySeatWaitlistRunPlan } from "../lib/library-seat-waitlist.js";
-import { librarySeatAutoTaskNextRunDelay, librarySeatAutoTaskRunPlan } from "../lib/library-seat-auto-task.js";
+import { LIBRARY_SEAT_AUTO_TASK_PREWARM_MS, librarySeatAutoTaskRunAtMs, normalizeLibrarySeatAutoTaskInput } from "../lib/library-seat-auto-task.js";
 import { randomUUID } from "node:crypto";
 
 export function groupAutoReservationTasksByUser(tasks = []) {
@@ -45,6 +45,7 @@ export function createBackgroundSchedulers({
   runAutoReservationTask,
   runLibrarySeatWaitlistTask,
   runLibrarySeatAutoTask,
+  prepareLibrarySeatAutoTask,
   isShuttingDown,
   userContextStorage,
   withAcademicSessionLock,
@@ -142,6 +143,10 @@ export function createBackgroundSchedulers({
   let librarySeatWaitlistRunning = false;
 
   let librarySeatWaitlistRescheduleRequested = false;
+  let librarySeatAutoScanTimer = null;
+  let librarySeatAutoScanning = false;
+  let librarySeatAutoRescan = false;
+  const librarySeatAutoTimers = new Map();
 
   let librarySeatReminderTimer = null;
 
@@ -238,6 +243,12 @@ export function createBackgroundSchedulers({
     if (academicReminderInterval) clearInterval(academicReminderInterval);
     if (libroomAutoReservationTimer) clearTimeout(libroomAutoReservationTimer);
     if (librarySeatWaitlistTimer) clearTimeout(librarySeatWaitlistTimer);
+    if (librarySeatAutoScanTimer) clearTimeout(librarySeatAutoScanTimer);
+    for (const entry of librarySeatAutoTimers.values()) {
+      clearTimeout(entry.prepareTimer);
+      clearTimeout(entry.runTimer);
+    }
+    librarySeatAutoTimers.clear();
     if (librarySeatReminderTimer) clearTimeout(librarySeatReminderTimer);
     if (chaoxingAutoSignTimer) clearTimeout(chaoxingAutoSignTimer);
   }
@@ -858,66 +869,6 @@ export function createBackgroundSchedulers({
           mediumWindowMs: LIBRARY_SEAT_WAITLIST_MEDIUM_WINDOW_MS
         }));
       }
-      // 座位「自动预约任务」是定点执行型，和候补分开跑，互不影响。
-      for await (const tasks of iterateTaskPages(repository.listEnabledLibrarySeatAutoTasks.bind(repository), {
-        batchSize: BACKGROUND_USER_SCAN_LIMIT,
-        shouldStop: () => isShuttingDown()
-      })) {
-        const now = new Date();
-        await mapWithConcurrency(tasks, 2, async (task) => {
-          const plan = librarySeatAutoTaskRunPlan(task, now);
-          if (plan.expired) {
-            await repository.finishLibrarySeatAutoTask(task.user_id, task.id, {
-              status: "expired",
-              message: "预约时段已结束，任务未执行。",
-              areaName: null,
-              seatId: null,
-              seatLabel: null
-            }, now.toISOString());
-            return "expired";
-          }
-          if (plan.waiting) return "waiting";
-          const user = await repository.findUserById(task.user_id);
-          if (!user || user.disabled) return "skipped";
-          return userContextStorage.run(
-            { requestId: `library-seat-auto-${randomUUID()}`, user },
-            async () => {
-              try {
-                await reloginSchoolSessionIfWanted({ message: "library seat auto task" });
-                const result = await runLibrarySeatAutoTask(task, user, now);
-                return result?.status || "done";
-              } catch (error) {
-                const failures = Number(task.consecutive_failures || 0) + 1;
-                const message = librarySeatWaitlistFailureText(error);
-                const timestamp = now.toISOString();
-                if (failures >= LIBRARY_SEAT_WAITLIST_MAX_FAILURES) {
-                  await repository.finishLibrarySeatAutoTask(user.id, task.id, {
-                    status: "failed",
-                    message: `自动预约已停止：${message}`,
-                    areaName: null,
-                    seatId: null,
-                    seatLabel: null
-                  }, timestamp);
-                } else {
-                  await repository.updateLibrarySeatAutoTask(user.id, task.id, {
-                    status: "running",
-                    last_message: `第 ${failures} 次检测失败：${message}`,
-                    consecutive_failures: failures,
-                    last_run_at: timestamp
-                  }, timestamp);
-                }
-                logger.warn("library_seat_auto_task_scan_failed", { userId: user.id, taskId: task.id, failures });
-                return "failed";
-              }
-            }
-          );
-        });
-        scanned += tasks.length;
-        nextDelayMs = Math.min(nextDelayMs, librarySeatAutoTaskNextRunDelay(tasks, new Date(), {
-          slowMs: LIBRARY_SEAT_WAITLIST_SLOW_INTERVAL_MS,
-          activeMs: LIBRARY_SEAT_WAITLIST_FAST_INTERVAL_MS
-        }));
-      }
       if (reason !== "interval" && scanned) {
         logger.info("library_seat_waitlist_scan_completed", { reason, tasks: scanned });
       }
@@ -929,6 +880,97 @@ export function createBackgroundSchedulers({
       librarySeatWaitlistRescheduleRequested = false;
       scheduleLibrarySeatWaitlistScan("interval", delay);
     }
+  }
+
+  function scheduleLibrarySeatAutoScan(delayMs) {
+    if (isShuttingDown()) return;
+    if (librarySeatAutoScanTimer) clearTimeout(librarySeatAutoScanTimer);
+    librarySeatAutoScanTimer = setTimeout(() => {
+      librarySeatAutoScanTimer = null;
+      trackBackgroundTask(refreshLibrarySeatAutoTimers);
+    }, delayMs);
+  }
+
+  function wakeLibrarySeatAutoTaskScheduler() {
+    if (librarySeatAutoScanning) { librarySeatAutoRescan = true; return; }
+    scheduleLibrarySeatAutoScan(0);
+  }
+
+  async function refreshLibrarySeatAutoTimers() {
+    if (isShuttingDown() || librarySeatAutoScanning) return;
+    librarySeatAutoScanning = true;
+    const seen = new Set();
+    try {
+      for await (const tasks of iterateTaskPages(repository.listEnabledLibrarySeatAutoTasks.bind(repository), {
+        batchSize: BACKGROUND_USER_SCAN_LIMIT, shouldStop: isShuttingDown
+      })) {
+        for (const task of tasks) {
+          seen.add(task.id);
+          const signature = JSON.stringify(normalizeLibrarySeatAutoTaskInput(task));
+          const existing = librarySeatAutoTimers.get(task.id);
+          if (existing?.signature === signature && (!existing.finished
+            || (task.run_lock_until && Date.parse(task.run_lock_until) > Date.now()))) continue;
+          if (existing) {
+            clearTimeout(existing.prepareTimer);
+            clearTimeout(existing.runTimer);
+          }
+          const entry = { signature, task, prepareTimer: null, runTimer: null, preparing: null, finished: false };
+          librarySeatAutoTimers.set(task.id, entry);
+          const runAt = librarySeatAutoTaskRunAtMs(task);
+          const executeInContext = async (operation) => {
+            if (isShuttingDown() || librarySeatAutoTimers.get(task.id) !== entry) return;
+            const user = await repository.findUserById(task.user_id);
+            if (!user || user.disabled) return;
+            return userContextStorage.run({ requestId: "library-seat-auto-" + randomUUID(), user },
+              () => operation(user));
+          };
+          const runDelay = Math.max(0, runAt - Date.now());
+          if (runDelay > 0) {
+            entry.prepareTimer = setTimeout(() => {
+              entry.prepareTimer = null;
+              entry.preparing = executeInContext(async (user) => {
+                await reloginSchoolSessionIfWanted({ message: "library seat auto task prewarm" });
+                return prepareLibrarySeatAutoTask(task, user);
+              }).catch((error) => {
+                logger.warn("library_seat_auto_prewarm_failed", { taskId: task.id, code: error.code || null });
+              });
+              trackBackgroundTask(() => entry.preparing);
+            }, Math.max(0, runDelay - LIBRARY_SEAT_AUTO_TASK_PREWARM_MS));
+          }
+          entry.runTimer = setTimeout(() => {
+            entry.runTimer = null;
+            trackBackgroundTask(async () => {
+              try {
+                await entry.preparing;
+                await executeInContext((user) => runLibrarySeatAutoTask(task, user, new Date(),
+                  { shouldStop: () => isShuttingDown() || librarySeatAutoTimers.get(task.id) !== entry }));
+              } catch (error) {
+                logger.warn("library_seat_auto_run_failed", { taskId: task.id, code: error.code || null });
+              } finally {
+                entry.finished = true;
+              }
+            });
+          }, runDelay);
+        }
+      }
+      for (const [id, entry] of librarySeatAutoTimers) {
+        if (seen.has(id)) continue;
+        clearTimeout(entry.prepareTimer);
+        clearTimeout(entry.runTimer);
+        librarySeatAutoTimers.delete(id);
+      }
+    } catch (error) {
+      logger.warn("library_seat_auto_timer_refresh_failed", { code: error.code || null });
+    } finally {
+      librarySeatAutoScanning = false;
+      const delay = librarySeatAutoRescan ? 0 : 30_000;
+      librarySeatAutoRescan = false;
+      scheduleLibrarySeatAutoScan(delay);
+    }
+  }
+
+  function startLibrarySeatAutoTaskScheduler() {
+    scheduleLibrarySeatAutoScan(0);
   }
 
   function startLibrarySeatWaitlistScheduler() {
@@ -1096,6 +1138,8 @@ export function createBackgroundSchedulers({
     startLibroomAutoReservationScheduler,
     wakeLibrarySeatWaitlistScheduler,
     startLibrarySeatWaitlistScheduler,
+    wakeLibrarySeatAutoTaskScheduler,
+    startLibrarySeatAutoTaskScheduler,
     wakeLibrarySeatReminderScheduler,
     startLibrarySeatReminderScheduler,
     startChaoxingAutoSignScheduler

@@ -688,13 +688,25 @@ export class CampusRepository {
     await this.db.collection("library_seat_auto_tasks").deleteOne({ id, user_id: userId });
   }
 
-  async finishLibrarySeatAutoTask(userId, id, result, timestamp) {
+  async claimLibrarySeatAutoTask(userId, id, owner, timestamp, lockUntil) {
+    return this.db.collection("library_seat_auto_tasks").findOneAndUpdate(
+      { id, user_id: userId, enabled: true, status: { $nin: ["success", "unconfirmed"] },
+        $or: [{ run_lock_until: { $exists: false } }, { run_lock_until: null }, { run_lock_until: { $lte: timestamp } }] },
+      { $set: { run_owner: owner, run_lock_until: lockUntil, status: "running", last_run_at: timestamp } },
+      { returnDocument: "after", projection: { _id: 0 } }
+    ).then((row) => row?.value ?? row ?? null);
+  }
+
+  async finishLibrarySeatAutoTask(userId, id, result, timestamp, owner) {
     await this.db.collection("library_seat_auto_tasks").updateOne(
-      { id, user_id: userId },
+      { id, user_id: userId, ...(owner ? { run_owner: owner } : {}) },
       {
         $set: {
           enabled: false,
           status: result.status,
+          run_owner: null,
+          run_lock_until: null,
+          timings: result.timings || null,
           last_message: result.message || null,
           last_run_at: timestamp,
           last_area_name: result.areaName || null,
@@ -1082,12 +1094,23 @@ export class MemoryCampusRepository {
     if (row?.user_id === userId) this.librarySeatAutoTasks.delete(id);
   }
 
-  async finishLibrarySeatAutoTask(userId, id, result, timestamp) {
+  async claimLibrarySeatAutoTask(userId, id, owner, timestamp, lockUntil) {
     const row = this.librarySeatAutoTasks.get(id);
-    if (!row || row.user_id !== userId) return;
+    if (!row || row.user_id !== userId || !row.enabled || ["success", "unconfirmed"].includes(row.status)
+      || (row.run_lock_until && row.run_lock_until > timestamp)) return null;
+    Object.assign(row, { run_owner: owner, run_lock_until: lockUntil, status: "running", last_run_at: timestamp });
+    return clone(row);
+  }
+
+  async finishLibrarySeatAutoTask(userId, id, result, timestamp, owner) {
+    const row = this.librarySeatAutoTasks.get(id);
+    if (!row || row.user_id !== userId || (owner && row.run_owner !== owner)) return;
     Object.assign(row, {
       enabled: false,
       status: result.status,
+      run_owner: null,
+      run_lock_until: null,
+      timings: result.timings || null,
       last_message: result.message || null,
       last_run_at: timestamp,
       last_area_name: result.areaName || null,

@@ -15,6 +15,7 @@ export async function handleLibrarySeatRoutes(req, res, url, {
   saveLibrarySeatAutoTask,
   saveLibrarySeatWaitlist,
   wakeLibrarySeatReminderScheduler,
+  wakeLibrarySeatAutoTaskScheduler,
   wakeLibrarySeatWaitlistScheduler
 }) {
   if (url.pathname === "/api/campus/library-seat/official-webview-login" && req.method === "GET") {
@@ -201,7 +202,7 @@ export async function handleLibrarySeatRoutes(req, res, url, {
       const body = await readBodyJson(req);
       const targets = await librarySeatWaitlistRequestTargets(userId, platformUserId);
       const data = await saveLibrarySeatAutoTask(userId, body, null, targets);
-      wakeLibrarySeatWaitlistScheduler("auto_task_changed");
+      wakeLibrarySeatAutoTaskScheduler("auto_task_changed");
       logger.info("audit_library_seat_auto_task_created", { actorUserId: userId, taskId: data.id });
       json(res, 201, { ok: true, data });
       return true;
@@ -216,14 +217,14 @@ export async function handleLibrarySeatRoutes(req, res, url, {
     if (req.method === "PUT") {
       const body = await readBodyJson(req);
       const data = await saveLibrarySeatAutoTask(userId, { ...existing, ...body }, existing);
-      wakeLibrarySeatWaitlistScheduler("auto_task_changed");
+      wakeLibrarySeatAutoTaskScheduler("auto_task_changed");
       logger.info("audit_library_seat_auto_task_updated", { actorUserId: userId, taskId: data.id, enabled: data.enabled });
       json(res, 200, { ok: true, data });
       return true;
     }
     if (req.method === "DELETE") {
       await repository.deleteLibrarySeatAutoTask(userId, taskId);
-      wakeLibrarySeatWaitlistScheduler("auto_task_changed");
+      wakeLibrarySeatAutoTaskScheduler("auto_task_changed");
       logger.info("audit_library_seat_auto_task_deleted", { actorUserId: userId, taskId });
       json(res, 200, { ok: true, data: null });
       return true;

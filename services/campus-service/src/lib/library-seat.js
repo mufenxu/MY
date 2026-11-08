@@ -450,12 +450,17 @@ export function createLibrarySeatClient({
       if (!currentToken) fail(401, "座位预约会话已过期，请重新登录学校账号。", "LIBRARY_SEAT_AUTH_EXPIRED");
       return request(pathname, data, { retry: false, tokenRequired, conflict });
     }
-    if (!ok) fail(statusCode || 502, upstreamMessage(payload, `座位预约系统返回 HTTP ${statusCode || 502}。`), "LIBRARY_SEAT_UPSTREAM_HTTP");
-    if (payload && payload.code !== undefined && code !== 200 && payload.status !== true) {
-      fail(conflict ? 409 : 502, upstreamMessage(payload, "座位预约系统拒绝了请求。"), "LIBRARY_SEAT_UPSTREAM_REJECTED");
-    }
-    if (payload && payload.status === false) {
-      fail(conflict ? 409 : 502, upstreamMessage(payload, "座位预约系统拒绝了请求。"), "LIBRARY_SEAT_UPSTREAM_REJECTED");
+    if (authError) fail(401, upstreamMessage(payload, "座位预约会话已过期，请重新登录学校账号。"), "LIBRARY_SEAT_AUTH_EXPIRED");
+    if (!ok) fail(statusCode || 502, upstreamMessage(payload, `座位预约系统返回 HTTP ${statusCode || 502}。`), "LIBRARY_SEAT_UPSTREAM_HTTP", { retryAfterMs: rawResult?.retryAfterMs || 0 });
+    if (payload && ((payload.code !== undefined && code !== 200 && payload.status !== true) || payload.status === false)) {
+      const message = upstreamMessage(payload, "座位预约系统拒绝了请求。");
+      let errorCode = "LIBRARY_SEAT_UPSTREAM_REJECTED";
+      let status = conflict ? 409 : 502;
+      if (conflict && /未开放|尚未开放|暂未开放|未到.*(?:预约|开放)|不在.*预约时间/.test(message)) errorCode = "LIBRARY_SEAT_NOT_OPEN";
+      else if (conflict && /已被.*(?:预约|占)|座位.*(?:已预约|占用)|seat.*(?:occupied|taken)/i.test(message)) errorCode = "LIBRARY_SEAT_OCCUPIED";
+      else if (/频繁|限流|too many requests/i.test(message)) { errorCode = "LIBRARY_SEAT_RATE_LIMITED"; status = 429; }
+      else if (/系统繁忙|服务繁忙|稍后重试/.test(message)) { errorCode = "LIBRARY_SEAT_BUSY"; status = 503; }
+      fail(status, message, errorCode, { upstreamCode: Number.isFinite(code) ? code : null, retryAfterMs: rawResult?.retryAfterMs || 0 });
     }
     return dataOf(payload);
   }
@@ -503,7 +508,7 @@ export function createLibrarySeatClient({
       const amPm = Number(stringValue(input.amPm));
       const useSlice = Number.isFinite(amPm) && amPm > 0;
       const cacheKey = `${roomId}|${date}|${range.beginMinute}|${range.endMinute}|${amPm}`;
-      const cached = readSeatAvailabilityCache(cacheKey);
+      const cached = input.refresh === true ? null : readSeatAvailabilityCache(cacheKey);
       if (cached) return cached;
       const seats = useSlice
         ? await request(`/static/frontApi/res/freeSeatIdsSlice/${roomId}/${date}`, { ...range, amPm })

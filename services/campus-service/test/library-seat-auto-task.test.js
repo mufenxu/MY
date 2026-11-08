@@ -166,3 +166,127 @@ test("scan does nothing before the run time", async () => {
 test("times render as HH:MM", () => {
   assert.deepEqual(librarySeatAutoTaskTimes(540, 660), { startTime: "09:00", endTime: "11:00" });
 });
+
+test("stored task fields reach the school query as normalized parameters", async () => {
+  const task = { enabled: true, venue_id: baseInput.venueId, venue_name: baseInput.venueName,
+    floor_id: baseInput.floorId, floor_name: baseInput.floorName, date: baseInput.date,
+    start_minute: 540, end_minute: 660, run_date: "2026-11-08", run_minute: 1315 };
+  let query;
+  await scanLibrarySeatAutoTask({ task, now: beijingNow("2026-11-08", 1315), client: {
+    listAreas: async (input) => { query = input; return []; }
+  } });
+  assert.equal(query.venueId, baseInput.venueId);
+  assert.equal(query.startMinute, 540);
+  assert.equal(query.floorId, baseInput.floorId);
+});
+
+test("a preferred seat in another area is tried before any fallback", async () => {
+  const task = { ...normalizeLibrarySeatAutoTaskInput(baseInput), seatLabels: [8] };
+  const submitted = [];
+  const result = await scanLibrarySeatAutoTask({ task, now: beijingNow("2026-11-08", 1315), client: {
+    listAreas: async () => [{ id: "a1", name: "甲区", seatFree: 10 }, { id: "a2", name: "乙区", seatFree: 1 }],
+    getSeats: async ({ roomId }) => roomId === "a1" ? [{ id: "s1", label: 1, isFree: true }] : [{ id: "s8", label: 8, isFree: true }],
+    submitReservation: async (input) => { submitted.push(input.seatId); }
+  } });
+  assert.equal(result.status, "success");
+  assert.deepEqual(submitted, ["s8"]);
+});
+
+test("an occupied seat immediately falls back to another seat in the same area", async () => {
+  const task = { ...normalizeLibrarySeatAutoTaskInput(baseInput), seatLabels: [8] };
+  const submitted = [];
+  const result = await scanLibrarySeatAutoTask({ task, now: beijingNow("2026-11-08", 1315), client: {
+    listAreas: async () => [{ id: "a1", name: "甲区", seatFree: 2 }],
+    getSeats: async () => [{ id: "s8", label: 8, isFree: true }, { id: "s9", label: 9, isFree: true }],
+    submitReservation: async (input) => {
+      submitted.push(input.seatId);
+      if (input.seatId === "s8") throw Object.assign(new Error("座位已被预约"), { status: 409 });
+    }
+  } });
+  assert.equal(result.status, "success");
+  assert.deepEqual(submitted, ["s8", "s9"]);
+});
+
+test("prepared seat ids are submitted at the deadline without availability queries", async () => {
+  const task = { ...normalizeLibrarySeatAutoTaskInput(baseInput), seatLabels: [8] };
+  const prepared = { candidates: [{ seatId: "s8", seatLabel: "8", areaId: "a1", areaName: "甲区", tier: "preferred", label: 8 }], blocked: new Set() };
+  const result = await scanLibrarySeatAutoTask({ task, prepared, now: beijingNow("2026-11-08", 1315), client: {
+    listAreas: async () => { throw new Error("deadline must not query areas"); },
+    getSeats: async () => { throw new Error("deadline must not query seats"); },
+    submitReservation: async (input) => { assert.equal(input.seatId, "s8"); }
+  } });
+  assert.equal(result.status, "success");
+});
+
+test("a submission timeout confirms the existing booking before changing seats", async () => {
+  const task = normalizeLibrarySeatAutoTaskInput(baseInput);
+  const prepared = { candidates: [{ seatId: "s8", seatLabel: "8", areaId: "a1", areaName: "甲区", tier: "preferred", label: 8 }], blocked: new Set() };
+  let submissions = 0;
+  const result = await scanLibrarySeatAutoTask({ task, prepared, now: beijingNow("2026-11-08", 1315), client: {
+    submitReservation: async () => { submissions++; throw Object.assign(new Error("timeout"), { status: 504 }); },
+    getMyReservations: async () => [{ seatId: "s8", date: "2026-11-09", startTime: "09:00", endTime: "11:00", status: "RESERVE" }]
+  } });
+  assert.equal(result.status, "success");
+  assert.equal(submissions, 1);
+});
+
+test("local capacity rejection retries the same candidate without confirming a nonexistent request", async () => {
+  const task = normalizeLibrarySeatAutoTaskInput(baseInput);
+  const prepared = { candidates: [{ seatId: "s8", seatLabel: "8", areaId: "a1", tier: "preferred", label: 8 }], blocked: new Set() };
+  let submissions = 0;
+  const client = {
+    submitReservation: async () => {
+      if (++submissions === 1) throw Object.assign(new Error("容量不足"), { status: 503, code: "UPSTREAM_CAPACITY_EXCEEDED" });
+    },
+    getMyReservations: async () => { assert.fail("no reservation was dispatched"); }
+  };
+  const options = { task, prepared, client, now: beijingNow("2026-11-08", 1315) };
+  const first = await scanLibrarySeatAutoTask(options);
+  assert.equal(first.status, "retry");
+  assert.equal(first.retryAfterMs, 750);
+  assert.equal(prepared.pending, undefined);
+  assert.equal((await scanLibrarySeatAutoTask(options)).status, "success");
+  assert.equal(submissions, 2);
+});
+
+test("stopping during an occupied response prevents the next candidate submission", async () => {
+  const task = normalizeLibrarySeatAutoTaskInput(baseInput);
+  const prepared = { candidates: [{ seatId: "s8" }, { seatId: "s9" }], blocked: new Set() };
+  let stopped = false;
+  const submitted = [];
+  const result = await scanLibrarySeatAutoTask({ task, prepared, now: beijingNow("2026-11-08", 1315),
+    shouldStop: () => stopped, client: {
+      submitReservation: async ({ seatId }) => {
+        submitted.push(seatId);
+        stopped = true;
+        throw Object.assign(new Error("座位已被预约"), { status: 409, code: "LIBRARY_SEAT_OCCUPIED" });
+      }
+    } });
+  assert.equal(result.status, "stopped");
+  assert.deepEqual(submitted, ["s8"]);
+});
+
+test("unavailable confirmation keeps a submission pending without changing seats", async () => {
+  const task = normalizeLibrarySeatAutoTaskInput(baseInput);
+  const prepared = { candidates: [{ seatId: "s8" }, { seatId: "s9" }], blocked: new Set() };
+  let submissions = 0;
+  let lookups = 0;
+  const options = { task, prepared, now: beijingNow("2026-11-08", 1315), client: {
+    submitReservation: async () => { submissions++; throw Object.assign(new Error("timeout"), { status: 504 }); },
+    getMyReservations: async () => {
+      if (++lookups === 1) throw new Error("lookup unavailable");
+      return [];
+    }
+  } };
+  assert.equal((await scanLibrarySeatAutoTask(options)).status, "confirming");
+  assert.equal((await scanLibrarySeatAutoTask(options)).status, "confirming");
+  assert.equal(prepared.pending.seatId, "s8");
+  assert.equal(submissions, 1);
+  assert.equal(lookups, 2);
+});
+
+test("deadline wake-up does not add a fixed delay", () => {
+  const task = normalizeLibrarySeatAutoTaskInput(baseInput);
+  const now = new Date("2026-11-08T21:54:59.800+08:00");
+  assert.equal(librarySeatAutoTaskNextRunDelay([task], now, { prewarmMs: 0 }), 200);
+});

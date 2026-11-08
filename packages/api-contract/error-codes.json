@@ -49,6 +49,13 @@
   "AI_EMPTY_REPLY": { "http": 502, "zh": "AI 助手没有返回有效内容，请稍后再试。" },
   "AI_TIMEOUT": { "http": 504, "zh": "AI 助手响应超时，请稍后再试。" },
 
+  "INVALID_LIBRARY_SEAT_AUTO_TASK_AREA": { "http": 400, "zh": "优先阅览区不正确。" },
+  "LIBRARY_SEAT_AUTO_TASK_COMPLETED": { "http": 409, "zh": "该任务已完成或提交结果待确认，请先查看我的预约。" },
+  "LIBRARY_SEAT_NOT_OPEN": { "http": 409, "zh": "座位预约尚未开放，请稍后重试。" },
+  "LIBRARY_SEAT_OCCUPIED": { "http": 409, "zh": "所选座位已被预约，请选择其他座位。" },
+  "LIBRARY_SEAT_RATE_LIMITED": { "http": 429, "zh": "座位预约请求过于频繁，请稍后重试。" },
+  "LIBRARY_SEAT_BUSY": { "http": 503, "zh": "座位预约服务繁忙，请稍后重试。" },
+
   "URL_NOT_ALLOWED": { "http": 400, "zh": "该链接不受支持。" },
   "INVALID_URL": { "http": 400, "zh": "没有识别到有效的链接。" },
   "BLOCKED_TARGET": { "http": 400, "zh": "不支持解析内网或本地地址。" },

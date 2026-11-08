@@ -21,6 +21,32 @@ import {
 } from "../src/lib/library-seat.js";
 import { buildLibrarySeatReminderPayload, librarySeatReminderPlan } from "../src/lib/library-seat-reminder.js";
 
+test("an explicit refresh ignores an older seat availability snapshot", async () => {
+  let calls = 0;
+  const client = createLibrarySeatClient({ token: "fixture", requestImpl: async () => ({ code: 200,
+    data: { "cache-test-seat": { id: "cache-test-seat", label: "8", status: ++calls === 1 ? "FREE" : "LOCKED" } } }) });
+  const input = { roomId: "cache-test-room", date: "2026-11-09", startMinute: 540, endMinute: 660 };
+  assert.equal((await client.getSeats(input))[0].isFree, true);
+  assert.equal((await client.getSeats({ ...input, refresh: true }))[0].isFree, false);
+});
+
+test("booking refusals distinguish release time, occupied seats, rate limits and auth expiry", async () => {
+  for (const [message, code, status] of [
+    ["尚未开放预约", "LIBRARY_SEAT_NOT_OPEN", 409],
+    ["该座位已被他人预约", "LIBRARY_SEAT_OCCUPIED", 409],
+    ["请求过于频繁", "LIBRARY_SEAT_RATE_LIMITED", 429],
+    ["系统繁忙", "LIBRARY_SEAT_BUSY", 503]
+  ]) {
+    const client = createLibrarySeatClient({ token: "fixture", requestImpl: async () => ({ code: 500, message }) });
+    await assert.rejects(client.submitReservation({ seatId: "s8", date: "2026-11-09", startMinute: 540, endMinute: 660 }),
+      (error) => error.code === code && error.status === status);
+  }
+  const expired = createLibrarySeatClient({ token: "fixture", getMemberToken: async () => "renewed-fixture",
+    requestImpl: async () => ({ code: 401, message: "会话已过期" }) });
+  await assert.rejects(expired.submitReservation({ seatId: "s8", date: "2026-11-09", startMinute: 540, endMinute: 660 }),
+    (error) => error.code === "LIBRARY_SEAT_AUTH_EXPIRED" && error.status === 401);
+});
+
 test("uses the WebVPN CAS service URL of the seat reservation system", () => {
   assert.equal(LIBRARY_SEAT_API_BASE, "https://libic.hgu.edu.cn/jsq");
   assert.equal(

@@ -34,10 +34,13 @@ import {
   scanLibrarySeatWaitlist
 } from "../lib/library-seat-waitlist.js";
 import {
-  LIBRARY_SEAT_AUTO_TASK_EMPTY_ROUNDS,
+  LIBRARY_SEAT_AUTO_TASK_RETRY_INTERVAL_MS,
+  LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS,
+  LIBRARY_SEAT_AUTO_TASK_PREWARM_MS,
   librarySeatAutoTaskRunAtMs,
   librarySeatAutoTaskRunPlan,
   normalizeLibrarySeatAutoTaskInput,
+  prepareLibrarySeatAutoTaskSeats,
   scanLibrarySeatAutoTask
 } from "../lib/library-seat-auto-task.js";
 import { normalizeHtmlText } from "../lib/academic-parsers.js";
@@ -77,6 +80,9 @@ export function createReservationService({
   const libroomSessionQueue = new KeyedSerialQueue();
 
   const librarySeatSessionQueue = new KeyedSerialQueue();
+  const librarySeatReservationQueue = new KeyedSerialQueue();
+  const librarySeatSubmissionQueue = new KeyedSerialQueue();
+  const preparedLibrarySeatTasks = new Map();
 
   function libroomTokenExpiry(token, capturedAt = Date.now()) {
     try {
@@ -338,9 +344,10 @@ export function createReservationService({
     });
   }
 
-  async function requestLibrarySeatJson(jar, pathname, data = {}, { token = "" } = {}) {
+  async function requestLibrarySeatJson(jar, pathname, data = {}, { token = "", onDispatch } = {}) {
     const response = await fetchWithJar(`${LIBRARY_SEAT_API_BASE}${pathname}`, {
       jar,
+      onDispatch,
       method: "POST",
       headers: {
         accept: "application/json, text/plain, */*",
@@ -363,7 +370,10 @@ export function createReservationService({
         sample: normalizeHtmlText(text).slice(0, 200)
       });
     }
-    return { payload, status: response.status, ok: response.ok };
+    const retryAfter = response.headers?.get("retry-after");
+    const retryAfterMs = retryAfter ? Math.max(0, /^\d+(?:\.\d+)?$/.test(retryAfter)
+      ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now()) : 0;
+    return { payload, status: response.status, ok: response.ok, retryAfterMs };
   }
 
   async function resolveLibrarySeatEntrance(jar, credentials = {}) {
@@ -515,20 +525,27 @@ export function createReservationService({
     });
   }
 
-  async function librarySeatClient() {
-    const jar = await readSessionJar();
+  async function librarySeatClient({ jar: preparedJar, persistSession = true, onSubmitRequest, onSubmitResponse } = {}) {
+    const jar = preparedJar || await readSessionJar();
     return createLibrarySeatClient({
       token: cachedLibrarySeatToken(jar),
       getMemberToken: () => getLibrarySeatMemberToken({ force: true }),
       requestImpl: async (pathname, data, options) => {
-        const latestJar = await readSessionJar();
-        Object.assign(jar, mergeSessionJars(latestJar, jar));
-        const result = await requestLibrarySeatJson(jar, pathname, data, options);
-        if (result?.payload?.code === undefined || Number(result.payload.code) === 200 || result.payload.status === true) {
-          if (jar.meta?.librarySeat?.lastError) jar.meta.librarySeat.lastError = null;
-        }
-        await saveSessionJar(jar);
-        return result;
+        const submit = pathname.includes("/make/freeBook/");
+        const perform = async () => {
+          const latestJar = await readSessionJar();
+          Object.assign(jar, mergeSessionJars(latestJar, jar));
+          const result = await requestLibrarySeatJson(jar, pathname, data, {
+            ...options, onDispatch: submit ? onSubmitRequest : undefined
+          });
+          if (submit) onSubmitResponse?.();
+          if (result?.payload?.code === undefined || Number(result.payload.code) === 200 || result.payload.status === true) {
+            if (jar.meta?.librarySeat?.lastError) jar.meta.librarySeat.lastError = null;
+          }
+          if (persistSession) await saveSessionJar(jar);
+          return result;
+        };
+        return submit ? librarySeatSubmissionQueue.run(currentUserId(), perform) : perform();
       }
     });
   }
@@ -1119,6 +1136,8 @@ export function createReservationService({
     if (normalized === "stopped") return "已停用";
     if (normalized === "expired") return "已过期";
     if (normalized === "running") return "正在抢";
+    if (normalized === "confirming") return "正在核对预约";
+    if (normalized === "unconfirmed") return "提交结果待确认";
     return "等待执行";
   }
 
@@ -1139,6 +1158,7 @@ export function createReservationService({
       minLabel: Number.isInteger(row.min_label) ? row.min_label : 1,
       maxLabel: Number.isInteger(row.max_label) ? row.max_label : 45,
       seatLabels: Array.isArray(row.seat_labels) ? row.seat_labels : [],
+      preferredAreaId: row.preferred_area_id || "",
       runDate: row.run_date || null,
       runMinute: Number.isInteger(row.run_minute) ? row.run_minute : null,
       runAt: Number.isFinite(runAtMs) ? new Date(runAtMs).toISOString() : null,
@@ -1150,7 +1170,8 @@ export function createReservationService({
       consecutiveFailures: Number(row.consecutive_failures) || 0,
       createdAt: row.created_at || null,
       updatedAt: row.updated_at || null,
-      lastRunAt: row.last_run_at || null
+      lastRunAt: row.last_run_at || null,
+      timings: row.timings || null
     };
   }
 
@@ -1168,6 +1189,7 @@ export function createReservationService({
       min_label: normalized.minLabel,
       max_label: normalized.maxLabel,
       seat_labels: normalized.seatLabels,
+      preferred_area_id: normalized.preferredAreaId,
       run_date: normalized.runDate,
       run_minute: normalized.runMinute,
       enabled: Boolean(normalized.enabled),
@@ -1205,6 +1227,9 @@ export function createReservationService({
 
   async function saveLibrarySeatAutoTask(userId, body, existing = null, targets = {}) {
     const normalized = normalizeLibrarySeatAutoTaskInput(body);
+    if (existing && normalized.enabled && ["success", "unconfirmed"].includes(existing.status)) {
+      throw new HttpError(409, "该任务已完成或提交结果待确认，请先查看我的预约。", null, "LIBRARY_SEAT_AUTO_TASK_COMPLETED");
+    }
     const timestamp = nowIso();
     const rows = await repository.listLibrarySeatAutoTasks(userId);
     const duplicate = rows.find((row) => row.enabled
@@ -1235,9 +1260,12 @@ export function createReservationService({
       min_label: normalized.minLabel,
       max_label: normalized.maxLabel,
       seat_labels: normalized.seatLabels,
+      preferred_area_id: normalized.preferredAreaId,
       run_date: normalized.runDate,
       run_minute: normalized.runMinute,
-      enabled: Boolean(normalized.enabled)
+      enabled: Boolean(normalized.enabled),
+      run_lock_until: null,
+      run_owner: null
     };
     if (!changes.enabled && existing.status !== "success") {
       changes.status = "stopped";
@@ -1249,73 +1277,126 @@ export function createReservationService({
       changes.last_message = null;
     }
     const row = await repository.updateLibrarySeatAutoTask(userId, existing.id, changes, timestamp);
+    preparedLibrarySeatTasks.delete(existing.id);
     return librarySeatAutoTaskPublic(row);
   }
 
-  async function runLibrarySeatAutoTask(task, user, now = new Date()) {
-    const nowValue = now.toISOString();
-    const plan = librarySeatAutoTaskRunPlan(task, now);
-    if (!plan.due) {
-      if (plan.expired) {
-        const expired = {
-          status: "expired",
-          message: "预约时段已结束，任务未执行。",
-          areaName: null,
-          seatId: null,
-          seatLabel: null
-        };
-        await repository.finishLibrarySeatAutoTask(user.id, task.id, expired, nowValue);
-        return expired;
+  async function prepareLibrarySeatAutoTask(task, user) {
+    const input = normalizeLibrarySeatAutoTaskInput(task);
+    const fingerprint = JSON.stringify(input);
+    const existing = preparedLibrarySeatTasks.get(task.id);
+    if (existing?.fingerprint === fingerprint && Date.now() - existing.preparedAt < 120_000) return existing;
+    for (const [id, value] of preparedLibrarySeatTasks) {
+      if (Date.now() - value.preparedAt > 120_000) preparedLibrarySeatTasks.delete(id);
+    }
+    const jar = await readSessionJar();
+    const minimumExpiry = Date.now() + LIBRARY_SEAT_AUTO_TASK_PREWARM_MS + LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS + 30_000;
+    if (!cachedLibrarySeatToken(jar) || Date.parse(jar.meta.librarySeat.expiresAt) <= minimumExpiry) {
+      const token = await getLibrarySeatMemberToken({ force: true });
+      jar.meta ||= {};
+      jar.meta.librarySeat = { token, capturedAt: new Date().toISOString(), expiresAt: libroomTokenExpiry(token) };
+    }
+    const timings = { scheduledAt: new Date(librarySeatAutoTaskRunAtMs(task)).toISOString(),
+      preparedAt: null, startedAt: null, firstRequestAt: null, firstResponseAt: null, responseAt: null, attempts: 0 };
+    const client = await librarySeatClient({ jar, persistSession: false, onSubmitRequest: () => {
+      timings.firstRequestAt ||= new Date().toISOString();
+    }, onSubmitResponse: () => {
+      timings.responseAt = new Date().toISOString();
+      timings.firstResponseAt ||= timings.responseAt;
+    } });
+    const seats = await prepareLibrarySeatAutoTaskSeats({ task: input, client, topology: true });
+    const prepared = { ...seats, jar, client, timings, fingerprint, preparedAt: Date.now() };
+    timings.preparedAt = new Date().toISOString();
+    preparedLibrarySeatTasks.set(task.id, prepared);
+    logger.info("library_seat_auto_task_prepared", { taskId: task.id, userId: user.id,
+      candidates: seats.candidates.length, preparedAt: timings.preparedAt });
+    return prepared;
+  }
+
+  async function runLibrarySeatAutoTask(task, user, now = new Date(), { shouldStop = () => false } = {}) {
+    return librarySeatReservationQueue.run(user.id, async () => {
+      const actualNow = new Date(Math.max(now.getTime(), Date.now()));
+      const plan = librarySeatAutoTaskRunPlan(task, actualNow);
+      if (!plan.due) {
+        if (!plan.expired) return { status: "waiting", message: "还没到运行时间。" };
+        const result = { status: "expired", message: "预约时段已结束，任务未执行。" };
+        await repository.finishLibrarySeatAutoTask(user.id, task.id, result, actualNow.toISOString());
+        return result;
       }
-      return { status: "waiting", message: "还没到运行时间。" };
-    }
-    const client = await librarySeatClient();
-    const scanResult = await scanLibrarySeatAutoTask({
-      task,
-      client,
-      now,
-      maxAttemptsPerScan: LIBRARY_SEAT_WAITLIST_MAX_SCAN_ATTEMPTS
+      const owner = randomUUID();
+      const claimed = await repository.claimLibrarySeatAutoTask(user.id, task.id, owner,
+        actualNow.toISOString(), new Date(actualNow.getTime() + 3 * 60_000).toISOString());
+      if (!claimed) return { status: "skipped", message: "任务已停用或正在执行。" };
+      task = claimed;
+      const input = normalizeLibrarySeatAutoTaskInput(task);
+      const fingerprint = JSON.stringify(input);
+      let prepared = preparedLibrarySeatTasks.get(task.id);
+      let result;
+      try {
+        if (prepared?.fingerprint !== fingerprint || Date.now() - prepared.preparedAt > 120_000) {
+          prepared = await prepareLibrarySeatAutoTask(task, user);
+        }
+        prepared.timings.startedAt = new Date().toISOString();
+        const deadline = Math.min(Date.now() + LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS, plan.endMs);
+        const shouldStopScan = async () => {
+          if (shouldStop() || Date.now() >= deadline) return true;
+          // 首次提交使用刚取得的任务锁；换座和重试前核对停用或编辑状态。
+          if (!prepared.timings.attempts) return false;
+          const current = await repository.getLibrarySeatAutoTask(user.id, task.id);
+          return !current?.enabled || current.run_owner !== owner
+            || JSON.stringify(normalizeLibrarySeatAutoTaskInput(current)) !== fingerprint;
+        };
+        while (!shouldStop() && Date.now() < deadline && prepared.timings.attempts < 40) {
+          const scan = await scanLibrarySeatAutoTask({ task: input, client: prepared.client, prepared,
+            now: new Date(), shouldStop: shouldStopScan, onAttempt: () => { prepared.timings.attempts++; },
+            maxAttemptsPerScan: Math.min(8, 40 - prepared.timings.attempts) });
+          if (scan.status === "success") {
+            result = { status: "success", message: scan.message, areaName: scan.seat.areaName,
+              seatId: scan.seat.seatId, seatLabel: scan.seat.seatLabel };
+            break;
+          }
+          if (scan.status === "stopped") {
+            if (!prepared.pending) result = scan;
+            break;
+          }
+          if (scan.status === "confirming") {
+            await repository.updateLibrarySeatAutoTask(user.id, task.id,
+              { status: "confirming", last_message: scan.message }, nowIso());
+          }
+          if (scan.status === "empty" && !prepared.pending) {
+            const fresh = await prepareLibrarySeatAutoTaskSeats({ task: input, client: prepared.client });
+            prepared.candidates = fresh.candidates;
+          }
+          const delay = Math.max(LIBRARY_SEAT_AUTO_TASK_RETRY_INTERVAL_MS, Number(scan.retryAfterMs) || 0);
+          const remaining = deadline - Date.now();
+          if (delay >= remaining) break;
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+        result ||= prepared.pending
+          ? { status: "unconfirmed", message: "提交结果仍待学校确认，请查看我的预约，任务已停止重复提交。" }
+          : { status: shouldStop() ? "stopped" : "failed", message: shouldStop()
+            ? "服务停止，任务已暂停。" : "快速尝试窗口内未能预约成功。" };
+      } catch (error) {
+        result = { status: "failed", message: error.message || "自动预约执行失败。" };
+      } finally {
+        if (prepared) {
+          const timings = prepared.timings;
+          timings.firstRequestDelayMs = timings.firstRequestAt
+            ? Date.parse(timings.firstRequestAt) - Date.parse(timings.scheduledAt) : null;
+          timings.requestDurationMs = timings.firstRequestAt && timings.firstResponseAt
+            ? Date.parse(timings.firstResponseAt) - Date.parse(timings.firstRequestAt) : null;
+          timings.totalDurationMs = timings.startedAt ? Date.now() - Date.parse(timings.startedAt) : null;
+          if (result) result.timings = timings;
+          await saveSessionJar(prepared.jar).catch((error) => logger.warn("library_seat_auto_session_save_failed",
+            { taskId: task.id, code: error.code || null }));
+        }
+        preparedLibrarySeatTasks.delete(task.id);
+      }
+      await repository.finishLibrarySeatAutoTask(user.id, task.id, result, nowIso(), owner);
+      logger.info("library_seat_auto_task_finished", { taskId: task.id, userId: user.id,
+        status: result.status, timings: result.timings || null });
+      return result;
     });
-    if (scanResult.status === "success") {
-      const seat = scanResult.seat;
-      const result = {
-        status: "success",
-        message: scanResult.message || "已自动预约成功。",
-        areaName: seat.areaName,
-        seatId: seat.seatId,
-        seatLabel: seat.seatLabel
-      };
-      await repository.finishLibrarySeatAutoTask(user.id, task.id, result, nowValue);
-      logger.info("audit_library_seat_auto_task_succeeded", {
-        actorUserId: user.id,
-        taskId: task.id,
-        seatId: seat.seatId,
-        seatLabel: seat.seatLabel,
-        areaName: seat.areaName
-      });
-      return result;
-    }
-    // 整个阅览区都约满：连续若干轮确认后才结束，避免放号延迟时误判。
-    const bumped = await repository.bumpLibrarySeatAutoTaskEmpty(
-      user.id,
-      task.id,
-      scanResult.message || null,
-      nowValue
-    );
-    const rounds = Number(bumped?.consecutive_failures) || 1;
-    if (rounds >= LIBRARY_SEAT_AUTO_TASK_EMPTY_ROUNDS) {
-      const result = {
-        status: "failed",
-        message: scanResult.message || "整个阅览区已约满，未能抢到座位。",
-        areaName: null,
-        seatId: null,
-        seatLabel: null
-      };
-      await repository.finishLibrarySeatAutoTask(user.id, task.id, result, nowValue);
-      logger.info("audit_library_seat_auto_task_exhausted", { actorUserId: user.id, taskId: task.id });
-      return result;
-    }
-    return { status: "running", message: scanResult.message || null };
   }
   return {
     libroomFailureLog,
@@ -1339,6 +1420,7 @@ export function createReservationService({
     runLibrarySeatWaitlistTask,
     librarySeatAutoTaskPublic,
     saveLibrarySeatAutoTask,
-    runLibrarySeatAutoTask
+    runLibrarySeatAutoTask,
+    prepareLibrarySeatAutoTask
   };
 }

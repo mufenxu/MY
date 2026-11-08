@@ -1811,7 +1811,8 @@ async function fetchWithJar(url, {
   headers = {},
   body,
   timeoutMs = REQUEST_TIMEOUT_MS,
-  redirect = "manual"
+  redirect = "manual",
+  onDispatch
 } = {}) {
   const safeUrl = assertAllowedSchoolUrl(url);
   if (activeUpstreamRequests >= MAX_CONCURRENT_UPSTREAM_REQUESTS) {
@@ -1829,6 +1830,7 @@ async function fetchWithJar(url, {
   if (cookie) requestHeaders.cookie = cookie;
 
   try {
+    onDispatch?.();
     const response = await fetchUpstream(safeUrl, {
       method,
       headers: requestHeaders,
@@ -2989,6 +2991,7 @@ async function handleApiRoutes(req, res, url) {
       readBodyJson,
       repository,
       saveLibrarySeatAutoTask,
+      wakeLibrarySeatAutoTaskScheduler,
       saveLibrarySeatWaitlist,
       wakeLibrarySeatReminderScheduler,
       wakeLibrarySeatWaitlistScheduler
@@ -3204,7 +3207,8 @@ const {
   runLibrarySeatWaitlistTask,
   librarySeatAutoTaskPublic,
   saveLibrarySeatAutoTask,
-  runLibrarySeatAutoTask
+  runLibrarySeatAutoTask,
+  prepareLibrarySeatAutoTask
 } = createReservationService({
   assertAllowedSchoolUrl,
   CAS_ORIGIN,
@@ -3298,6 +3302,8 @@ const {
   startLibroomAutoReservationScheduler,
   wakeLibrarySeatWaitlistScheduler,
   startLibrarySeatWaitlistScheduler,
+  wakeLibrarySeatAutoTaskScheduler,
+  startLibrarySeatAutoTaskScheduler,
   wakeLibrarySeatReminderScheduler,
   startLibrarySeatReminderScheduler,
   startChaoxingAutoSignScheduler
@@ -3323,6 +3329,7 @@ const {
   runAutoReservationTask,
   runLibrarySeatWaitlistTask,
   runLibrarySeatAutoTask,
+  prepareLibrarySeatAutoTask,
   isShuttingDown: () => shuttingDown,
   userContextStorage,
   withAcademicSessionLock
@@ -3430,6 +3437,7 @@ server.listen(PORT, HOST, () => {
   startAcademicReminderScheduler();
   startLibroomAutoReservationScheduler();
   startLibrarySeatWaitlistScheduler();
+  startLibrarySeatAutoTaskScheduler();
   startLibrarySeatReminderScheduler();
   startChaoxingAutoSignScheduler();
 });

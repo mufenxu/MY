@@ -1,9 +1,11 @@
+import { mapWithConcurrency } from "./bounded-concurrency.js";
+
 /**
  * 图书馆座位「自动预约任务」：定点执行型。
  *
  * 与候补任务的区别（两者是不同功能，别混）：
- * - 自动预约任务：到用户设定的运行时刻（默认 21:55）执行一次，按优先级抢座，
- *   抢到即成功；确认整个阅览区都约满则结束。跑完就停，不会一直挂着。
+ * - 自动预约任务：到用户设定的运行时刻（默认 21:55）启动短时快速尝试，
+ *   抢到即成功；快速尝试窗口结束即停止。
  * - 候补任务：进入时段就持续监听，有人退座就抢，直到时段结束。
  *
  * 选座优先级（由高到低）：
@@ -22,8 +24,9 @@ export const LIBRARY_SEAT_AUTO_TASK_DEFAULT_MAX_LABEL = DEFAULT_MAX_LABEL;
 // 学校在「目标日前一天 21:55」放出次日座位，默认就按这个时刻跑。
 export const LIBRARY_SEAT_AUTO_TASK_DEFAULT_RUN_MINUTE = 21 * 60 + 55;
 
-// 连续这么多轮都确认整个阅览区没有空位，才判定为「已约满」结束。
-export const LIBRARY_SEAT_AUTO_TASK_EMPTY_ROUNDS = 3;
+export const LIBRARY_SEAT_AUTO_TASK_PREWARM_MS = 45_000;
+export const LIBRARY_SEAT_AUTO_TASK_RETRY_INTERVAL_MS = 750;
+export const LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS = 60_000;
 
 function fail(message, code = "INVALID_LIBRARY_SEAT_AUTO_TASK") {
   const error = new Error(message);
@@ -121,6 +124,8 @@ export function normalizeLibrarySeatAutoTaskInput(input = {}) {
     fail("最小座位号不能大于最大座位号。", "INVALID_LIBRARY_SEAT_AUTO_TASK_LABEL_RANGE");
   }
   const seatLabels = seatLabelsValue(input.seatLabels ?? input.seat_labels);
+  const preferredAreaId = stringValue(input.preferredAreaId ?? input.preferred_area_id);
+  if (preferredAreaId) safeId(preferredAreaId, "优先阅览区", "INVALID_LIBRARY_SEAT_AUTO_TASK_AREA");
   // 默认「目标日期的前一天」，也就是学校放号那一天。
   const runDate = validDate(
     input.runDate ?? input.run_date ?? previousDate(date),
@@ -145,6 +150,7 @@ export function normalizeLibrarySeatAutoTaskInput(input = {}) {
     minLabel,
     maxLabel,
     seatLabels,
+    preferredAreaId,
     runDate,
     runMinute,
     enabled: input.enabled !== false
@@ -203,15 +209,14 @@ export function librarySeatAutoTaskRunPlan(task, now = new Date()) {
 
 export function librarySeatAutoTaskNextRunDelay(tasks = [], now = new Date(), config = {}) {
   const slowMs = Math.max(60_000, Math.trunc(Number(config.slowMs) || 10 * 60_000));
-  const activeMs = Math.max(5_000, Math.trunc(Number(config.activeMs) || 20_000));
+  const activeMs = Math.max(250, Math.trunc(Number(config.activeMs) || LIBRARY_SEAT_AUTO_TASK_RETRY_INTERVAL_MS));
   const nowMs = now.getTime();
   let delay = slowMs;
   for (const task of Array.isArray(tasks) ? tasks : []) {
     const plan = librarySeatAutoTaskRunPlan(task, now);
     if (plan.waiting && plan.runAtMs !== null) {
-      // 快到运行时刻时精确叫醒，别让 21:55 被轮询粒度磨掉。
       const untilRunMs = plan.runAtMs - nowMs;
-      if (untilRunMs <= slowMs) delay = Math.min(delay, Math.max(1_000, untilRunMs + 500));
+      if (untilRunMs <= slowMs) delay = Math.min(delay, Math.max(1, untilRunMs));
       continue;
     }
     if (!plan.due) continue;
@@ -287,90 +292,129 @@ export function librarySeatAutoTaskTierText(tier, label) {
   return `所选号段已满，改约同阅览区的空位${suffix}。`;
 }
 
-/**
- * 扫一轮。与候补扫描的区别：
- * - 选座走分层回退（候补是严格限定在设定范围内）
- * - 全部约满时返回 "empty"（候补返回 "listening" 继续等）
- */
+export async function prepareLibrarySeatAutoTaskSeats({ task, client, topology = false, maxAreas = 50 } = {}) {
+  const input = normalizeLibrarySeatAutoTaskInput(task);
+  const payload = await client.listAreas({ venueId: input.venueId, floorId: input.floorId,
+    date: input.date, startMinute: input.startMinute, endMinute: input.endMinute, currentPage: 1, pageSize: 50 });
+  const areas = areaList(payload).filter((area) => area && (topology || Number(area.seatFree) > 0))
+    .sort((a, b) => Number(b.seatFree) - Number(a.seatFree)).slice(0, maxAreas);
+  const groups = await mapWithConcurrency(areas, 2, async (area) => {
+    let seats;
+    if (topology && typeof client.getSeatLayout === "function") {
+      const layout = await client.getSeatLayout({ roomId: area.id, version: 0 });
+      // 布局只提供座位身份，能否预约最终由提交接口判断。
+      seats = (layout?.seats || []).map((seat) => ({ ...seat, isFree: true }));
+    } else {
+      const result = await client.getSeats({ roomId: area.id, date: input.date,
+        startMinute: input.startMinute, endMinute: input.endMinute, amPm: 0, refresh: true });
+      seats = Array.isArray(result) ? result : result?.seats || [];
+    }
+    const remaining = seats.filter((seat) => seat?.isFree === true);
+    const candidates = [];
+    const seatLabels = !input.preferredAreaId || input.preferredAreaId === String(area.id) ? input.seatLabels : [];
+    while (remaining.length) {
+      const picked = pickLibrarySeatAutoTaskSeat(remaining, { ...input, seatLabels });
+      if (!picked) break;
+      candidates.push({ seatId: picked.seat.id, seatLabel: String(picked.label), label: picked.label,
+        areaId: area.id, areaName: stringValue(area.name, "阅览区"), tier: picked.tier });
+      remaining.splice(remaining.indexOf(picked.seat), 1);
+    }
+    return candidates;
+  });
+  const tiers = { preferred: 0, neighbour: 1, range: 2, fallback: 3 };
+  const candidates = groups.flat().sort((a, b) => {
+    const tier = tiers[a.tier] - tiers[b.tier];
+    if (tier) return tier;
+    if (a.tier === "preferred") return input.seatLabels.indexOf(a.label) - input.seatLabels.indexOf(b.label);
+    if (a.tier === "neighbour") {
+      const distance = (seat) => Math.min(...input.seatLabels.map((label) => Math.abs(seat.label - label)));
+      const delta = distance(a) - distance(b);
+      if (delta) return delta;
+    }
+    const area = Number(b.areaId === input.preferredAreaId) - Number(a.areaId === input.preferredAreaId);
+    return area || a.label - b.label;
+  });
+  return { candidates, blocked: new Set(), pending: null };
+}
+
+function successfulSeat(candidate) {
+  return { status: "success", tier: candidate.tier,
+    message: librarySeatAutoTaskTierText(candidate.tier, candidate.label), seat: candidate };
+}
+
+async function confirmPendingReservation(prepared, task, client) {
+  const candidate = prepared.pending;
+  if (!candidate) return null;
+  try {
+    const rows = await client.getMyReservations();
+    const minute = (text) => {
+      const match = String(text || "").match(/(?:^|\s)(\d{1,2}):(\d{2})/);
+      return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+    };
+    const matched = (Array.isArray(rows) ? rows : []).find((row) => row.seatId === candidate.seatId
+      && row.date === task.date && minute(row.startTime) === task.startMinute && minute(row.endTime) === task.endMinute
+      && ["RESERVE", "CHECK_IN", "LEAVE"].includes(row.status));
+    if (matched) { prepared.pending = null; return successfulSeat(candidate); }
+  } catch {
+    // 查询暂时失败或记录尚未同步时保留待确认状态，避免重复预约。
+  }
+  return { status: "confirming", message: "预约提交结果待确认，正在核对我的预约，暂不重复提交。" };
+}
+
 export async function scanLibrarySeatAutoTask({
   task,
   client,
   now = new Date(),
-  maxAreasPerScan = 5,
+  prepared,
+  onAttempt = () => {},
+  shouldStop = () => false,
+  maxAreasPerScan = 50,
   maxAttemptsPerScan = 3
 } = {}) {
   const plan = librarySeatAutoTaskRunPlan(task, now);
   if (plan.waiting) return { status: "waiting", message: "还没到运行时间。" };
   if (!plan.due) return { status: plan.expired ? "expired" : "inactive" };
 
-  const areasPayload = await client.listAreas({
-    venueId: task.venueId,
-    date: task.date,
-    startMinute: task.startMinute,
-    endMinute: task.endMinute,
-    floorId: task.floorId,
-    currentPage: 1,
-    pageSize: 50
-  });
-  const candidates = areaList(areasPayload)
-    .filter((area) => area && Number(area.seatFree) > 0)
-    .sort((a, b) => Number(b.seatFree) - Number(a.seatFree))
-    .slice(0, maxAreasPerScan);
-
-  if (!candidates.length) {
-    return { status: "empty", message: "整个阅览区当前没有空座位。" };
-  }
-
+  task = normalizeLibrarySeatAutoTaskInput(task);
+  if (await shouldStop()) return { status: "stopped", message: "任务已停止，已取消后续尝试。" };
+  prepared ||= await prepareLibrarySeatAutoTaskSeats({ task, client, maxAreas: maxAreasPerScan });
+  prepared.blocked ||= new Set();
+  if (prepared.pending) return confirmPendingReservation(prepared, task, client);
   let attempts = 0;
-  let lastConflict = "";
   const attemptLimit = Math.max(1, Math.trunc(maxAttemptsPerScan) || 1);
-  for (const area of candidates) {
+  for (const candidate of prepared.candidates) {
+    if (prepared.blocked.has(candidate.seatId)) continue;
     if (attempts >= attemptLimit) break;
-    const seats = await client.getSeats({
-      roomId: area.id,
-      date: task.date,
-      startMinute: task.startMinute,
-      endMinute: task.endMinute,
-      amPm: 0
-    });
-    const picked = pickLibrarySeatAutoTaskSeat(Array.isArray(seats) ? seats : seats?.seats, {
-      minLabel: task.minLabel,
-      maxLabel: task.maxLabel,
-      seatLabels: task.seatLabels
-    });
-    if (!picked) continue;
+    if (await shouldStop()) return { status: "stopped", message: "任务已停止，已取消后续尝试。" };
+    attempts++;
+    onAttempt(candidate);
     try {
       await client.submitReservation({
-        seatId: picked.seat.id,
+        seatId: candidate.seatId,
         date: task.date,
         startMinute: task.startMinute,
         endMinute: task.endMinute
       });
-      return {
-        status: "success",
-        tier: picked.tier,
-        message: librarySeatAutoTaskTierText(picked.tier, picked.label),
-        seat: {
-          areaId: area.id,
-          areaName: stringValue(area.name, "阅览区"),
-          seatId: picked.seat.id,
-          seatLabel: stringValue(picked.seat.label, picked.seat.id)
-        }
-      };
+      return successfulSeat(candidate);
     } catch (error) {
-      attempts += 1;
-      if (error?.status === 409) {
-        lastConflict = error.message || "所选座位刚被他人预约，继续尝试其他座位。";
+      if (error?.code === "LIBRARY_SEAT_OCCUPIED" || (error?.status === 409 && !error.code)) {
+        prepared.blocked.add(candidate.seatId);
         continue;
+      }
+      if (["LIBRARY_SEAT_NOT_OPEN", "LIBRARY_SEAT_BUSY", "LIBRARY_SEAT_RATE_LIMITED", "UPSTREAM_CAPACITY_EXCEEDED"].includes(error?.code)
+        || error?.status === 429) {
+        return { status: "retry", message: error.message,
+          retryAfterMs: Math.max(Number(error?.details?.retryAfterMs) || 0, error.status === 429 ? 2_000 : 750) };
+      }
+      if (error?.status >= 500 || !error?.status || /TIMEOUT|NETWORK/.test(error.code || "")) {
+        prepared.pending = candidate;
+        return confirmPendingReservation(prepared, task, client);
       }
       throw error;
     }
   }
 
-  return {
-    status: "empty",
-    message: lastConflict || "整个阅览区当前没有空座位。"
-  };
+  return { status: attempts >= attemptLimit ? "retry" : "empty", message: "本轮候选座位暂未预约成功，继续检测。" };
 }
 
 export function librarySeatAutoTaskTimes(startMinute, endMinute) {
