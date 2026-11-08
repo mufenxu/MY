@@ -157,7 +157,7 @@ internal fun AutoReservationPanel(
                             ),
                         )
                         Text(
-                            "设置预约日期与触发时间，系统将按候选顺序自动尝试预约",
+                            "服务端提前准备，到点按候选顺序抢约；冲突换房，繁忙时短时重试。无需保持手机页面打开。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

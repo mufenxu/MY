@@ -71,7 +71,7 @@ internal fun AutoTaskCard(
     val semantic = when (task.status) {
         "waiting", "ready", "running" -> AppStatusSemantic.Info
         "succeeded" -> AppStatusSemantic.Success
-        "failed", "auth_required", "expired", "invalid" -> AppStatusSemantic.Warning
+        "failed", "auth_required", "expired", "invalid", "unconfirmed" -> AppStatusSemantic.Warning
         else -> AppStatusSemantic.Neutral
     }
     val accent = when (semantic) {
@@ -88,10 +88,10 @@ internal fun AutoTaskCard(
         "succeeded" -> Icons.Outlined.CheckCircle
         "auth_required" -> Icons.Outlined.Lock
         "expired" -> Icons.Outlined.EventBusy
-        "invalid", "failed" -> Icons.Outlined.WarningAmber
+        "invalid", "failed", "unconfirmed" -> Icons.Outlined.WarningAmber
         else -> Icons.Outlined.Info
     }
-    val terminalStatus = task.status in setOf("succeeded", "failed", "auth_required", "expired", "invalid", "disabled")
+    val terminalStatus = task.status in setOf("succeeded", "failed", "auth_required", "expired", "invalid", "disabled", "unconfirmed", "stopped")
     var confirmEnable by remember { mutableStateOf(false) }
 
     Surface(

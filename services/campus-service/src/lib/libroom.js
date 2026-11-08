@@ -606,10 +606,11 @@ export function createLibroomClient({
 } = {}) {
   let currentToken = String(token || "");
 
-  async function defaultRequestImpl(pathname, data, { token: memberToken }) {
+  async function defaultRequestImpl(pathname, data, { token: memberToken, onDispatch }) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
+      onDispatch?.();
       const response = await fetchImpl(`${String(baseUrl).replace(/\/+$/, "")}${pathname}`, {
         method: "POST",
         headers: {
@@ -621,23 +622,33 @@ export function createLibroomClient({
         signal: controller.signal
       });
       const payload = await response.json().catch(() => ({}));
-      return { payload, status: response.status, ok: response.ok };
+      const retryAfter = response.headers?.get("retry-after");
+      const retryAfterMs = retryAfter ? Math.max(0, Number.isFinite(Number(retryAfter))
+        ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now()) : 0;
+      return { payload, status: response.status, ok: response.ok, retryAfterMs };
     } finally {
       clearTimeout(timer);
     }
   }
 
-  async function request(pathname, data = {}, { retry = true } = {}) {
+  async function request(pathname, data = {}, { retry = true, onDispatch } = {}) {
     if (!currentToken) {
       if (typeof getMemberToken !== "function") fail(401, "空间预约会话未连接，请先登录学校账号。", "LIBROOM_AUTH_REQUIRED");
       currentToken = String(await getMemberToken() || "");
       if (!currentToken) fail(401, "空间预约会话已过期，请重新登录学校账号。", "LIBROOM_AUTH_EXPIRED");
     }
-    const rawResult = await (requestImpl || defaultRequestImpl)(pathname, data || {}, {
-      token: currentToken,
-      baseUrl,
-      timeoutMs
-    });
+    const submitting = ["/v4/seminar/confirm", "/v4/seminar/submit"].includes(pathname);
+    let dispatched = false;
+    let rawResult;
+    try {
+      rawResult = await (requestImpl || defaultRequestImpl)(pathname, data || {}, {
+        token: currentToken, baseUrl, timeoutMs,
+        onDispatch: () => { dispatched = true; onDispatch?.(); }
+      });
+    } catch (error) {
+      if (submitting && dispatched) error.libroomSubmissionUnknown = true;
+      throw error;
+    }
     const payload = rawResult && Object.hasOwn(rawResult, "payload") ? rawResult.payload : rawResult;
     const statusCode = Number(rawResult?.status || 200);
     const responseOk = rawResult?.ok !== undefined ? Boolean(rawResult.ok) : statusCode >= 200 && statusCode < 300;
@@ -647,22 +658,43 @@ export function createLibroomClient({
     if (authError && retry && typeof getMemberToken === "function") {
       currentToken = String(await getMemberToken() || "");
       if (!currentToken) fail(401, "空间预约会话已过期，请重新登录学校账号。", "LIBROOM_AUTH_EXPIRED");
-      return request(pathname, data, { retry: false });
+      return request(pathname, data, { retry: false, onDispatch });
     }
-    if (!responseOk) fail(statusCode || 502, upstreamMessage(payload, `空间预约系统返回 HTTP ${statusCode || 502}。`), "LIBROOM_UPSTREAM_HTTP");
+    if (!responseOk) {
+      const error = new HttpError(statusCode || 502, upstreamMessage(payload, `空间预约系统返回 HTTP ${statusCode || 502}。`),
+        { retryAfterMs: Number(rawResult?.retryAfterMs) || 0 }, "LIBROOM_UPSTREAM_HTTP");
+      if (submitting && statusCode >= 500) error.libroomSubmissionUnknown = true;
+      throw error;
+    }
+    if (authError) fail(401, upstreamMessage(payload, "空间预约会话已过期，请重新登录学校账号。"), "LIBROOM_AUTH_EXPIRED");
     if (payload && payload.code !== undefined && code !== 0) {
-      const status = code === 20001 || /预约|占用|已被/.test(upstreamMessage(payload, "")) ? 409 : 502;
-      fail(status, upstreamMessage(payload, "空间预约系统拒绝了请求。"), "LIBROOM_UPSTREAM_REJECTED");
+      const message = upstreamMessage(payload, "空间预约系统拒绝了请求。");
+      if (/尚未开放|未开放|未到.*(?:预约|开放)|还未.*(?:预约|开放)/.test(message)) fail(503, message, "LIBROOM_NOT_OPEN");
+      if (/频繁|限流|太快/.test(message)) fail(429, message, "LIBROOM_RATE_LIMITED", { retryAfterMs: Number(rawResult?.retryAfterMs) || 1000 });
+      if (/繁忙|稍后.*(?:再试|重试)|拥挤/.test(message)) fail(503, message, "LIBROOM_BUSY");
+      const status = code === 20001 || /已被|占用|已.*预约|时段.*冲突|无可用/.test(message) ? 409 : 502;
+      fail(status, message, "LIBROOM_UPSTREAM_REJECTED");
+    }
+    if (submitting && payload?.code === undefined) {
+      const error = new HttpError(502, "学校未返回明确的预约结果，请核对我的预约。", null, "LIBROOM_SUBMISSION_UNKNOWN");
+      error.libroomSubmissionUnknown = true;
+      throw error;
     }
     return responseData(payload);
   }
 
-  async function submitReservation(input, options = {}) {
-    const normalized = normalizeReservationInput(input, options);
-    const seminar = await request("/v4/seminar/seminar", { id: normalized.payload.area_id });
+  async function prepareReservation(areaId) {
+    const seminar = await request("/v4/seminar/seminar", { id: Number(areaId) });
     const earlierPeriods = Number(seminar?.earlierPeriods ?? seminar?.data?.earlierPeriods ?? 0);
     const endpoint = earlierPeriods === 0 ? "/v4/seminar/confirm" : "/v4/seminar/submit";
-    return request(endpoint, normalized.payload);
+    return { areaId: Number(areaId), endpoint };
+  }
+
+  async function submitReservation(input, options = {}) {
+    const normalized = normalizeReservationInput(input, options);
+    const prepared = options.prepared?.areaId === normalized.payload.area_id
+      ? options.prepared : await prepareReservation(normalized.payload.area_id);
+    return request(prepared.endpoint, normalized.payload, { onDispatch: options.onDispatch });
   }
 
   async function listSpaces(data = {}) {
@@ -734,6 +766,7 @@ export function createLibroomClient({
       const raw = await request("/v4/seminar/seminar", { id: Number(spaceId), date: String(date || "") });
       return summarizeLibroomAvailability(raw, { date: String(date || "") });
     },
+    prepareReservation,
     submitReservation
   });
 }

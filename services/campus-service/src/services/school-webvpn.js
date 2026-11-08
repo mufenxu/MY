@@ -177,7 +177,9 @@ export function createSchoolWebvpnService({
     method = "GET",
     headers = {},
     body,
-    attempt = 0
+    attempt = 0,
+    onDispatch,
+    timeoutMs
   } = {}) {
     const response = await fetchWithJar(targetUrl, {
       jar,
@@ -187,7 +189,9 @@ export function createSchoolWebvpnService({
         referer: `${LIBROOM_ORIGIN}/h5/index.html`,
         ...headers
       },
-      body
+      body,
+      onDispatch,
+      timeoutMs
     });
 
     if (response.status >= 300 && response.status < 400) {
@@ -200,7 +204,7 @@ export function createSchoolWebvpnService({
         if (method.toUpperCase() === "GET" && libroomCasFromCallback(verified.finalUrl)) {
           return { response: { status: 200, headers: new Headers() }, text: verified.html, finalUrl: verified.finalUrl };
         }
-        return fetchLibroomWithWebvpn(jar, targetUrl, { method, headers, body, attempt: attempt + 1 });
+        return fetchLibroomWithWebvpn(jar, targetUrl, { method, headers, body, onDispatch, timeoutMs, attempt: attempt + 1 });
       }
       await discardUpstreamResponse(response);
       return { response, text: null, finalUrl: targetUrl };
@@ -211,7 +215,7 @@ export function createSchoolWebvpnService({
     if (verifyUrl && attempt < 2) {
       await ensureWebvpnSession(jar);
       await requestAcademicHtmlWithSimpleRedirects(jar, verifyUrl, { referer: targetUrl });
-      return fetchLibroomWithWebvpn(jar, targetUrl, { method, headers, body, attempt: attempt + 1 });
+      return fetchLibroomWithWebvpn(jar, targetUrl, { method, headers, body, onDispatch, timeoutMs, attempt: attempt + 1 });
     }
 
     return { response, text, finalUrl: targetUrl };
@@ -237,7 +241,7 @@ export function createSchoolWebvpnService({
     return libroomCasLoginOptionsFromConfig(config?.config || config);
   }
 
-  async function requestLibroomJsonWithWebvpn(jar, pathname, data = {}, { token = "" } = {}) {
+  async function requestLibroomJsonWithWebvpn(jar, pathname, data = {}, { token = "", onDispatch, timeoutMs } = {}) {
     const headers = {
       accept: "application/json, text/plain, */*",
       "content-type": "application/json;charset=UTF-8",
@@ -250,13 +254,21 @@ export function createSchoolWebvpnService({
     const { response, text } = await fetchLibroomWithWebvpn(jar, new URL(pathname, LIBROOM_ORIGIN).href, {
       method: "POST",
       headers,
-      body: JSON.stringify(data || {})
+      body: JSON.stringify(data || {}),
+      onDispatch,
+      timeoutMs
     });
 
+    const retryAfter = response.headers.get("retry-after");
+    const retryAfterMs = retryAfter ? Math.max(0, Number.isFinite(Number(retryAfter))
+      ? Number(retryAfter) * 1000 : Date.parse(retryAfter) - Date.now()) : 0;
     let payload;
     try {
       payload = parseJsonLike(text || "{}");
     } catch {
+      if (response.status < 200 || response.status >= 300) {
+        return { payload: {}, status: response.status, ok: false, retryAfterMs };
+      }
       throw new HttpError(502, "空间预约系统返回的 JSON 结构不符合预期。", {
         endpoint: pathname,
         sample: normalizeHtmlText(text).slice(0, 200)
@@ -266,7 +278,8 @@ export function createSchoolWebvpnService({
     return {
       payload,
       status: response.status,
-      ok: response.status >= 200 && response.status < 300
+      ok: response.status >= 200 && response.status < 300,
+      retryAfterMs
     };
   }
 

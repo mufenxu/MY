@@ -1341,6 +1341,8 @@ private fun campusAutoReservationStatusText(status: String): String = when (stat
     "succeeded" -> "已完成"
     "failed" -> "执行失败"
     "auth_required" -> "需重新登录"
+    "unconfirmed" -> "结果待确认"
+    "stopped" -> "已停止"
     "expired" -> "已过期"
     "invalid" -> "配置无效"
     else -> "已停用"

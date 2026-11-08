@@ -410,7 +410,7 @@ function publicUserWithStatus(row) {
   const schoolSession = publicSchoolSessionInfo(row.school_session_jar_json);
   return {
     ...user,
-    hasSchoolSession: Boolean(row.has_school_session),
+    hasSchoolSession: Boolean(row.has_school_session && schoolSession.status !== "missing"),
     schoolSessionUpdatedAt: row.school_session_updated_at || null,
     schoolAccount: schoolSession.account,
     schoolOwnerName: schoolSession.ownerName,
@@ -435,8 +435,8 @@ function publicSchoolSessionInfo(jarJson) {
     return {
       account: summary.schoolAccount || null,
       ownerName: summary.ownerName || summary.campus?.ownerName || null,
-      status: summary.needsLogin || !summary.schoolAccount ? "expired" : (summary.hasStoredSession ? "active" : "missing"),
-      needsLogin: Boolean(summary.needsLogin || !summary.schoolAccount)
+      status: summary.hasStoredSession ? (summary.needsLogin ? "expired" : "active") : "missing",
+      needsLogin: Boolean(summary.needsLogin)
     };
   } catch {
     return { account: null, ownerName: null, status: "unknown", needsLogin: false };
@@ -1126,7 +1126,8 @@ function serviceSessionSummary({ key, label, connected, capturedAt, expiresAt, l
 function casSessionSummary(jar) {
   const castgc = validCookieForDomain(jar, "cas.hgu.edu.cn", (cookie) => cookie.name === "CASTGC");
   const session = validCookieForDomain(jar, "cas.hgu.edu.cn", (cookie) => cookie.name === "SESSION");
-  const connected = Boolean(castgc || session);
+  // CAS 登录页也会发 SESSION；它本身不是登录成功的凭据。
+  const connected = Boolean(castgc || (session && jar.meta?.loginAt));
   const capturedAt = latestIsoDate(castgc?.createdAt, session?.createdAt, jar.meta?.loginAt, jar.updatedAt);
   const expiresAt = cookieExpiresAt(castgc);
   const castgcStatus = sessionStatusValue({
@@ -1564,7 +1565,8 @@ function storedSessionSummary(jar) {
   const portal = portalSessionSummary(jar);
   const libroom = libroomSessionSummary(jar);
   const librarySeat = librarySeatSessionSummary(jar);
-  const hasStoredSession = Boolean(cas.connected || energy.connected || campus.connected || academic.connected || portal.connected || libroom.connected || libroom.lastError || librarySeat.connected || librarySeat.lastError);
+  const hasStoredSession = Boolean(jar.meta?.loginAt || cas.connected || energy.connected || campus.connected
+    || academic.connected || portal.connected || libroom.connected || librarySeat.connected);
   // 短信登录的学号回填可能失败，这里允许用已保存的能耗账号兜底，
   // 否则会话会被前端一直判定为「旧的学校会话、学号未确认」。
   const schoolAccount = resolveSchoolAccount(jar.meta, {
@@ -1577,10 +1579,19 @@ function storedSessionSummary(jar) {
     primaryRefreshableSessions.some(sessionNeedsRefresh)
     || globalLoginSessions.some(sessionHasLoginRequiredError)
   );
-  const loginRequiredMessage = needsLogin ? "统一身份认证会话已过期，请重新登录学校账号。" : null;
+  const loginRequiredMessage = needsLogin ? "学校登录已失效，请用学校绑定的手机号和短信验证码重新连接。" : null;
 
   const sessions = { cas, energy, campus, academic, portal, libroom, librarySeat };
+  if (!hasStoredSession) {
+    for (const session of Object.values(sessions)) {
+      session.status = "missing";
+      session.lastError = null;
+      if (Object.hasOwn(session, "appdmLastError")) session.appdmLastError = null;
+    }
+  }
   if (loginRequiredMessage) {
+    cas.status = "expired";
+    cas.lastError = loginRequiredMessage;
     for (const session of primaryRefreshableSessions) {
       if (sessionNeedsRefresh(session)) {
         session.status = "expired";
@@ -1601,6 +1612,8 @@ function storedSessionSummary(jar) {
     ownerName: energy.ownerName || jar.meta?.ownerName || null,
     schoolAccount,
     hasSchoolAccount: Boolean(schoolAccount),
+    loginMethod: hasStoredSession ? (jar.meta?.loginMethod || null) : null,
+    loginPhone: hasStoredSession && jar.meta?.loginPhone ? maskSmsPhone(jar.meta.loginPhone) : null,
     autoRelogin: autoReloginSummary(jar),
     needsLogin,
     loginRequiredMessage,
@@ -2067,7 +2080,7 @@ async function getCasTicketRedirect({ jar, username, password, rememberMe = true
   return assertAllowedSchoolUrl(new URL(location, action).href);
 }
 
-async function finalizeCasLogin({ jar, schoolAccount, password = "", rememberMe = true, saveCredentials = false }) {
+async function finalizeCasLogin({ jar, schoolAccount, password = "", phone = "", rememberMe = true, saveCredentials = false }) {
   jar.meta.schoolAccount = normalizeSchoolLoginAccount(schoolAccount) || null;
   // 短信验证码登录没有可复用的密码，此时不写入自动重登凭据，避免用空密码反复重试。
   jar.meta.autoRelogin = saveCredentials && password
@@ -2080,6 +2093,9 @@ async function finalizeCasLogin({ jar, schoolAccount, password = "", rememberMe 
       }
     : null;
   jar.meta.loginAt = new Date().toISOString();
+  jar.meta.loginMethod = phone ? "sms" : "password";
+  jar.meta.loginPhone = phone || null;
+  if (jar.meta.cas) jar.meta.cas.lastError = null;
   await saveSessionJar(jar);
   let view = null;
   try {
@@ -2273,7 +2289,7 @@ async function completeCasSmsLogin({ pendingId, code, rememberMe = true }) {
   await discardUpstreamResponse(landing.response).catch(() => {});
   casSmsPending.drop(String(pendingId));
   logger.info("audit_school_account_connected_by_sms", { actorUserId: currentUserId() });
-  return finalizeCasLogin({ jar, schoolAccount: "", rememberMe, saveCredentials: false });
+  return finalizeCasLogin({ jar, schoolAccount: "", phone, rememberMe, saveCredentials: false });
 }
 
 function calendarPaths(token) {
@@ -3199,6 +3215,7 @@ const {
   autoReservationTaskPublic,
   saveAutoReservationTask,
   runAutoReservationTask,
+  prepareAutoReservationTask,
   librarySeatWaitlistPublic,
   saveLibrarySeatWaitlist,
   librarySeatWaitlistRequestTargets,
@@ -3327,6 +3344,7 @@ const {
   reloginSchoolSessionIfWanted,
   repository,
   runAutoReservationTask,
+  prepareAutoReservationTask,
   runLibrarySeatWaitlistTask,
   runLibrarySeatAutoTask,
   prepareLibrarySeatAutoTask,

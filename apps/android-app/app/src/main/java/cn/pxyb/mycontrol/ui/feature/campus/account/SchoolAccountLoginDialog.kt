@@ -48,11 +48,11 @@ internal fun SchoolAccountLoginDialog(
     val codePhase = state.phase == SchoolAccountPhase.Code
 
     AppDialogForm(
-        title = if (codePhase) "输入短信验证码" else "学校账号已过期",
+        title = if (codePhase) "输入短信验证码" else "连接学校账号",
         subtitle = if (codePhase) {
             "已发送至 ${state.maskedPhone.ifBlank { "绑定的手机号" }}，5 分钟内有效"
         } else {
-            "验证手机号后自动恢复当前页，无需前往后台"
+            "使用学校绑定的手机号和验证码登录，连接后继续使用当前功能"
         },
         icon = if (codePhase) Icons.Outlined.VpnKey else Icons.Outlined.Shield,
         onDismissRequest = onDismiss,

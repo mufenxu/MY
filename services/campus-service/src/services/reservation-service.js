@@ -1,5 +1,7 @@
 import {
   autoReservationRunPlan,
+  autoReservationRunAtMs,
+  LIBROOM_AUTO_RESERVATION_RETRY_WINDOW_MS,
   executeAutoReservationCandidates,
   normalizeAutoReservationTaskInput
 } from "../lib/libroom-auto-reservation.js";
@@ -18,6 +20,7 @@ import {
   exchangeLibroomMemberToken,
   LIBROOM_ORIGIN,
   libroomRequiresCasTicket,
+  normalizeLibroomMyReservationRecord,
   resolveLibroomCasCallback
 } from "../lib/libroom.js";
 import { DAY_MS } from "../lib/academic-config.js";
@@ -78,6 +81,8 @@ export function createReservationService({
   const LIBRARY_SEAT_WAITLIST_MAX_SCAN_ATTEMPTS = 3;
 
   const libroomSessionQueue = new KeyedSerialQueue();
+  const preparedLibroomTasks = new Map();
+  const libroomReservationQueue = new KeyedSerialQueue();
 
   const librarySeatSessionQueue = new KeyedSerialQueue();
   const librarySeatReservationQueue = new KeyedSerialQueue();
@@ -550,17 +555,24 @@ export function createReservationService({
     });
   }
 
-  async function libroomClient() {
-    const jar = await readSessionJar();
+  async function libroomClient({ jar: preparedJar, persistSession = true, onSubmitResponse } = {}) {
+    const jar = preparedJar || await readSessionJar();
     return createLibroomClient({
       token: cachedLibroomToken(jar),
-      getMemberToken: () => getLibroomMemberToken({ force: true }),
+      getMemberToken: async () => {
+        const token = await getLibroomMemberToken({ force: true });
+        Object.assign(jar, mergeSessionJars(await readSessionJar(), jar));
+        return token;
+      },
       requestImpl: async (pathname, data, options) => {
-        const latestJar = await readSessionJar();
-        Object.assign(jar, mergeSessionJars(latestJar, jar));
+        if (persistSession) {
+          const latestJar = await readSessionJar();
+          Object.assign(jar, mergeSessionJars(latestJar, jar));
+        }
         const result = await requestLibroomJsonWithWebvpn(jar, pathname, data, options);
+        if (["/v4/seminar/confirm", "/v4/seminar/submit"].includes(pathname)) onSubmitResponse?.();
         clearLibroomLastError(jar.meta);
-        await saveSessionJar(jar);
+        if (persistSession) await saveSessionJar(jar);
         return result;
       }
     });
@@ -594,6 +606,8 @@ export function createReservationService({
     if (status === "succeeded") return "已完成";
     if (status === "failed") return "执行失败";
     if (status === "auth_required") return "需重新登录";
+    if (status === "unconfirmed") return "结果待确认";
+    if (status === "stopped") return "已停止";
     if (status === "expired") return "已过期";
     if (status === "invalid") return "配置无效";
     return "已停用";
@@ -632,7 +646,8 @@ export function createReservationService({
       lastMessage: row.last_message || null,
       lastCandidateIndex: Number.isInteger(row.last_candidate_index) ? row.last_candidate_index : null,
       lastAttempts: Array.isArray(row.last_attempts) ? row.last_attempts : [],
-      lastReservation: row.last_reservation || null
+      lastReservation: row.last_reservation || null,
+      lastTimings: row.last_timings || null
     };
   }
 
@@ -680,7 +695,7 @@ export function createReservationService({
       "reservationDate",
       "executeDate",
       "executeTime",
-      "candidates"
+      "candidates", "enabled", "title", "content", "mobile", "open"
     ].some((key) => JSON.stringify(existing[key] ?? null) !== JSON.stringify(normalized[key] ?? null));
     const row = await repository.updateAutoReservationTask(
       userId,
@@ -689,6 +704,7 @@ export function createReservationService({
         ...normalized,
         last_run_key: null,
         run_lock_until: null,
+        run_owner: null,
         run_status: null,
         last_run_started_at: null
       } : normalized,
@@ -750,7 +766,44 @@ export function createReservationService({
     return payload;
   }
 
-  async function runAutoReservationTask(task, user, now = new Date()) {
+  function libroomTaskSignature(task) {
+    return JSON.stringify([task.user_id, task.reservationDate || task.startDate, task.executeDate,
+      task.executeTime, task.candidates, task.title, task.content, task.mobile, task.open]);
+  }
+
+  async function prepareAutoReservationTask(task, user, { allCandidates = true } = {}) {
+    const signature = libroomTaskSignature(task);
+    const cached = preparedLibroomTasks.get(task.id);
+    if (cached?.signature === signature && Date.now() - cached.createdAt < 120_000) return cached;
+    const latest = await repository.getAutoReservationTask(user.id, task.id);
+    if (!latest?.enabled || libroomTaskSignature(latest) !== signature) return null;
+    const jar = await readSessionJar();
+    const prepared = { signature, jar, endpoints: new Map(), createdAt: Date.now(), onSubmitResponse: null };
+    prepared.client = await libroomClient({ jar, persistSession: false,
+      onSubmitResponse: () => prepared.onSubmitResponse?.() });
+    preparedLibroomTasks.set(task.id, prepared);
+    for (const candidate of allCandidates ? task.candidates : task.candidates.slice(0, 1)) {
+      if (!prepared.endpoints.has(candidate.areaId)) {
+        const pending = prepared.client.prepareReservation(candidate.areaId);
+        prepared.endpoints.set(candidate.areaId, pending);
+        try { await pending; } catch (error) {
+          prepared.endpoints.delete(candidate.areaId);
+          throw error;
+        }
+      }
+      const current = await repository.getAutoReservationTask(user.id, task.id);
+      if (!current?.enabled || libroomTaskSignature(current) !== signature) {
+        if (preparedLibroomTasks.get(task.id) === prepared) preparedLibroomTasks.delete(task.id);
+        return null;
+      }
+    }
+    return prepared;
+  }
+
+  async function runAutoReservationTask(task, user, now = new Date(), { shouldStop = () => false } = {}) {
+    return libroomReservationQueue.run(user.id, async () => {
+    task = await repository.getAutoReservationTask(user.id, task.id);
+    if (!task?.enabled || shouldStop()) return null;
     const plan = autoReservationRunPlan(task, now);
     const date = plan.targetDate;
     if (plan.state === "invalid" || plan.state === "expired") {
@@ -761,7 +814,8 @@ export function createReservationService({
         attempts: [],
         runAt: now.toISOString()
       };
-      await repository.finishAutoReservationTask(user.id, task.id, result, now.toISOString());
+      const saved = await repository.finishAutoReservationTask(user.id, task.id, result, now.toISOString(), null, task.updated_at);
+      if (!saved) return null;
       await notifyAutoReservationTask(user, task, result).catch((error) => {
         logger.warn("libroom_auto_reservation_notify_failed", { taskId: task.id, error: error?.message });
       });
@@ -777,48 +831,90 @@ export function createReservationService({
     }
     if (!plan.due || !date || !plan.runKey) return null;
     const nowValue = now.toISOString();
-    let client;
-    try {
-      client = await libroomClient();
-    } catch (error) {
-      const result = {
-        status: [401, 403].includes(Number(error?.status)) ? "auth_required" : "failed",
-        candidateIndex: -1,
-        message: error.message || "自动预约执行失败。",
-        attempts: [],
-        runAt: nowValue
-      };
-      await repository.finishAutoReservationTask(user.id, task.id, result, nowValue);
-      await notifyAutoReservationTask(user, task, result).catch((notifyError) => {
-        logger.warn("libroom_auto_reservation_notify_failed", { taskId: task.id, error: notifyError?.message });
-      });
-      return result;
-    }
+    const owner = randomUUID();
     const claimed = await repository.claimAutoReservationTask(
       user.id,
       task.id,
       plan.runKey,
       nowValue,
-      new Date(now.getTime() + LIBROOM_AUTO_RESERVATION_LOCK_MS).toISOString()
+      new Date(Date.now() + LIBROOM_AUTO_RESERVATION_LOCK_MS).toISOString(), owner, task.updated_at
     );
     if (!claimed) return null;
 
     let result;
+    let prepared;
+    const scheduledAtMs = autoReservationRunAtMs(task, now);
+    const deadlineMs = Date.now() + LIBROOM_AUTO_RESERVATION_RETRY_WINDOW_MS;
+    const timings = { scheduledAt: new Date(scheduledAtMs).toISOString(), startedAt: nowValue,
+      firstRequestAt: null, firstResponseAt: null, firstRequestDelayMs: null, totalDurationMs: null };
+    const shouldContinue = async () => {
+      if (shouldStop()) return false;
+      const latest = await repository.getAutoReservationTask(user.id, task.id);
+      return latest?.enabled && latest.run_owner === owner && latest.updated_at === task.updated_at;
+    };
     try {
+      prepared = await prepareAutoReservationTask(claimed, user, { allCandidates: false });
+      if (!prepared) return null;
+      prepared.onSubmitResponse = () => { timings.firstResponseAt ||= nowIso(); };
+      const recovered = task.last_run_key === plan.runKey && task.run_status === "running";
+      const verifyReservation = async (input) => {
+        const records = await prepared.client.getMyReservations({ limit: 100 });
+        const matches = (row) => row?.spaceId === input.areaId && row.date === input.date
+          && row.startTime === input.startTime && row.endTime === input.endTime;
+        const direct = records.map((row) => normalizeLibroomMyReservationRecord(row)).find(matches);
+        if (direct) return direct;
+        const spaces = await prepared.client.listSpaces();
+        return records.map((row) => normalizeLibroomMyReservationRecord(row, { spaces }))
+          .find(matches) || null;
+      };
       result = await executeAutoReservationCandidates({
-        task: claimed,
-        date,
-        submitReservation: (candidate) => client.submitReservation(candidate, { now })
+        task: claimed, date, shouldContinue, verifyReservation,
+        maxTransientAttempts: 40, transientRetryDelayMs: 300,
+        deadlineMs,
+        submitReservation: async (candidate) => {
+          if (recovered) {
+            const confirmed = await verifyReservation(candidate);
+            if (confirmed) return confirmed;
+            const error = new HttpError(502, "上次执行中断，需核对学校预约记录。", null, "LIBROOM_SUBMISSION_UNKNOWN");
+            error.libroomSubmissionUnknown = true;
+            throw error;
+          }
+          if (!prepared.endpoints.has(candidate.areaId)) {
+            prepared.endpoints.set(candidate.areaId, prepared.client.prepareReservation(candidate.areaId));
+          }
+          let endpoint;
+          try { endpoint = await prepared.endpoints.get(candidate.areaId); } catch (error) {
+            prepared.endpoints.delete(candidate.areaId);
+            throw error;
+          }
+          if (Date.now() >= deadlineMs) throw new HttpError(408, "快速尝试窗口已结束。", null, "LIBROOM_WINDOW_ENDED");
+          if (!await shouldContinue()) throw new HttpError(409, "任务已停用或修改，已停止后续提交。", null, "LIBROOM_TASK_STOPPED");
+          const reservation = await prepared.client.submitReservation(candidate, {
+            now: new Date(), prepared: endpoint,
+            onDispatch: () => { timings.firstRequestAt ||= nowIso(); }
+          });
+          return reservation;
+        }
       });
     } catch (error) {
       result = {
-        status: "failed",
+        status: [401, 403].includes(Number(error?.status)) ? "auth_required" : "failed",
         candidateIndex: -1,
         message: error.message || "自动预约执行失败。",
         attempts: []
       };
+    } finally {
+      if (prepared) prepared.onSubmitResponse = null;
+      timings.firstRequestDelayMs = timings.firstRequestAt ? Date.parse(timings.firstRequestAt) - scheduledAtMs : null;
+      timings.totalDurationMs = Date.now() - Date.parse(nowValue);
+      if (prepared) await saveSessionJar(prepared.jar).catch((error) => {
+        logger.warn("libroom_auto_session_save_failed", { taskId: task.id, code: error.code || null });
+      });
+      preparedLibroomTasks.delete(task.id);
     }
-    await repository.finishAutoReservationTask(user.id, task.id, result, nowValue);
+    result.timings = timings;
+    const saved = await repository.finishAutoReservationTask(user.id, task.id, result, nowIso(), owner, task.updated_at);
+    if (!saved) return result;
     result.runAt = nowValue;
     await notifyAutoReservationTask(user, task, result).catch((error) => {
       logger.warn("libroom_auto_reservation_notify_failed", { taskId: task.id, error: error?.message });
@@ -832,6 +928,7 @@ export function createReservationService({
       candidateIndex: result.candidateIndex
     });
     return result;
+    });
   }
 
   function librarySeatWaitlistStringValue(value, fallback = "") {
@@ -1412,6 +1509,7 @@ export function createReservationService({
     saveAutoReservationTask,
     notifyAutoReservationTask,
     runAutoReservationTask,
+    prepareAutoReservationTask,
     librarySeatWaitlistPublic,
     saveLibrarySeatWaitlist,
     librarySeatWaitlistRequestTargets,

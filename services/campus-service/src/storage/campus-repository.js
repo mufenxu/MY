@@ -544,7 +544,7 @@ export class CampusRepository {
     await this.db.collection("auto_reservation_tasks").deleteOne({ id, user_id: userId });
   }
 
-  async claimAutoReservationTask(userId, id, runKey, now, lockUntil) {
+  async claimAutoReservationTask(userId, id, runKey, now, lockUntil, owner = null, expectedUpdatedAt = null) {
     const lockAvailable = {
       $or: [
         { run_lock_until: { $exists: false } },
@@ -557,6 +557,7 @@ export class CampusRepository {
         id,
         user_id: userId,
         enabled: true,
+        ...(expectedUpdatedAt ? { updated_at: expectedUpdatedAt } : {}),
         $and: [
           lockAvailable,
           {
@@ -567,18 +568,20 @@ export class CampusRepository {
           }
         ]
       },
-      { $set: { last_run_key: runKey, run_lock_until: lockUntil, run_status: "running", last_run_started_at: now } },
+      { $set: { last_run_key: runKey, run_lock_until: lockUntil, run_owner: owner, run_status: "running", last_run_started_at: now } },
       { returnDocument: "after", projection: { _id: 0 } }
     );
-    return result?.value || result || null;
+    return result && Object.hasOwn(result, "value") ? result.value : result || null;
   }
 
-  async finishAutoReservationTask(userId, id, result, timestamp) {
-    await this.db.collection("auto_reservation_tasks").updateOne(
-      { id, user_id: userId },
+  async finishAutoReservationTask(userId, id, result, timestamp, owner = null, expectedUpdatedAt = null) {
+    const saved = await this.db.collection("auto_reservation_tasks").updateOne(
+      { id, user_id: userId, ...(owner ? { run_owner: owner, enabled: true } : {}),
+        ...(expectedUpdatedAt ? { updated_at: expectedUpdatedAt } : {}) },
       {
         $set: {
           run_lock_until: null,
+          run_owner: null,
           run_status: "finished",
           last_run_at: timestamp,
           enabled: false,
@@ -587,10 +590,12 @@ export class CampusRepository {
           last_candidate_index: Number.isInteger(result.candidateIndex) ? result.candidateIndex : null,
           last_attempts: clone(result.attempts || []),
           last_reservation: clone(result.result || null),
+          last_timings: clone(result.timings || null),
           updated_at: timestamp
         }
       }
     );
+    return Boolean(saved?.matchedCount);
   }
 
   async listLibrarySeatWaitlists(userId) {
@@ -977,23 +982,26 @@ export class MemoryCampusRepository {
     if (row?.user_id === userId) this.autoReservationTasks.delete(id);
   }
 
-  async claimAutoReservationTask(userId, id, runKey, now, lockUntil) {
+  async claimAutoReservationTask(userId, id, runKey, now, lockUntil, owner = null, expectedUpdatedAt = null) {
     const row = this.autoReservationTasks.get(id);
     if (!row || row.user_id !== userId || !row.enabled) return null;
+    if (expectedUpdatedAt && row.updated_at !== expectedUpdatedAt) return null;
     const lockExpired = !row.run_lock_until || row.run_lock_until <= now;
     const newOccurrence = row.last_run_key !== runKey;
     const recoverInterruptedRun = row.last_run_key === runKey && row.run_status === "running";
     if (!lockExpired || (!newOccurrence && !recoverInterruptedRun)) return null;
 
-    Object.assign(row, { last_run_key: runKey, run_lock_until: lockUntil, run_status: "running", last_run_started_at: now });
+    Object.assign(row, { last_run_key: runKey, run_lock_until: lockUntil, run_owner: owner, run_status: "running", last_run_started_at: now });
     return clone(row);
   }
 
-  async finishAutoReservationTask(userId, id, result, timestamp) {
+  async finishAutoReservationTask(userId, id, result, timestamp, owner = null, expectedUpdatedAt = null) {
     const row = this.autoReservationTasks.get(id);
-    if (!row || row.user_id !== userId) return;
+    if (!row || row.user_id !== userId || (owner && (row.run_owner !== owner || !row.enabled))
+      || (expectedUpdatedAt && row.updated_at !== expectedUpdatedAt)) return false;
     Object.assign(row, {
       run_lock_until: null,
+      run_owner: null,
       run_status: "finished",
       last_run_at: timestamp,
       enabled: false,
@@ -1002,8 +1010,10 @@ export class MemoryCampusRepository {
       last_candidate_index: Number.isInteger(result.candidateIndex) ? result.candidateIndex : null,
       last_attempts: clone(result.attempts || []),
       last_reservation: clone(result.result || null),
+      last_timings: clone(result.timings || null),
       updated_at: timestamp
     });
+    return true;
   }
 
   async listLibrarySeatWaitlists(userId) {

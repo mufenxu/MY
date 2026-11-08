@@ -149,19 +149,7 @@
   }
 
   function spaceCandidates(payload) {
-    const queue = [payload];
-    const arrays = [];
-    const seen = new Set();
-    while (queue.length) {
-      const value = queue.shift();
-      if (!value || typeof value !== "object" || seen.has(value)) continue;
-      seen.add(value);
-      if (Array.isArray(value)) {
-        if (value.some((item) => item && typeof item === "object" && Number(item.id ?? item.area_id ?? item.areaId) > 0)) arrays.push(value);
-        value.forEach((item) => queue.push(item));
-      } else Object.values(value).forEach((item) => queue.push(item));
-    }
-    return arrays.sort((a, b) => b.length - a.length)[0] || [];
+    return Array.isArray(payload) ? payload : [];
   }
 
   function spaceOption(space) {

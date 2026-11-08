@@ -241,6 +241,15 @@ export function autoReservationNextScanDelay(tasks = [], now = new Date(), { fal
   return Math.max(0, Math.trunc(delay));
 }
 
+export const LIBROOM_AUTO_RESERVATION_PREWARM_MS = 45_000;
+export const LIBROOM_AUTO_RESERVATION_RETRY_WINDOW_MS = 30_000;
+
+export function autoReservationRunAtMs(task, now = new Date()) {
+  const plan = autoReservationRunPlan(task, now);
+  return ["waiting", "ready"].includes(plan.state)
+    ? beijingDateTimeMs(plan.executeDate, plan.executeTime) : null;
+}
+
 function isConflictError(error) {
   return Number(error?.status) === 409
     || (error?.code === "LIBROOM_UPSTREAM_REJECTED" && Number(error?.status) === 409);
@@ -251,8 +260,10 @@ function isAuthReservationError(error) {
 }
 
 function isTransientReservationError(error) {
+  if (error?.code === "LIBROOM_UPSTREAM_REJECTED") return false;
   const status = Number(error?.status);
-  return !Number.isFinite(status) || status >= 500;
+  return ["LIBROOM_NOT_OPEN", "LIBROOM_BUSY", "LIBROOM_RATE_LIMITED", "UPSTREAM_CAPACITY_EXCEEDED"].includes(error?.code)
+    || status === 429 || !Number.isFinite(status) || status >= 500;
 }
 
 function wait(ms) {
@@ -264,37 +275,51 @@ export async function executeAutoReservationCandidates({
   date,
   submitReservation,
   maxTransientAttempts = 2,
-  transientRetryDelayMs = 500
+  transientRetryDelayMs = 500,
+  deadlineMs = Infinity,
+  maxAttempts = 40,
+  shouldContinue = async () => true,
+  verifyReservation
 }) {
   const attempts = [];
   for (let index = 0; index < task.candidates.length; index += 1) {
     const candidate = task.candidates[index];
     const transientLimit = Math.max(1, Math.trunc(Number(maxTransientAttempts) || 2));
     for (let attempt = 1; attempt <= transientLimit; attempt += 1) {
+      if (!await shouldContinue()) return { status: "stopped", candidateIndex: index, message: "任务已停用或修改，已停止后续提交。", attempts };
+      if (Date.now() >= deadlineMs || attempts.length >= maxAttempts) {
+        return { status: "failed", candidateIndex: index, message: "快速尝试窗口内未能预约成功。", attempts };
+      }
+      const input = {
+        areaId: candidate.areaId, date, startTime: candidate.startTime, endTime: candidate.endTime,
+        title: task.title, content: task.content, mobile: task.mobile, open: task.open
+      };
       try {
-        const result = await submitReservation({
-          areaId: candidate.areaId,
-          date,
-          startTime: candidate.startTime,
-          endTime: candidate.endTime,
-          title: task.title,
-          content: task.content,
-          mobile: task.mobile,
-          open: task.open
-        });
+        const result = await submitReservation(input);
         attempts.push({ candidateIndex: index, status: "succeeded", attempt, transient: false, message: null });
         return { status: "succeeded", candidateIndex: index, result, attempts };
       } catch (error) {
-        const conflict = isConflictError(error);
+        const unknown = Boolean(error.libroomSubmissionUnknown);
+        const conflict = !unknown && isConflictError(error);
         const transient = !conflict && isTransientReservationError(error);
         attempts.push({
           candidateIndex: index,
           status: "failed",
           conflict,
           transient,
+          ...(unknown ? { uncertain: true } : {}),
           attempt,
           message: error.message || "预约失败。"
         });
+        if (error.code === "LIBROOM_TASK_STOPPED") return { status: "stopped", candidateIndex: index, message: error.message, attempts };
+        if (unknown) {
+          const confirmed = typeof verifyReservation === "function"
+            ? await verifyReservation(input).catch(() => null) : null;
+          if (confirmed) return { status: "succeeded", candidateIndex: index, result: confirmed, attempts,
+            message: "已从学校预约记录确认成功。" };
+          return { status: "unconfirmed", candidateIndex: index,
+            message: "提交结果仍待学校确认，请查看我的预约，任务已停止重复提交。", attempts };
+        }
         if (!conflict && !transient) {
           if (isAuthReservationError(error)) {
             return {
@@ -308,8 +333,12 @@ export async function executeAutoReservationCandidates({
         }
         if (conflict) break;
         if (transient && attempt < transientLimit) {
-          await wait(transientRetryDelayMs);
+          const delay = Math.max(transientRetryDelayMs, Number(error?.details?.retryAfterMs) || 0, error.status === 429 ? 1000 : 0);
+          if (Date.now() + delay >= deadlineMs) return { status: "failed", candidateIndex: index,
+            message: "学校要求的重试等待已超过快速尝试窗口。", attempts };
+          await wait(delay);
         }
+        if (attempt === transientLimit) return { status: "failed", candidateIndex: index, message: error.message || "预约失败。", attempts };
       }
     }
   }

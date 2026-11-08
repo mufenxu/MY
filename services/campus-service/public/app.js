@@ -1112,8 +1112,8 @@ function renderCreatedInvite(invite) {
 }
 
 function schoolAccountLabel(user) {
-  if (!user.hasSchoolSession) return "未绑定学号/工号";
-  const base = user.schoolAccount ? `学号/工号 ${user.schoolAccount}` : "未记录学号/工号";
+  if (!user.hasSchoolSession) return "未连接学校账号";
+  const base = user.schoolAccount ? `学号/工号 ${user.schoolAccount}` : "已连接学校账号";
   if (user.schoolSessionNeedsLogin || user.schoolSessionStatus === "expired") {
     return `${base} · 需重新登录`;
   }
@@ -2457,7 +2457,7 @@ function authSessionEntries(auth = {}) {
   return [
     {
       key: "cas",
-      label: "CAS 有效期",
+      label: "学校登录",
       data: sessions.cas || { connected: auth.hasCasCookie, status: fallbackStatus(auth.hasCasCookie) }
     },
     {
@@ -2513,10 +2513,8 @@ function authSessionChip(entry) {
 
 function schoolAuthProblem(auth = {}) {
   const casStatus = auth.sessions?.cas?.status;
-  const hasSchoolAccount = Boolean(auth.schoolAccount);
   const expired = auth.needsLogin
-    || casStatus === "expired"
-    || casStatus === "error";
+    || casStatus === "expired";
   if (!auth.hasCookie) {
     return {
       type: "missing",
@@ -2524,19 +2522,11 @@ function schoolAuthProblem(auth = {}) {
       message: "当前系统账号还没有连接学校账号。用学校绑定的手机号收验证码，完成连接后即可继续使用。"
     };
   }
-  if (auth.source !== "env" && !hasSchoolAccount) {
-    return {
-      type: "unverified",
-      // 短信登录只有手机号，学号要等上游返回后才补得上。
-      title: "还差学号确认",
-      message: "学校会话已建立，但这次登录没带回学号/工号，系统会自动补齐；长时间不变请用短信验证码重新连接。"
-    };
-  }
   if (expired) {
     return {
       type: "expired",
       title: "学校登录已过期",
-      message: auth.loginRequiredMessage || auth.sessions?.portal?.lastError || "本系统保存的学校会话已失效，请重新登录学校账号后继续使用。"
+      message: auth.loginRequiredMessage || "学校登录已失效，请用学校绑定的手机号和短信验证码重新连接。"
     };
   }
   return null;
@@ -2567,8 +2557,7 @@ function renderAuth(error) {
   const shouldShowLogin = !auth.hasCookie
     || Boolean(authProblem)
     || auth.needsLogin
-    || casStatus === "expired"
-    || casStatus === "error";
+    || casStatus === "expired";
   nodes.authPanel.dataset.connected = auth.hasCookie ? (shouldShowLogin ? "relogin" : "true") : "false";
   // 学校账号只保留短信验证码登录，未连接或会话过期时才展开。
   nodes.schoolLoginBlock.hidden = !shouldShowLogin;
@@ -2594,19 +2583,19 @@ function renderAuth(error) {
     return;
   }
 
-  const source = auth.source === "env" ? "环境变量" : "已保存会话";
-  const name = auth.schoolAccount ? `学号/工号 ${auth.schoolAccount}` : "学号未确认";
+  const source = auth.source === "env" ? "已连接学校服务" : "学校账号已连接";
+  const name = auth.schoolAccount ? `学号/工号 ${auth.schoolAccount}` : auth.loginPhone || "手机号验证码登录";
   const loginMessage = authProblem?.message
     || (auth.needsLogin ? (auth.loginRequiredMessage || "统一身份认证会话已过期，请在本页面重新连接学校账号。") : "");
   const loginHint = loginMessage
-    ? `<span class="auth-login-hint">${escapeHtml(loginMessage)} 本系统会在学校统一认证有效期内保留会话，各服务通过独立票据自动续签。</span>`
+    ? `<span class="auth-login-hint">${escapeHtml(loginMessage)}</span>`
     : "";
   nodes.authStatusText.innerHTML = `
     <span class="auth-status-lede ${authProblem ? "needs-login" : ""}">${escapeHtml(authProblem ? "需要处理" : source)}，${escapeHtml(name)}</span>
     ${loginHint}
     <span class="auth-session-grid">${authSessionEntries(auth).map(authSessionChip).join("")}</span>
   `;
-  nodes.authNote.textContent = "学校统一认证有效期内各服务自动换票，只有统一认证本身失效后才需要重新登录。";
+  nodes.authNote.textContent = "使用学校绑定的手机号和短信验证码连接。登录有效期间，各服务自动续签；登录失效后再获取验证码。";
   renderOverview();
 }
 
@@ -2730,7 +2719,7 @@ function renderOverview() {
   nodes.overviewSyncText.textContent = state.lastSyncedAt && authReady ? syncClock : (authReady ? "已连接" : "--");
   nodes.overviewSyncMeta.textContent = state.lastSyncedAt && authReady ? `${syncDay} 已同步` : (authProblem?.title || "等待登录");
   nodes.overviewAuthDetail.textContent = authReady
-    ? (compactAuthName || auth.schoolAccount || "学号/工号")
+    ? (compactAuthName || auth.schoolAccount || auth.loginPhone || "手机号验证码登录")
     : (authProblem?.type === "expired" ? "登录已过期" : "未连接");
   nodes.overviewServiceDetail.textContent = authReady
     ? `${usableServices}/${authEntries.length} 项可用`
