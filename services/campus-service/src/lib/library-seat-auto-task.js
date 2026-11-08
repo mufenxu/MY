@@ -433,7 +433,7 @@ export async function scanLibrarySeatAutoTask({
         continue;
       }
       if (error?.status === 409 && ["LIBRARY_SEAT_UPSTREAM_REJECTED", "LIBRARY_SEAT_UPSTREAM_HTTP"].includes(error?.code)
-        && /^(?:(?:座位)?预约失败|操作失败|请求失败|座位预约系统拒绝了请求|座位预约系统返回 HTTP 409)[。！!]?$/u.test(error.message)) {
+        && /^(?:(?:座位)?预约失败(?:[,，]\s*请尽快选择其他时段或座位)?|操作失败|请求失败|座位预约系统拒绝了请求|座位预约系统返回 HTTP 409)[。！!]?$/u.test(error.message)) {
         prepared.pending = candidate;
         prepared.pendingRefused = true;
         return confirmPendingReservation(prepared, task, client, shouldStop, onFailure);
