@@ -27,13 +27,19 @@ import { readUpstreamFailure, recordUpstreamFailure } from "../lib/failure-coold
 import { isCookieExpired, mergeSessionJars } from "../lib/session-jar.js";
 import { KeyedSerialQueue } from "../lib/keyed-serial-queue.js";
 import {
-  librarySeatWaitlistOpenMs,
   librarySeatWaitlistRunInput,
   librarySeatWaitlistRunPlan,
   librarySeatWaitlistTimes,
   normalizeLibrarySeatWaitlistInput,
   scanLibrarySeatWaitlist
 } from "../lib/library-seat-waitlist.js";
+import {
+  LIBRARY_SEAT_AUTO_TASK_EMPTY_ROUNDS,
+  librarySeatAutoTaskRunAtMs,
+  librarySeatAutoTaskRunPlan,
+  normalizeLibrarySeatAutoTaskInput,
+  scanLibrarySeatAutoTask
+} from "../lib/library-seat-auto-task.js";
 import { normalizeHtmlText } from "../lib/academic-parsers.js";
 import { randomUUID } from "node:crypto";
 import { sendCampusNotification } from "../lib/notification-client.js";
@@ -837,7 +843,6 @@ export function createReservationService({
   function librarySeatWaitlistPublic(row) {
     if (!row) return null;
     const status = librarySeatWaitlistStringValue(row.status) || "listening";
-    const openMs = librarySeatWaitlistOpenMs(row.date);
     return {
       id: row.id,
       enabled: Boolean(row.enabled),
@@ -853,7 +858,6 @@ export function createReservationService({
       seatLabels: Array.isArray(row.seat_labels) ? row.seat_labels : [],
       status,
       statusText: librarySeatWaitlistStatusText(status),
-      openAt: Number.isFinite(openMs) ? new Date(openMs).toISOString() : null,
       lastMessage: row.last_message || null,
       lastAreaName: row.last_area_name || "",
       lastSeatLabel: row.last_seat_label || "",
@@ -1047,10 +1051,6 @@ export function createReservationService({
     const plan = librarySeatWaitlistRunPlan(runInput, now);
     const nowValue = now.toISOString();
     if (!plan.due) {
-      // 还没到 21:55 放号时刻的任务只是等待，不能按「已过期」结束掉。
-      if (plan.waiting) {
-        return { status: "waiting", message: "等待 21:55 放号后自动开抢。" };
-      }
       const result = {
         status: "expired",
         message: "候补时段已结束，未能预约成功。",
@@ -1109,6 +1109,214 @@ export function createReservationService({
     }, nowValue);
     return { status: "listening", message: scanResult.message || null };
   }
+
+  /* ---------------------------------------------------------------- 座位自动预约任务 */
+
+  function librarySeatAutoTaskStatusText(status) {
+    const normalized = librarySeatWaitlistStringValue(status);
+    if (normalized === "success") return "已预约成功";
+    if (normalized === "failed") return "未抢到";
+    if (normalized === "stopped") return "已停用";
+    if (normalized === "expired") return "已过期";
+    if (normalized === "running") return "正在抢";
+    return "等待执行";
+  }
+
+  function librarySeatAutoTaskPublic(row) {
+    if (!row) return null;
+    const status = librarySeatWaitlistStringValue(row.status) || "scheduled";
+    const runAtMs = librarySeatAutoTaskRunAtMs(row);
+    return {
+      id: row.id,
+      enabled: Boolean(row.enabled),
+      venueId: row.venue_id || null,
+      venueName: row.venue_name || "",
+      floorId: row.floor_id || null,
+      floorName: row.floor_name || "",
+      date: row.date || null,
+      startMinute: Number.isInteger(row.start_minute) ? row.start_minute : null,
+      endMinute: Number.isInteger(row.end_minute) ? row.end_minute : null,
+      minLabel: Number.isInteger(row.min_label) ? row.min_label : 1,
+      maxLabel: Number.isInteger(row.max_label) ? row.max_label : 45,
+      seatLabels: Array.isArray(row.seat_labels) ? row.seat_labels : [],
+      runDate: row.run_date || null,
+      runMinute: Number.isInteger(row.run_minute) ? row.run_minute : null,
+      runAt: Number.isFinite(runAtMs) ? new Date(runAtMs).toISOString() : null,
+      status,
+      statusText: librarySeatAutoTaskStatusText(status),
+      lastMessage: row.last_message || null,
+      lastAreaName: row.last_area_name || "",
+      lastSeatLabel: row.last_seat_label || "",
+      consecutiveFailures: Number(row.consecutive_failures) || 0,
+      createdAt: row.created_at || null,
+      updatedAt: row.updated_at || null,
+      lastRunAt: row.last_run_at || null
+    };
+  }
+
+  function librarySeatAutoTaskRecord(userId, normalized, timestamp, targets, id = randomUUID()) {
+    return {
+      id,
+      user_id: userId,
+      venue_id: normalized.venueId,
+      venue_name: normalized.venueName,
+      floor_id: normalized.floorId,
+      floor_name: normalized.floorName,
+      date: normalized.date,
+      start_minute: normalized.startMinute,
+      end_minute: normalized.endMinute,
+      min_label: normalized.minLabel,
+      max_label: normalized.maxLabel,
+      seat_labels: normalized.seatLabels,
+      run_date: normalized.runDate,
+      run_minute: normalized.runMinute,
+      enabled: Boolean(normalized.enabled),
+      status: "scheduled",
+      last_message: null,
+      last_area_name: "",
+      last_seat_id: "",
+      last_seat_label: "",
+      consecutive_failures: 0,
+      notify_app_id: String(targets?.appId || "").trim(),
+      notify_wecom_id: String(targets?.wecomId || "").trim(),
+      created_at: timestamp,
+      updated_at: timestamp,
+      last_run_at: null
+    };
+  }
+
+  function librarySeatAutoTaskDuplicate(left, right) {
+    if (!left || !right) return false;
+    if (String(left.date || left.reservationDate) !== String(right.date || right.reservationDate)) return false;
+    const leftRunDate = String(left.run_date ?? left.runDate ?? "");
+    const rightRunDate = String(right.run_date ?? right.runDate ?? "");
+    if (leftRunDate !== rightRunDate) return false;
+    const leftRunMinute = Number(left.run_minute ?? left.runMinute);
+    const rightRunMinute = Number(right.run_minute ?? right.runMinute);
+    if (leftRunMinute !== rightRunMinute) return false;
+    const leftStart = Number(left.start_minute ?? left.startMinute);
+    const leftEnd = Number(left.end_minute ?? left.endMinute);
+    const rightStart = Number(right.start_minute ?? right.startMinute);
+    const rightEnd = Number(right.end_minute ?? right.endMinute);
+    return Number.isFinite(leftStart) && Number.isFinite(leftEnd)
+      && Number.isFinite(rightStart) && Number.isFinite(rightEnd)
+      && leftStart < rightEnd && rightStart < leftEnd;
+  }
+
+  async function saveLibrarySeatAutoTask(userId, body, existing = null, targets = {}) {
+    const normalized = normalizeLibrarySeatAutoTaskInput(body);
+    const timestamp = nowIso();
+    const rows = await repository.listLibrarySeatAutoTasks(userId);
+    const duplicate = rows.find((row) => row.enabled
+      && row.id !== existing?.id
+      && librarySeatAutoTaskDuplicate(row, normalized));
+    if (duplicate) {
+      throw new HttpError(
+        409,
+        "该日期已有运行时间相同的自动预约任务，请先停用或删除后再创建。",
+        null,
+        "LIBRARY_SEAT_AUTO_TASK_DUPLICATE"
+      );
+    }
+    if (!existing) {
+      const row = await repository.insertLibrarySeatAutoTask(
+        librarySeatAutoTaskRecord(userId, normalized, timestamp, targets)
+      );
+      return librarySeatAutoTaskPublic(row);
+    }
+    const changes = {
+      venue_id: normalized.venueId,
+      venue_name: normalized.venueName,
+      floor_id: normalized.floorId,
+      floor_name: normalized.floorName,
+      date: normalized.date,
+      start_minute: normalized.startMinute,
+      end_minute: normalized.endMinute,
+      min_label: normalized.minLabel,
+      max_label: normalized.maxLabel,
+      seat_labels: normalized.seatLabels,
+      run_date: normalized.runDate,
+      run_minute: normalized.runMinute,
+      enabled: Boolean(normalized.enabled)
+    };
+    if (!changes.enabled && existing.status !== "success") {
+      changes.status = "stopped";
+      changes.last_message = null;
+    }
+    if (changes.enabled && existing.status !== "success") {
+      changes.status = "scheduled";
+      changes.consecutive_failures = 0;
+      changes.last_message = null;
+    }
+    const row = await repository.updateLibrarySeatAutoTask(userId, existing.id, changes, timestamp);
+    return librarySeatAutoTaskPublic(row);
+  }
+
+  async function runLibrarySeatAutoTask(task, user, now = new Date()) {
+    const nowValue = now.toISOString();
+    const plan = librarySeatAutoTaskRunPlan(task, now);
+    if (!plan.due) {
+      if (plan.expired) {
+        const expired = {
+          status: "expired",
+          message: "预约时段已结束，任务未执行。",
+          areaName: null,
+          seatId: null,
+          seatLabel: null
+        };
+        await repository.finishLibrarySeatAutoTask(user.id, task.id, expired, nowValue);
+        return expired;
+      }
+      return { status: "waiting", message: "还没到运行时间。" };
+    }
+    const client = await librarySeatClient();
+    const scanResult = await scanLibrarySeatAutoTask({
+      task,
+      client,
+      now,
+      maxAttemptsPerScan: LIBRARY_SEAT_WAITLIST_MAX_SCAN_ATTEMPTS
+    });
+    if (scanResult.status === "success") {
+      const seat = scanResult.seat;
+      const result = {
+        status: "success",
+        message: scanResult.message || "已自动预约成功。",
+        areaName: seat.areaName,
+        seatId: seat.seatId,
+        seatLabel: seat.seatLabel
+      };
+      await repository.finishLibrarySeatAutoTask(user.id, task.id, result, nowValue);
+      logger.info("audit_library_seat_auto_task_succeeded", {
+        actorUserId: user.id,
+        taskId: task.id,
+        seatId: seat.seatId,
+        seatLabel: seat.seatLabel,
+        areaName: seat.areaName
+      });
+      return result;
+    }
+    // 整个阅览区都约满：连续若干轮确认后才结束，避免放号延迟时误判。
+    const bumped = await repository.bumpLibrarySeatAutoTaskEmpty(
+      user.id,
+      task.id,
+      scanResult.message || null,
+      nowValue
+    );
+    const rounds = Number(bumped?.consecutive_failures) || 1;
+    if (rounds >= LIBRARY_SEAT_AUTO_TASK_EMPTY_ROUNDS) {
+      const result = {
+        status: "failed",
+        message: scanResult.message || "整个阅览区已约满，未能抢到座位。",
+        areaName: null,
+        seatId: null,
+        seatLabel: null
+      };
+      await repository.finishLibrarySeatAutoTask(user.id, task.id, result, nowValue);
+      logger.info("audit_library_seat_auto_task_exhausted", { actorUserId: user.id, taskId: task.id });
+      return result;
+    }
+    return { status: "running", message: scanResult.message || null };
+  }
   return {
     libroomFailureLog,
     issueLibroomMemberToken,
@@ -1128,6 +1336,9 @@ export function createReservationService({
     librarySeatWaitlistRequestTargets,
     librarySeatWaitlistFailureText,
     notifyLibrarySeatWaitlist,
-    runLibrarySeatWaitlistTask
+    runLibrarySeatWaitlistTask,
+    librarySeatAutoTaskPublic,
+    saveLibrarySeatAutoTask,
+    runLibrarySeatAutoTask
   };
 }

@@ -4,6 +4,7 @@ export async function handleLibrarySeatRoutes(req, res, url, {
   getLibrarySeatOfficialWebViewLogin,
   json,
   librarySeatClient,
+  librarySeatAutoTaskPublic,
   librarySeatWaitlistPublic,
   librarySeatWaitlistRequestTargets,
   logger,
@@ -11,6 +12,7 @@ export async function handleLibrarySeatRoutes(req, res, url, {
   platformUserId,
   readBodyJson,
   repository,
+  saveLibrarySeatAutoTask,
   saveLibrarySeatWaitlist,
   wakeLibrarySeatReminderScheduler,
   wakeLibrarySeatWaitlistScheduler
@@ -183,6 +185,49 @@ export async function handleLibrarySeatRoutes(req, res, url, {
     const data = await client.getDoorLog({ date: url.searchParams.get("date") || "" });
     json(res, 200, { ok: true, data });
     return true;
+  }
+  const librarySeatAutoTaskPath = url.pathname.match(/^\/api\/campus\/library-seat\/auto-tasks(?:\/([^/]+))?$/);
+  if (librarySeatAutoTaskPath) {
+    const userId = currentUserId();
+    const taskId = librarySeatAutoTaskPath[1] ? decodeURIComponent(librarySeatAutoTaskPath[1]) : "";
+    if (req.method === "GET" && !taskId) {
+      json(res, 200, {
+        ok: true,
+        data: (await repository.listLibrarySeatAutoTasks(userId)).map(librarySeatAutoTaskPublic)
+      });
+      return true;
+    }
+    if (req.method === "POST" && !taskId) {
+      const body = await readBodyJson(req);
+      const targets = await librarySeatWaitlistRequestTargets(userId, platformUserId);
+      const data = await saveLibrarySeatAutoTask(userId, body, null, targets);
+      wakeLibrarySeatWaitlistScheduler("auto_task_changed");
+      logger.info("audit_library_seat_auto_task_created", { actorUserId: userId, taskId: data.id });
+      json(res, 201, { ok: true, data });
+      return true;
+    }
+    if (!taskId) {
+      throw new HttpError(400, "自动预约任务标识不正确。", null, "INVALID_LIBRARY_SEAT_AUTO_TASK_ID");
+    }
+    const existing = await repository.getLibrarySeatAutoTask(userId, taskId);
+    if (!existing) {
+      throw new HttpError(404, "自动预约任务不存在。", null, "LIBRARY_SEAT_AUTO_TASK_NOT_FOUND");
+    }
+    if (req.method === "PUT") {
+      const body = await readBodyJson(req);
+      const data = await saveLibrarySeatAutoTask(userId, { ...existing, ...body }, existing);
+      wakeLibrarySeatWaitlistScheduler("auto_task_changed");
+      logger.info("audit_library_seat_auto_task_updated", { actorUserId: userId, taskId: data.id, enabled: data.enabled });
+      json(res, 200, { ok: true, data });
+      return true;
+    }
+    if (req.method === "DELETE") {
+      await repository.deleteLibrarySeatAutoTask(userId, taskId);
+      wakeLibrarySeatWaitlistScheduler("auto_task_changed");
+      logger.info("audit_library_seat_auto_task_deleted", { actorUserId: userId, taskId });
+      json(res, 200, { ok: true, data: null });
+      return true;
+    }
   }
   const librarySeatWaitlistPath = url.pathname.match(/^\/api\/campus\/library-seat\/waitlists(?:\/([^/]+))?$/);
   if (librarySeatWaitlistPath) {

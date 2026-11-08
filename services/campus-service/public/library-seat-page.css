@@ -356,3 +356,8 @@ body.dark-theme .seat-dot.is-free {
     width: 100%;
   }
 }
+
+/* 自动预约任务表单：指定座位号独占一行（它是最高优先级，用整行强调） */
+.resv-fields.is-waitlist .resv-field.is-wide {
+  grid-column: 1 / -1;
+}

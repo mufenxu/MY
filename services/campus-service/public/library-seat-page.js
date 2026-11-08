@@ -12,7 +12,7 @@
   if (!document.querySelector("link[data-library-seat-page]")) {
     const stylesheet = document.createElement("link");
     stylesheet.rel = "stylesheet";
-    stylesheet.href = "./library-seat-page.css?v=20261107-seat-v4";
+    stylesheet.href = "./library-seat-page.css?v=20261108-seat-v5";
     stylesheet.dataset.librarySeatPage = "1";
     document.head.append(stylesheet);
   }
@@ -30,19 +30,11 @@
     timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit"
   }).format(new Date(Date.now() + offset * 86400000));
 
-  // 学校在目标日期的前一天 21:55 放出次日座位，定时任务就在这个时刻开抢。
-  const SEAT_OPEN_MINUTE = 21 * 60 + 55;
+  // 座位自动预约任务默认在目标日期的前一天 21:55 执行（学校此时放出次日座位）。
   const shiftDate = (value, days) => {
     const parsed = new Date(`${value}T12:00:00+08:00`);
     if (!value || Number.isNaN(parsed.getTime())) return "";
     return new Date(parsed.getTime() + days * 86400000).toISOString().slice(0, 10);
-  };
-  const openInfo = (targetDate) => {
-    const openDate = shiftDate(targetDate, -1);
-    if (!openDate) return { openDate: "", text: "", passed: true };
-    const label = openDate === localDate(0) ? "今天" : openDate === localDate(1) ? "明天" : `${openDate}（${weekdayText(openDate)}）`;
-    const openMs = new Date(`${openDate}T21:55:00+08:00`).getTime();
-    return { openDate, text: `${label} ${minuteText(SEAT_OPEN_MINUTE)}`, passed: Number.isFinite(openMs) && Date.now() >= openMs };
   };
 
   const SCHOOL_HINT = '学校账号未连接或已过期，请先到 <a href="#campus">一卡通</a> 页面连接学校账号。';
@@ -794,17 +786,19 @@
   waitlistMount.innerHTML = `
     <section class="resv-panel">
       <div class="resv-panel-head">
-        <div><h3>新建自动预约任务</h3><p>选好日期和座位范围，到学校放号时间自动开抢；没抢到会继续监听，直到该时段结束。</p></div>
+        <div><h3>新建自动预约任务</h3><p>定点执行型：到设定的运行时间抢一次。先抢指定座位，抢不到换相邻号，再不行按号码顺序挑本区空位，整个阅览区都约满才结束。</p></div>
       </div>
       <form id="seatWaitlistForm" class="resv-fields is-waitlist">
         <label class="resv-field"><span>场馆</span><select id="seatWaitlistVenue" required></select></label>
         <label class="resv-field"><span>楼层</span><select id="seatWaitlistFloor" required></select></label>
-        <label class="resv-field"><span>日期</span><select id="seatWaitlistDate" required></select></label>
+        <label class="resv-field"><span>预约目标日期</span><select id="seatWaitlistDate" required></select></label>
         <label class="resv-field"><span>开始时间</span><select id="seatWaitlistStart" required></select></label>
         <label class="resv-field"><span>使用时长</span><select id="seatWaitlistDuration">${DURATIONS.map((item) => `<option value="${item.value}"${item.value === 120 ? " selected" : ""}>${item.label}</option>`).join("")}</select></label>
-        <label class="resv-field"><span>指定座位号 <small>可选</small></span><input id="seatWaitlistLabels" placeholder="逗号分隔，例如 8,12,15"></label>
+        <label class="resv-field"><span>任务运行日期</span><input id="seatAutoRunDate" type="date" required></label>
+        <label class="resv-field"><span>任务运行时间</span><input id="seatAutoRunTime" type="time" step="60" value="21:55" required></label>
         <label class="resv-field"><span>最小座位号</span><input id="seatWaitlistMin" type="number" min="1" max="999" value="1" required></label>
         <label class="resv-field"><span>最大座位号</span><input id="seatWaitlistMax" type="number" min="1" max="999" value="45" required></label>
+        <label class="resv-field is-wide"><span>指定座位号 <small>可选，填了就先抢这些号</small></span><input id="seatWaitlistLabels" placeholder="逗号分隔，例如 8,12,15；没抢到会自动换相邻号"></label>
         <p id="seatWaitlistOpenHint" class="resv-open-hint" role="status"></p>
         <div class="resv-actions is-waitlist-actions">
           <label class="resv-check"><input id="seatWaitlistEnabled" type="checkbox" checked>创建后立即启用</label>
@@ -814,7 +808,7 @@
       <p id="seatWaitlistStatus" class="resv-status" role="status" aria-live="polite"></p>
     </section>
     <section class="resv-panel">
-      <div class="resv-panel-head"><div><h3>我的自动预约任务</h3><p>任务从开抢时间开始监听，可随时停用或删除。</p></div><button id="seatWaitlistReload" class="ghost" type="button">刷新</button></div>
+      <div class="resv-panel-head"><div><h3>我的自动预约任务</h3><p>到点执行一次，抢到即结束；确认整个阅览区都约满才判定失败。可随时停用或删除。</p></div><button id="seatWaitlistReload" class="ghost" type="button">刷新</button></div>
       <div id="seatWaitlistList" class="resv-list"><div class="resv-empty">打开本页签后自动加载。</div></div>
     </section>`;
 
@@ -823,6 +817,7 @@
     date: waitlistMount.querySelector("#seatWaitlistDate"), start: waitlistMount.querySelector("#seatWaitlistStart"),
     duration: waitlistMount.querySelector("#seatWaitlistDuration"), min: waitlistMount.querySelector("#seatWaitlistMin"),
     max: waitlistMount.querySelector("#seatWaitlistMax"), labels: waitlistMount.querySelector("#seatWaitlistLabels"),
+    runDate: waitlistMount.querySelector("#seatAutoRunDate"), runTime: waitlistMount.querySelector("#seatAutoRunTime"),
     enabled: waitlistMount.querySelector("#seatWaitlistEnabled"), form: waitlistMount.querySelector("#seatWaitlistForm"),
     submit: waitlistMount.querySelector("#seatWaitlistSubmit"), status: waitlistMount.querySelector("#seatWaitlistStatus"),
     openHint: waitlistMount.querySelector("#seatWaitlistOpenHint"),
@@ -832,15 +827,18 @@
   function syncWaitlistOpenHint() {
     if (!w.openHint) return;
     const target = w.date.value;
-    const info = openInfo(target);
-    if (!info.text) {
+    const runDate = w.runDate.value || shiftDate(target, -1);
+    const runTime = w.runTime.value || "21:55";
+    if (!target || !runDate || !runTime) {
       w.openHint.textContent = "";
       return;
     }
-    w.openHint.dataset.waiting = info.passed ? "false" : "true";
-    w.openHint.textContent = info.passed
-      ? `学校已放出 ${target} 的座位，任务创建后立即开始监听。`
-      : `开始运行：${info.text}（学校放号时间），到点自动开抢 ${target} 的座位。`;
+    const runMs = new Date(`${runDate}T${runTime}:00+08:00`).getTime();
+    const passed = Number.isFinite(runMs) && Date.now() >= runMs;
+    w.openHint.dataset.waiting = passed ? "false" : "true";
+    w.openHint.textContent = passed
+      ? `运行时间 ${runDate} ${runTime} 已过，保存后会自动执行一次，抢 ${target} 的座位。`
+      : `将在 ${runDate} ${runTime} 自动执行，抢 ${target} 的座位。`;
   }
 
   const waitlistState = { loaded: false, loading: false, tasks: [] };
@@ -849,6 +847,7 @@
     w.venue.innerHTML = shared.venues.map((venue) => `<option value="${esc(venue.id)}">${esc(venue.name)}</option>`).join("");
     w.date.innerHTML = shared.dates.map((date) => `<option value="${esc(date)}">${esc(date)}（${esc(weekdayText(date))}）</option>`).join("");
     w.start.innerHTML = startMinuteOptions().map((minute) => `<option value="${minute}"${minute === 540 ? " selected" : ""}>${minuteText(minute)}</option>`).join("");
+    w.runDate.value = shiftDate(w.date.value, -1) || localDate(0);
     fillWaitlistFloors();
     syncWaitlistOpenHint();
   }
@@ -869,27 +868,24 @@
     w.list.innerHTML = waitlistState.tasks.map((task) => {
       const slotText = `${task.date || ""} ${minuteText(task.startMinute || 0)} - ${minuteText(task.endMinute || 0)}`;
       const range = Array.isArray(task.seatLabels) && task.seatLabels.length
-        ? `指定 ${task.seatLabels.join("、")} 号`
+        ? `指定 ${task.seatLabels.join("、")} 号优先`
         : `座位号 ${task.minLabel} - ${task.maxLabel}`;
-      const tone = task.status === "success" ? "is-ok" : task.status === "expired" ? "is-bad" : task.enabled ? "is-info" : "";
-      const openAtMs = task.openAt ? Date.parse(task.openAt) : NaN;
-      const waitingForOpen = task.enabled && Number.isFinite(openAtMs) && Date.now() < openAtMs;
-      const openText = Number.isFinite(openAtMs)
+      const tone = task.status === "success" ? "is-ok" : ["failed", "expired"].includes(task.status) ? "is-bad" : task.enabled ? "is-info" : "";
+      const runAtMs = task.runAt ? Date.parse(task.runAt) : NaN;
+      const waitingForRun = task.enabled && Number.isFinite(runAtMs) && Date.now() < runAtMs;
+      const runText = Number.isFinite(runAtMs)
         ? new Intl.DateTimeFormat("zh-CN", {
           timeZone: "Asia/Shanghai", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false
-        }).format(new Date(openAtMs)).replace(/\//g, "-")
-        : "";
-      const openLabel = openText
-        ? `${openText}（${waitingForOpen ? "学校放号后自动开始" : "已开放，任务按监听中执行"}）`
-        : "立即开始";
-      const headBadge = waitingForOpen
-        ? `<span class="resv-badge is-info">等待 ${esc(openText)} 开抢</span>`
+        }).format(new Date(runAtMs)).replace(/\//g, "-")
+        : `${task.runDate || ""} ${minuteText(task.runMinute || 0)}`.trim();
+      const headBadge = waitingForRun
+        ? `<span class="resv-badge is-info">等待 ${esc(runText)} 执行</span>`
         : `<span class="resv-badge ${tone}">${esc(task.statusText || task.status || "")}</span>`;
       return `<article class="resv-item" data-task="${esc(task.id)}">
         <div class="resv-item-head"><span class="resv-item-title">${esc(task.venueName || "")} ${esc(task.floorName || "")}</span>${headBadge}${task.enabled ? "" : '<span class="resv-badge">已停用</span>'}</div>
         <p class="resv-item-meta">${esc(slotText)} · ${esc(range)}</p>
-        <p class="resv-item-meta">开抢时间：${esc(openLabel)}</p>
-        <p class="resv-item-meta">最近结果：${esc(task.lastMessage || "尚未执行")}${task.lastSeatLabel ? `（座位 ${esc(task.lastSeatLabel)}）` : ""}${task.consecutiveFailures > 0 ? ` · 连续失败 ${task.consecutiveFailures} 次` : ""}</p>
+        <p class="resv-item-meta">运行时间：${esc(runText)}${waitingForRun ? "（到点自动执行一次）" : ""}</p>
+        <p class="resv-item-meta">最近结果：${esc(task.lastMessage || "尚未执行")}${task.lastSeatLabel ? `（座位 ${esc(task.lastSeatLabel)}）` : ""}${task.consecutiveFailures > 0 ? ` · 连续 ${task.consecutiveFailures} 轮无空位` : ""}</p>
         <div class="resv-item-actions"><button class="ghost" type="button" data-task-toggle="${esc(task.id)}">${task.enabled ? "停用" : "启用"}</button><button class="ghost" type="button" data-task-delete="${esc(task.id)}">删除</button></div>
       </article>`;
     }).join("");
@@ -903,7 +899,7 @@
 
   async function loadWaitlistTasks() {
     try {
-      const payload = await api("/api/campus/library-seat/waitlists");
+      const payload = await api("/api/campus/library-seat/auto-tasks");
       waitlistState.tasks = Array.isArray(payload) ? payload : [];
       renderWaitlistTasks();
     } catch (error) {
@@ -916,7 +912,7 @@
     if (!task) return;
     button.disabled = true;
     try {
-      await api(`/api/campus/library-seat/waitlists/${encodeURIComponent(id)}`, { method: "PUT", body: { enabled: !task.enabled } });
+      await api(`/api/campus/library-seat/auto-tasks/${encodeURIComponent(id)}`, { method: "PUT", body: { enabled: !task.enabled } });
       await loadWaitlistTasks();
     } catch (error) {
       setStatus(w.status, errorText(error), "error");
@@ -929,7 +925,7 @@
     if (!window.confirm(`确定删除${task ? `「${task.venueName} ${task.floorName}」的` : "这条"}自动预约任务吗？`)) return;
     button.disabled = true;
     try {
-      await api(`/api/campus/library-seat/waitlists/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await api(`/api/campus/library-seat/auto-tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
       await loadWaitlistTasks();
     } catch (error) {
       setStatus(w.status, errorText(error), "error");
@@ -947,7 +943,13 @@
 
   w.venue.addEventListener("change", fillWaitlistFloors);
   w.reload.addEventListener("click", loadWaitlistTasks);
-  w.date.addEventListener("change", syncWaitlistOpenHint);
+  w.date.addEventListener("change", () => {
+    // 换目标日期时运行日期跟回「前一天」，用户仍然可以手动改成别的日子。
+    w.runDate.value = shiftDate(w.date.value, -1) || w.runDate.value;
+    syncWaitlistOpenHint();
+  });
+  w.runDate.addEventListener("change", syncWaitlistOpenHint);
+  w.runTime.addEventListener("change", syncWaitlistOpenHint);
   w.form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const venue = shared.venues.find((item) => String(item.id) === String(w.venue.value));
@@ -963,16 +965,32 @@
     }
     const start = clampMinute(w.start.value);
     const end = Math.min(1440, start + Number(w.duration.value || 60));
+    const runDate = w.runDate.value || shiftDate(w.date.value, -1);
+    const runTime = w.runTime.value || "21:55";
+    if (!runDate) {
+      setStatus(w.status, "请选择任务运行日期。", "error");
+      return;
+    }
+    if (runDate > w.date.value) {
+      setStatus(w.status, "运行日期不能晚于预约目标日期。", "error");
+      return;
+    }
+    const runParts = runTime.split(":");
+    const runMinute = Number(runParts[0]) * 60 + Number(runParts[1]);
+    if (!Number.isInteger(runMinute) || runMinute < 0 || runMinute > 1440) {
+      setStatus(w.status, "任务运行时间格式不正确。", "error");
+      return;
+    }
     w.submit.disabled = true;
     setStatus(w.status, "正在创建自动预约任务...");
     try {
-      await api("/api/campus/library-seat/waitlists", {
+      await api("/api/campus/library-seat/auto-tasks", {
         method: "POST",
         body: {
           venueId: venue.id, venueName: venue.name, floorId: floor.id, floorName: floor.name,
           date: w.date.value, startMinute: start, endMinute: end,
           minLabel: Number(w.min.value) || 1, maxLabel: Number(w.max.value) || 45,
-          seatLabels: labels, enabled: w.enabled.checked
+          seatLabels: labels, runDate, runMinute, enabled: w.enabled.checked
         }
       });
       setStatus(w.status, "自动预约任务已创建。", "ok");

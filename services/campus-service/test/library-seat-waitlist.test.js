@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  librarySeatWaitlistOpenMs,
   librarySeatWaitlistRunInput,
   librarySeatWaitlistNextScanDelay,
   librarySeatWaitlistRunPlan,
@@ -92,48 +91,6 @@ test("run plan marks a task expired after its time window ends", () => {
   assert.equal(librarySeatWaitlistRunPlan(baseTask, beforeEnd).expired, false);
   assert.equal(librarySeatWaitlistRunPlan(baseTask, afterEnd).due, false);
   assert.equal(librarySeatWaitlistRunPlan(baseTask, afterEnd).expired, true);
-});
-
-test("next-day seats wait for the 21:55 release of the day before", () => {
-  const tomorrowTask = { ...baseTask, date: "2026-09-04" };
-  assert.equal(librarySeatWaitlistOpenMs("2026-09-04"), beijingNow("2026-09-03", 21 * 60 + 55).getTime());
-
-  const beforeOpen = librarySeatWaitlistRunPlan(tomorrowTask, beijingNow("2026-09-03", 20 * 60));
-  assert.equal(beforeOpen.waiting, true);
-  assert.equal(beforeOpen.due, false);
-  // 等待开抢的任务不能被判成已过期，否则调度器会直接把它结束掉。
-  assert.equal(beforeOpen.expired, false);
-
-  const afterOpen = librarySeatWaitlistRunPlan(tomorrowTask, beijingNow("2026-09-03", 21 * 60 + 56));
-  assert.equal(afterOpen.waiting, false);
-  assert.equal(afterOpen.due, true);
-});
-
-test("same-day tasks keep running immediately instead of waiting", () => {
-  const plan = librarySeatWaitlistRunPlan(baseTask, beijingNow("2026-09-03", 480));
-  assert.equal(plan.waiting, false);
-  assert.equal(plan.due, true);
-});
-
-test("scan skips a next-day task before the release time", async () => {
-  const result = await scanLibrarySeatWaitlist({
-    task: { ...baseTask, date: "2026-09-04" },
-    client: { listAreas: () => { throw new Error("should not be called"); } },
-    now: beijingNow("2026-09-03", 20 * 60)
-  });
-  assert.equal(result.status, "waiting");
-});
-
-test("next scan delay wakes up right at the release time", () => {
-  const task = { ...baseTask, date: "2026-09-04" };
-  const delay = librarySeatWaitlistNextScanDelay([task], beijingNow("2026-09-03", 21 * 60 + 50), {
-    fastMs: 20_000,
-    mediumMs: 120_000,
-    slowMs: 600_000,
-    hotWindowMs: 2 * 60 * 60 * 1000,
-    mediumWindowMs: 24 * 60 * 60 * 1000
-  });
-  assert.ok(delay > 0 && delay <= 6 * 60 * 1000, `delay should be a few minutes, got ${delay}`);
 });
 
 test("next scan delay uses fast interval inside the hot window", () => {

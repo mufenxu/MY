@@ -27,9 +27,12 @@ cd apps/android-app && ./gradlew :app:compileDebugKotlin
 - 座位平面图用 `/api/campus/library-seat/layout` 的真实坐标。**不要改回百分比定位**（2026-11-07 踩过）：百分比 + 固定 36×30 方块会让 188 个座位的编号糊成一团。现在的做法是 `coordinateGap()` 求坐标最小列距/行距 → 算出画布最小宽高 → px 绝对定位 → `.seat-plan` 自己 `overflow:auto` 横向滚动，网格背景挂在 `.seat-plan-canvas` 上。窄屏方块缩到 30×24。
 - 选中阅览区后其余卡片折叠（`.resv-grid.is-collapsed` + 「展开其他 N 个阅览区」），`queryState.areasExpanded` 控制；`selectArea` 与 `runQuery` 都会重置为折叠态。
 - 预约相关状态**一律不写 localStorage/sessionStorage**（多人共用浏览器会串号）。自动任务也没做「本机草稿」。
-- **「研讨间自动任务」和「座位候补预约」是两套东西，别混**（2026-11-07 已踩过一次）：
+- **「研讨间自动任务」「座位自动预约任务」「座位候补预约」是三套东西，别混**（2026-11-07、11-08 各踩过一次）：
   - 研讨间 = **一次性定时闹钟**。字段是「预约目标日期 + 任务运行日期 + 运行时间 + 候选空间列表」；`libroom-auto-reservation.js` 用 `runKey = targetDate:executeDateTexecuteTime` 做幂等锁，到点跑一次就结束（抢到 `succeeded`，抢空 `failed`）。研讨间**可提前 3 天**预约，`defaultExecuteDate` 默认取目标日期前 3 天；网页端默认运行时间 **07:00**（2026-11-07 用户指定，安卓端仍是 08:30，不要跟着改）。
-  - 座位候补 = **时段内持续蹲守**。字段是「日期 + 开始时间 + 时长 + 座位号范围」；`library-seat-waitlist.js` 用 `LIBRARY_SEAT_BOOKING_OPEN_MINUTE = 21:55` 卡住**目标日前一天 21:55** 放号时刻，到点开始扫描，抢不到就 `listening` 继续下一轮，直到时段结束才 `expired`。
-  - **网页端不叫「候补预约」**（2026-11-07 用户要求）：座位的这个页签在 UI 上叫「自动预约任务」，面板/按钮/空态/确认框同步改了。但内部标识符仍是 `waitlist`（`data-resv-tab="waitlist"`、`#resvSeatWaitlist`、`/api/campus/library-seat/waitlists`），**后端接口与字段一律不动**——安卓端 `LibrarySeatReservationScreen.kt` 还叫「候补预约」，那是它自己的文案，网页端改名不得牵动安卓与接口。
-  - 21:55 只属于图书馆座位，别往上套研讨间。
+  - **图书馆座位有「两个不同功能」，一个网页端一个安卓端**（2026-11-08 用户明确纠正两次，这是重点）：
+    - 网页端「**自动预约任务**」= **定点执行型**。用户填「预约目标日期 + 任务运行日期 + 任务运行时间」，运行日期默认目标日期前一天、运行时间默认 **21:55**（学校放号时刻）。到点跑一次：先抢指定座位 → 抢不到按距离换相邻号 → 再按号码顺序在本区挑 → 都没有就抢整个阅览区任意空位（兜底）。抢到即 `success`；连续 3 轮确认整区约满才 `failed`。独立集合 `library_seat_auto_tasks`、独立接口 `/api/campus/library-seat/auto-tasks`、独立库 `src/lib/library-seat-auto-task.js`。
+    - 安卓端「**候补预约**」= **持续监听**。字段没有运行时间（`LibrarySeatWaitlistRequest` 只有 venueId/floorId/date/startMinute/endMinute/minLabel/maxLabel/seatLabels），进时段就盯，有人退座就抢，一直盯到时段结束。接口 `/api/campus/library-seat/waitlists`，`library-seat-waitlist.js` 按 `due = now < endMs` 判断，抢不到就 `listening` 循环到 `expired`。**没有任何时间门槛**（11-08 已把误加的 21:55 等待整块回滚，`5194801` 版即原样）。
+    - **两套物理隔离**：不同集合、不同路由、不同核心库、不同调度分支，`grep` 验证互不引用。网页建的任务在 `/waitlists` 里查不到（端到端实测 `WAITLISTS_STILL_EMPTY`），安卓零感知。
+    - UI 上网页端这个页签仍叫「自动预约任务」，但内部标识符保留 `waitlist`（`data-resv-tab="waitlist"`、`#resvSeatWaitlist`），因为它是挂载点、不是接口。
+  - 21:55 只是「座位自动预约任务」的默认运行时间，既不属于候补，也不属于研讨间。
 - `test/asset-budget.test.js` 是硬闸门：`app.js`/`styles.css` 只剩个位数余量，新增前端代码必须走独立文件并同步登记 `package.json` 的 `check`/`lint` 和预算表。

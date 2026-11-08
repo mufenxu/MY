@@ -2980,6 +2980,7 @@ async function handleApiRoutes(req, res, url) {
       getLibrarySeatOfficialWebViewLogin,
       json,
       librarySeatClient,
+      librarySeatAutoTaskPublic,
       librarySeatWaitlistPublic,
       librarySeatWaitlistRequestTargets,
       logger,
@@ -2987,6 +2988,7 @@ async function handleApiRoutes(req, res, url) {
       platformUserId: appSession.platformUserId,
       readBodyJson,
       repository,
+      saveLibrarySeatAutoTask,
       saveLibrarySeatWaitlist,
       wakeLibrarySeatReminderScheduler,
       wakeLibrarySeatWaitlistScheduler
@@ -3199,7 +3201,10 @@ const {
   librarySeatWaitlistRequestTargets,
   librarySeatWaitlistFailureText,
   notifyLibrarySeatWaitlist,
-  runLibrarySeatWaitlistTask
+  runLibrarySeatWaitlistTask,
+  librarySeatAutoTaskPublic,
+  saveLibrarySeatAutoTask,
+  runLibrarySeatAutoTask
 } = createReservationService({
   assertAllowedSchoolUrl,
   CAS_ORIGIN,
@@ -3317,6 +3322,7 @@ const {
   repository,
   runAutoReservationTask,
   runLibrarySeatWaitlistTask,
+  runLibrarySeatAutoTask,
   isShuttingDown: () => shuttingDown,
   userContextStorage,
   withAcademicSessionLock

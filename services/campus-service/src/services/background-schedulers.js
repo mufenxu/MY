@@ -8,6 +8,7 @@ import { iterateTaskPages, mapWithConcurrency } from "../lib/bounded-concurrency
 import { cachedLibrarySeatToken } from "../lib/library-seat.js";
 import { buildLibrarySeatReminderPayload, librarySeatReminderPlan } from "../lib/library-seat-reminder.js";
 import { librarySeatWaitlistNextScanDelay, librarySeatWaitlistRunPlan } from "../lib/library-seat-waitlist.js";
+import { librarySeatAutoTaskNextRunDelay, librarySeatAutoTaskRunPlan } from "../lib/library-seat-auto-task.js";
 import { randomUUID } from "node:crypto";
 
 export function groupAutoReservationTasksByUser(tasks = []) {
@@ -43,6 +44,7 @@ export function createBackgroundSchedulers({
   repository,
   runAutoReservationTask,
   runLibrarySeatWaitlistTask,
+  runLibrarySeatAutoTask,
   isShuttingDown,
   userContextStorage,
   withAcademicSessionLock,
@@ -797,8 +799,6 @@ export function createBackgroundSchedulers({
         const now = new Date();
         await mapWithConcurrency(tasks, 2, async (task) => {
           const plan = librarySeatWaitlistRunPlan(task, now);
-          // 还没到 21:55 放号时刻：直接跳过，不换票也不打学校接口。
-          if (plan.waiting) return "waiting";
           const user = await repository.findUserById(task.user_id);
           if (!user || user.disabled) {
             if (plan.expired) {
@@ -856,6 +856,66 @@ export function createBackgroundSchedulers({
           slowMs: LIBRARY_SEAT_WAITLIST_SLOW_INTERVAL_MS,
           hotWindowMs: LIBRARY_SEAT_WAITLIST_HOT_WINDOW_MS,
           mediumWindowMs: LIBRARY_SEAT_WAITLIST_MEDIUM_WINDOW_MS
+        }));
+      }
+      // 座位「自动预约任务」是定点执行型，和候补分开跑，互不影响。
+      for await (const tasks of iterateTaskPages(repository.listEnabledLibrarySeatAutoTasks.bind(repository), {
+        batchSize: BACKGROUND_USER_SCAN_LIMIT,
+        shouldStop: () => isShuttingDown()
+      })) {
+        const now = new Date();
+        await mapWithConcurrency(tasks, 2, async (task) => {
+          const plan = librarySeatAutoTaskRunPlan(task, now);
+          if (plan.expired) {
+            await repository.finishLibrarySeatAutoTask(task.user_id, task.id, {
+              status: "expired",
+              message: "预约时段已结束，任务未执行。",
+              areaName: null,
+              seatId: null,
+              seatLabel: null
+            }, now.toISOString());
+            return "expired";
+          }
+          if (plan.waiting) return "waiting";
+          const user = await repository.findUserById(task.user_id);
+          if (!user || user.disabled) return "skipped";
+          return userContextStorage.run(
+            { requestId: `library-seat-auto-${randomUUID()}`, user },
+            async () => {
+              try {
+                await reloginSchoolSessionIfWanted({ message: "library seat auto task" });
+                const result = await runLibrarySeatAutoTask(task, user, now);
+                return result?.status || "done";
+              } catch (error) {
+                const failures = Number(task.consecutive_failures || 0) + 1;
+                const message = librarySeatWaitlistFailureText(error);
+                const timestamp = now.toISOString();
+                if (failures >= LIBRARY_SEAT_WAITLIST_MAX_FAILURES) {
+                  await repository.finishLibrarySeatAutoTask(user.id, task.id, {
+                    status: "failed",
+                    message: `自动预约已停止：${message}`,
+                    areaName: null,
+                    seatId: null,
+                    seatLabel: null
+                  }, timestamp);
+                } else {
+                  await repository.updateLibrarySeatAutoTask(user.id, task.id, {
+                    status: "running",
+                    last_message: `第 ${failures} 次检测失败：${message}`,
+                    consecutive_failures: failures,
+                    last_run_at: timestamp
+                  }, timestamp);
+                }
+                logger.warn("library_seat_auto_task_scan_failed", { userId: user.id, taskId: task.id, failures });
+                return "failed";
+              }
+            }
+          );
+        });
+        scanned += tasks.length;
+        nextDelayMs = Math.min(nextDelayMs, librarySeatAutoTaskNextRunDelay(tasks, new Date(), {
+          slowMs: LIBRARY_SEAT_WAITLIST_SLOW_INTERVAL_MS,
+          activeMs: LIBRARY_SEAT_WAITLIST_FAST_INTERVAL_MS
         }));
       }
       if (reason !== "interval" && scanned) {

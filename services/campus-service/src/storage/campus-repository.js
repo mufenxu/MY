@@ -63,6 +63,10 @@ export class CampusRepository {
       this.db.collection("library_seat_waitlists").createIndex({ user_id: 1, created_at: 1 }),
       this.db.collection("library_seat_waitlists").createIndex({ enabled: 1, updated_at: 1 }),
       this.db.collection("library_seat_waitlists").createIndex({ enabled: 1, id: 1 }),
+      this.db.collection("library_seat_auto_tasks").createIndex({ id: 1 }, { unique: true }),
+      this.db.collection("library_seat_auto_tasks").createIndex({ user_id: 1, created_at: 1 }),
+      this.db.collection("library_seat_auto_tasks").createIndex({ enabled: 1, run_at: 1 }),
+      this.db.collection("library_seat_auto_tasks").createIndex({ enabled: 1, id: 1 }),
       this.db.collection("invites").createIndex({ id: 1 }, { unique: true }),
       this.db.collection("invites").createIndex({ code_hash: 1 }, { unique: true }),
       this.db.collection("invites").createIndex({ created_at: -1 })
@@ -645,6 +649,75 @@ export class CampusRepository {
       }
     );
   }
+
+  async listLibrarySeatAutoTasks(userId) {
+    return this.db.collection("library_seat_auto_tasks")
+      .find({ user_id: userId }, { projection: { _id: 0 } })
+      .sort({ created_at: 1 })
+      .toArray();
+  }
+
+  async getLibrarySeatAutoTask(userId, id) {
+    return this.db.collection("library_seat_auto_tasks").findOne({ id, user_id: userId }, { projection: { _id: 0 } });
+  }
+
+  async listEnabledLibrarySeatAutoTasks(options = {}) {
+    const { offset, limit } = boundedWindow(options);
+    return this.db.collection("library_seat_auto_tasks")
+      .find({ enabled: true, ...(options.afterId ? { id: { $gt: String(options.afterId) } } : {}) }, { projection: { _id: 0 } })
+      .sort({ id: 1 })
+      .skip(offset)
+      .limit(limit)
+      .toArray();
+  }
+
+  async insertLibrarySeatAutoTask(row) {
+    await this.db.collection("library_seat_auto_tasks").insertOne({ _id: row.id, ...clone(row) });
+    return clone(row);
+  }
+
+  async updateLibrarySeatAutoTask(userId, id, changes, timestamp) {
+    await this.db.collection("library_seat_auto_tasks").updateOne(
+      { id, user_id: userId },
+      { $set: { ...clone(changes), updated_at: timestamp } }
+    );
+    return this.db.collection("library_seat_auto_tasks").findOne({ id, user_id: userId }, { projection: { _id: 0 } });
+  }
+
+  async deleteLibrarySeatAutoTask(userId, id) {
+    await this.db.collection("library_seat_auto_tasks").deleteOne({ id, user_id: userId });
+  }
+
+  async finishLibrarySeatAutoTask(userId, id, result, timestamp) {
+    await this.db.collection("library_seat_auto_tasks").updateOne(
+      { id, user_id: userId },
+      {
+        $set: {
+          enabled: false,
+          status: result.status,
+          last_message: result.message || null,
+          last_run_at: timestamp,
+          last_area_name: result.areaName || null,
+          last_seat_id: result.seatId || null,
+          last_seat_label: result.seatLabel || null,
+          consecutive_failures: 0,
+          updated_at: timestamp
+        }
+      }
+    );
+  }
+
+  /** 只累加失败轮次，不结束任务——用来判断「连续几轮整个区都没座」。 */
+  async bumpLibrarySeatAutoTaskEmpty(userId, id, message, timestamp) {
+    return this.db.collection("library_seat_auto_tasks").findOneAndUpdate(
+      { id, user_id: userId },
+      {
+        $inc: { consecutive_failures: 1 },
+        $set: { last_message: message || null, last_run_at: timestamp, updated_at: timestamp }
+      },
+      { returnDocument: "after", projection: { _id: 0 } }
+    ).then((row) => (row?.value ?? row ?? null));
+  }
 }
 
 export class MemoryCampusRepository {
@@ -659,6 +732,7 @@ export class MemoryCampusRepository {
     this.reminderPreferences = new Map();
     this.autoReservationTasks = new Map();
     this.librarySeatWaitlists = new Map();
+    this.librarySeatAutoTasks = new Map();
     this.backgroundCheckpoints = new Map();
   }
 
@@ -723,6 +797,7 @@ export class MemoryCampusRepository {
     this.reminderPreferences.delete(id);
     for (const [taskId, task] of this.autoReservationTasks) if (task.user_id === id) this.autoReservationTasks.delete(taskId);
     for (const [taskId, task] of this.librarySeatWaitlists) if (task.user_id === id) this.librarySeatWaitlists.delete(taskId);
+    for (const [taskId, task] of this.librarySeatAutoTasks) if (task.user_id === id) this.librarySeatAutoTasks.delete(taskId);
   }
 
   async listInvites() {
@@ -969,6 +1044,68 @@ export class MemoryCampusRepository {
       consecutive_failures: 0,
       updated_at: timestamp
     });
+  }
+
+  async listLibrarySeatAutoTasks(userId) {
+    return clone(Array.from(this.librarySeatAutoTasks.values())
+      .filter((row) => row.user_id === userId)
+      .sort((a, b) => String(a.created_at || "").localeCompare(String(b.created_at || ""))));
+  }
+
+  async getLibrarySeatAutoTask(userId, id) {
+    const row = this.librarySeatAutoTasks.get(id);
+    return row?.user_id === userId ? clone(row) : null;
+  }
+
+  async listEnabledLibrarySeatAutoTasks(options = {}) {
+    const { offset, limit } = boundedWindow(options);
+    return clone(Array.from(this.librarySeatAutoTasks.values())
+      .filter((row) => row.enabled && (!options.afterId || String(row.id) > String(options.afterId)))
+      .sort((a, b) => String(a.id) < String(b.id) ? -1 : String(a.id) > String(b.id) ? 1 : 0)
+      .slice(offset, offset + limit));
+  }
+
+  async insertLibrarySeatAutoTask(row) {
+    this.librarySeatAutoTasks.set(row.id, clone(row));
+    return clone(row);
+  }
+
+  async updateLibrarySeatAutoTask(userId, id, changes, timestamp) {
+    const row = this.librarySeatAutoTasks.get(id);
+    if (!row || row.user_id !== userId) return null;
+    Object.assign(row, clone(changes), { updated_at: timestamp });
+    return clone(row);
+  }
+
+  async deleteLibrarySeatAutoTask(userId, id) {
+    const row = this.librarySeatAutoTasks.get(id);
+    if (row?.user_id === userId) this.librarySeatAutoTasks.delete(id);
+  }
+
+  async finishLibrarySeatAutoTask(userId, id, result, timestamp) {
+    const row = this.librarySeatAutoTasks.get(id);
+    if (!row || row.user_id !== userId) return;
+    Object.assign(row, {
+      enabled: false,
+      status: result.status,
+      last_message: result.message || null,
+      last_run_at: timestamp,
+      last_area_name: result.areaName || null,
+      last_seat_id: result.seatId || null,
+      last_seat_label: result.seatLabel || null,
+      consecutive_failures: 0,
+      updated_at: timestamp
+    });
+  }
+
+  async bumpLibrarySeatAutoTaskEmpty(userId, id, message, timestamp) {
+    const row = this.librarySeatAutoTasks.get(id);
+    if (!row || row.user_id !== userId) return null;
+    row.consecutive_failures = Number(row.consecutive_failures || 0) + 1;
+    row.last_message = message || null;
+    row.last_run_at = timestamp;
+    row.updated_at = timestamp;
+    return clone(row);
   }
 }
 
