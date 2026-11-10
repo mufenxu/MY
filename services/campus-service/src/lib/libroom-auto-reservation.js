@@ -294,9 +294,23 @@ export async function executeAutoReservationCandidates({
         areaId: candidate.areaId, date, startTime: candidate.startTime, endTime: candidate.endTime,
         title: task.title, content: task.content, mobile: task.mobile, open: task.open
       };
+      const startedAtMs = Date.now();
+      let requestedAt = null;
+      let responseAt = null;
+      const attemptTimings = () => ({
+        startedAt: new Date(startedAtMs).toISOString(),
+        requestedAt,
+        responseAt,
+        finishedAt: new Date().toISOString(),
+        durationMs: Math.max(0, Date.now() - startedAtMs),
+        requestDurationMs: requestedAt && responseAt ? Math.max(0, Date.parse(responseAt) - Date.parse(requestedAt)) : null
+      });
       try {
-        const result = await submitReservation(input);
-        attempts.push({ candidateIndex: index, status: "succeeded", attempt, transient: false, message: null });
+        const result = await submitReservation(input, {
+          onDispatch: () => { requestedAt ||= new Date().toISOString(); },
+          onResponse: () => { responseAt ||= new Date().toISOString(); }
+        });
+        attempts.push({ candidateIndex: index, status: "succeeded", attempt, transient: false, message: null, ...attemptTimings() });
         return { status: "succeeded", candidateIndex: index, result, attempts };
       } catch (error) {
         const unknown = Boolean(error.libroomSubmissionUnknown);
@@ -309,7 +323,10 @@ export async function executeAutoReservationCandidates({
           transient,
           ...(unknown ? { uncertain: true } : {}),
           attempt,
-          message: error.message || "预约失败。"
+          code: error.code || null,
+          errorStatus: Number.isFinite(Number(error.status)) ? Number(error.status) : null,
+          message: error.message || "预约失败。",
+          ...attemptTimings()
         });
         if (error.code === "LIBROOM_TASK_STOPPED") return { status: "stopped", candidateIndex: index, message: error.message, attempts };
         if (unknown) {
@@ -333,7 +350,11 @@ export async function executeAutoReservationCandidates({
         }
         if (conflict) break;
         if (transient && attempt < transientLimit) {
-          const delay = Math.max(transientRetryDelayMs, Number(error?.details?.retryAfterMs) || 0, error.status === 429 ? 1000 : 0);
+          const baseDelay = Math.max(0, Number(transientRetryDelayMs) || 0);
+          const quickDelay = attempt <= 3 ? Math.min(baseDelay, 200) : baseDelay;
+          const jitter = baseDelay > 0 ? Math.floor(Math.random() * 51) : 0;
+          const delay = Math.max(quickDelay + jitter, Number(error?.details?.retryAfterMs) || 0, error.status === 429 ? 1000 : 0);
+          attempts.at(-1).retryDelayMs = delay;
           if (Date.now() + delay >= deadlineMs) return { status: "failed", candidateIndex: index,
             message: "学校要求的重试等待已超过快速尝试窗口。", attempts };
           await wait(delay);

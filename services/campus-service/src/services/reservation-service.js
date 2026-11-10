@@ -29,6 +29,7 @@ import { HttpError, isUpstreamNetworkFailure } from "../lib/http.js";
 import { readUpstreamFailure, recordUpstreamFailure } from "../lib/failure-cooldown.js";
 import { isCookieExpired, mergeSessionJars } from "../lib/session-jar.js";
 import { KeyedSerialQueue } from "../lib/keyed-serial-queue.js";
+import { mapWithConcurrency } from "../lib/bounded-concurrency.js";
 import {
   librarySeatWaitlistRunInput,
   librarySeatWaitlistRunPlan,
@@ -772,37 +773,67 @@ export function createReservationService({
       task.executeTime, task.candidates, task.title, task.content, task.mobile, task.open]);
   }
 
+  function prepareLibroomTaskEndpoint(prepared, areaId, options = {}) {
+    const cached = prepared.endpoints.get(areaId);
+    if (cached) return cached;
+    const pending = prepared.client.prepareReservation(areaId, options).then((endpoint) => {
+      if (prepared.endpoints.get(areaId) === pending) prepared.endpoints.set(areaId, endpoint);
+      if (areaId === prepared.firstAreaId) prepared.preparedAt ||= nowIso();
+      return endpoint;
+    }).catch((error) => {
+      if (prepared.endpoints.get(areaId) === pending) prepared.endpoints.delete(areaId);
+      throw error;
+    });
+    prepared.endpoints.set(areaId, pending);
+    return pending;
+  }
+
   async function prepareAutoReservationTask(task, user, { allCandidates = true } = {}) {
     const signature = libroomTaskSignature(task);
     const cached = preparedLibroomTasks.get(task.id);
-    if (cached?.signature === signature && Date.now() - cached.createdAt < 120_000) return cached;
-    const latest = await repository.getAutoReservationTask(user.id, task.id);
-    if (!latest?.enabled || libroomTaskSignature(latest) !== signature) return null;
-    const jar = await readSessionJar();
-    const prepared = { signature, jar, endpoints: new Map(), createdAt: Date.now(), onSubmitResponse: null };
-    prepared.client = await libroomClient({ jar, persistSession: false,
-      onSubmitResponse: () => prepared.onSubmitResponse?.() });
-    preparedLibroomTasks.set(task.id, prepared);
-    for (const candidate of allCandidates ? task.candidates : task.candidates.slice(0, 1)) {
-      if (!prepared.endpoints.has(candidate.areaId)) {
-        const pending = prepared.client.prepareReservation(candidate.areaId);
-        prepared.endpoints.set(candidate.areaId, pending);
-        try { await pending; } catch (error) {
-          prepared.endpoints.delete(candidate.areaId);
+    let prepared = cached?.signature === signature && Date.now() - cached.createdAt < 120_000 ? cached : null;
+    if (!prepared) {
+      // 执行入口已抢占任务；预热入口仍需检查保存后的最新配置。
+      const latest = allCandidates ? await repository.getAutoReservationTask(user.id, task.id) : task;
+      if (!latest?.enabled || libroomTaskSignature(latest) !== signature) return null;
+      const currentPrepared = preparedLibroomTasks.get(task.id);
+      if (currentPrepared?.signature === signature && Date.now() - currentPrepared.createdAt < 120_000) {
+        prepared = currentPrepared;
+      } else {
+        prepared = { signature, endpoints: new Map(), createdAt: Date.now(), onSubmitResponse: null,
+          firstAreaId: task.candidates[0]?.areaId, preparedAt: null };
+        preparedLibroomTasks.set(task.id, prepared);
+        prepared.initializing = (async () => {
+          prepared.jar = await readSessionJar();
+          prepared.client = await libroomClient({ jar: prepared.jar, persistSession: false,
+            onSubmitResponse: () => prepared.onSubmitResponse?.() });
+        })().catch((error) => {
+          if (preparedLibroomTasks.get(task.id) === prepared) preparedLibroomTasks.delete(task.id);
           throw error;
-        }
+        });
       }
-      const current = await repository.getAutoReservationTask(user.id, task.id);
-      if (!current?.enabled || libroomTaskSignature(current) !== signature) {
-        if (preparedLibroomTasks.get(task.id) === prepared) preparedLibroomTasks.delete(task.id);
-        return null;
+    }
+    await prepared.initializing;
+    // 到点只复用客户端，首选接口的临时失败由提交重试处理，避免提前终止任务。
+    if (!allCandidates) return prepared;
+    const areaIds = [...new Set(task.candidates.map((candidate) => candidate.areaId))];
+    await mapWithConcurrency(areaIds, 2, async (areaId) => {
+      try { await prepareLibroomTaskEndpoint(prepared, areaId); } catch (error) {
+        logger.warn("libroom_auto_candidate_prewarm_failed", { taskId: task.id, areaId, code: error.code || null });
       }
+    });
+    const current = await repository.getAutoReservationTask(user.id, task.id);
+    if (!current?.enabled || libroomTaskSignature(current) !== signature) {
+      if (preparedLibroomTasks.get(task.id) === prepared) preparedLibroomTasks.delete(task.id);
+      return null;
     }
     return prepared;
   }
 
   async function runAutoReservationTask(task, user, now = new Date(), { shouldStop = () => false } = {}) {
+    const triggeredAt = now;
     return libroomReservationQueue.run(user.id, async () => {
+    now = new Date();
     task = await repository.getAutoReservationTask(user.id, task.id);
     if (!task?.enabled || shouldStop()) return null;
     const plan = autoReservationRunPlan(task, now);
@@ -833,6 +864,7 @@ export function createReservationService({
     if (!plan.due || !date || !plan.runKey) return null;
     const nowValue = now.toISOString();
     const owner = randomUUID();
+    const claimStartedAtMs = Date.now();
     const claimed = await repository.claimAutoReservationTask(
       user.id,
       task.id,
@@ -846,7 +878,8 @@ export function createReservationService({
     let prepared;
     const scheduledAtMs = autoReservationRunAtMs(task, now);
     const deadlineMs = Date.now() + LIBROOM_AUTO_RESERVATION_RETRY_WINDOW_MS;
-    const timings = { scheduledAt: new Date(scheduledAtMs).toISOString(), startedAt: nowValue,
+    const timings = { scheduledAt: new Date(scheduledAtMs).toISOString(), triggeredAt: triggeredAt.toISOString(), startedAt: nowValue,
+      queueDelayMs: Math.max(0, now.getTime() - triggeredAt.getTime()), claimDurationMs: Date.now() - claimStartedAtMs, preparedAt: null,
       firstRequestAt: null, firstResponseAt: null, firstRequestDelayMs: null, totalDurationMs: null };
     const shouldContinue = async () => {
       if (shouldStop()) return false;
@@ -856,7 +889,7 @@ export function createReservationService({
     try {
       prepared = await prepareAutoReservationTask(claimed, user, { allCandidates: false });
       if (!prepared) return null;
-      prepared.onSubmitResponse = () => { timings.firstResponseAt ||= nowIso(); };
+      timings.preparedAt = prepared.preparedAt;
       const recovered = task.last_run_key === plan.runKey && task.run_status === "running";
       const verifyReservation = async (input) => {
         const records = await prepared.client.getMyReservations({ limit: 100 });
@@ -869,10 +902,10 @@ export function createReservationService({
           .find(matches) || null;
       };
       result = await executeAutoReservationCandidates({
-        task: claimed, date, shouldContinue, verifyReservation,
+        task: claimed, date, shouldContinue: () => !shouldStop(), verifyReservation,
         maxTransientAttempts: 40, transientRetryDelayMs: 300,
         deadlineMs,
-        submitReservation: async (candidate) => {
+        submitReservation: async (candidate, { onDispatch, onResponse }) => {
           if (recovered) {
             const confirmed = await verifyReservation(candidate);
             if (confirmed) return confirmed;
@@ -880,19 +913,15 @@ export function createReservationService({
             error.libroomSubmissionUnknown = true;
             throw error;
           }
-          if (!prepared.endpoints.has(candidate.areaId)) {
-            prepared.endpoints.set(candidate.areaId, prepared.client.prepareReservation(candidate.areaId));
-          }
-          let endpoint;
-          try { endpoint = await prepared.endpoints.get(candidate.areaId); } catch (error) {
-            prepared.endpoints.delete(candidate.areaId);
-            throw error;
-          }
+          if (Date.now() >= deadlineMs) throw new HttpError(408, "快速尝试窗口已结束。", null, "LIBROOM_WINDOW_ENDED");
+          const endpoint = await prepareLibroomTaskEndpoint(prepared, candidate.areaId, { timeoutMs: Math.max(1, deadlineMs - Date.now()) });
+          timings.preparedAt ||= prepared.preparedAt;
           if (Date.now() >= deadlineMs) throw new HttpError(408, "快速尝试窗口已结束。", null, "LIBROOM_WINDOW_ENDED");
           if (!await shouldContinue()) throw new HttpError(409, "任务已停用或修改，已停止后续提交。", null, "LIBROOM_TASK_STOPPED");
+          prepared.onSubmitResponse = () => { timings.firstResponseAt ||= nowIso(); onResponse(); };
           const reservation = await prepared.client.submitReservation(candidate, {
-            now: new Date(), prepared: endpoint,
-            onDispatch: () => { timings.firstRequestAt ||= nowIso(); }
+            now: new Date(), prepared: endpoint, timeoutMs: Math.max(1, deadlineMs - Date.now()),
+            onDispatch: () => { timings.firstRequestAt ||= nowIso(); onDispatch(); }
           });
           return reservation;
         }

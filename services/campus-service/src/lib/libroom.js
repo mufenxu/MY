@@ -606,9 +606,9 @@ export function createLibroomClient({
 } = {}) {
   let currentToken = String(token || "");
 
-  async function defaultRequestImpl(pathname, data, { token: memberToken, onDispatch }) {
+  async function defaultRequestImpl(pathname, data, { token: memberToken, onDispatch, timeoutMs: requestTimeoutMs }) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
     try {
       onDispatch?.();
       const response = await fetchImpl(`${String(baseUrl).replace(/\/+$/, "")}${pathname}`, {
@@ -631,7 +631,7 @@ export function createLibroomClient({
     }
   }
 
-  async function request(pathname, data = {}, { retry = true, onDispatch } = {}) {
+  async function request(pathname, data = {}, { retry = true, onDispatch, timeoutMs: requestTimeoutMs = timeoutMs } = {}) {
     if (!currentToken) {
       if (typeof getMemberToken !== "function") fail(401, "空间预约会话未连接，请先登录学校账号。", "LIBROOM_AUTH_REQUIRED");
       currentToken = String(await getMemberToken() || "");
@@ -642,7 +642,7 @@ export function createLibroomClient({
     let rawResult;
     try {
       rawResult = await (requestImpl || defaultRequestImpl)(pathname, data || {}, {
-        token: currentToken, baseUrl, timeoutMs,
+        token: currentToken, baseUrl, timeoutMs: Math.min(timeoutMs, requestTimeoutMs),
         onDispatch: () => { dispatched = true; onDispatch?.(); }
       });
     } catch (error) {
@@ -658,7 +658,7 @@ export function createLibroomClient({
     if (authError && retry && typeof getMemberToken === "function") {
       currentToken = String(await getMemberToken() || "");
       if (!currentToken) fail(401, "空间预约会话已过期，请重新登录学校账号。", "LIBROOM_AUTH_EXPIRED");
-      return request(pathname, data, { retry: false, onDispatch });
+      return request(pathname, data, { retry: false, onDispatch, timeoutMs: requestTimeoutMs });
     }
     if (!responseOk) {
       const error = new HttpError(statusCode || 502, upstreamMessage(payload, `空间预约系统返回 HTTP ${statusCode || 502}。`),
@@ -669,9 +669,9 @@ export function createLibroomClient({
     if (authError) fail(401, upstreamMessage(payload, "空间预约会话已过期，请重新登录学校账号。"), "LIBROOM_AUTH_EXPIRED");
     if (payload && payload.code !== undefined && code !== 0) {
       const message = upstreamMessage(payload, "空间预约系统拒绝了请求。");
-      if (/尚未开放|未开放|未到.*(?:预约|开放)|还未.*(?:预约|开放)/.test(message)) fail(503, message, "LIBROOM_NOT_OPEN");
+      if (/尚未开放|未开放|未到.*(?:预约|开放)|还未.*(?:预约|开放)/.test(message)) fail(503, message, "LIBROOM_NOT_OPEN", { retryAfterMs: Number(rawResult?.retryAfterMs) || 0 });
       if (/频繁|限流|太快/.test(message)) fail(429, message, "LIBROOM_RATE_LIMITED", { retryAfterMs: Number(rawResult?.retryAfterMs) || 1000 });
-      if (/繁忙|稍后.*(?:再试|重试)|拥挤/.test(message)) fail(503, message, "LIBROOM_BUSY");
+      if (/繁忙|稍后.*(?:再试|重试)|拥挤|(?:提交)?预约人数(?:过多|太多)/.test(message)) fail(503, message, "LIBROOM_BUSY", { retryAfterMs: Number(rawResult?.retryAfterMs) || 0 });
       const status = code === 20001 || /已被|占用|已.*预约|时段.*冲突|无可用/.test(message) ? 409 : 502;
       fail(status, message, "LIBROOM_UPSTREAM_REJECTED");
     }
@@ -683,8 +683,8 @@ export function createLibroomClient({
     return responseData(payload);
   }
 
-  async function prepareReservation(areaId) {
-    const seminar = await request("/v4/seminar/seminar", { id: Number(areaId) });
+  async function prepareReservation(areaId, options = {}) {
+    const seminar = await request("/v4/seminar/seminar", { id: Number(areaId) }, { timeoutMs: options.timeoutMs });
     const earlierPeriods = Number(seminar?.earlierPeriods ?? seminar?.data?.earlierPeriods ?? 0);
     const endpoint = earlierPeriods === 0 ? "/v4/seminar/confirm" : "/v4/seminar/submit";
     return { areaId: Number(areaId), endpoint };
@@ -693,8 +693,8 @@ export function createLibroomClient({
   async function submitReservation(input, options = {}) {
     const normalized = normalizeReservationInput(input, options);
     const prepared = options.prepared?.areaId === normalized.payload.area_id
-      ? options.prepared : await prepareReservation(normalized.payload.area_id);
-    return request(prepared.endpoint, normalized.payload, { onDispatch: options.onDispatch });
+      ? options.prepared : await prepareReservation(normalized.payload.area_id, options);
+    return request(prepared.endpoint, normalized.payload, { onDispatch: options.onDispatch, timeoutMs: options.timeoutMs });
   }
 
   async function listSpaces(data = {}) {
