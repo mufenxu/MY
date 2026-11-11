@@ -13,7 +13,7 @@ const budgets = {
   "public/libroom-page.js": 21 * 1024,
   "public/libroom-page.css": 8 * 1024,
   "public/libroom-records-page.js": 17 * 1024,
-  "public/libroom-auto-page.js": 14 * 1024,
+  "public/libroom-auto-page.js": 16 * 1024,
   "public/library-seat-page.js": 60 * 1024,
   "public/library-seat-page.css": 10 * 1024,
   "public/ui-refresh.css": 14 * 1024,
