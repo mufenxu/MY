@@ -64,7 +64,11 @@ exports.login = asyncHandler(async (req, res) => {
                     return res.status(403).json({ success: false, error: '人机验证失败，请重试' });
                 }
             } catch (verifyErr) {
-                logger.error('Turnstile verification error:', verifyErr);
+                // 不要把 AxiosError 整个交给日志：它的 config.data 带着 Turnstile secret
+                logger.error(`Turnstile verification error: ${verifyErr.message}`, {
+                    code: verifyErr.code,
+                    status: verifyErr.response?.status,
+                });
                 const timedOut = isExternalHttpTimeout(verifyErr);
                 return res.status(timedOut ? 504 : 502).json({
                     success: false,

@@ -25,7 +25,9 @@ MY/
 |   `-- iot-service/            # MQTT and device service
 |-- packages/
 |   |-- platform-auth/          # shared platform SSO and signed service-request helpers
-|   `-- platform-browser-runtime/ # shared browser runtime: SSO, timeout fetch, telemetry
+|   |-- platform-browser-runtime/ # shared browser runtime: SSO, timeout fetch, telemetry
+|   |-- api-contract/           # API contract config: error-code registry
+|   `-- pearl-tokens/           # pearl-glass design tokens: CSS variables, component styles, JS palette
 |-- automation/ct8-automation/  # deployment templates for external automation
 |-- config/                     # service registry and canonical topology without secrets
 |-- docs/                       # architecture and operations docs

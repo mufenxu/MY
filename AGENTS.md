@@ -33,7 +33,9 @@ MY/
 |   `-- iot-service/            MQTT / 设备 / 遥测
 |-- packages/
 |   |-- platform-auth/          平台内部身份签发与 SSO/HMAC 验签（CJS + ESM 双入口）
-|   `-- platform-browser-runtime/ 浏览器侧共享运行时（SSO、超时请求、体验上报）
+|   |-- platform-browser-runtime/ 浏览器侧共享运行时（SSO、超时请求、体验上报）
+|   |-- api-contract/           接口契约配置：错误码注册表
+|   `-- pearl-tokens/           珍珠玻璃设计令牌：CSS 变量、通用组件样式与 JS 色板
 |-- automation/ct8-automation/  独立仓库自动化任务的部署模板
 |-- config/                     无密钥的服务注册表与拓扑契约
 |-- docs/                       架构、运维、发布与工程规范

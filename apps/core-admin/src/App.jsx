@@ -148,7 +148,8 @@ const buildPearlTheme = (dark) => {
 };
 
 function App() {
-  const shellPreview = new URLSearchParams(window.location.search).has('shellshot'); // TEMP-SHELLSHOT
+  // 仅开发构建可用：生产包里这个开关恒为 false，不能靠 URL 参数跳过登录态
+  const shellPreview = import.meta.env.DEV && new URLSearchParams(window.location.search).has('shellshot'); // TEMP-SHELLSHOT
   const [session, setSession] = useState(() => ({
     ready: shellPreview,
     authenticated: shellPreview,

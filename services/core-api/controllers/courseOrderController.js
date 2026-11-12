@@ -524,7 +524,8 @@ exports.retryOrder = async (req, res) => {
 exports.publicSearch = async (req, res) => {
     try {
         const { q } = req.query;
-        if (!q || q.length < 2) {
+        // 公开接口：?q=a&q=b 会得到数组，必须先确认是字符串再 trim
+        if (typeof q !== 'string' || q.trim().length < 2 || q.length > 128) {
             return fail(res, { status: 400, code: 'INVALID_PARAMETER', message: '请输入有效的订单号或下单账号' });
         }
 
@@ -583,7 +584,8 @@ exports.publicSearch = async (req, res) => {
 exports.publicRefresh = async (req, res) => {
     try {
         const { tradeNo } = req.body;
-        if (!tradeNo) {
+        // 公开接口：只接受字符串，拒绝 {"$gt":""} 这类查询操作符对象
+        if (typeof tradeNo !== 'string' || !tradeNo || tradeNo.length > 128) {
             return res.status(400).json({ code: 400, message: '无效的订单号' });
         }
 

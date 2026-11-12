@@ -221,6 +221,35 @@ test('official website briefly caches documents and caches hashed assets immutab
   }
 });
 
+test('official website CSP allows exactly the inline scripts present in the served document', async () => {
+  const staticPath = fs.mkdtempSync(path.join(os.tmpdir(), 'my-official-website-csp-'));
+  const distPath = path.join(staticPath, 'dist');
+  fs.mkdirSync(distPath, { recursive: true });
+  const inline = "\r\n  document.documentElement.dataset.theme = 'dark';\r\n";
+  fs.writeFileSync(
+    path.join(distPath, 'index.html'),
+    `<!doctype html><script>${inline}</script><script type="module" src="./website-assets/a.js"></script>`,
+  );
+  // 浏览器对 CRLF 归一成 LF 之后的内容算哈希
+  const expected = crypto.createHash('sha256').update(inline.replace(/\r\n/g, '\n')).digest('base64');
+
+  const app = createOfficialWebsiteApp({ staticPath });
+  const server = http.createServer(app);
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/`);
+    const csp = response.headers.get('content-security-policy');
+    assert.match(csp, /script-src 'self' 'sha256-[A-Za-z0-9+/=]+';/);
+    assert.ok(csp.includes(`'sha256-${expected}'`));
+    assert.ok(!csp.includes("'unsafe-inline'"));
+    assert.equal(csp.match(/'sha256-/g).length, 1, 'external scripts must not get a hash');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(staticPath, { recursive: true, force: true });
+  }
+});
+
 test('campus and IoT legacy domains stay behind the platform gateway', async () => {
   const upstream = http.createServer(echoApp('internal-service'));
   await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
@@ -238,6 +267,40 @@ test('campus and IoT legacy domains stay behind the platform gateway', async () 
       assert.equal((await request(port, '/api/devices', 'iot.example.com')).body.name, 'internal-service');
     });
   } finally {
+    await new Promise((resolve) => upstream.close(resolve));
+  }
+});
+
+test('gateway reuses upstream connections and drops them before the upstream idle limit', { timeout: 20_000 }, async () => {
+  const upstream = http.createServer(echoApp('internal-service'));
+  // 与真实上游一致：Node 默认与 campus-service 都是 5s
+  upstream.keepAliveTimeout = 5_000;
+  let connections = 0;
+  upstream.on('connection', () => { connections += 1; });
+  await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+  const router = createPlatformRouter({
+    portalApp: echoApp('portal'),
+    campusTarget: `http://127.0.0.1:${upstream.address().port}`,
+    campusHosts: 'campus.example.com',
+  });
+  try {
+    await withServer(router, async (port) => {
+      for (let index = 0; index < 4; index += 1) {
+        const response = await request(port, '/api/ready', 'campus.example.com');
+        assert.equal(response.status, 200);
+        assert.equal(response.body.name, 'internal-service');
+      }
+      assert.equal(connections, 1, 'sequential requests must share one upstream connection');
+
+      // 空闲超过网关的 3s 上限（仍小于上游的 5s）后，必须换新连接而不是撞上被关闭的旧连接
+      await new Promise((resolve) => setTimeout(resolve, 3_600));
+      const afterIdle = await request(port, '/api/ready', 'campus.example.com');
+      assert.equal(afterIdle.status, 200);
+      assert.equal(connections, 2, 'an idle upstream socket must be discarded before the upstream closes it');
+    });
+  } finally {
+    router.close();
+    upstream.closeAllConnections();
     await new Promise((resolve) => upstream.close(resolve));
   }
 });

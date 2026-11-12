@@ -7,7 +7,7 @@ const { getDatabase } = require('./storage/db');
 function registerShutdown(server, mqttService, automationEngine, closeRealtime) {
   let shuttingDown = false;
 
-  const shutdown = async (signal) => {
+  const shutdown = async (signal, exitCode = 0) => {
     if (shuttingDown) {
       return;
     }
@@ -28,7 +28,7 @@ function registerShutdown(server, mqttService, automationEngine, closeRealtime) 
       await serverClosed;
       await mqttService.db?.close?.();
       clearTimeout(forceTimer);
-      process.exit(0);
+      process.exit(exitCode);
     } catch (error) {
       console.error('Failed to shut down cleanly:', error);
       process.exit(1);
@@ -37,6 +37,15 @@ function registerShutdown(server, mqttService, automationEngine, closeRealtime) 
 
   process.on('SIGINT', () => shutdown('SIGINT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
+  // MQTT 回调、WebSocket 处理里漏掉的异步拒绝只记录，不让它带走整个服务。
+  process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled promise rejection:', reason instanceof Error ? reason.message : reason);
+  });
+  // 同步异常之后连接状态不可信，走一次正常收尾再以非零码退出。
+  process.on('uncaughtException', (error) => {
+    console.error('Uncaught exception:', error);
+    void shutdown('uncaughtException', 1);
+  });
 }
 
 function listen(server, port) {

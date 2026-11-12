@@ -23,6 +23,16 @@ server {
     # 普通 API 请求保持较小的全局请求体上限；备份传输在下方单独放宽。
     client_max_body_size 32m;
 
+    # 压缩文本类响应。官网、campus、iot、notification 自身不做压缩，靠这里统一处理；
+    # 已压缩的备份流（application/gzip）不在列表内，不会被二次压缩。
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/javascript application/javascript application/json
+               application/manifest+json image/svg+xml text/calendar;
+
     # Raw gzip backup transfers use the same 5 GiB and 10 minute defaults as
     # PLATFORM_BACKUP_UPLOAD_MAX_BYTES and PLATFORM_BACKUP_TRANSFER_TIMEOUT_MS.
     location ^~ /api/backups/ {

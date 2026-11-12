@@ -2832,34 +2832,6 @@ async function handleApiRoutes(req, res, url) {
       json(res, ready ? 200 : 503, { ok: ready, service: "hgu-campus-hub", ready });
       return;
     }
-    // 统一健康契约：/livez 不查依赖，/readyz 反映存储就绪，/version 供发布核对。
-    if (url.pathname === "/livez") {
-      json(res, 200, { status: "ok", service: "campus-service", version: CAMPUS_SERVICE_VERSION });
-      return;
-    }
-    if (url.pathname === "/readyz") {
-      let ready = false;
-      try {
-        ready = Boolean(await repository.ping());
-      } catch {
-        ready = false;
-      }
-      json(res, ready ? 200 : 503, {
-        status: ready ? "ready" : "not-ready",
-        service: "campus-service",
-        version: CAMPUS_SERVICE_VERSION,
-      });
-      return;
-    }
-    if (url.pathname === "/version") {
-      json(res, 200, {
-        status: "ok",
-        service: "campus-service",
-        version: CAMPUS_SERVICE_VERSION,
-        node: process.version,
-      });
-      return;
-    }
     const calendarMatch = url.pathname.match(/^\/api\/academic\/calendar\/([A-Za-z0-9_-]{43,128})\.ics$/);
     if (calendarMatch && req.method === "GET") {
       await serveAcademicCalendar(res, calendarMatch[1]);
@@ -3387,6 +3359,40 @@ const waterValve = createWaterValveService({
   }
 });
 
+// 统一健康契约：/livez 不查依赖，/readyz 反映存储就绪，/version 供发布核对。
+// 这三个路径不带 /api/ 前缀，必须在静态回退之前处理：否则它们会落到 SPA 回退拿到
+// 200 的 index.html，容器 HEALTHCHECK 与网关探针在存储不可用时仍然判定为健康。
+async function handleHealthRoutes(res, url) {
+  if (url.pathname === "/livez") {
+    json(res, 200, { status: "ok", service: "campus-service", version: CAMPUS_SERVICE_VERSION });
+    return true;
+  }
+  if (url.pathname === "/readyz") {
+    let ready = false;
+    try {
+      ready = Boolean(await repository.ping());
+    } catch {
+      ready = false;
+    }
+    json(res, ready ? 200 : 503, {
+      status: ready ? "ready" : "not-ready",
+      service: "campus-service",
+      version: CAMPUS_SERVICE_VERSION,
+    });
+    return true;
+  }
+  if (url.pathname === "/version") {
+    json(res, 200, {
+      status: "ok",
+      service: "campus-service",
+      version: CAMPUS_SERVICE_VERSION,
+      node: process.version,
+    });
+    return true;
+  }
+  return false;
+}
+
 const server = createServer((req, res) => {
   const incomingRequestId = String(req.headers["x-request-id"] || "");
   const requestId = /^[A-Za-z0-9._:-]{1,128}$/.test(incomingRequestId) ? incomingRequestId : randomUUID();
@@ -3406,6 +3412,8 @@ const server = createServer((req, res) => {
 
   const task = userContextStorage.run({ requestId, user: null }, async () => {
     const url = new URL(req.url || "/", "http://localhost");
+    // 探针来自容器内回环地址，走明文 HTTP，所以要排在 HTTPS 跳转之前
+    if (await handleHealthRoutes(res, url)) return;
     if (maybeRedirectHttps(req, res, url)) return;
     if (url.pathname === "/app-auth/login" && req.method === "POST") {
       await handleAppLoginForm(req, res);
@@ -3510,3 +3518,13 @@ function shutdown(signal) {
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
+// 请求链路以外的异步任务（调度器、定时器回调）漏掉的拒绝只记录，不让它带走整个进程。
+process.on("unhandledRejection", (reason) => {
+  logger.error("unhandled_rejection", { error: reason instanceof Error ? reason : new Error(String(reason)) });
+});
+// 同步异常之后进程状态不可信，直接以非零码退出交给容器重启。这里有意不走 shutdown()：
+// 它的收尾逻辑是为正常停机写的，异常退出时不应把用户的预约任务当作正常结束处理。
+process.on("uncaughtException", (error) => {
+  logger.error("uncaught_exception", { error });
+  process.exit(1);
+});

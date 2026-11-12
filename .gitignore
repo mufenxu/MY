@@ -37,6 +37,9 @@
 /.env.ci
 /.env.release-smoke
 **/.env
+# 备份、临时文件和环境变体（.env.bak、.env.production、secrets:rotate 中断留下的 .env.<pid>.tmp）
+.env.*
+!.env.example
 **/env
 **/*.local
 **/project.private.config.json

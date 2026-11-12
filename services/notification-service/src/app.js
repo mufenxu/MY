@@ -61,12 +61,25 @@ function httpError(status, code, message) {
   return error;
 }
 
+// AxiosError 的 config 里带着 corpsecret、access_token、消息正文和收件人，不能原样进日志。
+function loggableError(error) {
+  if (!error || !(error.isAxiosError || error.config)) return error;
+  return {
+    name: error.name,
+    message: error.message,
+    code: error.code,
+    status: error.response?.status,
+  };
+}
+
 function targetMetadata(body) {
   if (body.touser) {
+    // touser 可能是数字等非字符串，先转成字符串再判断，避免 .includes 抛错
+    const touser = String(body.touser);
     return {
-      targetType: body.touser === '@all' ? 'all' : 'user',
-      targetValue: String(body.touser).slice(0, 256),
-      retryable: body.touser !== '@all' && !body.touser.includes('|'),
+      targetType: touser === '@all' ? 'all' : 'user',
+      targetValue: touser.slice(0, 256),
+      retryable: touser !== '@all' && !touser.includes('|'),
     };
   }
   if (body.toparty) return { targetType: 'party', targetValue: String(body.toparty).slice(0, 256), retryable: false };
@@ -1569,7 +1582,7 @@ function createApp({
       });
     }
     const status = Number.isFinite(Number(error.status)) ? Number(error.status) : 500;
-    if (status === 500) console.error(`[${req.id}]`, error);
+    if (status === 500) console.error(`[${req.id}]`, loggableError(error));
     const text = status === 500 ? '通知服务内部错误。' : error.message;
     return res.status(status).json({
       ok: false,
@@ -1590,4 +1603,4 @@ function createApp({
   return app;
 }
 
-module.exports = { createApp, createReplayGuard, safeEqual, targetMetadata };
+module.exports = { createApp, createReplayGuard, safeEqual, targetMetadata, loggableError };

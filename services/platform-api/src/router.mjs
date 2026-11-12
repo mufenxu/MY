@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { IncomingMessage } from 'node:http';
+import { Agent, IncomingMessage } from 'node:http';
 import { Readable } from 'node:stream';
 import express from 'express';
 import httpProxy from 'http-proxy';
@@ -274,23 +274,49 @@ export function createCoreWebApp({ coreApp, staticPath }) {
   return app;
 }
 
+// 官网 index.html 里有一段必须在首帧前执行的内联主题脚本。CSP 不放开
+// 'unsafe-inline'，而是对实际要下发的那份 HTML 里的内联脚本逐段算 sha256，
+// 这样脚本内容改了哈希也会跟着变，不需要手工同步。
+export function inlineScriptCspHashes(html) {
+  const hashes = [];
+  const pattern = /<script\b(?![^>]*\bsrc\s*=)[^>]*>([\s\S]*?)<\/script>/gi;
+  for (const match of String(html || '').matchAll(pattern)) {
+    // 浏览器在计算哈希前会把 CRLF 归一成 LF
+    const content = match[1].replace(/\r\n?/g, '\n');
+    if (!content.trim()) continue;
+    hashes.push(`'sha256-${crypto.createHash('sha256').update(content, 'utf8').digest('base64')}'`);
+  }
+  return hashes;
+}
+
 export function createOfficialWebsiteApp({ staticPath }) {
   const app = express();
   app.disable('x-powered-by');
+
+  const hasStatic = Boolean(staticPath) && fs.existsSync(staticPath);
+  const distPath = hasStatic ? path.join(staticPath, 'dist') : '';
+  const targetPath = hasStatic && fs.existsSync(distPath) ? distPath : staticPath;
+  let scriptSources = "'self'";
+  if (hasStatic) {
+    try {
+      const html = fs.readFileSync(path.join(targetPath, 'index.html'), 'utf8');
+      scriptSources = ["'self'", ...inlineScriptCspHashes(html)].join(' ');
+    } catch {
+      // 没有 index.html 时保持最严格的策略
+    }
+  }
+
   app.use((req, res, next) => {
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self'; style-src 'self'; "
+      `default-src 'self'; script-src ${scriptSources}; style-src 'self'; `
       + "font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; "
       + "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
     );
     next();
   });
 
-  if (staticPath && fs.existsSync(staticPath)) {
-    const distPath = path.join(staticPath, 'dist');
-    const targetPath = fs.existsSync(distPath) ? distPath : staticPath;
-
+  if (hasStatic) {
     app.use(express.static(targetPath, {
       index: false,
       dotfiles: 'deny',
@@ -364,9 +390,22 @@ export function createPlatformRouter({
   const assistantLimiter = createAssistantRateLimiter({ limit: assistantConfig.rateLimitPerMinute });
   const downloadConfig = readDownloadConfig();
   const downloadLimiter = createAssistantRateLimiter({ limit: DOWNLOAD_RATE_LIMIT_PER_MINUTE });
+  // 上游全是本机/内网 HTTP。不带 agent 时 http-proxy 会给每个请求加
+  // `Connection: close`，每个请求新建一次 TCP 连接，并发高时还会堆 TIME_WAIT。
+  // 空闲上限必须明显小于上游的 keepAliveTimeout（campus 显式设为 5s，其余是
+  // Node 默认的 5s），否则会复用到对端已经开始关闭的连接；单次请求的超时仍由
+  // 各路由自己的 proxyTimeout 控制，不受这里的 timeout 影响。
+  const upstreamAgent = new Agent({
+    keepAlive: true,
+    keepAliveMsecs: 1_000,
+    maxSockets: 128,
+    maxFreeSockets: 32,
+    timeout: 3_000,
+  });
   const proxy = httpProxy.createProxyServer({
     xfwd: true,
     ws: true,
+    agent: upstreamAgent,
     proxyTimeout: upstreamTimeout + 250,
   });
 
@@ -805,7 +844,10 @@ export function createPlatformRouter({
       }
     },
     handleUpgrade,
-    close: () => proxy.close(),
+    close: () => {
+      proxy.close();
+      upstreamAgent.destroy();
+    },
   };
 }
 

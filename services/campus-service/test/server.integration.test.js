@@ -96,6 +96,16 @@ test("server authentication, revocation, validation and static caching work toge
   const ready = await fetch(`${origin}/api/ready`);
   assert.equal(ready.status, 200);
 
+  // 健康契约路径不带 /api/ 前缀，必须由服务自己应答，不能落到 SPA 的 index.html 回退
+  for (const [path, status] of [["/livez", "ok"], ["/readyz", "ready"], ["/version", "ok"]]) {
+    const health = await fetch(`${origin}${path}`, { redirect: "manual" });
+    assert.equal(health.status, 200, path);
+    assert.match(health.headers.get("content-type") || "", /application\/json/, path);
+    const payload = await health.json();
+    assert.equal(payload.service, "campus-service", path);
+    assert.equal(payload.status, status, path);
+  }
+
   const insecureForwarded = await fetch(`${origin}/app-auth/login?next=%2F`, {
     redirect: "manual",
     headers: {

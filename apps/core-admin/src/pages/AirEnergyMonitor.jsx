@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Switch, Slider, Radio, Spin } from 'antd';
 import {
     ThunderboltOutlined,
@@ -138,6 +138,8 @@ const AirEnergyMonitor = () => {
     const [chartLoading, setChartLoading] = useState(true);
     const [switching, setSwitching] = useState(false);
     const [autoRefresh, setAutoRefresh] = useState(true);
+    // 记录拖动开始前的目标温度，下发失败时回滚到它
+    const tempBeforeDragRef = useRef(null);
 
     const parseStatus = useCallback((result) => {
         setData(prevData => {
@@ -271,9 +273,17 @@ const AirEnergyMonitor = () => {
         }
     };
 
+    // 拖动过程只更新本地显示；松手（onChangeComplete）才真正下发一次控制指令
+    const handleTempDrag = (val) => {
+        if (!data.online || !data.powerOn) return;
+        if (tempBeforeDragRef.current === null) tempBeforeDragRef.current = data.targetTemp;
+        setData(prev => ({ ...prev, targetTemp: val }));
+    };
+
     const handleTempChange = async (val) => {
         if (!data.online || !data.powerOn) return;
-        const prevState = data.targetTemp;
+        const prevState = tempBeforeDragRef.current ?? data.targetTemp;
+        tempBeforeDragRef.current = null;
         setData(prev => ({ ...prev, targetTemp: val }));
 
         try {
@@ -396,7 +406,8 @@ const AirEnergyMonitor = () => {
                                 min={15}
                                 max={60}
                                 value={typeof data.targetTemp === 'number' ? data.targetTemp : 45}
-                                onChange={handleTempChange}
+                                onChange={handleTempDrag}
+                                onChangeComplete={handleTempChange}
                                 disabled={!data.powerOn}
                             />
                         </div>

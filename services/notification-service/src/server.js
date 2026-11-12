@@ -1,6 +1,6 @@
 const http = require('http');
 
-const { createApp } = require('./app');
+const { createApp, loggableError } = require('./app');
 const config = require('./config');
 const { createMemoryNotificationStore, createMongoNotificationStore } = require('./notification-store');
 
@@ -25,7 +25,7 @@ async function start() {
     if (orchestrationPromise) return orchestrationPromise;
     orchestrationPromise = app.locals.notificationOrchestrator.runDue(config.orchestrationBatchSize)
       .catch((error) => {
-        console.error('通知编排任务执行失败。', error);
+        console.error('通知编排任务执行失败。', loggableError(error));
       })
       .finally(() => {
         orchestrationPromise = null;
@@ -78,6 +78,16 @@ async function start() {
     });
   };
   process.on('SIGINT', () => handleSignal('SIGINT'));
+  // Express 4 不接管 async 路由里的拒绝；没有这个兜底时，一个畸形请求就能让进程退出。
+  process.on('unhandledRejection', (reason) => {
+    console.error('未处理的 Promise 拒绝。', loggableError(reason));
+  });
+  // 同步异常之后进程状态不可信：记录、排空、以非零码退出，交给容器重启。
+  process.on('uncaughtException', (error) => {
+    console.error('未捕获的异常，通知服务即将退出。', loggableError(error));
+    process.exitCode = 1;
+    handleSignal('uncaughtException');
+  });
   process.on('SIGTERM', () => handleSignal('SIGTERM'));
 }
 
