@@ -15,6 +15,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -33,7 +35,10 @@ fun AppToast(
     message: String,
     error: Boolean,
     modifier: Modifier = Modifier,
+    onRetry: (() -> Unit)? = null,
+    onDismiss: (() -> Unit)? = null,
 ) {
+    val hasActions = onRetry != null || onDismiss != null
     val dark = isAppInDarkTheme()
     val colors = MaterialTheme.colorScheme
     val accentColor = when {
@@ -53,7 +58,13 @@ fun AppToast(
         Row(
             modifier = Modifier
                 .heightIn(min = 48.dp)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                // 带操作时由 48dp 按钮热区撑开高度，收紧外侧留白避免提示过高。
+                .padding(
+                    start = 16.dp,
+                    end = if (hasActions) 4.dp else 16.dp,
+                    top = if (hasActions) 4.dp else 12.dp,
+                    bottom = if (hasActions) 4.dp else 12.dp,
+                ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -74,7 +85,21 @@ fun AppToast(
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                modifier = Modifier.weight(1f, fill = false),
             )
+            if (onRetry != null) {
+                TextButton(onClick = onRetry) { Text("重试") }
+            }
+            if (onDismiss != null) {
+                IconButton(onClick = onDismiss) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = "关闭提示",
+                        tint = colors.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
         }
     }
 }

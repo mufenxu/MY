@@ -19,6 +19,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.joinAll
 
+/** 读数据失败的全局提示前缀；外壳据此判断该错误可以安全地就地重试（只重读，不重放操作）。 */
+internal const val SECTION_REFRESH_ERROR_PREFIX = "部分数据暂不可用"
+
 internal class SectionRefreshController(
     private val scope: CoroutineScope,
     private val api: PlatformApi,
@@ -81,7 +84,7 @@ internal class SectionRefreshController(
                         // 学校账号失效由弹窗统一接管，不再往顶部堆一条全局错误横幅。
                         onSchoolAccountRequired()
                     } else if (publishError) {
-                        mutableState.update { it.copy(error = "部分数据暂不可用：${error.message ?: "请稍后重试。"}") }
+                        mutableState.update { it.copy(error = "${SECTION_REFRESH_ERROR_PREFIX}：${error.message ?: "请稍后重试。"}") }
                     }
                 } finally {
                     if (refreshJobs[section] === refreshJob) {

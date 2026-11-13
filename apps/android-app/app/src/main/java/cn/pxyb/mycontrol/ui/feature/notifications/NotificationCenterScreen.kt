@@ -205,7 +205,7 @@ fun NotificationCenterScreen(
                     NotificationDayHeader(label = section.label, count = section.alerts.size)
                 }
                 items(section.alerts, key = ::notificationItemKey, contentType = { "notification" }) { alert ->
-                    NotificationCard(
+                    Box(Modifier.animateItem()) { NotificationCard(
                         alert = alert,
                         onOpen = {
                             if (alert.contentBlocks.isNotEmpty()) {
@@ -220,7 +220,7 @@ fun NotificationCenterScreen(
                         onArchive = ::queueArchive,
                         onSnooze = { snoozeTargetId = it },
                         selected = selectedAlert?.id == alert.id,
-                    )
+                    ) }
                 }
             }
         }

@@ -45,6 +45,7 @@ internal fun <T> LazyListScope.appGridItems(
     columns: Int,
     itemKey: (T) -> Any,
     contentType: String,
+    animateRows: Boolean = false,
     itemContent: @Composable (T) -> Unit,
 ) {
     val rows = values.chunked(columns)
@@ -54,7 +55,9 @@ internal fun <T> LazyListScope.appGridItems(
         contentType = { contentType },
     ) { index ->
         val row = rows[index]
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(
+            (if (animateRows) Modifier.animateItem() else Modifier).fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             row.forEach { value ->
                 key(itemKey(value)) {
                     Box(Modifier.weight(1f)) { itemContent(value) }

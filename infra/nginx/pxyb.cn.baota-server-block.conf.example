@@ -1,0 +1,65 @@
+# 宝塔面板不允许修改站点主配置文件时使用：把本文件内容粘贴到站点的「自定义配置」
+# （即主配置里 #SERVER-BLOCK START / END 之间的区域），替换其中原有的全部内容。
+# 这里只包含能写在 server { } 内部的指令；TLS 协议、0-RTT、反代请求头等属于面板
+# 管理的区块，需要在面板界面里改，见 docs/single-domain-deployment.md。
+
+server_tokens off;
+
+# 普通 API 请求保持较小的全局请求体上限；备份传输在下方单独放宽。
+client_max_body_size 32m;
+
+# 压缩文本类响应。官网、campus、iot、notification 自身不做压缩，靠这里统一处理；
+# 已压缩的备份流（application/gzip）不在列表内，不会被二次压缩。
+gzip on;
+gzip_vary on;
+gzip_proxied any;
+gzip_comp_level 5;
+gzip_min_length 1024;
+gzip_types text/plain text/css text/javascript application/javascript application/json
+           application/manifest+json image/svg+xml text/calendar;
+
+# Raw gzip backup transfers use the same 5 GiB and 10 minute defaults as
+# PLATFORM_BACKUP_UPLOAD_MAX_BYTES and PLATFORM_BACKUP_TRANSFER_TIMEOUT_MS.
+location ^~ /api/backups/ {
+    client_max_body_size 5g;
+    client_body_timeout 600s;
+    proxy_pass http://127.0.0.1:22100;
+    proxy_http_version 1.1;
+    proxy_request_buffering off;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+}
+
+# Android App Links 域名关联：文件由 admin-console 提供，网关上挂在 /console 下。
+location = /.well-known/assetlinks.json {
+    proxy_pass http://127.0.0.1:22100/console/.well-known/assetlinks.json;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_connect_timeout 10s;
+    proxy_read_timeout 30s;
+    proxy_send_timeout 30s;
+}
+
+# OIDC Discovery：面板的 `location /.well-known` 会把该目录交给本地磁盘，
+# 所以这里必须用精确匹配把它送回网关。
+location = /.well-known/openid-configuration {
+    proxy_pass http://127.0.0.1:22100;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_connect_timeout 10s;
+    proxy_read_timeout 30s;
+    proxy_send_timeout 30s;
+}

@@ -35,6 +35,9 @@ import cn.pxyb.mycontrol.ui.components.display.AppListCard
 import cn.pxyb.mycontrol.ui.components.filter.AppChoiceRow
 import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
+import cn.pxyb.mycontrol.ui.components.interaction.AppSwipeAction
+import cn.pxyb.mycontrol.ui.components.interaction.AppSwipeActions
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.util.DateTimeUtils.formatLocalDateTime
 import java.time.LocalDate
 import java.time.ZoneId
@@ -43,7 +46,17 @@ import java.util.UUID
 @Composable
 internal fun TodoCard(task: TodoTask, onToggle: (String) -> Unit, onEdit: () -> Unit, onDelete: (String) -> Unit) {
     var confirmDelete by remember(task.id) { mutableStateOf(false) }
-    AppListCard(
+    AppSwipeActions(
+        itemKey = task.id,
+        startAction = AppSwipeAction(
+            icon = if (task.completed) Icons.Outlined.Schedule else Icons.Outlined.CheckCircle,
+            label = if (task.completed) "右滑标为未完成" else "右滑完成",
+            releaseLabel = if (task.completed) "松开标为未完成" else "松开完成",
+            containerColor = ColorTokens.Green.container,
+            contentColor = ColorTokens.Green.foreground,
+            onTrigger = { onToggle(task.id) },
+        ),
+    ) { AppListCard(
         title = task.title,
         subtitle = todoMeta(task),
         leading = {
@@ -61,7 +74,7 @@ internal fun TodoCard(task: TodoTask, onToggle: (String) -> Unit, onEdit: () -> 
             IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Outlined.DeleteOutline, "删除") }
             }
         }
-    )
+    ) }
     if (confirmDelete) {
         AppConfirmDialog(
             title = "删除待办？",

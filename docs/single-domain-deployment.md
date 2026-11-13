@@ -49,6 +49,10 @@ PLATFORM_SSO_CAMPUS_USERNAME=admin
 
 以 `infra/nginx/my-platform.conf.example` 为模板，只需让主域名的 `/` 全部代理到 `127.0.0.1:22100`。不要在 Nginx 中分别代理 `/apps/campus`、`/apps/iot`、`/api/campus` 和 `/api/iot`，路径改写、WebSocket 和内部身份签发均由平台网关负责。
 
+服务器使用宝塔面板管理站点时，改用 `infra/nginx/pxyb.cn.baota.conf.example`：内容与主模板等价，只是按面板生成的区块结构排布，可整体粘贴到站点配置文件。面板重新保存「反向代理」或「SSL」设置会重写对应区块，之后需对照该文件再核对一遍。
+
+面板不允许修改站点主配置文件时，把 `infra/nginx/pxyb.cn.baota-server-block.conf.example` 粘贴到站点的「自定义配置」，替换其中原有内容。它只覆盖 gzip、请求体上限、备份传输和两个 `/.well-known` 路径；TLS 协议与套件、`ssl_early_data`、`Alt-Svc`、主反代的请求头和超时属于面板管理的区块，只能在面板的「SSL」和「反向代理」设置里修改。
+
 上线前确认 DNS 中根域 `pxyb.cn` 已经添加 A 或 CNAME 记录并指向部署服务器。当前旧业务子域可以继续保留到回归完成后再下线。
 
 主模板只包含统一域名，可以直接加载。旧域名或新增独立域名的示例位于 `infra/nginx/additional-domains.conf.example.disabled`；不需要时不要改名或加载，因此不会因为示例证书不存在而影响 `nginx -t`。

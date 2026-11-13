@@ -275,7 +275,7 @@ fun TodayScreen(
                 }
             }
         } else {
-            appGridItems(state.todoSnapshot.tasks, recordColumns, TodoTask::id, "todo") { task ->
+            appGridItems(state.todoSnapshot.tasks, recordColumns, TodoTask::id, "todo", animateRows = true) { task ->
                 TodoCard(task, onToggleTodo, { editingTodoId = task.id }, onDeleteTodo)
             }
         }

@@ -368,7 +368,7 @@ const ROUTE_TABLE = [
 | P2-4 | `If-Match` / 428 / 409 只有 todos 实现 | `todoController.js:315-341` | 这是全仓最好的 HTTP 语义范例，应作为模板推广到"可并发编辑"的资源 |
 | P2-5 | 重复实现 | SSO 包装器 ×2、`parsePagination` ×2、`requestId` ×2、`asyncHandler` ×2 | 抽 `packages/` 前先评估信任边界（Core/Exam 与网关已无进程隔离，见 `architecture.md:45`） |
 | P2-6 | 前端错误映射各写各的 | `exam-admin/src/utils/http.js:149` 取 `message`；core-admin 取 `error` | 统一信封后由 `platform-browser-runtime` 提供单一解析器 |
-| P2-7 | 网关与 nginx 超时不一致 | nginx `proxy_read_timeout 90s`（`my-platform.conf.example:54`），网关上限 120s | 让 nginx 至少比网关最大值多 10 秒，或统一收敛到 60s |
+| P2-7 | 网关与 nginx 超时不一致 | nginx `proxy_read_timeout 90s`（`my-platform.conf.example:89`），网关上限 120s | 让 nginx 至少比网关最大值多 10 秒，或统一收敛到 60s |
 | P2-8 | 无请求体大小/字段长度总闸 | core-api `express.json({ limit: '1mb' })` 之外无字段级上限 | 在 schema 层统一加 `max()`，避免超长字符串写入 |
 
 ---
@@ -593,4 +593,4 @@ core-api 的 `middleware/validate.js` 可以直接对齐 exam-api 的实现，�
 | todos 并发控制（428/409） | `services/core-api/controllers/todoController.js:315-341` |
 | 课程订单幂等键 | `services/core-api/controllers/courseOrderController.js:198-224` |
 | 文档名不副实 | `docs/core-api-usage.md:1-16` |
-| nginx 90 秒读超时 | `infra/nginx/my-platform.conf.example:54` |
+| nginx 90 秒读超时 | `infra/nginx/my-platform.conf.example:89` |

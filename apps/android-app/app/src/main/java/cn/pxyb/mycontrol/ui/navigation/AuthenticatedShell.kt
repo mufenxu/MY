@@ -82,6 +82,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import cn.pxyb.mycontrol.ui.state.SECTION_REFRESH_ERROR_PREFIX
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -335,10 +336,14 @@ internal fun AuthenticatedShell(
             toastDragOffset = 0f
             toastDragging = false
             toastVisible = true
+        } else {
+            // 反馈已被新操作或重试清除，提示随真实状态收起。
+            toastVisible = false
         }
     }
     LaunchedEffect(toastVisible, toastDragging, state.error, state.message) {
-        if (toastVisible && !toastDragging) {
+        // 错误持续显示，由用户关闭、滑走或重试解除；只有成功提示自动收起。
+        if (toastVisible && !toastDragging && state.error == null) {
             val displayedError = state.error
             val displayedMessage = state.message
             delay(3800)
@@ -1303,6 +1308,16 @@ internal fun AuthenticatedShell(
                 AppToast(
                     message = toastMessage,
                     error = toastError,
+                    // 只对读数据失败提供重试；删除、预约等有副作用的操作不自动重放。
+                    onRetry = if (toastError && toastMessage.startsWith(SECTION_REFRESH_ERROR_PREFIX)) {
+                        { viewModel.refreshCurrentTab(true) }
+                    } else null,
+                    onDismiss = if (toastError) {
+                        {
+                            toastVisible = false
+                            viewModel.clearFeedback(state.error, state.message)
+                        }
+                    } else null,
                 )
             }
         }

@@ -57,6 +57,8 @@ import cn.pxyb.mycontrol.data.isHighPriority
 import cn.pxyb.mycontrol.data.isSnoozedAt
 import cn.pxyb.mycontrol.data.kind
 import cn.pxyb.mycontrol.ui.components.display.AppIconTile
+import cn.pxyb.mycontrol.ui.components.interaction.AppSwipeAction
+import cn.pxyb.mycontrol.ui.components.interaction.AppSwipeActions
 import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.theme.AccentColors
 import cn.pxyb.mycontrol.ui.theme.AppCardShape
@@ -67,12 +69,10 @@ import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.roundToInt
 
-private val ARCHIVE_SWIPE_THRESHOLD = 96.dp
-
 /**
  * 通知卡片。
  *
- * 交互约定：向左滑动超过 [ARCHIVE_SWIPE_THRESHOLD] 后松手归档（此前文案误写成"右滑"），
+ * 交互约定：滑动由 [AppSwipeActions] 统一处理，左滑过阈值松手归档，右滑切换已读/未读；
  * 卡片底部只保留「已读 / 标为未读」与「稍后」两个高频动作，来源与详情入口交给列表本身表达。
  */
 @Composable
@@ -85,75 +85,35 @@ internal fun NotificationCard(
     onSnooze: (String) -> Unit,
     selected: Boolean = false,
 ) {
-    var offsetX by remember(alert.id) { mutableFloatStateOf(0f) }
-    var thresholdNotified by remember(alert.id) { mutableStateOf(false) }
-    val thresholdPx = with(LocalDensity.current) { ARCHIVE_SWIPE_THRESHOLD.toPx() }
-    val haptics = LocalHapticFeedback.current
-
     val kind = alert.kind()
     val accent = notificationKindColors(kind)
     val urgent = !alert.read && alert.isHighPriority()
     val snoozed = alert.isSnoozedAt()
 
-    Box(contentAlignment = Alignment.CenterEnd) {
-        if (offsetX < 0f) {
-            val reached = -offsetX >= thresholdPx
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(MaterialTheme.colorScheme.errorContainer, AppCardShape)
-                    .padding(horizontal = 22.dp),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Archive,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        text = if (reached) "松开归档" else "左滑归档",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                    )
-                }
-            }
-        }
-
+    AppSwipeActions(
+        itemKey = alert.id,
+        startAction = AppSwipeAction(
+            icon = if (alert.read) Icons.Outlined.MarkEmailUnread else Icons.Outlined.MarkEmailRead,
+            label = if (alert.read) "右滑标为未读" else "右滑已读",
+            releaseLabel = if (alert.read) "松开标为未读" else "松开已读",
+            containerColor = ColorTokens.Green.container,
+            contentColor = ColorTokens.Green.foreground,
+            onTrigger = { if (alert.read) onMarkUnread(alert.id) else onMarkRead(alert.id) },
+        ),
+        endAction = AppSwipeAction(
+            icon = Icons.Outlined.Archive,
+            label = "左滑归档",
+            releaseLabel = "松开归档",
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            danger = true,
+            onTrigger = { onArchive(alert.id) },
+        ),
+    ) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .offset { IntOffset(offsetX.roundToInt(), 0) }
                 .clip(AppCardShape)
-                .pointerInput(alert.id) {
-                    detectHorizontalDragGestures(
-                        onHorizontalDrag = { _, dragAmount ->
-                            if (dragAmount < 0f || offsetX < 0f) {
-                                offsetX = (offsetX + dragAmount).coerceAtMost(0f)
-                            }
-                            val reached = -offsetX >= thresholdPx
-                            if (reached && !thresholdNotified) {
-                                thresholdNotified = true
-                                AppHaptics.heavy(haptics)
-                            } else if (!reached) {
-                                thresholdNotified = false
-                            }
-                        },
-                        onDragEnd = {
-                            if (-offsetX >= thresholdPx) onArchive(alert.id)
-                            offsetX = 0f
-                            thresholdNotified = false
-                        },
-                        onDragCancel = {
-                            offsetX = 0f
-                            thresholdNotified = false
-                        },
-                    )
-                }
                 .clickable(onClick = onOpen),
             shape = AppCardShape,
             color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.06f) else glassCardColor(),

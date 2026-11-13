@@ -1,0 +1,232 @@
+# pxyb.cn 在宝塔面板（Docker 项目反代）下的站点配置示例。
+# 内容与 my-platform.conf.example 等价，只是按面板生成的区块结构排布，可整体粘贴到
+# 面板「站点 -> 配置文件」。粘贴前先备份原文件，保存后执行 `nginx -t` 再重载。
+#
+# 面板不允许修改主配置文件时，本文件只作对照参考，改用
+# pxyb.cn.baota-server-block.conf.example 粘贴到「自定义配置」。
+#
+# 注意：面板重新保存「反向代理」或「SSL」设置时，会重写 #PROXY-CONF 与 #SSL 区块，
+# 之后需要对照本文件把这两段再核对一遍。#SERVER-BLOCK 区块不会被面板改写。
+
+# 面板生成的缓存区，当前没有任何 location 使用；保留是为了不影响面板的缓存开关。
+proxy_cache_path /www/dk_project/sites/pxyb.cn/proxy_cache_dir levels=1:2 keys_zone=pxyb_cn_cache:20m inactive=1d max_size=5g;
+
+# 面板全局已定义 $connection_upgrade（普通请求得到 close，会关掉后端长连接），
+# 这里用独立变量名，避免重复定义冲突：WebSocket 时为 upgrade，其余为空。
+map $http_upgrade $my_platform_connection {
+    default upgrade;
+    '' '';
+}
+
+upstream my_platform_gateway {
+    server 127.0.0.1:22100;
+    keepalive 32;
+}
+
+server {
+    listen 80;
+
+    # 多 worker 时可改成 `listen 443 quic reuseport;`，但整个 nginx 只能有一个站点带 reuseport。
+    listen 443 quic;
+    listen 443 ssl;
+
+    http2 on;
+    http3 on;
+    server_name pxyb.cn;
+    server_tokens off;
+    index index.php index.html index.htm default.php default.htm default.html;
+    root /www/dk_project/wwwroot/pxyb.cn;
+    include /www/server/panel/vhost/nginx/extension/pxyb.cn/*.conf;
+
+    # 普通 API 请求保持较小的全局请求体上限；备份传输在 #SERVER-BLOCK 中单独放宽。
+    client_max_body_size 32m;
+
+    #CERT-APPLY-CHECK--START
+    # 用于SSL证书申请时的文件验证相关配置 -- 请勿删除
+    include /www/server/panel/vhost/nginx/well-known/pxyb.cn.conf;
+    #CERT-APPLY-CHECK--END
+
+    #SSL-START SSL相关配置，请勿删除或修改下一行带注释的404规则
+    #error_page 404/404.html;
+    #HTTP_TO_HTTPS_START
+    set $isRedcert 1;
+    if ($server_port != 443) {
+        set $isRedcert 2;
+    }
+    if ( $uri ~ /\.well-known/ ) {
+        set $isRedcert 1;
+    }
+    if ($isRedcert != 1) {
+        rewrite ^(/.*)$ https://$host$1 permanent;
+    }
+    #HTTP_TO_HTTPS_END
+    ssl_certificate    /www/server/panel/vhost/cert/pxyb.cn/fullchain.pem;
+    ssl_certificate_key    /www/server/panel/vhost/cert/pxyb.cn/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE+AESGCM:ECDHE+CHACHA20;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    error_page 497  https://$host$request_uri;
+    add_header Alt-Svc 'h3=":443"; ma=86400' always;
+    quic_retry on;
+    quic_gso on;
+    # 0-RTT 数据可被重放，登录与管理接口不应接受，保持关闭。
+    ssl_early_data off;
+    #SSL-END
+    #REDIRECT START
+
+
+    #REDIRECT END
+
+    #ERROR-PAGE-START  错误页配置，可以注释、删除或修改
+    error_page 404 /404.html;
+    #error_page 502 /502.html;
+    #ERROR-PAGE-END
+
+    #PHP-INFO-START  PHP引用配置，可以注释或修改
+
+
+    #PHP-INFO-END
+
+    #REWRITE-START URL重写规则引用,修改后将导致面板设置的伪静态规则失效
+
+    #REWRITE-END
+
+    #IP-RESTRICT-START 限制访问ip的配置，IP黑白名单
+
+
+    #IP-RESTRICT-END
+
+    #BASICAUTH START
+
+    #BASICAUTH END
+
+    #SUB_FILTER START
+
+    #SUB_FILTER END
+
+    #GZIP START
+    # 压缩文本类响应。官网、campus、iot、notification 自身不做压缩，靠这里统一处理；
+    # 已压缩的备份流（application/gzip）不在列表内，不会被二次压缩。
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/javascript application/javascript application/json
+               application/manifest+json image/svg+xml text/calendar;
+    #GZIP END
+
+    #GLOBAL-CACHE START
+
+    #GLOBAL-CACHE END
+
+    #WEBSOCKET-SUPPORT START
+    proxy_http_version 1.1;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection $connection_upgrade;
+    #WEBSOCKET-SUPPORT END
+
+    #PROXY-CONF-START
+    # 保留 `^~`：它让下方面板自带的敏感文件/目录正则规则不参与匹配。全站都是网关路由
+    # 而非静态目录，那些正则（如 `.log`、`/runtime/`、`package.json`）反而可能误伤正常接口。
+    location ^~ / {
+      proxy_pass http://my_platform_gateway;
+      proxy_http_version 1.1;
+      proxy_set_header Host $host;
+      proxy_set_header X-Real-IP $remote_addr;
+      # 覆盖客户端自带的 X-Forwarded-For，避免伪造来源地址绕过登录限流。
+      # 若 nginx 前面还有 CDN，应改用 real_ip 模块还原真实地址，而不是信任客户端的头。
+      proxy_set_header X-Forwarded-For $remote_addr;
+      proxy_set_header X-Forwarded-Host $host;
+      proxy_set_header X-Forwarded-Proto $scheme;
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection $my_platform_connection;
+      proxy_connect_timeout 10s;
+      proxy_read_timeout 90s;
+      proxy_send_timeout 90s;
+    }
+
+    #PROXY-CONF-END
+
+    #SERVER-BLOCK START
+    # Raw gzip backup transfers use the same 5 GiB and 10 minute defaults as
+    # PLATFORM_BACKUP_UPLOAD_MAX_BYTES and PLATFORM_BACKUP_TRANSFER_TIMEOUT_MS.
+    location ^~ /api/backups/ {
+        client_max_body_size 5g;
+        client_body_timeout 600s;
+        proxy_pass http://my_platform_gateway;
+        proxy_http_version 1.1;
+        proxy_request_buffering off;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+    }
+
+    # Android App Links 域名关联：文件由 admin-console 提供，网关上挂在 /console 下。
+    location = /.well-known/assetlinks.json {
+        proxy_pass http://my_platform_gateway/console/.well-known/assetlinks.json;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 30s;
+        proxy_send_timeout 30s;
+    }
+
+    # OIDC Discovery：面板的 `location /.well-known` 会把该目录交给本地磁盘，
+    # 所以这里必须用精确匹配把它送回网关。
+    location = /.well-known/openid-configuration {
+        proxy_pass http://my_platform_gateway;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 30s;
+        proxy_send_timeout 30s;
+    }
+    #SERVER-BLOCK END
+
+    # 禁止访问的敏感文件
+    location ~* (\.user.ini|\.htaccess|\.htpasswd|\.env.*|\.project|\.bashrc|\.bash_profile|\.bash_logout|\.DS_Store|\.gitignore|\.gitattributes|LICENSE|README\.md|CLAUDE\.md|CHANGELOG\.md|CHANGELOG|CONTRIBUTING\.md|TODO\.md|FAQ\.md|composer\.json|composer\.lock|package(-lock)?\.json|yarn\.lock|pnpm-lock\.yaml|\.\w+~|\.swp|\.swo|\.bak(up)?|\.old|\.tmp|\.temp|\.log|\.sql(\.gz)?|docker-compose\.yml|docker\.env|Dockerfile|\.csproj|\.sln|Cargo\.toml|Cargo\.lock|go\.mod|go\.sum|phpunit\.xml|phpunit\.xml|pom\.xml|build\.gradl|pyproject\.toml|requirements\.txt|application(-\w+)?\.(ya?ml|properties))$
+    {
+        return 404;
+    }
+
+    # 禁止访问的敏感目录
+    location ~* /(\.git|\.svn|\.bzr|\.vscode|\.claude|\.idea|\.ssh|\.github|\.npm|\.yarn|\.pnpm|\.cache|\.husky|\.turbo|\.next|\.nuxt|node_modules|runtime)/ {
+        return 404;
+    }
+
+    #一键申请SSL证书验证目录相关设置
+    location /.well-known{
+        allow all;
+    }
+
+    #禁止在证书验证目录放入敏感文件
+    if ( $uri ~ "^/\.well-known/.*\.(php|jsp|py|js|css|lua|ts|go|zip|tar\.gz|rar|7z|sql|bak)$" ) {
+        return 403;
+    }
+
+    #LOG START
+
+    access_log  /www/wwwlogs/pxyb.cn.log;
+    error_log  /www/wwwlogs/pxyb.cn.error.log;
+
+    #LOG END
+}
