@@ -6,6 +6,8 @@ const logger = require('../utils/logger');
 const { encrypt } = require('../utils/crypto');
 const { parsePagination } = require('../utils/pagination');
 const { fail } = require('../utils/respond');
+const logAudit = require('../utils/auditLogger');
+const courseOrderSubmissionWorker = require('../services/courseOrderSubmissionWorker');
 
 // 转义正则表达式特殊字符，防止 ReDoS 攻击
 function escapeRegex(string) {
@@ -152,6 +154,72 @@ async function _refreshSingleOrder(tradeNo) {
         return false;
     }
 }
+
+/**
+ * 管理员确认上游没有此单后，把“待核对 / 未受理”的订单重新放回提交队列。
+ *
+ * 这是唯一允许订单回到自动提交状态的入口（adminUpdateOrder 仍然禁止改成 Pending）：
+ * - 只接受没有上游订单号的订单，已受理的订单不可能被重复提交；
+ * - 状态切换是原子的，并发点击只会有一次生效；
+ * - 每次操作都写审计日志。
+ */
+exports.adminResubmitOrder = async (req, res) => {
+    try {
+        const tradeNo = req.body?.tradeNo;
+        if (typeof tradeNo !== 'string' || !tradeNo || tradeNo.length > 128) {
+            return fail(res, { status: 400, code: 'INVALID_PARAMETER', message: '无效的订单号' });
+        }
+
+        const now = Date.now();
+        const order = await CourseOrder.findOneAndUpdate(
+            {
+                tradeNo,
+                status: { $in: ['ReconcilePending', 'Failed'] },
+                isManual: { $ne: true },
+                remoteOrderId: { $in: ['', null] },
+                remoteOid: { $in: ['', null] },
+                // 与提交任务的认领条件一致：缺这两个键的历史订单进不了队列。
+                submissionKey: { $type: 'string' },
+                batchId: { $type: 'string', $ne: '' }
+            },
+            {
+                $set: {
+                    status: 'Pending',
+                    statusText: '已入队',
+                    remarks: '管理员确认上游无此单后重新提交',
+                    updateTime: now
+                }
+            },
+            { new: true }
+        );
+
+        if (!order) {
+            const existing = await CourseOrder.findOne({ tradeNo })
+                .select('status isManual remoteOrderId remoteOid submissionKey batchId')
+                .lean();
+            if (!existing) {
+                return fail(res, { status: 404, code: 'NOT_FOUND', message: '订单不存在' });
+            }
+            let reason = '只有“需要确认”或“失败”状态的订单可以重新提交';
+            if (existing.remoteOrderId || existing.remoteOid) reason = '订单已有上游订单号，不能重新提交';
+            else if (existing.isManual) reason = '手工录入的订单不能进入自动提交';
+            else if (['ReconcilePending', 'Failed'].includes(existing.status)) reason = '历史订单缺少提交凭据，请让用户重新下单';
+            return fail(res, { status: 409, code: 'CONFLICT', message: reason });
+        }
+
+        await logAudit(req, {
+            action: 'COURSE_ORDER_RESUBMIT',
+            targetId: tradeNo,
+            payload: { account: order.account, courseName: order.courseName }
+        });
+        courseOrderSubmissionWorker.kick();
+
+        return res.json({ code: 200, message: '订单已重新入队，稍后刷新查看结果' });
+    } catch (error) {
+        logger.error(`[AdminResubmitOrder] ${error.message}`, { stack: error.stack });
+        return res.status(500).json({ code: 500, message: '服务器内部错误，请稍后重试' });
+    }
+};
 
 /**
  * 后台删除订单或退款废弃

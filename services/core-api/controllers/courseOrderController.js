@@ -517,63 +517,127 @@ exports.retryOrder = async (req, res) => {
     }
 };
 
-/**
- * 极简公开查询 (免登录)
- * 只展示核心进度，隐藏密码和上游平台详情
- */
+function maskPublicAccount(account) {
+    const value = String(account || '');
+    return value.length > 7
+        ? value.substring(0, 3) + '****' + value.substring(value.length - 4)
+        : value.length > 2 ? value.substring(0, 2) + '***' : '***';
+}
+
+function normalizePublicProgress(value, remarks = '', fallback = '未提供') {
+    let text = String(value ?? '').trim();
+    if (!text || /^nan%?$/i.test(text)) {
+        text = String(remarks).match(/进度[:：]\s*(\d+(?:\.\d+)?)\/100/)?.[1] || '';
+    }
+    if (/^-?\d+(?:\.\d+)?\s*%?$/.test(text)) {
+        return `${Math.min(100, Math.max(0, Number(text.replace('%', '').trim())))}%`;
+    }
+    return text || fallback;
+}
+
+function parsePublicOrderTime(value) {
+    // 源站 addtime 没有时区，按源站使用的北京时间解释，而非服务器本地时区。
+    const text = String(value || '').trim();
+    const timestamp = Date.parse(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(text)
+        ? `${text.replace(' ', 'T')}+08:00` : text);
+    return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+async function searchPublicOrders(q, res) {
+    if (typeof q !== 'string' || q.trim().length < 2 || q.length > 128) {
+        return fail(res, { status: 400, code: 'INVALID_PARAMETER', message: '请输入有效的订单号或下单账号' });
+    }
+    const keyword = q.trim();
+    const regex = new RegExp(`^${escapeRegex(keyword)}$`, 'i');
+    // 隐藏记录只用于过滤，防止源站结果重新暴露已隐藏的记录。
+    const orders = await CourseOrder.find({ $or: [{ tradeNo: regex }, { account: regex }] })
+        .select('tradeNo account courseName statusText progress remarks updateTime createTime platformCode remoteOrderId remoteOid isHidden')
+        .sort({ createTime: -1 })
+        .lean();
+    const byTradeNo = orders.some(order => regex.test(order.tradeNo));
+    const matchedOrders = byTradeNo ? orders.filter(order => regex.test(order.tradeNo)) : orders;
+    const safeOrders = matchedOrders.filter(order => !order.isHidden).map(order => ({
+        recordKey: `local:${order.tradeNo}`,
+        tradeNo: order.tradeNo,
+        account: maskPublicAccount(order.account),
+        courseName: order.courseName,
+        statusText: order.statusText || '进行中',
+        progress: normalizePublicProgress(order.progress, order.remarks, '0%'),
+        remarks: order.remarks || '',
+        updateTime: order.updateTime,
+        createTime: order.createTime,
+        canRefresh: Boolean(order.remoteOrderId || order.remoteOid)
+    }));
+    // 记录编号只查询该笔本地记录，不展开该账号的其他订单。
+    if (byTradeNo) return res.json({ code: 200, data: safeOrders });
+
+    let upstream;
+    try {
+        upstream = await mxPlatform.queryOrdersByAccount(keyword);
+    } catch (error) {
+        logger.warn('[PublicSearch] Upstream lookup unavailable', { code: error.code });
+        if (!safeOrders.length) {
+            return fail(res, { status: 502, code: 'UPSTREAM_UNAVAILABLE', message: '记录查询暂时不可用，请稍后重试' });
+        }
+        return res.json({
+            code: 200, data: safeOrders, partial: true,
+            message: '暂时无法获取最新记录，当前仅展示本地已保存的记录，请稍后重试。'
+        });
+    }
+
+    const localByRemoteId = new Map();
+    const hiddenRemoteIds = new Set();
+    const hiddenCourseNames = new Set();
+    for (const order of orders) {
+        if (order.platformCode !== 'mx') continue;
+        const ids = [order.remoteOid, order.remoteOrderId].filter(Boolean).map(id => String(id).trim());
+        for (const id of ids) {
+            if (order.isHidden) hiddenRemoteIds.add(id);
+            else localByRemoteId.set(id, `local:${order.tradeNo}`);
+        }
+        // 缺少源站 ID 的隐藏旧记录只能保守屏蔽同账号同名课程，不能据此关联订单。
+        if (order.isHidden && !ids.length) hiddenCourseNames.add(String(order.courseName || '').trim());
+    }
+    const safeByKey = new Map(safeOrders.map(order => [order.recordKey, order]));
+    const seenRemoteIds = new Set();
+    for (const row of upstream.data) {
+        const remoteId = String(row.id).trim();
+        if (seenRemoteIds.has(remoteId) || hiddenRemoteIds.has(remoteId)
+            || hiddenCourseNames.has(row.kcname.trim())) continue;
+        seenRemoteIds.add(remoteId);
+        const local = safeByKey.get(localByRemoteId.get(remoteId));
+        const progress = {
+            statusText: row.status || local?.statusText || '未提供',
+            progress: normalizePublicProgress(row.process, row.remarks, local?.progress),
+            remarks: row.remarks || local?.remarks || '',
+            queriedAt: upstream.queriedAt
+        };
+        if (local) {
+            Object.assign(local, progress);
+        } else {
+            safeOrders.push({
+                recordKey: `upstream:${sha256(`mx:${remoteId}`)}`,
+                tradeNo: '',
+                account: maskPublicAccount(row.user),
+                courseName: row.kcname,
+                ...progress,
+                updateTime: null,
+                createTime: parsePublicOrderTime(row.addtime),
+                canRefresh: false
+            });
+        }
+    }
+    safeOrders.sort((a, b) => (b.createTime || 0) - (a.createTime || 0));
+    return res.json({ code: 200, data: safeOrders });
+}
+
+/** 免登录自查：仅返回脱敏后的本地和源站记录，不创建本地订单。 */
 exports.publicSearch = async (req, res) => {
     try {
-        const { q } = req.query;
-        // 公开接口：?q=a&q=b 会得到数组，必须先确认是字符串再 trim
-        if (typeof q !== 'string' || q.trim().length < 2 || q.length > 128) {
-            return fail(res, { status: 400, code: 'INVALID_PARAMETER', message: '请输入有效的订单号或下单账号' });
-        }
-
-        const safeQuery = escapeRegex(q.trim());
-        const regex = new RegExp(`^${safeQuery}$`, 'i'); // 默认精确匹配提升安全性
-
-        // 查询条件：订单号或账号
-        const match = { 
-            $or: [{ tradeNo: regex }, { account: regex }],
-            isHidden: { $ne: true }
-        };
-
-        // 精确匹配订单号或账号，命中范围天然有界，这里返回全部记录供自查
-        const orders = await CourseOrder.find(match)
-            .select('tradeNo account courseName statusText progress remarks updateTime createTime') // 明确排除平台等敏感字段
-            .sort({ createTime: -1 })
-            .lean();
-
-        if (orders.length === 0) {
-            return fail(res, { status: 404, code: 'NOT_FOUND', message: '未找到相关订单信息，请核对输入' });
-        }
-
-        // 数据脱敏
-        const safeOrders = orders.map(order => {
-            // 账号脱敏 (例如: 138****8888)
-            const acc = order.account || '';
-            const maskedAccount = acc.length > 7 
-                ? acc.substring(0, 3) + '****' + acc.substring(acc.length - 4)
-                : acc.length > 2 
-                    ? acc.substring(0, 2) + '***'
-                    : '***';
-            
-            return {
-                tradeNo: order.tradeNo,
-                account: maskedAccount,
-                courseName: order.courseName,
-                statusText: order.statusText || '进行中',
-                progress: order.progress || '0%',
-                remarks: order.remarks || '正在努力更新进度...',
-                updateTime: order.updateTime,
-                createTime: order.createTime
-            };
-        });
-
-        res.json({ code: 200, data: safeOrders });
+        return await searchPublicOrders(req.query.q, res);
     } catch (error) {
-        logger.error(`[PublicSearch] ${error.message}`, { stack: error.stack });
-        res.status(500).json({ code: 500, message: '系统繁忙，请稍后再试' });
+        logger.error('[PublicSearch] Query failed', { code: error.code });
+        return fail(res, { status: 500, code: 'INTERNAL_ERROR', message: '系统繁忙，请稍后再试' });
     }
 };
 
@@ -583,6 +647,7 @@ exports.publicSearch = async (req, res) => {
  */
 exports.publicRefresh = async (req, res) => {
     try {
+        if (req.body.q !== undefined) return await searchPublicOrders(req.body.q, res);
         const { tradeNo } = req.body;
         // 公开接口：只接受字符串，拒绝 {"$gt":""} 这类查询操作符对象
         if (typeof tradeNo !== 'string' || !tradeNo || tradeNo.length > 128) {
@@ -627,9 +692,10 @@ exports.publicRefresh = async (req, res) => {
                 data: {
                     tradeNo: order.tradeNo,
                     statusText: order.statusText,
-                    progress: order.progress,
+                    progress: normalizePublicProgress(order.progress, order.remarks),
                     remarks: order.remarks,
-                    updateTime: Date.now()
+                    updateTime: order.updateTime,
+                    queriedAt: Date.now()
                 } 
             });
         } else {

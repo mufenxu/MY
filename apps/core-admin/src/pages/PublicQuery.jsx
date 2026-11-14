@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Input, Spin } from 'antd';
 import {
   CheckCircleOutlined,
@@ -31,73 +31,88 @@ const PublicQuery = () => {
   const [loading, setLoading] = useState(false);
   const [refreshingId, setRefreshingId] = useState(null);
   const [results, setResults] = useState(null);
+  const [searchedQuery, setSearchedQuery] = useState('');
+  const [queryError, setQueryError] = useState('');
+  const [notice, setNotice] = useState('');
+  const requestVersion = useRef(0);
 
   useEffect(() => {
     const previousTitle = document.title;
     document.title = '学习记录自查';
     return () => {
       document.title = previousTitle;
+      requestVersion.current += 1;
     };
   }, []);
 
   const handleSearch = async () => {
+    if (loading) return;
     const keyword = query.trim();
-    if (keyword.length < 2) {
+    if (keyword.length < 2 || keyword.length > 128) {
       message.warning('请输入有效的手机号、学号或记录编号');
       return;
     }
 
+    const version = ++requestVersion.current;
     setLoading(true);
+    setRefreshingId(null);
+    setQueryError('');
+    setNotice('');
+    setSearchedQuery(keyword);
     try {
       const res = await api.get(`/course-order/public-search?q=${encodeURIComponent(keyword)}`);
+      if (version !== requestVersion.current) return;
       if (res.data.code === 200) {
         setResults(Array.isArray(res.data.data) ? res.data.data : []);
+        setNotice(res.data.partial ? res.data.message : '');
       } else {
-        message.error(res.data.message || '未查到相关信息');
-        setResults([]);
+        setQueryError(res.data.message || '查询失败，请稍后重试');
+        setResults(null);
       }
     } catch (err) {
-      console.error(err);
-      if (err.response && err.response.status === 429) {
-        message.warning(err.response.data?.message || err.response.data || '访问过于频繁，请稍后再试');
-      } else {
-        message.error('系统繁忙，请稍后再试');
-      }
-      setResults([]);
+      if (version !== requestVersion.current) return;
+      setQueryError(err.response?.data?.message || (err.response?.status === 429
+        ? '访问过于频繁，请稍后再试' : '查询暂时不可用，请稍后重试'));
+      setResults(null);
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   };
 
-  const handleRefresh = async (tradeNo) => {
-    setRefreshingId(tradeNo);
+  const handleRefresh = async (order) => {
+    if (loading || refreshingId) return;
+    const version = ++requestVersion.current;
+    const recordKey = order.recordKey || order.tradeNo;
+    const payload = order.tradeNo && order.canRefresh !== false
+      ? { tradeNo: order.tradeNo } : { q: searchedQuery };
+    setRefreshingId(recordKey);
     try {
-      const res = await api.post('/course-order/public-refresh', { tradeNo }, {
+      const res = await api.post('/course-order/public-refresh', payload, {
         timeout: PUBLIC_REFRESH_TIMEOUT_MS,
       });
+      if (version !== requestVersion.current) return;
       if (res.data.code === 200) {
-        message.success(res.data.message || '记录已刷新');
-        if (results) {
-          const updated = results.map((item) => {
-            if (item.tradeNo === tradeNo && res.data.data) {
-              return { ...item, ...res.data.data };
-            }
-            return item;
-          });
-          setResults(updated);
+        if (res.data.partial) message.warning(res.data.message);
+        else message.success(res.data.message || '记录已刷新');
+        if (Array.isArray(res.data.data)) {
+          setResults(res.data.data);
+          setNotice(res.data.partial ? res.data.message : '');
+        } else if (res.data.data) {
+          setResults(previous => previous?.map(item => (item.recordKey || item.tradeNo) === recordKey
+            ? { ...item, ...res.data.data } : item));
         }
       } else {
         message.warning(res.data.message || '刷新请求失败');
       }
     } catch (err) {
-      console.error(err);
+      if (version !== requestVersion.current) return;
       if (err.response && err.response.status === 429) {
         message.warning(err.response.data?.message || err.response.data || '刷新过于频繁，请稍后再试');
       } else {
-        message.error('刷新失败，请检查网络或稍后重试');
+        message.error(err.response?.data?.message || '刷新失败，请检查网络或稍后重试');
       }
     } finally {
-      setRefreshingId(null);
+      if (version === requestVersion.current) setRefreshingId(null);
     }
   };
 
@@ -120,6 +135,7 @@ const PublicQuery = () => {
   const formatTime = (time) => {
     if (!time) return '未记录';
     const d = new Date(time);
+    if (Number.isNaN(d.getTime())) return '未记录';
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
 
@@ -202,10 +218,22 @@ const PublicQuery = () => {
         </section>
 
         <section className="record-results-section" aria-label="查询结果">
+          {!loading && notice && (
+            <div className="notice-strip" role="status">
+              <InfoCircleOutlined />
+              <span>{notice}</span>
+            </div>
+          )}
           {loading ? (
             <div className="record-loading">
               <Spin size="large" />
               <span>正在获取记录信息…</span>
+            </div>
+          ) : queryError ? (
+            <div className="record-empty-state" role="alert">
+              <InfoCircleOutlined />
+              <strong>暂时无法查询</strong>
+              <span>{queryError}</span>
             </div>
           ) : results === null ? (
             <div className="record-empty-intro">
@@ -220,12 +248,13 @@ const PublicQuery = () => {
               </div>
               {results.map((order, index) => {
                 const isCompleted = order.statusText?.includes('完成');
-                const isRefreshing = refreshingId === order.tradeNo;
+                const recordKey = order.recordKey || order.tradeNo || index;
+                const isRefreshing = refreshingId === recordKey;
                 const percent = parseProgress(order.progress);
 
                 return (
                   <article
-                    key={order.tradeNo || index}
+                    key={recordKey}
                     className={`record-result-card${isCompleted ? ' is-complete' : ''}`}
                   >
                     <div className="result-card-top">
@@ -233,7 +262,9 @@ const PublicQuery = () => {
                         <h3 className="result-title" title={order.courseName}>
                           {order.courseName || '未知记录'}
                         </h3>
-                        <span className="result-time">最后更新 {formatTime(order.updateTime)}</span>
+                        <span className="result-time">
+                          {order.queriedAt ? '查询时间' : '最后更新'} {formatTime(order.queriedAt || order.updateTime)}
+                        </span>
                       </div>
                       <span className={`tag tone-${isCompleted ? 'ok' : 'info'}`}>
                         {order.statusText || '进行中'}
@@ -275,7 +306,7 @@ const PublicQuery = () => {
                       <div className="meta-item">
                         <FieldTimeOutlined />
                         <span>记录编号</span>
-                        <strong title={order.tradeNo}>{order.tradeNo || '未记录'}</strong>
+                        <strong title={order.tradeNo}>{order.tradeNo || '未提供'}</strong>
                       </div>
                       <div className="meta-item">
                         <ClockCircleFilled />
@@ -287,8 +318,8 @@ const PublicQuery = () => {
                     <div className="result-actions">
                       <button
                         type="button"
-                        disabled={isRefreshing}
-                        onClick={() => handleRefresh(order.tradeNo)}
+                        disabled={refreshingId !== null}
+                        onClick={() => handleRefresh(order)}
                         className="btn btn-primary btn-sm refresh-record-button"
                       >
                         <SyncOutlined spin={isRefreshing} />

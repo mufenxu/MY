@@ -45,6 +45,8 @@ function clearSubmissionKey(key: string): void {
 }
 
 Page({
+  formRevision: 0,
+  queriedRevision: -1,
   data: {
     platforms: [] as any[],
     platformIndex: null as number | null,
@@ -94,7 +96,8 @@ Page({
   },
 
   onSelectPlatform(e: any) {
-    const index = e.currentTarget.dataset.index
+    const index = Number(e.currentTarget.dataset.index)
+    if (index !== this.data.platformIndex) this.invalidateQuery()
     this.setData({
       platformIndex: index,
       showPlatformPopup: false
@@ -106,17 +109,33 @@ Page({
   },
 
   onPlatformChange(e: any) {
+    const index = Number(e.detail.value)
+    if (index !== this.data.platformIndex) this.invalidateQuery()
     this.setData({
-      platformIndex: e.detail.value
+      platformIndex: index
     })
   },
 
+  invalidateQuery() {
+    this.formRevision += 1
+    this.queriedRevision = -1
+    this.setData({ queried: false, courseList: [], selectedIndices: [], showConfirmPopup: false })
+  },
+
+  onFormInput(e: any) {
+    const field = e.currentTarget.dataset.field as 'user' | 'pass' | 'school'
+    const value = e.detail.value
+    if (this.data[field] === value) return
+    this.invalidateQuery()
+    this.setData({ [field]: value })
+  },
+
   async onQuery() {
-    if (this.data.querying) return
+    if (this.data.querying || this.data.submitting) return
 
     const { platformIndex, platforms, school, user, pass } = this.data
 
-    if (platformIndex === null) {
+    if (platformIndex === null || !platforms[platformIndex]) {
       wx.showToast({ title: '请选择平台类型', icon: 'none' })
       return
     }
@@ -127,7 +146,9 @@ Page({
 
     const selectedCategory = platforms[platformIndex]
 
-    this.setData({ querying: true, queried: false, courseList: [], selectedIndices: [] })
+    this.invalidateQuery()
+    const revision = this.formRevision
+    this.setData({ querying: true })
 
     try {
       const res = await request<any>('/course-order/query', 'POST', {
@@ -137,6 +158,8 @@ Page({
         pass
       });
 
+      // 表单变化后返回的旧查课结果不能再用于当前账号或平台下单。
+      if (revision !== this.formRevision) return
       if (res && res.code === 200) {
         // 后端已经归一化为数组了
         let list = res.data || []
@@ -144,6 +167,7 @@ Page({
         // 把数据加个 checked
         list = list.map((item: any) => ({ ...item, checked: false }))
 
+        this.queriedRevision = revision
         this.setData({
           queried: true,
           courseList: list
@@ -157,6 +181,7 @@ Page({
         })
       }
     } catch (err: any) {
+      if (revision !== this.formRevision) return
       logger.error('Course Query Error', err, 'CourseQuery')
       wx.showModal({
         title: '网络请求失败',
@@ -197,9 +222,13 @@ Page({
   },
 
   async onSubmitOrder() {
+    if (!this.data.queried || this.queriedRevision !== this.formRevision) {
+      wx.showToast({ title: '信息已变化，请重新查课', icon: 'none' })
+      return
+    }
     const { courseList, selectedIndices } = this.data
 
-    const selectedCourses = selectedIndices.map(i => courseList[i])
+    const selectedCourses = selectedIndices.map(i => courseList[i]).filter(Boolean)
 
     if (selectedCourses.length === 0) {
       wx.showToast({ title: '请先勾选课程', icon: 'none'})
@@ -219,15 +248,21 @@ Page({
 
   async onConfirmSubmit() {
     if (this.data.submitting) return
+    if (!this.data.queried || this.queriedRevision !== this.formRevision) {
+      this.setData({ showConfirmPopup: false })
+      wx.showToast({ title: '信息已变化，请重新查课', icon: 'none' })
+      return
+    }
 
     const { platformIndex, platforms, school, user, pass, courseList, selectedIndices } = this.data
     const selectedCategory = platforms[platformIndex as number]
-    const selectedCourses = selectedIndices.map(i => courseList[i])
+    const selectedCourses = selectedIndices.map(i => courseList[i]).filter(Boolean)
+    if (!selectedCategory || !selectedCourses.length) return
 
     this.setData({
       showConfirmPopup: false
     })
-    this.doSubmit(selectedCategory._id, school, user, pass, selectedCourses)
+    return this.doSubmit(selectedCategory._id, school, user, pass, selectedCourses)
   },
 
   async doSubmit(categoryId: string, school: string, user: string, pass: string, courseList: any[]) {

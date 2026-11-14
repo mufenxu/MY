@@ -69,6 +69,17 @@ async function loadCategory(order) {
     return CourseCategory.findOne({ noun: order.platformId });
 }
 
+function upstreamMessage(response) {
+    return String(response?.msg || response?.message || '').trim().slice(0, 200);
+}
+
+function unknownOutcomeReason(error) {
+    if (['ECONNABORTED', 'ETIMEDOUT'].includes(error.code)) return '上游响应超时';
+    if (error.code === 'ECONNRESET') return '与上游的连接被中断';
+    if (Number(error.statusCode) >= 500) return `上游服务异常（HTTP ${error.statusCode}）`;
+    return '';
+}
+
 async function processClaimedOrder(order) {
     const category = await loadCategory(order);
     if (!category) {
@@ -79,20 +90,40 @@ async function processClaimedOrder(order) {
         return;
     }
 
+    let plainPassword;
+    try {
+        plainPassword = decrypt(order.password);
+    } catch (error) {
+        // 解密发生在请求上游之前，订单确定没有提交。
+        logger.error(`[CourseOrderWorker] Credential decrypt failed for ${order.tradeNo}`, {
+            message: error.message
+        });
+        await markOrder(order._id, 'Failed', {
+            statusText: '未受理',
+            remarks: '订单凭据无法解密，未提交到上游；请重新下单'
+        });
+        return;
+    }
+
     try {
         const response = await mxPlatform.submitOrder({
             school: order.school,
             user: order.account,
-            pass: decrypt(order.password),
+            pass: plainPassword,
             category,
             courseId: order.courseId,
             courseName: order.courseName,
             duration: order.duration,
             clientTradeNo: order.tradeNo
         });
-        const remoteOrderId = response && (response.id || response.yid || response.oid);
+        const rawOrderId = response && (response.id || response.yid || response.oid);
+        const remoteOrderId = ['string', 'number'].includes(typeof rawOrderId)
+            ? String(rawOrderId).trim() : '';
+        const hasCode = response && !Array.isArray(response)
+            && ['string', 'number'].includes(typeof response.code)
+            && /^-?\d+$/.test(String(response.code));
 
-        if (response && response.code == 0 && remoteOrderId) {
+        if (hasCode && Number(response.code) === 0 && remoteOrderId && remoteOrderId !== '0') {
             await markOrder(order._id, 'Processing', {
                 remoteOrderId: String(remoteOrderId),
                 statusText: '进行中',
@@ -101,10 +132,16 @@ async function processClaimedOrder(order) {
             return;
         }
 
-        if (response && response.code == 0) {
+        if (!hasCode || Number(response.code) >= 0) {
+            // 非标准响应不能证明请求被拒绝；保留待核对状态，避免诱导重复提交。
+            const hint = upstreamMessage(response);
+            const reason = hasCode && Number(response.code) === 0
+                ? '上游未返回订单号' : '上游响应无法确认是否受理';
             await markOrder(order._id, 'ReconcilePending', {
                 statusText: '待核对',
-                remarks: '第三方返回已受理，但未返回可核对的订单号；请勿重复提交'
+                remarks: hint
+                    ? `${reason}，上游提示：${hint}；请先核对上游是否已有此单，勿直接重复提交`
+                    : '上游响应无法确认是否受理，或未返回有效订单号；请先核对，勿直接重复提交'
             });
             return;
         }
@@ -114,16 +151,23 @@ async function processClaimedOrder(order) {
             remarks: String(response?.msg || response?.message || '第三方明确拒绝订单').slice(0, 500)
         });
     } catch (error) {
-        logger.error(`[CourseOrderWorker] Submission outcome unknown for ${order.tradeNo}`, {
+        const outcomeUnknown = error.outcomeUnknown !== false;
+        logger.error(`[CourseOrderWorker] Submission ${outcomeUnknown ? 'outcome unknown' : 'not accepted'} for ${order.tradeNo}`, {
             message: error.message,
             code: error.code
         });
-        const outcomeUnknown = error.outcomeUnknown !== false;
-        await markOrder(order._id, outcomeUnknown ? 'ReconcilePending' : 'Failed', {
-            statusText: outcomeUnknown ? '待核对' : '未受理',
-            remarks: outcomeUnknown
-                ? '提交结果未知，系统不会自动重投；请等待人工或上游核对'
-                : String(error.message || '第三方明确拒绝订单').slice(0, 500)
+        if (!outcomeUnknown) {
+            const reason = String(error.publicMessage || error.message || '第三方明确拒绝订单').slice(0, 500);
+            await markOrder(order._id, 'Failed', {
+                statusText: '未受理',
+                remarks: error.requestSent === false ? `未提交到上游：${reason}` : reason
+            });
+            return;
+        }
+        const reason = unknownOutcomeReason(error);
+        await markOrder(order._id, 'ReconcilePending', {
+            statusText: '待核对',
+            remarks: `提交结果未知${reason ? `（${reason}）` : ''}，系统不会自动重投；请等待人工或上游核对`
         });
     }
 }

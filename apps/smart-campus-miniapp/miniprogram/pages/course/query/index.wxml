@@ -29,17 +29,17 @@
       <view class="form-row">
         <view class="form-item flex-1">
           <view class="form-label">登录账号</view>
-          <input class="input" placeholder="账号或手机号" placeholder-class="ph-color" model:value="{{user}}" />
+          <input class="input" placeholder="账号或手机号" placeholder-class="ph-color" value="{{user}}" data-field="user" bindinput="onFormInput" />
         </view>
         <view class="form-item flex-1">
           <view class="form-label">登录密码</view>
-          <input class="input" placeholder="平台密码" placeholder-class="ph-color" model:value="{{pass}}" />
+          <input class="input" placeholder="平台密码" placeholder-class="ph-color" value="{{pass}}" data-field="pass" bindinput="onFormInput" />
         </view>
       </view>
 
       <view class="form-item">
         <view class="form-label">所在学校 <text class="optional">（部分平台必填）</text></view>
-        <input class="input" placeholder="请输入学校全称" placeholder-class="ph-color" model:value="{{school}}" />
+        <input class="input" placeholder="请输入学校全称" placeholder-class="ph-color" value="{{school}}" data-field="school" bindinput="onFormInput" />
       </view>
     </view>
 

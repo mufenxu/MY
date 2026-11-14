@@ -20,6 +20,7 @@ router.post('/retry', verifyToken, courseOrderController.retryOrder);
 // 管理后台专用 API 路由（需管理员权限）
 router.get('/admin/list', verifyToken, authorize('admin', 'super_admin'), adminCourseOrderController.getAllOrdersForAdmin);
 router.post('/admin/refresh', verifyToken, authorize('admin', 'super_admin'), adminCourseOrderController.adminRefreshProgress);
+router.post('/admin/resubmit', verifyToken, authorize('admin', 'super_admin'), adminCourseOrderController.adminResubmitOrder);
 router.post('/admin/create', verifyToken, authorize('admin', 'super_admin'), adminCourseOrderController.adminCreateOrder);
 router.put('/admin/:tradeNo', verifyToken, authorize('admin', 'super_admin'), adminCourseOrderController.adminUpdateOrder);
 router.delete('/admin/:tradeNo', verifyToken, authorize('admin', 'super_admin'), adminCourseOrderController.adminDeleteOrder);

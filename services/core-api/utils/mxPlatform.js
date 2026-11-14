@@ -7,6 +7,55 @@ function getRequestTimeoutMs() {
     return Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1000), 14000) : 10000;
 }
 
+// 下单由后台任务异步执行，不占用网关的同步请求预算，所以单独给更长的超时（默认恢复为
+// 引入异步队列之前的 20 秒）：上游 add 往往会同步再查一次课，10 秒内回不来就会落入“结果未知”。
+function getSubmitTimeoutMs() {
+    const parsed = Number.parseInt(process.env.MX_SUBMIT_TIMEOUT_MS || '20000', 10);
+    return Number.isFinite(parsed) ? Math.min(Math.max(parsed, 5000), 60000) : 20000;
+}
+
+// 这些错误发生在建立连接阶段，请求体根本没有发到上游，可以确定订单没有被受理。
+// 超时与连接重置不在此列：那时请求可能已经送达，结果确实未知。
+const REQUEST_NOT_SENT_REASONS = {
+    ENOTFOUND: '上游域名解析失败',
+    EAI_AGAIN: '上游域名解析失败',
+    ECONNREFUSED: '上游拒绝连接',
+    EHOSTUNREACH: '上游主机不可达',
+    ENETUNREACH: '上游网络不可达',
+    ERR_INVALID_URL: '上游接口地址配置无效',
+    CERT_HAS_EXPIRED: '上游证书已过期',
+    CERT_NOT_YET_VALID: '上游证书尚未生效',
+    DEPTH_ZERO_SELF_SIGNED_CERT: '上游证书校验失败',
+    SELF_SIGNED_CERT_IN_CHAIN: '上游证书校验失败',
+    UNABLE_TO_VERIFY_LEAF_SIGNATURE: '上游证书校验失败',
+    UNABLE_TO_GET_ISSUER_CERT_LOCALLY: '上游证书校验失败',
+    ERR_TLS_CERT_ALTNAME_INVALID: '上游证书与域名不匹配'
+};
+
+/**
+ * 构造“请求确定没有发出”的错误。publicMessage 会写进订单备注并展示给用户，
+ * 因此不能带上游域名、密钥等内部信息。
+ */
+function notSentError(publicMessage, code, cause) {
+    const error = new Error(cause?.message ? `${publicMessage}: ${cause.message}` : publicMessage);
+    error.code = code;
+    error.outcomeUnknown = false;
+    error.requestSent = false;
+    error.publicMessage = publicMessage;
+    return error;
+}
+
+/**
+ * 服务商地址可能填成 https://host、https://host/api.php 或 https://host/apisub.php，
+ * 下单、补刷、查进度统一落到 https://host/api.php。
+ */
+function resolveApiBaseUrl(config) {
+    return String(config.url || '')
+        .split('/api.php')[0]
+        .split('/apisub.php')[0]
+        .replace(/\/+$/, '');
+}
+
 function appendClientTradeNo(data, value, envKey, fallbackField) {
     if (!value) return;
     const field = String(process.env[envKey] || fallbackField).trim();
@@ -17,10 +66,10 @@ function appendClientTradeNo(data, value, envKey, fallbackField) {
 
 // 敏感字段脱敏
 function sanitizeLogData(data) {
-    const sensitive = ['key', 'pass', 'password', 'secretKey', 'token'];
+    const sensitive = ['key', 'pass', 'password', 'secretKey', 'token', 'userinfo', 'user', 'username', 'account'];
     const sanitized = { ...data };
     sensitive.forEach(k => {
-        if (sanitized[k]) sanitized[k] = sanitized[k].substring(0, 3) + '***';
+        if (sanitized[k]) sanitized[k] = '***';
     });
     return sanitized;
 }
@@ -31,14 +80,19 @@ function sanitizeLogData(data) {
 async function getPlatformConfig(platformCode = 'mx') {
     const config = await PlatformConfig.findOne({ platformCode, status: true });
     if (!config) {
-        throw new Error(`平台通道 [${platformCode}] 未配置或已被停用。请前往管理后台 -> 服务商管理 中设置。`);
+        const error = new Error(`平台通道 [${platformCode}] 未配置或已被停用。请前往管理后台 -> 服务商管理 中设置。`);
+        error.code = 'PLATFORM_CHANNEL_UNAVAILABLE';
+        error.outcomeUnknown = false;
+        error.requestSent = false;
+        error.publicMessage = '交单通道未配置或已停用';
+        throw error;
     }
     return config;
 }
 
 const querystring = require('querystring');
 
-async function platformRequest(url, data) {
+async function platformRequest(url, data, options = {}) {
     try {
         // 严格过滤掉所有 null, undefined 或空字符串，防止触发服务器端的 empty() 校验错误
         const cleanData = {};
@@ -58,11 +112,11 @@ async function platformRequest(url, data) {
                 'Content-Type': 'application/x-www-form-urlencoded',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/67.0.3396.62 Safari/537.36'
             },
-            timeout: getRequestTimeoutMs()
+            timeout: options.timeoutMs || getRequestTimeoutMs()
         });
 
         let resData = response.data;
-        logger.debug(`[Platform Response] ${typeof resData === 'object' ? JSON.stringify(resData).substring(0, 500) : String(resData).substring(0, 500)}`);
+        logger.debug('[Platform Response]', { code: resData?.code, type: typeof resData });
 
         if (typeof resData === 'string') {
             try {
@@ -75,14 +129,25 @@ async function platformRequest(url, data) {
     } catch (error) {
         logger.error(`[Platform Network Error] ${error.message}`);
         if (error.response) {
-            logger.error(`[Platform Error Response] Status: ${error.response.status}, Data: ${JSON.stringify(error.response.data).substring(0, 500)}`);
+            logger.error('[Platform Error Response]', { status: error.response.status });
         }
         const wrapped = new Error(`连接远程服务器失败: ${error.message}`);
         wrapped.code = error.code || 'UPSTREAM_REQUEST_FAILED';
         wrapped.statusCode = error.response?.status;
-        wrapped.outcomeUnknown = !error.response
-            || ['ECONNABORTED', 'ETIMEDOUT', 'ECONNRESET'].includes(error.code)
-            || Number(error.response?.status) >= 500;
+        const notSentReason = !error.response && REQUEST_NOT_SENT_REASONS[error.code];
+        if (notSentReason) {
+            // 连接都没建立，订单确定没有到上游，不能归为“结果未知”。
+            wrapped.outcomeUnknown = false;
+            wrapped.requestSent = false;
+            wrapped.publicMessage = notSentReason;
+        } else {
+            wrapped.outcomeUnknown = !error.response
+                || ['ECONNABORTED', 'ETIMEDOUT', 'ECONNRESET'].includes(error.code)
+                || Number(error.response?.status) >= 500;
+            if (!wrapped.outcomeUnknown) {
+                wrapped.publicMessage = `上游拒绝了请求（HTTP ${error.response.status}）`;
+            }
+        }
         throw wrapped;
     }
 }
@@ -103,29 +168,18 @@ async function queryCourses(school, user, pass, category) {
     let data = {};
 
     if (channel === 'mx') {
-        // 根据 URL 自动判断是 api.php 还是 apisub.php
-        const isApiSub = config.url.includes('apisub.php');
-        url = isApiSub ? config.url : `${config.url}/api.php?act=get`;
-        
-        if (isApiSub) {
-            data = {
-                act: 'get',
-                cid: String(platformId || ''),
-                userinfo: `${user} ${pass}`,
-            };
-        } else {
-            // 对接 api.php，严格遵循 ckjk.php 逻辑，且把 act 放入 body 以防万一
-            data = {
-                act: 'get',
-                uid: String(config.uid || ''),
-                key: String(config.secretKey || ''),
-                user: String(user || ''),
-                pass: String(pass || ''),
-                platform: String(platformId || ''), // 这里对应您的“查课参数 125”
-                school: String(school || '默认'),    // 必须有值，否则报“所有项目不能为空”
-                kcid: ''                          // 显式提供空字符串
-            };
-        }
+        // apisub.php 是网页会话接口；服务端始终使用 uid/key 鉴权的开放接口。
+        url = `${resolveApiBaseUrl(config)}/api.php?act=get`;
+        data = {
+            act: 'get',
+            uid: String(config.uid || ''),
+            key: String(config.secretKey || ''),
+            user: String(user || ''),
+            pass: String(pass || ''),
+            platform: String(platformId || ''),
+            school: String(school || '默认'),
+            kcid: ''
+        };
     } else if (channel === 'joker') {
         url = `${config.url}/api.php?act=getcourse`;
         data = {
@@ -144,19 +198,70 @@ async function queryCourses(school, user, pass, category) {
 
     logger.info(`[Platform Query] Channel: ${channel}, URL: ${url}, User: ${user}`);
     const res = await platformRequest(url, data);
-    logger.debug('[Platform Result]', { resultPreview: JSON.stringify(res).substring(0, 300) });
+    logger.debug('[Platform Result]', { code: res?.code });
 
     // 统计：查课次数 +1 (如果当前为 0，则初始化为 31)
     if (res && (res.code == 1 || Array.isArray(res) || res.data)) {
-        const config = await PlatformConfig.findOne({ platformCode: channel });
-        if (config && config.queryCount === 0) {
-            await PlatformConfig.updateOne({ platformCode: channel }, { $set: { queryCount: 31 } });
-        } else {
-            await PlatformConfig.updateOne({ platformCode: channel }, { $inc: { queryCount: 1 } });
+        try {
+            const config = await PlatformConfig.findOne({ platformCode: channel });
+            if (config && config.queryCount === 0) {
+                await PlatformConfig.updateOne({ platformCode: channel }, { $set: { queryCount: 31 } });
+            } else {
+                await PlatformConfig.updateOne({ platformCode: channel }, { $inc: { queryCount: 1 } });
+            }
+        } catch (error) {
+            logger.warn('[Platform Query] Statistics update failed', { code: error.code });
         }
     }
 
     return res;
+}
+
+const publicOrderCache = new Map();
+
+async function queryOrdersByAccount(account) {
+    const config = await getPlatformConfig('mx');
+    const baseUrl = resolveApiBaseUrl(config);
+    const username = String(account).trim();
+    const cacheKey = `${baseUrl}:${username}`;
+    const cached = publicOrderCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.promise;
+
+    for (const [key, entry] of publicOrderCache) {
+        if (entry.expiresAt <= Date.now()) publicOrderCache.delete(key);
+    }
+    if (publicOrderCache.size >= 200) publicOrderCache.delete(publicOrderCache.keys().next().value);
+
+    const entry = { expiresAt: Date.now() + 30000 };
+    entry.promise = (async () => {
+        const result = await platformRequest(`${baseUrl}/api.php?act=chadan`, { username }, {
+            timeoutMs: Math.min(getRequestTimeoutMs(), 8000)
+        });
+        if (!result || ![1, '1'].includes(result.code)
+            || (result.data !== null && !Array.isArray(result.data))) {
+            throw new Error('上游记录查询返回无效响应');
+        }
+        const data = [];
+        for (const row of result.data || []) {
+            if (!row || typeof row !== 'object'
+                || !['string', 'number'].includes(typeof row.id) || !String(row.id).trim()
+                || !['string', 'number'].includes(typeof row.user)) {
+                throw new Error('上游记录缺少可核对的标识');
+            }
+            if (String(row.user).trim().toLowerCase() !== username.toLowerCase()) continue;
+            // 只保留自查需要的字段，不缓存姓名、学校、凭据等上游附加信息。
+            data.push(Object.fromEntries(
+                ['id', 'user', 'kcname', 'status', 'process', 'remarks', 'addtime']
+                    .map(key => [key, ['string', 'number'].includes(typeof row[key]) ? String(row[key]) : ''])
+            ));
+        }
+        return { data, queriedAt: Date.now() };
+    })().catch(error => {
+        if (publicOrderCache.get(cacheKey) === entry) publicOrderCache.delete(cacheKey);
+        throw error;
+    });
+    publicOrderCache.set(cacheKey, entry);
+    return entry.promise;
 }
 
 /**
@@ -165,14 +270,25 @@ async function queryCourses(school, user, pass, category) {
 async function submitOrder(options) {
     const { category } = options;
     const channel = category.docking || 'mx';
-    const config = await getPlatformConfig(channel);
+    if (channel !== 'mx' && channel !== 'joker') {
+        throw notSentError('暂不支持的交单通道', 'PLATFORM_CHANNEL_UNSUPPORTED');
+    }
+
+    let config;
+    try {
+        config = await getPlatformConfig(channel);
+    } catch (error) {
+        // 读取通道配置发生在发请求之前，无论因何失败，订单都确定没有提交。
+        if (error.outcomeUnknown === false) throw error;
+        throw notSentError('读取交单通道配置失败', 'PLATFORM_CONFIG_LOOKUP_FAILED', error);
+    }
     const platformId = category.noun;
 
     let url = '';
     let data = {};
 
     if (channel === 'mx') {
-        url = `${config.url}/api.php?act=add`;
+        url = `${resolveApiBaseUrl(config)}/api.php?act=add`;
         data = {
             act: 'add',
             uid: String(config.uid || ''),
@@ -203,16 +319,25 @@ async function submitOrder(options) {
     }
 
     logger.info(`[Platform Submit] Channel: ${channel}, URL: ${url}, User: ${options.user}, Course: ${options.courseName}`);
-    const res = await platformRequest(url, data);
-    logger.debug('[Platform Submit Result]', { result: JSON.stringify(res).substring(0, 300) });
+    const res = await platformRequest(url, data, { timeoutMs: getSubmitTimeoutMs() });
+    logger.info('[Platform Submit Result]', {
+        tradeNo: options.clientTradeNo || '-',
+        code: res?.code,
+        remoteOrderId: res?.id || res?.yid || res?.oid || ''
+    });
 
     // 统计：下单数 +1 (如果当前为 0，则初始化为 2)
     if (res && (res.code == 0 || res.code == 1 || res.id)) {
-        const config = await PlatformConfig.findOne({ platformCode: channel });
-        if (config && config.orderCount === 0) {
-            await PlatformConfig.updateOne({ platformCode: channel }, { $set: { orderCount: 2 } });
-        } else {
-            await PlatformConfig.updateOne({ platformCode: channel }, { $inc: { orderCount: 1 } });
+        try {
+            const config = await PlatformConfig.findOne({ platformCode: channel });
+            if (config && config.orderCount === 0) {
+                await PlatformConfig.updateOne({ platformCode: channel }, { $set: { orderCount: 2 } });
+            } else {
+                await PlatformConfig.updateOne({ platformCode: channel }, { $inc: { orderCount: 1 } });
+            }
+        } catch (error) {
+            // 统计失败不能吞掉已收到的受理结果和订单号。
+            logger.warn('[Platform Submit] Statistics update failed', { code: error.code });
         }
     }
 
@@ -228,7 +353,7 @@ async function queryProgress(user, category, remoteOrderId) {
     const platformId = category.noun;
 
     if (channel === 'mx') {
-        const baseUrl = config.url.split('/api.php')[0].split('/apisub.php')[0].replace(/\/$/, '');
+        const baseUrl = resolveApiBaseUrl(config);
         const apiUrl = `${baseUrl}/api.php`; // chadan/chadan2 统一走 api.php
 
         // 第一步：触发上游刷新 (直接用 api.php)
@@ -298,7 +423,7 @@ async function queryProgressEnhanced(user, category, remoteOid, remoteOrderId) {
     const orderId = remoteOid || remoteOrderId; // 优先使用 oid
 
     if (channel === 'mx') {
-        const baseUrl = config.url.split('/api.php')[0].split('/apisub.php')[0].replace(/\/$/, '');
+        const baseUrl = resolveApiBaseUrl(config);
         const apiUrl = `${baseUrl}/api.php`; // chadan/chadan2 统一走 api.php
 
         // 第一步：触发上游刷新 (改为 api.php 以支持非登录状态)
@@ -424,7 +549,7 @@ async function retryOrder(user, pass, remoteOrderId, channel = 'mx') {
     let data = {};
 
     if (channel === 'mx') {
-        url = `${config.url}/api.php?act=budan`;
+        url = `${resolveApiBaseUrl(config)}/api.php?act=budan`;
         data = {
             act: 'budan',
             uid: String(config.uid || ''),
@@ -448,9 +573,11 @@ async function retryOrder(user, pass, remoteOrderId, channel = 'mx') {
 
 module.exports = {
     queryCourses,
+    queryOrdersByAccount,
     submitOrder,
     queryProgress,
     queryProgressEnhanced,
     retryOrder,
-    getRequestTimeoutMs
+    getRequestTimeoutMs,
+    getSubmitTimeoutMs
 };

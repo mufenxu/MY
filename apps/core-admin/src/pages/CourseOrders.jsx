@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Table, Input, Select, Modal, Tooltip, Typography, Form, Switch, Row, Col, Pagination } from 'antd';
-import { SyncOutlined, DeleteOutlined, FileTextOutlined, PlusOutlined, EditOutlined, EyeOutlined, EyeInvisibleOutlined, SearchOutlined, WarningOutlined } from '@ant-design/icons';
+import { SyncOutlined, RedoOutlined, DeleteOutlined, FileTextOutlined, PlusOutlined, EditOutlined, EyeOutlined, EyeInvisibleOutlined, SearchOutlined, WarningOutlined } from '@ant-design/icons';
 import api from '../utils/api';
 import useIsMobile from '../hooks/useIsMobile';
 import { message } from '../utils/feedback';
@@ -20,6 +20,18 @@ const ORDER_STATUS = {
     ReconcilePending: { label: '需要确认', tone: 'warn' },
     Unknown: { label: '状态未知', tone: 'neutral' },
 };
+
+/**
+ * 只有没拿到上游订单号的「需要确认 / 失败」订单才允许重新提交；
+ * 条件与后端 /course-order/admin/resubmit 的原子过滤保持一致。
+ */
+const canResubmit = (record) => ['ReconcilePending', 'Failed'].includes(record.status)
+    && !record.remoteOrderId
+    && !record.remoteOid
+    && !record.isManual
+    && typeof record.submissionKey === 'string'
+    && typeof record.batchId === 'string'
+    && record.batchId !== '';
 
 const CourseOrders = () => {
     const isMobile = useIsMobile();
@@ -41,6 +53,10 @@ const CourseOrders = () => {
     const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [deletingTradeNo, setDeletingTradeNo] = useState('');
     const [deleteLoading, setDeleteLoading] = useState(false);
+
+    // 重新提交二次确认弹窗
+    const [resubmitTarget, setResubmitTarget] = useState(null);
+    const [resubmitLoading, setResubmitLoading] = useState(false);
 
     // 搜索与分页条件
     const [query, setQuery] = useState({
@@ -154,6 +170,27 @@ const CourseOrders = () => {
             message.error('删除异常');
         } finally {
             setDeleteLoading(false);
+        }
+    };
+
+    const handleConfirmResubmit = async () => {
+        if (!resubmitTarget) return;
+        setResubmitLoading(true);
+        try {
+            const res = await api.post('/course-order/admin/resubmit', {
+                tradeNo: resubmitTarget.tradeNo
+            });
+            if (res.data.code === 200) {
+                message.success(res.data.message || '订单已重新入队');
+                setResubmitTarget(null);
+                fetchOrders();
+            } else {
+                message.error(res.data.message || '重新提交失败');
+            }
+        } catch (error) {
+            message.error(error?.response?.data?.message || '重新提交失败');
+        } finally {
+            setResubmitLoading(false);
         }
     };
 
@@ -316,7 +353,7 @@ const CourseOrders = () => {
             title: '操作',
             key: 'action',
             fixed: isMobile ? undefined : 'right',
-            width: 168,
+            width: 204,
             align: 'right',
             render: (_, record) => (
                 <span className="row-actions">
@@ -331,6 +368,18 @@ const CourseOrders = () => {
                             <SyncOutlined />
                         </button>
                     </Tooltip>
+                    {canResubmit(record) && (
+                        <Tooltip title="确认上游没有此单后，重新提交到上游">
+                            <button
+                                type="button"
+                                className="icon-action"
+                                onClick={() => setResubmitTarget(record)}
+                                aria-label="重新提交订单"
+                            >
+                                <RedoOutlined />
+                            </button>
+                        </Tooltip>
+                    )}
                     <Tooltip title={record.isHidden ? '显示在小程序订单列表' : '隐藏此订单'}>
                         <button
                             type="button"
@@ -493,6 +542,16 @@ const CourseOrders = () => {
                                                     <SyncOutlined />
                                                     刷新
                                                 </button>
+                                                {canResubmit(record) && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm"
+                                                        onClick={() => setResubmitTarget(record)}
+                                                    >
+                                                        <RedoOutlined />
+                                                        重提
+                                                    </button>
+                                                )}
                                                 <button
                                                     type="button"
                                                     className="icon-action"
@@ -718,6 +777,49 @@ const CourseOrders = () => {
                             onClick={handleConfirmDelete}
                         >
                             {deleteLoading ? '删除中…' : '确认删除'}
+                        </button>
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal
+                title={null}
+                open={Boolean(resubmitTarget)}
+                onCancel={() => setResubmitTarget(null)}
+                footer={null}
+                width={isMobile ? '90%' : 420}
+                centered
+                destroyOnClose
+            >
+                <div style={{ textAlign: 'center' }}>
+                    <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 680 }}>重新提交这笔订单？</h3>
+                    <div className="hint is-warn" style={{ marginBottom: 12, textAlign: 'left' }}>
+                        <strong>请先到上游确认没有这笔订单</strong>
+                        <span>如果上游其实已经受理，重新提交会产生重复订单并重复扣费。</span>
+                    </div>
+                    {resubmitTarget && (
+                        <p className="settings-note" style={{ marginBottom: 20, textAlign: 'left' }}>
+                            {resubmitTarget.account} · {resubmitTarget.courseName || '未知课程'}
+                            {resubmitTarget.remarks ? `（${resubmitTarget.remarks}）` : ''}
+                        </p>
+                    )}
+                    <div style={{ display: 'flex', gap: 10 }}>
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            style={{ flex: 1 }}
+                            onClick={() => setResubmitTarget(null)}
+                        >
+                            取消
+                        </button>
+                        <button
+                            type="button"
+                            className="btn btn-primary"
+                            style={{ flex: 1 }}
+                            disabled={resubmitLoading}
+                            onClick={handleConfirmResubmit}
+                        >
+                            {resubmitLoading ? '提交中…' : '确认重新提交'}
                         </button>
                     </div>
                 </div>
