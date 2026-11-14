@@ -6,13 +6,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
+import cn.pxyb.mycontrol.ui.feature.envreference.EnvReferenceScreen
 import cn.pxyb.mycontrol.ui.feature.google.GoogleAccountDeskScreen
 import cn.pxyb.mycontrol.ui.feature.projects.GitHubProjectsScreen
 import cn.pxyb.mycontrol.ui.feature.projects.ProjectsScreen
 import cn.pxyb.mycontrol.ui.feature.registry.RegistryImagesScreen
 import cn.pxyb.mycontrol.ui.feature.releases.AndroidReleaseScreen
 
-/** 项目与资产管理路由：项目总览、Google 账号台、GitHub 项目、Android 发布、镜像仓库。 */
+/** 项目与资产管理路由：项目总览、Google 账号台、GitHub 项目、Android 发布、镜像仓库、环境变量对照表。 */
 internal fun NavGraphBuilder.managementRoutes(shell: ShellRouteContext) = with(shell) {
     composable(AppRoute.Projects) {
         val projectsState by viewModel.projectsState.collectAsStateWithLifecycle()
@@ -115,6 +116,12 @@ internal fun NavGraphBuilder.managementRoutes(shell: ShellRouteContext) = with(s
             onPruneConfirm = { viewModel.executeRegistryImagePrune(onSensitiveActionConfirmation) },
             onPruneDismiss = viewModel::discardRegistryImagePlan,
             onDismissFeedback = viewModel::clearRegistryImageFeedback,
+        )
+    }
+    composable(AppRoute.EnvReference) {
+        EnvReferenceScreen(
+            contentPadding = contentPadding,
+            onBack = navigateBackFromSubScreen,
         )
     }
 }

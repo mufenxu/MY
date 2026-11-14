@@ -18,6 +18,7 @@ import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.NotificationsActive
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.VolumeOff
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material3.HorizontalDivider
@@ -87,6 +88,7 @@ fun OperationsScreen(
     onTriggerBackup: () -> Unit,
     onOpenNotifications: () -> Unit,
     onOpenProjects: () -> Unit,
+    onOpenEnvReference: () -> Unit,
     requestWebLoginUrl: suspend (String) -> String,
     onMeasureNetwork: () -> Unit,
     onIncidentNote: (String, String) -> Unit,
@@ -456,12 +458,19 @@ fun OperationsScreen(
 
             OperationsTab.Maintenance -> {
                 item(key = "projects", contentType = "card") {
-                    AppPanel {
+                    AppGroupedCard {
                         AppActionRow(
                             title = "项目与发布",
                             subtitle = "GitHub 项目、Android 发布、CT8 任务与容器镜像",
                             icon = Icons.Outlined.Code,
                             onClick = onOpenProjects,
+                        )
+                        AppDivider()
+                        AppActionRow(
+                            title = "环境变量对照表",
+                            subtitle = "服务器 .env 各参数的中文含义与用途",
+                            icon = Icons.Outlined.Tune,
+                            onClick = onOpenEnvReference,
                         )
                     }
                 }

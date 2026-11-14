@@ -298,7 +298,7 @@ internal fun AuthenticatedShell(
             AppRoute.Campus -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Campus)
             AppRoute.Todos -> viewModel.syncNavigationDestination(MainTab.Overview, workspaceDestination = WorkspaceDestination.Todos)
             AppRoute.Projects -> viewModel.syncNavigationDestination(MainTab.Operations, workspaceDestination = WorkspaceDestination.Projects)
-            AppRoute.AndroidReleases, AppRoute.RegistryImages -> viewModel.syncNavigationDestination(MainTab.Operations, autoRefresh = false)
+            AppRoute.AndroidReleases, AppRoute.RegistryImages, AppRoute.EnvReference -> viewModel.syncNavigationDestination(MainTab.Operations, autoRefresh = false)
             AppRoute.Authenticator, AppRoute.NotificationSettings -> viewModel.syncNavigationDestination(MainTab.Profile, autoRefresh = false)
             AppRoute.LoginSessions -> viewModel.syncNavigationDestination(MainTab.Profile)
         }
@@ -561,6 +561,7 @@ internal fun AuthenticatedShell(
                         onIncidentResolve = { id, note -> viewModel.resolveIncident(id, note, onSensitiveActionConfirmation) },
                         onRefresh = onRefresh,
                         onOpenProjects = { navigateToSubScreen(AppRoute.Projects) },
+                        onOpenEnvReference = { navigateToSubScreen(AppRoute.EnvReference) },
                         requestWebLoginUrl = viewModel::createPlatformWebLoginUrl,
                     )
                 }

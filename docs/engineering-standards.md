@@ -229,6 +229,7 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 - `.env.example` 必须与 `scripts/workspace/validate-deployment-env.mjs` 的校验规则保持一致；密钥名变更时同步更新 `scripts/checks/check-ci-env-contract.mjs` 与 CI 缓存/契约。
 - 生产环境校验会拒绝弱会话密钥、公开模板密钥、占位值；`create-ci-env.mjs` 生成的 `.env.ci` 是一次性环境，仅用于 Docker 冒烟测试。
 - 已被自动校验的部分（可依赖）：`validate-deployment-env.mjs` 的 26 个必需项 + 8 个可选项 + 2 个 Base64URL-32 字节密钥 + 跨键取值唯一性；以及 `check-ci-env-contract.mjs` 保证 `compose.yml` 中每个 `${VAR:?}` 都由 `create-ci-env.mjs` 生成。
+- Android App 内置 `.env.example` 的中文对照表（`apps/android-app/.../ui/feature/envreference/EnvReferenceCatalog.kt`，只含变量名、含义与模板默认值，不含真实取值）。`.env.example` 增删或改名变量时同步该文件；`npm run check:env-reference`（已接入根 `check` 与 Android CI）校验两侧变量名一一对应。
 - **未被该规则覆盖的缺口**：约 62 个被 compose 或脚本引用、但**不在 `.env.example`** 中的变量名，其中运维相关的包括 `BACKUP_RETENTION_DAYS`、`PLATFORM_BLACKBOX_*` 系列、`LEGACY_CAMPUS_DB`、`LEGACY_IOT_DATA_DIR`、`PLATFORM_BACKUP_*` 与 `PLATFORM_RESTORE_COMMAND`。它们多数有 compose 内置默认值。**新增这类变量时同步补进 `.env.example`**，否则运维无法从模板发现它。
 - **严禁**把密钥、令牌、真实账号、私钥写入 `config/`、文档、注释或测试固件。
 

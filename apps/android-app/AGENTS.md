@@ -182,6 +182,7 @@
 - 专用验证码输入保留 `BasicTextField`，身份码全屏展示保留专用 `Dialog`；这些例外不允许扩展成普通表单的替代体系。
 - `app/src/debug/java/cn/pxyb/mycontrol/ui/components/DesignSystemPreviews.kt` 提供浅色、深色、深色大字号和窄屏 1.5 倍字号预览，仅进入 Debug 源集。预览涵盖按钮加载/禁用、字段错误、筛选选中、持续反馈、长名称、长指标值与单位、可复制长详情。
 - 源码检查和 Kotlin 编译不能代替实际渲染、TalkBack 或真机性能验证；报告时分别说明。
+- 「状态 → 维护 → 环境变量对照表」（`ui/feature/envreference/`）是根目录 `.env.example` 的中文说明，纯本地静态内容，不请求服务器、不显示真实取值。`.env.example` 增删或改名变量时必须同步 `EnvReferenceCatalog.kt`，根目录 `npm.cmd run check:env-reference` 会校验两侧变量名一致（已接入根 `check` 和 Android CI）；条目只能用 `required(` / `keep(` / `optional(` 构造，密钥类条目不得填写 `example`。
 
 ## 12. 设备侧回归测试 (androidTest)
 

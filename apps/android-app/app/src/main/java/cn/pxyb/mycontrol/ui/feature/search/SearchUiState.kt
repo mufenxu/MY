@@ -53,6 +53,7 @@ internal val featureSearchItems = listOf(
     GlobalSearchItem("feature:github", "GitHub 项目", "仓库公开性与 Release 管理", "项目与发布", SearchDestination.Operations, featureRoute = AppRoute.GitHubProjects),
     GlobalSearchItem("feature:android", "Android 发布管理", "版本构建、发布配置与历史安装包", "项目与发布", SearchDestination.Operations, featureRoute = AppRoute.AndroidReleases),
     GlobalSearchItem("feature:registry", "容器镜像管理", "阿里云 ACR 历史镜像清理", "项目与发布", SearchDestination.Operations, featureRoute = AppRoute.RegistryImages),
+    GlobalSearchItem("feature:env", "环境变量对照表", ".env 配置参数的中文含义与用途", "系统维护", SearchDestination.Operations, featureRoute = AppRoute.EnvReference),
     GlobalSearchItem("feature:authenticator", "本地验证器", "第三方网站 TOTP 动态验证码、离线验证", "账号工具", SearchDestination.Overview, featureRoute = AppRoute.Authenticator),
     GlobalSearchItem("feature:google", "Google 邮箱台账", "邮箱、别名、账号与 OpenAI 使用状态", "账号工具", SearchDestination.GoogleAccounts, featureRoute = AppRoute.GoogleAccounts),
     GlobalSearchItem("feature:account", "账号与安全", "修改密码、MFA、Passkey、恢复码与应用锁", "账号与安全", SearchDestination.Overview, featureRoute = AppRoute.Account),

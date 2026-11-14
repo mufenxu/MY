@@ -20,6 +20,7 @@ internal object AppRoute {
     const val GitHubProjects = "github-projects"
     const val AndroidReleases = "android-releases"
     const val RegistryImages = "registry-images"
+    const val EnvReference = "env-reference"
     const val Projects = "projects"
     const val NotificationSettings = "notification-settings"
     const val LoginSessions = "login-sessions"
@@ -46,7 +47,7 @@ internal object AppRoute {
 }
 
 internal fun contentMaxWidthForRoute(route: String): Dp = when (route) {
-    AppRoute.DailyNews -> AppReadingContentMaxWidth
+    AppRoute.DailyNews, AppRoute.EnvReference -> AppReadingContentMaxWidth
     AppRoute.NotificationSettings, AppRoute.LoginSessions, AppRoute.CampusWaterValve -> AppFormContentMaxWidth
     AppRoute.Agenda, AppRoute.Study, AppRoute.Energy, AppRoute.Grades, AppRoute.Screenshot -> AppWorkspaceContentMaxWidth
     AppRoute.Overview, AppRoute.Operations, AppRoute.Tools, AppRoute.Today,
@@ -96,7 +97,7 @@ internal fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.CampusWaterValve, AppRoute.DailyNews, AppRoute.Notifications, AppRoute.Chaoxing -> MainTab.Overview
     AppRoute.MediaDownload -> MainTab.Overview
     AppRoute.Operations, AppRoute.Projects, AppRoute.GitHubProjects,
-    AppRoute.AndroidReleases, AppRoute.RegistryImages -> MainTab.Operations
+    AppRoute.AndroidReleases, AppRoute.RegistryImages, AppRoute.EnvReference -> MainTab.Operations
     AppRoute.Tools, AppRoute.Scenes -> MainTab.Tools
     AppRoute.Profile, AppRoute.Account, AppRoute.GoogleAccounts,
     AppRoute.Authenticator, AppRoute.LoginSessions, AppRoute.NotificationSettings -> MainTab.Profile
@@ -108,7 +109,7 @@ internal fun parentTabForSubScreen(route: String?, previousRoute: String?): Main
     AppRoute.Account, AppRoute.Authenticator, AppRoute.LoginSessions,
     AppRoute.NotificationSettings -> MainTab.Profile
     AppRoute.Projects, AppRoute.GitHubProjects, AppRoute.AndroidReleases,
-    AppRoute.RegistryImages -> MainTab.Operations
+    AppRoute.RegistryImages, AppRoute.EnvReference -> MainTab.Operations
     AppRoute.Scenes -> MainTab.Tools
     AppRoute.Assistant, AppRoute.Notifications, AppRoute.Search,
     AppRoute.Agenda, AppRoute.Study, AppRoute.Energy, AppRoute.Grades, AppRoute.Screenshot,

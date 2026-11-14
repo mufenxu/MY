@@ -9,6 +9,9 @@ on:
       - 'scripts/release/android-release.test.mjs'
       - 'scripts/checks/check-android-design.mjs'
       - 'scripts/checks/check-android-design.test.mjs'
+      - 'scripts/checks/check-env-reference.mjs'
+      - 'scripts/checks/check-env-reference.test.mjs'
+      - '.env.example'
       - '.github/workflows/android-ci.yml'
       - '.github/workflows/android-release.yml'
   workflow_dispatch:
@@ -44,6 +47,9 @@ jobs:
 
       - name: Check Android design conventions
         run: npm run check:android-design
+
+      - name: Check environment variable reference
+        run: npm run check:env-reference
 
       - name: Run Android checks
         working-directory: apps/android-app
