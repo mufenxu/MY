@@ -1,4 +1,9 @@
 (function applySavedTheme(global) {
+  if (/\/query\/?$/i.test(global.location.pathname)) {
+    global.document.title = '学习记录自查';
+    global.document.querySelector('meta[name="description"]').setAttribute('content', '学习记录自查');
+  }
+
   try {
     const theme = global.localStorage.getItem('theme');
     const prefersDark = global.matchMedia('(prefers-color-scheme: dark)').matches;

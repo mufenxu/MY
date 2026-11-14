@@ -3,7 +3,6 @@ import { Input, Spin } from 'antd';
 import {
   CheckCircleOutlined,
   ClockCircleFilled,
-  ArrowLeftOutlined,
   FieldTimeOutlined,
   FileSearchOutlined,
   IdcardOutlined,
@@ -35,7 +34,7 @@ const PublicQuery = () => {
 
   useEffect(() => {
     const previousTitle = document.title;
-    document.title = '星轨控制台';
+    document.title = '学习记录自查';
     return () => {
       document.title = previousTitle;
     };
@@ -132,14 +131,6 @@ const PublicQuery = () => {
             <div className="brand-mark">
               <span className="brand-mark-icon"><SafetyCertificateOutlined /></span>
               <span>星轨记录工具</span>
-              <button
-                type="button"
-                className="btn btn-sm btn-text record-back"
-                onClick={() => { window.location.assign('/dashboard'); }}
-              >
-                <ArrowLeftOutlined />
-                返回管理台
-              </button>
             </div>
 
             <h1 id="record-query-title" className="record-title">学习记录自查</h1>

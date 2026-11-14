@@ -66,13 +66,6 @@
   color: var(--blue);
 }
 
-.record-back {
-  margin-left: 6px;
-  padding-left: 10px;
-  border-left: 1px solid var(--line);
-  border-radius: 0;
-}
-
 .record-title {
   margin: 0;
   color: var(--ink);
