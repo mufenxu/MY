@@ -1,39 +1,27 @@
 package cn.pxyb.mycontrol.ui.feature.campus.reservation
 
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.EventBusy
 import androidx.compose.material.icons.outlined.FactCheck
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,7 +33,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.CampusMyReservation
@@ -60,16 +47,20 @@ import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.input.AppSelectField
 import cn.pxyb.mycontrol.ui.components.input.AppSelectOption
-import cn.pxyb.mycontrol.ui.components.input.AppSwitch
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
 import cn.pxyb.mycontrol.ui.components.picker.AppDatePickerModal
 import cn.pxyb.mycontrol.ui.components.picker.AppTimeRangePicker
-import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.util.DateTimeUtils.parseTimeMinutes
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
+import cn.pxyb.mycontrol.ui.components.layout.AppInsetPanel
+import cn.pxyb.mycontrol.ui.components.display.AppDivider
+import cn.pxyb.mycontrol.ui.components.display.AppSwitchRow
+import cn.pxyb.mycontrol.ui.components.input.AppPickerField
+import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
+import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
+import androidx.compose.foundation.selection.selectableGroup
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -156,20 +147,15 @@ internal fun SingleReservationPanel(
                 onSubmit(req) {}
             },
             extraContent = {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-                ) {
+                AppInsetPanel {
                     Column(
-                        modifier = Modifier.padding(14.dp),
+                        modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         AppDetailRow("预约空间", selectedSpaceName)
                         AppDetailRow("预约日期", "$selectedDate (${weekdayName(today.plusDays(dayOffset.toLong()))})")
                         AppDetailRow("预约时段", "$startTime - $endTime (${durationMin?.let { "${it / 60}小时${if (it % 60 > 0) "${it % 60}分" else ""}" } ?: ""})")
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                        AppDivider(paddingStart = 0.dp, paddingEnd = 0.dp)
                         AppDetailRow("申请主题", title)
                         AppDetailRow("联系电话", mobile)
                         AppDetailRow("公开申请", if (open) "是" else "否")
@@ -187,7 +173,7 @@ internal fun SingleReservationPanel(
     val cardSpaceAndTime = @Composable {
         AppPanel {
             Column(
-                modifier = Modifier.padding(14.dp),
+                modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 AppSectionHeader(
@@ -195,50 +181,25 @@ internal fun SingleReservationPanel(
                     subtitle = "选择研讨间与目标日期，快速查看并选取空闲时段",
                 )
 
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = "预约空间",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.weight(1f),
                         )
-                        Surface(
+                        AppSecondaryButton(
+                            text = "刷新空间",
+                            icon = Icons.Outlined.Refresh,
                             onClick = onReloadSpaces,
-                            enabled = !spacesLoading,
-                            shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                            ) {
-                                if (spacesLoading) {
-                                    AppCircularProgressIndicator(
-                                        modifier = Modifier.size(12.dp),
-                                        strokeWidth = 1.5.dp,
-                                    )
-                                } else {
-                                    Icon(
-                                        Icons.Outlined.Refresh,
-                                        contentDescription = "刷新空间列表",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(12.dp),
-                                    )
-                                }
-                                Text(
-                                    text = if (spacesLoading) "刷新中..." else "刷新空间",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
+                            loading = spacesLoading,
+                            height = 36.dp,
+                            compact = true,
+                        )
                     }
                     AppSelectField(
                         label = "研讨间",
@@ -274,233 +235,68 @@ internal fun SingleReservationPanel(
                     )
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "预约日期",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Surface(
-                            onClick = { singleDatePickerOpen = true },
-                            shape = RoundedCornerShape(6.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                            ) {
-                                Icon(
-                                    Icons.Outlined.CalendarMonth,
-                                    contentDescription = "滑动选择更多日期",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(12.dp),
-                                )
-                                Text(
-                                    text = "滑动选日期",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                            }
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        val offsets = listOf(0 to "今天", 1 to "明天", 2 to "后天", 3 to "大后天")
-                        offsets.forEach { (offset, name) ->
-                            val targetDate = today.plusDays(offset.toLong())
-                            val isSelected = dayOffset == offset
-                            val wk = weekdayName(targetDate)
-                            Surface(
-                                onClick = {
-                                    dayOffset = offset
-                                    onClearFeedback()
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                                border = BorderStroke(
-                                    1.dp,
-                                    if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f),
-                                ),
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(38.dp),
-                            ) {
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier.fillMaxSize(),
-                                ) {
-                                    Text(
-                                        text = "$name($wk)",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                        ),
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Surface(
-                    onClick = {
-                        if (selectedSpaceId > 0) {
-                            onQuery(selectedSpaceId, selectedDate)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ReservationQuickDateSelector(
+                        today = today,
+                        selectedDate = today.plusDays(dayOffset.toLong()),
+                        onSelect = { date ->
+                            dayOffset = java.time.temporal.ChronoUnit.DAYS.between(today, date).toInt()
                             onClearFeedback()
-                        }
-                    },
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        if (queryLoading) {
-                            AppCircularProgressIndicator(modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                "正在查询该空间空闲时段...",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        } else {
-                            Icon(
-                                Icons.Outlined.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(15.dp),
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                if (isQueriedCurrent) "刷新当前空间空闲时段" else "查询该空间开放规则与空闲时段",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                        }
-                    }
+                        },
+                    )
+                    AppPickerField(
+                        label = "预约日期",
+                        value = "$selectedDate · ${weekdayName(today.plusDays(dayOffset.toLong()))}",
+                        onClick = { singleDatePickerOpen = true },
+                        icon = Icons.Outlined.CalendarMonth,
+                    )
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                AppSecondaryButton(
+                    text = if (isQueriedCurrent) "刷新当前空间空闲时段" else "查询该空间开放规则与空闲时段",
+                    icon = Icons.Outlined.Search,
+                    onClick = {
+                        onQuery(selectedSpaceId, selectedDate)
+                        onClearFeedback()
+                    },
+                    loading = queryLoading,
+                    enabled = selectedSpaceId > 0,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         text = "可预约空闲时段",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface,
+                        style = MaterialTheme.typography.labelLarge,
                     )
-
-                    if (isQueriedCurrent) {
-                        if (currentFreeWindows.isNotEmpty()) {
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                currentFreeWindows.forEach { win ->
-                                    val isPicked = startTime == win.start && endTime == win.end
-                                    Surface(
-                                        onClick = {
-                                            startTime = win.start
-                                            endTime = win.end
-                                            onClearFeedback()
-                                        },
-                                        shape = RoundedCornerShape(6.dp),
-                                        color = if (isPicked) ColorTokens.Green.container.copy(alpha = 0.55f) else ColorTokens.Green.container.copy(alpha = 0.55f),
-                                        border = BorderStroke(1.dp, if (isPicked) ColorTokens.Green.foreground else ColorTokens.Green.border),
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                        ) {
-                                            Icon(
-                                                Icons.Outlined.CheckCircle,
-                                                contentDescription = null,
-                                                tint = ColorTokens.Green.foreground,
-                                                modifier = Modifier.size(13.dp),
-                                            )
-                                            Text(
-                                                text = "${win.start} - ${win.end}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = ColorTokens.Green.foreground,
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.3f)),
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Outlined.EventBusy,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                    Text(
-                                        text = "该空间在所选日期无空闲时段或已被全部约满",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.error,
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                    when {
+                        !isQueriedCurrent -> ReservationHint("选择空间和日期后，点击下方按钮查询空间空闲与已预约时段")
+                        currentFreeWindows.isEmpty() -> AppFeedbackBanner(
+                            message = "该空间在所选日期无空闲时段或已被全部约满",
+                            type = AppFeedbackType.Warning,
+                            icon = Icons.Outlined.EventBusy,
+                            showCloseButton = false,
+                        )
+                        else -> FlowRow(
+                            modifier = Modifier.fillMaxWidth().selectableGroup(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            ) {
-                                Icon(
-                                    Icons.Outlined.Info,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                                Text(
-                                    text = "选择空间和日期后，点击下方按钮查询空间空闲与已预约时段",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            currentFreeWindows.forEach { win ->
+                                AppFilterChip(
+                                    label = "${win.start} - ${win.end}",
+                                    selected = startTime == win.start && endTime == win.end,
+                                    onClick = {
+                                        startTime = win.start
+                                        endTime = win.end
+                                        onClearFeedback()
+                                    },
                                 )
                             }
                         }
                     }
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                AppDivider(paddingStart = 0.dp, paddingEnd = 0.dp)
 
                 AppTimeRangePicker(
                     startTime = startTime,
@@ -586,17 +382,11 @@ internal fun SingleReservationPanel(
                     )
 
                     if (availability != null) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
-                        ) {
+                        AppInsetPanel {
                             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(
                                     text = "空闲时段说明",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.primary,
                                 )
                                 Text(
@@ -609,12 +399,10 @@ internal fun SingleReservationPanel(
                     }
 
                     if (rules != null) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(
                                 text = "详细预约规则",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.labelLarge,
                             )
                             ScrollableRuleText(text = rules)
                         }
@@ -668,36 +456,14 @@ internal fun SingleReservationPanel(
                     maxLines = 5,
                 )
 
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Icon(
-                                Icons.Outlined.Public,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Column {
-                                Text("公开本次申请", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                                Text("在系统中公开展示申请主题与预约时段", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        AppSwitch(checked = open, onCheckedChange = { open = it; onClearFeedback() })
-                    }
+                AppInsetPanel {
+                    AppSwitchRow(
+                        title = "公开本次申请",
+                        subtitle = "在系统中公开展示申请主题与预约时段",
+                        icon = Icons.Outlined.Public,
+                        checked = open,
+                        onCheckedChange = { open = it; onClearFeedback() },
+                    )
                 }
 
                 formValidationNotice?.let { notice ->

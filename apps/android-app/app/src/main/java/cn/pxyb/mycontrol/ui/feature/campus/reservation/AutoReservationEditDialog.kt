@@ -1,20 +1,16 @@
 package cn.pxyb.mycontrol.ui.feature.campus.reservation
 
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -25,7 +21,6 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material3.MaterialTheme
 import cn.pxyb.mycontrol.ui.components.input.AppPickerField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,7 +30,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -53,12 +47,13 @@ import cn.pxyb.mycontrol.ui.components.dialog.AppDialogSize
 import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
-import cn.pxyb.mycontrol.ui.components.input.AppSwitch
 import cn.pxyb.mycontrol.ui.components.picker.AppDatePickerModal
 import cn.pxyb.mycontrol.ui.components.picker.AppTimePickerModal
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import cn.pxyb.mycontrol.ui.components.layout.AppInsetPanel
+import cn.pxyb.mycontrol.ui.components.display.AppSwitchRow
 
 @Composable
 internal fun AutoReservationEditDialog(
@@ -286,82 +281,38 @@ internal fun AutoReservationEditDialog(
                 singleLine = true,
             )
 
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = "启用此自动任务",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.weight(1f),
-                        )
-                        AppSwitch(
-                            checked = enabled && !needsRoom,
-                            onCheckedChange = { enabled = it },
-                            enabled = !needsRoom,
-                        )
-                    }
+            AppInsetPanel {
+                Column {
+                    AppSwitchRow(
+                        title = "启用此自动任务",
+                        checked = enabled && !needsRoom,
+                        onCheckedChange = { enabled = it },
+                        enabled = !needsRoom,
+                    )
                     if (needsRoom || task?.isLocalDraft == true) {
                         Text(
                             text = "草稿仅保存在当前账号的本机数据中，不会执行。补选房间并保存为正式任务后，才可启用自动预约。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
                         )
                     }
                 }
             }
 
             // 快速选择今天/明天/后天/大后天
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                listOf("今天", "明天", "后天", "大后天").forEachIndexed { index, label ->
-                    val targetDate = today.plusDays(index.toLong())
-                    val dateStr = targetDate.format(DateTimeFormatter.ISO_LOCAL_DATE)
-                    val wk = weekdayName(targetDate)
-                    val isSelected = reservationDate.trim() == dateStr
-                    Surface(
-                        onClick = {
-                            reservationDate = dateStr
-                            executeDate = defaultAutoReservationExecuteDate(dateStr, today)
-                            validationError = null
-                        },
-                        shape = RoundedCornerShape(6.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        border = BorderStroke(
-                            1.dp,
-                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(30.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "$label($wk)",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                maxLines = 1,
-                            )
-                        }
-                    }
-                }
-            }
+            ReservationQuickDateSelector(
+                today = today,
+                selectedDate = remember(reservationDate) {
+                    runCatching { LocalDate.parse(reservationDate.trim(), DateTimeFormatter.ISO_LOCAL_DATE) }.getOrNull()
+                },
+                onSelect = { date ->
+                    val dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                    reservationDate = dateStr
+                    executeDate = defaultAutoReservationExecuteDate(dateStr, today)
+                    validationError = null
+                },
+            )
 
             AppPickerField(
                 label = "预约目标日期",
@@ -537,21 +488,12 @@ internal fun AutoReservationEditDialog(
                 maxLines = 4,
             )
 
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("公开本次申请", style = MaterialTheme.typography.bodyMedium)
-                    AppSwitch(checked = open, onCheckedChange = { open = it })
-                }
+            AppInsetPanel {
+                AppSwitchRow(
+                    title = "公开本次申请",
+                    checked = open,
+                    onCheckedChange = { open = it },
+                )
             }
 
             validationError?.let { err ->

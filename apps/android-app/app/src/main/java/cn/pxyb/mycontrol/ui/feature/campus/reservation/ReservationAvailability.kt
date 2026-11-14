@@ -1,47 +1,66 @@
 package cn.pxyb.mycontrol.ui.feature.campus.reservation
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.CampusReservationSpace
-import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.components.feedback.AppCircularProgressIndicator
+import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
+import cn.pxyb.mycontrol.ui.components.layout.AppInsetPanel
+import cn.pxyb.mycontrol.ui.theme.ColorTokens
+
+/** 预约模块内的中性提示：浅底分区里一枚小图标加一段说明。 */
+@Composable
+internal fun ReservationHint(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector = Icons.Outlined.Info,
+) {
+    AppInsetPanel(modifier = modifier) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
 
 @Composable
 internal fun ScrollableRuleText(text: String) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-    ) {
+    AppInsetPanel {
         Box(
             modifier = Modifier
                 .heightIn(max = 200.dp)
@@ -52,7 +71,6 @@ internal fun ScrollableRuleText(text: String) {
                 text = text,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                lineHeight = 20.sp,
             )
         }
     }
@@ -68,19 +86,13 @@ internal fun AvailableSpacesByTimeBlock(
     onSelectSpace: (CampusReservationSpace) -> Unit,
 ) {
     if (loading) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
-        ) {
+        AppInsetPanel {
             Row(
                 modifier = Modifier.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             ) {
                 AppCircularProgressIndicator(modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(10.dp))
                 Text(
                     text = "正在查询该时段空闲学习间...",
                     style = MaterialTheme.typography.bodySmall,
@@ -90,91 +102,49 @@ internal fun AvailableSpacesByTimeBlock(
         }
         return
     }
-
     if (queryText == null) return
-
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        color = if (availableSpaces.isNotEmpty()) ColorTokens.Green.container else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        border = BorderStroke(
-            1.dp,
-            if (availableSpaces.isNotEmpty()) ColorTokens.Green.border else MaterialTheme.colorScheme.outlineVariant,
-        ),
-    ) {
+    val found = availableSpaces.isNotEmpty()
+    AppInsetPanel {
         Column(
             modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Icon(
-                        if (availableSpaces.isNotEmpty()) Icons.Outlined.CheckCircle else Icons.Outlined.Info,
-                        contentDescription = null,
-                        tint = if (availableSpaces.isNotEmpty()) ColorTokens.Green.foreground else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp),
-                    )
-                    Text(
-                        text = if (availableSpaces.isNotEmpty()) "在该时段找到 ${availableSpaces.size} 间空闲学习间" else "该时段暂无空闲学习间",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (availableSpaces.isNotEmpty()) ColorTokens.Green.foreground else MaterialTheme.colorScheme.onSurface,
-                    )
-                }
-                if (availableSpaces.isNotEmpty()) {
+                Icon(
+                    if (found) Icons.Outlined.CheckCircle else Icons.Outlined.Info,
+                    contentDescription = null,
+                    tint = if (found) ColorTokens.Green.foreground else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    text = if (found) "在该时段找到 ${availableSpaces.size} 间空闲学习间" else "该时段暂无空闲学习间",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (found) ColorTokens.Green.foreground else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                if (found) {
                     Text(
                         text = "点击可直接选中",
                         style = MaterialTheme.typography.labelSmall,
-                        color = ColorTokens.Green.foreground,
-                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-
-            if (availableSpaces.isNotEmpty()) {
+            if (found) {
                 FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.fillMaxWidth().selectableGroup(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     availableSpaces.forEach { space ->
-                        val isSelected = space.id == selectedSpaceId
-                        Surface(
+                        AppFilterChip(
+                            label = space.name,
+                            selected = space.id == selectedSpaceId,
                             onClick = { onSelectSpace(space) },
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                            contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                            border = BorderStroke(
-                                1.dp,
-                                if (isSelected) MaterialTheme.colorScheme.primary else ColorTokens.Green.border,
-                            ),
-                            shadowElevation = 0.dp,
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                            ) {
-                                Icon(
-                                    imageVector = if (isSelected) Icons.Outlined.CheckCircle else Icons.Outlined.MeetingRoom,
-                                    contentDescription = null,
-                                    tint = if (isSelected) MaterialTheme.colorScheme.onPrimary else ColorTokens.Green.foreground,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                                Text(
-                                    text = space.name,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                )
-                            }
-                        }
+                        )
                     }
                 }
             } else {

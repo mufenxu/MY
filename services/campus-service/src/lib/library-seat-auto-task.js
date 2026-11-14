@@ -96,28 +96,44 @@ function beijingInstantMs(date, minute) {
   return Date.UTC(year, month - 1, day, Math.floor(minute / 60), minute % 60, 0, 0) - BEIJING_OFFSET_MS;
 }
 
+export function librarySeatAutoTaskTimeSlots(input = {}) {
+  const slots = input.timeSlots ?? input.time_slots ?? [input];
+  if (!Array.isArray(slots) || !slots.length) {
+    fail("请至少设置一个预约时段。", "INVALID_LIBRARY_SEAT_AUTO_TASK_TIME_RANGE");
+  }
+  const normalized = slots.map((slot) => {
+    const startMinute = minuteValue(
+      slot?.startMinute ?? slot?.start_minute ?? slot?.beginMinute,
+      "开始时间",
+      "INVALID_LIBRARY_SEAT_AUTO_TASK_START"
+    );
+    const endMinute = minuteValue(
+      slot?.endMinute ?? slot?.end_minute,
+      "结束时间",
+      "INVALID_LIBRARY_SEAT_AUTO_TASK_END"
+    );
+    if (endMinute <= startMinute) {
+      fail("结束时间必须晚于开始时间。", "INVALID_LIBRARY_SEAT_AUTO_TASK_TIME_RANGE");
+    }
+    if (endMinute - startMinute > 240) {
+      fail("自动预约的每个座位时段不能超过 4 小时。", "INVALID_LIBRARY_SEAT_AUTO_TASK_DURATION");
+    }
+    return { startMinute, endMinute };
+  }).sort((a, b) => a.startMinute - b.startMinute);
+  if (normalized.some((slot, index) => index > 0 && slot.startMinute < normalized[index - 1].endMinute)) {
+    fail("预约时段不能重叠。", "INVALID_LIBRARY_SEAT_AUTO_TASK_TIME_RANGE");
+  }
+  return normalized;
+}
+
 export function normalizeLibrarySeatAutoTaskInput(input = {}) {
   const venueId = safeId(input.venueId ?? input.venue_id, "场馆", "INVALID_LIBRARY_SEAT_AUTO_TASK_VENUE");
   const floorId = safeId(input.floorId ?? input.floor_id, "楼层", "INVALID_LIBRARY_SEAT_AUTO_TASK_FLOOR");
   const venueName = safeName(input.venueName ?? input.venue_name ?? input.venue?.name, "场馆名称", 80);
   const floorName = safeName(input.floorName ?? input.floor_name ?? input.floor?.name, "楼层名称", 80);
   const date = validDate(input.date ?? input.reservationDate, "预约目标日期");
-  const startMinute = minuteValue(
-    input.startMinute ?? input.start_minute ?? input.beginMinute,
-    "开始时间",
-    "INVALID_LIBRARY_SEAT_AUTO_TASK_START"
-  );
-  const endMinute = minuteValue(
-    input.endMinute ?? input.end_minute,
-    "结束时间",
-    "INVALID_LIBRARY_SEAT_AUTO_TASK_END"
-  );
-  if (endMinute <= startMinute) {
-    fail("结束时间必须晚于开始时间。", "INVALID_LIBRARY_SEAT_AUTO_TASK_TIME_RANGE");
-  }
-  if (endMinute - startMinute > 240) {
-    fail("自动预约的座位时段不能超过 4 小时。", "INVALID_LIBRARY_SEAT_AUTO_TASK_DURATION");
-  }
+  const timeSlots = librarySeatAutoTaskTimeSlots(input);
+  const { startMinute, endMinute } = timeSlots[0];
   const minLabel = labelValue(input.minLabel ?? input.min_label ?? input.minSeatNo, DEFAULT_MIN_LABEL, "最小座位号");
   const maxLabel = labelValue(input.maxLabel ?? input.max_label ?? input.maxSeatNo, DEFAULT_MAX_LABEL, "最大座位号");
   if (minLabel > maxLabel) {
@@ -126,6 +142,9 @@ export function normalizeLibrarySeatAutoTaskInput(input = {}) {
   const seatLabels = seatLabelsValue(input.seatLabels ?? input.seat_labels);
   const preferredAreaId = stringValue(input.preferredAreaId ?? input.preferred_area_id);
   if (preferredAreaId) safeId(preferredAreaId, "优先阅览区", "INVALID_LIBRARY_SEAT_AUTO_TASK_AREA");
+  if (timeSlots.length > 1 && (!preferredAreaId || seatLabels.length !== 1)) {
+    fail("同座位多时段任务需指定一个阅览区和一个座位号。", "INVALID_LIBRARY_SEAT_AUTO_TASK_SEAT_LABELS");
+  }
   // 默认「目标日期的前一天」，也就是学校放号那一天。
   const runDate = validDate(
     input.runDate ?? input.run_date ?? previousDate(date),
@@ -147,6 +166,7 @@ export function normalizeLibrarySeatAutoTaskInput(input = {}) {
     date,
     startMinute,
     endMinute,
+    timeSlots,
     minLabel,
     maxLabel,
     seatLabels,
@@ -176,13 +196,12 @@ export function librarySeatAutoTaskRunAtMs(task) {
 
 function taskWindow(task) {
   const date = stringValue(task?.date ?? task?.reservationDate);
-  const startMinute = Number(task?.startMinute ?? task?.start_minute);
-  const endMinute = Number(task?.endMinute ?? task?.end_minute);
   if (!DATE_PATTERN.test(date)) return null;
-  if (!Number.isInteger(startMinute) || !Number.isInteger(endMinute)) return null;
+  let slots;
+  try { slots = librarySeatAutoTaskTimeSlots(task); } catch { return null; }
   return {
-    startMs: beijingInstantMs(date, startMinute),
-    endMs: beijingInstantMs(date, endMinute)
+    startMs: beijingInstantMs(date, slots[0].startMinute),
+    endMs: beijingInstantMs(date, slots.at(-1).endMinute)
   };
 }
 
@@ -294,9 +313,11 @@ export function librarySeatAutoTaskTierText(tier, label) {
 
 export async function prepareLibrarySeatAutoTaskSeats({ task, client, topology = false, maxAreas = 50 } = {}) {
   const input = normalizeLibrarySeatAutoTaskInput(task);
+  const fixedSeat = input.timeSlots.length > 1;
   const payload = await client.listAreas({ venueId: input.venueId, floorId: input.floorId,
     date: input.date, startMinute: input.startMinute, endMinute: input.endMinute, currentPage: 1, pageSize: 50 });
-  const areas = areaList(payload).filter((area) => area && (topology || Number(area.seatFree) > 0))
+  const areas = areaList(payload).filter((area) => area && (topology || Number(area.seatFree) > 0)
+    && (!fixedSeat || String(area.id) === input.preferredAreaId))
     .sort((a, b) => Number(b.seatFree) - Number(a.seatFree)).slice(0, maxAreas);
   const groups = await mapWithConcurrency(areas, 2, async (area) => {
     let seats;
@@ -309,7 +330,8 @@ export async function prepareLibrarySeatAutoTaskSeats({ task, client, topology =
         startMinute: input.startMinute, endMinute: input.endMinute, amPm: 0, refresh: true });
       seats = Array.isArray(result) ? result : result?.seats || [];
     }
-    const remaining = seats.filter((seat) => seat?.isFree === true);
+    const remaining = seats.filter((seat) => seat?.isFree === true
+      && (!fixedSeat || Number(seat.label) === input.seatLabels[0]));
     const candidates = [];
     const seatLabels = !input.preferredAreaId || input.preferredAreaId === String(area.id) ? input.seatLabels : [];
     while (remaining.length) {
@@ -373,6 +395,11 @@ async function confirmPendingReservation(prepared, task, client, shouldStop = ()
         prepared.pendingRefused = false;
         return { status: "stopped", message: "任务已停止，已取消后续尝试。" };
       }
+      if (prepared.fixedSeat) {
+        prepared.pending = null;
+        prepared.pendingRefused = false;
+        return { status: "failed", message: "学校拒绝了该时段预约，已核对预约记录，保留其他时段结果。" };
+      }
       stage = "availability";
       const fresh = await prepareLibrarySeatAutoTaskSeats({ task, client });
       prepared.blocked.add(candidate.seatId);
@@ -428,6 +455,7 @@ export async function scanLibrarySeatAutoTask({
     } catch (error) {
       onFailure(error, candidate);
       if (error?.code === "LIBRARY_SEAT_OCCUPIED" || (error?.status === 409 && !error.code)) {
+        if (prepared.fixedSeat) return { status: "failed", message: "指定座位在该时段已被占用，保留其他时段结果。" };
         prepared.blocked.add(candidate.seatId);
         if (prepared.topology) return { status: "retry", message: "座位已被占用，刷新目标时段空位后继续尝试。" };
         continue;
@@ -436,6 +464,7 @@ export async function scanLibrarySeatAutoTask({
         && /^(?:(?:座位)?预约失败(?:[,，]\s*请尽快选择其他时段或座位)?|操作失败|请求失败|座位预约系统拒绝了请求|座位预约系统返回 HTTP 409)[。！!]?$/u.test(error.message)) {
         prepared.pending = candidate;
         prepared.pendingRefused = true;
+        if (prepared.fixedSeat) return { status: "confirming", message: "提交结果待确认，正在核对该时段预约。" };
         return confirmPendingReservation(prepared, task, client, shouldStop, onFailure);
       }
       if (["LIBRARY_SEAT_NOT_OPEN", "LIBRARY_SEAT_BUSY", "LIBRARY_SEAT_RATE_LIMITED", "UPSTREAM_CAPACITY_EXCEEDED"].includes(error?.code)
@@ -446,6 +475,7 @@ export async function scanLibrarySeatAutoTask({
       if (error?.status >= 500 || !error?.status || /TIMEOUT|NETWORK/.test(error.code || "")) {
         prepared.pending = candidate;
         prepared.pendingRefused = false;
+        if (prepared.fixedSeat) return { status: "confirming", message: "提交结果待确认，正在核对该时段预约。" };
         return confirmPendingReservation(prepared, task, client, shouldStop, onFailure);
       }
       throw error;

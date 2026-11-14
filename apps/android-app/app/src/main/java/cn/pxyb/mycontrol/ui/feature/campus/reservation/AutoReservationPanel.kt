@@ -1,7 +1,5 @@
 package cn.pxyb.mycontrol.ui.feature.campus.reservation
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,16 +8,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,9 +21,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.CampusAutoReservationTask
 import cn.pxyb.mycontrol.data.CampusReservationSpace
@@ -41,6 +31,8 @@ import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
 import java.time.LocalDate
+import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
+import cn.pxyb.mycontrol.ui.components.feedback.AppEmptyState
 
 @Composable
 internal fun AutoReservationPanel(
@@ -138,152 +130,106 @@ internal fun AutoReservationPanel(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         AppPanel {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Column(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        Text(
-                            "自动预约任务",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                            ),
-                        )
+                        Text("自动预约任务", style = MaterialTheme.typography.titleLarge)
                         Text(
                             "服务端提前准备，到点按候选顺序抢约；冲突换房，繁忙时短时重试。无需保持手机页面打开。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Spacer(Modifier.width(10.dp))
-                    Surface(
+                    AppHeaderIconButton(
+                        icon = Icons.Outlined.Add,
+                        contentDescription = "新建任务",
                         onClick = {
                             editingTask = null
                             isEditing = true
                             onClearFeedback()
                         },
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(36.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Outlined.Add,
-                                contentDescription = "新建任务",
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                    }
+                        iconTint = MaterialTheme.colorScheme.primary,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    )
                 }
 
                 if (tasks.isEmpty() && !tasksLoading) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(vertical = 32.dp, horizontal = 20.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                    AppEmptyState(
+                        title = "还没有自动预约任务",
+                        detail = "点击右上角“新建任务”，设置候选空间与时段，系统会在指定时间自动尝试预约抢占。",
+                        icon = Icons.Outlined.AutoAwesome,
+                    )
+                }
+            }
+        }
+
+        // 任务卡片与标题卡片并列排布，不再嵌套在同一张卡片里。
+        val isTablet = useTwoPaneLayout()
+
+        if (tasks.isNotEmpty()) {
+            if (isTablet) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    tasks.chunked(2).forEach { rowTasks ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(CircleShape)
-                                    .background(MaterialTheme.colorScheme.primaryContainer),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    Icons.Outlined.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(24.dp),
-                                )
+                            rowTasks.forEach { task ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    AutoTaskCard(
+                                        task = task,
+                                        spaces = spaces,
+                                        isDeleting = deletingTaskId == task.id,
+                                        onToggle = { taskToToggle = task },
+                                        onEdit = {
+                                            editingTask = task
+                                            isEditing = true
+                                            onClearFeedback()
+                                        },
+                                        onCopy = {
+                                            editingTask = task.copyForNextRun(LocalDate.now())
+                                            isEditing = true
+                                            onClearFeedback()
+                                        },
+                                        onDelete = { taskToDelete = task },
+                                    )
+                                }
                             }
-                            Text(
-                                text = "还没有自动预约任务",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                text = "点击右上角“新建任务”，设置候选空间与时段，系统会在指定时间自动尝试预约抢占。",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                            )
+                            if (rowTasks.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
                         }
                     }
                 }
-
-                val isTablet = useTwoPaneLayout()
-
-                if (tasks.isNotEmpty()) {
-                    if (isTablet) {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            tasks.chunked(2).forEach { rowTasks ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                ) {
-                                    rowTasks.forEach { task ->
-                                        Box(modifier = Modifier.weight(1f)) {
-                                            AutoTaskCard(
-                                                task = task,
-                                                spaces = spaces,
-                                                isDeleting = deletingTaskId == task.id,
-                                                onToggle = { taskToToggle = task },
-                                                onEdit = {
-                                                    editingTask = task
-                                                    isEditing = true
-                                                    onClearFeedback()
-                                                },
-                                                onCopy = {
-                                                    editingTask = task.copyForNextRun(LocalDate.now())
-                                                    isEditing = true
-                                                    onClearFeedback()
-                                                },
-                                                onDelete = { taskToDelete = task },
-                                            )
-                                        }
-                                    }
-                                    if (rowTasks.size == 1) {
-                                        Spacer(modifier = Modifier.weight(1f))
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            tasks.forEach { task ->
-                                AutoTaskCard(
-                                    task = task,
-                                    spaces = spaces,
-                                    isDeleting = deletingTaskId == task.id,
-                                    onToggle = { taskToToggle = task },
-                                    onEdit = {
-                                        editingTask = task
-                                        isEditing = true
-                                        onClearFeedback()
-                                    },
-                                    onCopy = {
-                                        editingTask = task.copyForNextRun(LocalDate.now())
-                                        isEditing = true
-                                        onClearFeedback()
-                                    },
-                                    onDelete = { taskToDelete = task },
-                                )
-                            }
-                        }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    tasks.forEach { task ->
+                        AutoTaskCard(
+                            task = task,
+                            spaces = spaces,
+                            isDeleting = deletingTaskId == task.id,
+                            onToggle = { taskToToggle = task },
+                            onEdit = {
+                                editingTask = task
+                                isEditing = true
+                                onClearFeedback()
+                            },
+                            onCopy = {
+                                editingTask = task.copyForNextRun(LocalDate.now())
+                                isEditing = true
+                                onClearFeedback()
+                            },
+                            onDelete = { taskToDelete = task },
+                        )
                     }
                 }
             }

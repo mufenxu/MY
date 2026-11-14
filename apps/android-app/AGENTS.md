@@ -17,6 +17,7 @@
 - **主题表面与背景**：
   - 当前固定采用选定的 Material 分区方案，深浅色取自 `Theme.kt` / `Color.kt`；不保留候选方案切换或演示账号入口。
   - 面板复用 `AppPanel`，使用主题实色表面、20.dp 圆角与 0 阴影，默认无描边；不要重新添加旧版顶部高光渐变。可选中的卡片传 `selected = true`，由 `AppPanel` 统一给出主色细描边与极浅主色底并暴露选中语义，业务页面不要再手写 `Surface` 用描边粗细或底色表达选中；`containerColor` / `border` 只用于开关开启、高优先这类业务状态色。
+  - 卡片或弹窗内部的摘要、说明、分组字段用 `AppInsetPanel`（同在 `AppPanel.kt`）：主题实色 `surfaceContainerLow`、12.dp 圆角、无描边，语义色分区传成组状态色的实色底。不要在卡片里再套一张带描边的卡片，也不要用 `surfaceVariant.copy(alpha = …)` 这类半透明叠色手写浅底块；列表型内容把每一项做成与标题卡片并列的 `AppPanel`。
   - `Glassmorphism.kt` 保留共享接口：`glassCardColor()` 返回主题表面色，`auroraBackdrop()` 返回主题背景色；`glassPanel()` 保留细描边，加载微光仍由 `glassShimmer()` 提供。
 - **顶部悬浮胶囊导航**：
   采用“迷你浮岛 + 柔性追随”：顶部 0–200dp 滚动距离连续映射收拢进度，宽高、标题与操作透明度共享同一平滑进度，最终约 186dp 宽、44dp 视觉高度；按钮保留 48dp 热区，操作渐变进入“更多”。固定首屏内容内边距，不随收缩改变。搜索输入栏保留展开。

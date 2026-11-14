@@ -38,6 +38,7 @@ import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
 import cn.pxyb.mycontrol.ui.components.input.AppPickerField
 import cn.pxyb.mycontrol.ui.components.input.AppSearchBar
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
+import cn.pxyb.mycontrol.ui.components.layout.AppInsetPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.theme.MYControlTheme
 
@@ -110,6 +111,18 @@ private fun ComponentsPreview(dark: Boolean) {
                         AppDetailRow("完整访问地址", "https://example.invalid/workspace/applications/releases/2026/11/01", canCopy = true)
                         AppDetailRow("较长的设置名称与补充说明", "长详情自动在标签下方完整换行，关键内容无需依靠省略号猜测。")
                         AppDetailRow("暂无数据", "")
+                    }
+                }
+                // 浅底分区：卡片内的摘要与说明，深浅色下都要与卡片表面分得开
+                AppPanel {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("带浅底分区的卡片", style = MaterialTheme.typography.titleSmall)
+                        AppInsetPanel {
+                            Text("中性分区：摘要、说明与分组字段。", Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
+                        }
+                        AppInsetPanel(containerColor = MaterialTheme.colorScheme.primaryContainer) {
+                            Text("语义色分区使用实色底，不叠加透明度。", Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                 }
                 // 选中态：主色细描边 + 极浅主色底，深浅色下都要能与普通卡片区分

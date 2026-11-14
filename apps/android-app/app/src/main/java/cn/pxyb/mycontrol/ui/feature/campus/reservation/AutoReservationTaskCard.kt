@@ -1,7 +1,5 @@
 package cn.pxyb.mycontrol.ui.feature.campus.reservation
 
-import cn.pxyb.mycontrol.ui.theme.AppCardShape
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,7 +10,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.AutoAwesome
@@ -25,10 +22,8 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.WarningAmber
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -51,11 +46,14 @@ import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
 import cn.pxyb.mycontrol.ui.components.input.AppSwitch
-import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.util.DateTimeUtils.formatPlatformTime
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import cn.pxyb.mycontrol.ui.components.layout.AppPanel
+import cn.pxyb.mycontrol.ui.components.layout.AppInsetPanel
+import cn.pxyb.mycontrol.ui.components.display.AppIconTile
+import cn.pxyb.mycontrol.ui.components.display.AppDivider
 
 @Composable
 internal fun AutoTaskCard(
@@ -82,7 +80,6 @@ internal fun AutoTaskCard(
     }
     val accentForeground = accent?.foreground ?: MaterialTheme.colorScheme.onSurfaceVariant
     val accentContainer = accent?.container ?: MaterialTheme.colorScheme.surfaceVariant
-    val accentBorder = accent?.border ?: MaterialTheme.colorScheme.outlineVariant
     val statusIcon = when (task.status) {
         "waiting", "ready", "running" -> Icons.Outlined.AutoAwesome
         "succeeded" -> Icons.Outlined.CheckCircle
@@ -94,36 +91,17 @@ internal fun AutoTaskCard(
     val terminalStatus = task.status in setOf("succeeded", "failed", "auth_required", "expired", "invalid", "disabled", "unconfirmed", "stopped")
     var confirmEnable by remember { mutableStateOf(false) }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = AppCardShape,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
-        color = glassCardColor(),
-    ) {
+    AppPanel {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = accentContainer,
-                    border = BorderStroke(1.dp, accentBorder.copy(alpha = 0.7f)),
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = statusIcon,
-                            contentDescription = null,
-                            tint = accentForeground,
-                            modifier = Modifier.size(19.dp),
-                        )
-                    }
-                }
+                AppIconTile(icon = statusIcon, tint = accentForeground, background = accentContainer)
 
                 Column(
                     modifier = Modifier.weight(1f),
@@ -224,18 +202,7 @@ internal fun AutoTaskCard(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        Surface(
-                            shape = RoundedCornerShape(999.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                            border = BorderStroke(0.6.dp, MaterialTheme.colorScheme.outlineVariant),
-                        ) {
-                            Text(
-                                text = "${task.candidates.size} 个",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp),
-                            )
-                        }
+                        AppStatusBadge(label = "${task.candidates.size} 个", semantic = AppStatusSemantic.Neutral)
                     }
 
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -254,7 +221,7 @@ internal fun AutoTaskCard(
                                             if (index == 0) {
                                                 MaterialTheme.colorScheme.primaryContainer
                                             } else {
-                                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+                                                MaterialTheme.colorScheme.surfaceContainerHigh
                                             },
                                         ),
                                     contentAlignment = Alignment.Center,
@@ -280,21 +247,10 @@ internal fun AutoTaskCard(
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f),
                                 )
-                                Surface(
-                                    shape = RoundedCornerShape(999.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    border = BorderStroke(
-                                        0.6.dp,
-                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f),
-                                    ),
-                                ) {
-                                    Text(
-                                        text = "${candidate.startTime} - ${candidate.endTime}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                                    )
-                                }
+                                AppStatusBadge(
+                                    label = "${candidate.startTime} - ${candidate.endTime}",
+                                    semantic = AppStatusSemantic.Neutral,
+                                )
                             }
                         }
                     }
@@ -316,18 +272,11 @@ internal fun AutoTaskCard(
                 else -> ColorTokens.Amber
             }
             val resultForeground = resultAccent?.foreground ?: MaterialTheme.colorScheme.onSurfaceVariant
-            val resultContainer = resultAccent?.container?.copy(alpha = 0.6f)
-                ?: MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-            val resultBorder = resultAccent?.border?.copy(alpha = 0.7f)
-                ?: MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(10.dp),
-                color = resultContainer,
-                border = BorderStroke(1.dp, resultBorder),
+            AppInsetPanel(
+                containerColor = resultAccent?.container ?: MaterialTheme.colorScheme.surfaceContainerLow,
             ) {
                 Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                    modifier = Modifier.padding(12.dp),
                     verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
@@ -368,17 +317,9 @@ internal fun AutoTaskCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                        border = BorderStroke(
-                            0.6.dp,
-                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                        ),
-                    ) {
+                    AppInsetPanel {
                         Column(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            modifier = Modifier.padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             task.lastAttempts.take(4).forEach { attempt ->
@@ -427,7 +368,7 @@ internal fun AutoTaskCard(
                 }
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            AppDivider(paddingStart = 0.dp, paddingEnd = 0.dp)
 
             // 操作栏
             Row(

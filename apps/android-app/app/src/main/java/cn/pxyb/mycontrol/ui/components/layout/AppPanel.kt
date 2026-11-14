@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.semantics.Role
@@ -21,6 +22,27 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
 import cn.pxyb.mycontrol.ui.theme.AppCardShape
+
+/**
+ * 卡片或弹窗内部的浅底分区：主题实色 `surfaceContainerLow`、12dp 圆角、无描边，不添加内容内边距。
+ *
+ * 用于摘要、说明、分组字段这类"卡片里的一块"。语义色分区传成组状态色的实色底
+ * （如 `ColorTokens.Green.container`、`colorScheme.primaryContainer`），
+ * 业务页面不要再用半透明叠色、描边或自定圆角手写 `Surface`。
+ */
+@Composable
+fun AppInsetPanel(
+    modifier: Modifier = Modifier,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.small,
+        color = containerColor,
+        content = content,
+    )
+}
 
 private const val AppPanelSelectedTint = 0.06f
 private val AppPanelSelectedBorderWidth = 1.5.dp

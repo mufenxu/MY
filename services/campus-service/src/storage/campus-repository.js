@@ -695,7 +695,7 @@ export class CampusRepository {
 
   async claimLibrarySeatAutoTask(userId, id, owner, timestamp, lockUntil) {
     return this.db.collection("library_seat_auto_tasks").findOneAndUpdate(
-      { id, user_id: userId, enabled: true, status: { $nin: ["success", "unconfirmed"] },
+      { id, user_id: userId, enabled: true, status: { $nin: ["success", "partial", "unconfirmed"] },
         $or: [{ run_lock_until: { $exists: false } }, { run_lock_until: null }, { run_lock_until: { $lte: timestamp } }] },
       { $set: { run_owner: owner, run_lock_until: lockUntil, status: "running", last_run_at: timestamp } },
       { returnDocument: "after", projection: { _id: 0 } }
@@ -712,6 +712,7 @@ export class CampusRepository {
           run_owner: null,
           run_lock_until: null,
           timings: result.timings || null,
+          slot_results: result.slotResults || [],
           last_message: result.message || null,
           last_failure: result.lastFailure || null,
           last_run_at: timestamp,
@@ -1107,7 +1108,7 @@ export class MemoryCampusRepository {
 
   async claimLibrarySeatAutoTask(userId, id, owner, timestamp, lockUntil) {
     const row = this.librarySeatAutoTasks.get(id);
-    if (!row || row.user_id !== userId || !row.enabled || ["success", "unconfirmed"].includes(row.status)
+    if (!row || row.user_id !== userId || !row.enabled || ["success", "partial", "unconfirmed"].includes(row.status)
       || (row.run_lock_until && row.run_lock_until > timestamp)) return null;
     Object.assign(row, { run_owner: owner, run_lock_until: lockUntil, status: "running", last_run_at: timestamp });
     return clone(row);
@@ -1122,6 +1123,7 @@ export class MemoryCampusRepository {
       run_owner: null,
       run_lock_until: null,
       timings: result.timings || null,
+      slot_results: result.slotResults || [],
       last_message: result.message || null,
       last_failure: result.lastFailure || null,
       last_run_at: timestamp,

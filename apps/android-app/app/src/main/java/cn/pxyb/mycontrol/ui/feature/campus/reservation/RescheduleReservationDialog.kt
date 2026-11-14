@@ -1,17 +1,10 @@
 package cn.pxyb.mycontrol.ui.feature.campus.reservation
 
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CalendarMonth
@@ -22,9 +15,7 @@ import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,12 +24,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.data.CampusMyReservation
 import cn.pxyb.mycontrol.data.CampusReservationRequest
 import cn.pxyb.mycontrol.data.CampusReservationSpace
@@ -57,8 +45,9 @@ import cn.pxyb.mycontrol.util.DateTimeUtils.parseTimeMinutes
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
+import cn.pxyb.mycontrol.ui.components.layout.AppInsetPanel
+import cn.pxyb.mycontrol.ui.components.input.AppPickerField
 
-private val RESCHEDULE_DATE_OFFSETS = listOf(0 to "今天", 1 to "明天", 2 to "后天", 3 to "大后天")
 
 private const val RESCHEDULE_DEFAULT_CONTENT = "用于个人课程自主研读、文献查阅及学术研讨。"
 
@@ -153,50 +142,18 @@ internal fun RescheduleReservationDialog(
             )
         },
     ) {
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        ) {
+        AppInsetPanel {
             Column(
-                modifier = Modifier.padding(14.dp),
+                modifier = Modifier.padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
-                    text = "当前预约",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                Text(text = "当前预约", style = MaterialTheme.typography.labelLarge)
                 AppDetailRow("预约空间", reservation.spaceName)
                 AppDetailRow("预约时段", "${reservation.date} ${reservation.startTime} - ${reservation.endTime}")
             }
         }
 
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(10.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-        ) {
-            Row(
-                modifier = Modifier.padding(12.dp),
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(
-                    Icons.Outlined.Info,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(15.dp),
-                )
-                Text(
-                    text = "学校系统不支持直接修改预约：改期会先取消原预约，再立即创建新预约。若新预约恰好被其他同学抢占，原预约不会自动恢复，需要重新选择时段。",
-                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 16.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        ReservationHint("学校系统不支持直接修改预约：改期会先取消原预约，再立即创建新预约。若新预约恰好被其他同学抢占，原预约不会自动恢复，需要重新选择时段。")
 
         AppSectionHeader(
             title = "改期目标",
@@ -230,75 +187,22 @@ internal fun RescheduleReservationDialog(
             )
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "改期日期（学校仅开放今天起 3 日内）",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Surface(
-                    onClick = { datePickerOpen = true },
-                    shape = RoundedCornerShape(6.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                    ) {
-                        Icon(
-                            Icons.Outlined.CalendarMonth,
-                            contentDescription = "打开日期选择",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(12.dp),
-                        )
-                        Text(
-                            text = "选日期",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                RESCHEDULE_DATE_OFFSETS.forEach { (offset, name) ->
-                    val candidate = today.plusDays(offset.toLong())
-                    val isSelected = targetLocalDate == candidate
-                    Surface(
-                        onClick = { targetDate = candidate.format(DateTimeFormatter.ISO_LOCAL_DATE) },
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                        border = BorderStroke(
-                            1.dp,
-                            if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f),
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(38.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Text(
-                                text = "$name(${weekdayName(candidate)})",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                ),
-                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
-                }
-            }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = "改期日期（学校仅开放今天起 3 日内）",
+                style = MaterialTheme.typography.labelLarge,
+            )
+            ReservationQuickDateSelector(
+                today = today,
+                selectedDate = targetLocalDate,
+                onSelect = { targetDate = it.format(DateTimeFormatter.ISO_LOCAL_DATE) },
+            )
+            AppPickerField(
+                label = "改期日期",
+                value = listOfNotNull(targetDate, targetLocalDate?.let(::weekdayName)).joinToString(" · "),
+                onClick = { datePickerOpen = true },
+                icon = Icons.Outlined.CalendarMonth,
+            )
         }
 
         AppTimeRangePicker(

@@ -1,6 +1,5 @@
 package cn.pxyb.mycontrol.ui.feature.campus.reservation
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,18 +9,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.ArrowDownward
 import androidx.compose.material.icons.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.MeetingRoom
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -37,10 +32,12 @@ import cn.pxyb.mycontrol.data.CampusAutoReservationCandidate
 import cn.pxyb.mycontrol.data.CampusReservationSpace
 import cn.pxyb.mycontrol.ui.components.input.AppSelectField
 import cn.pxyb.mycontrol.ui.components.input.AppSelectOption
-import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.components.picker.AppTimePickerModal
 import cn.pxyb.mycontrol.util.DateTimeUtils.formatMinutesToTime
 import cn.pxyb.mycontrol.util.DateTimeUtils.parseTimeMinutes
+import cn.pxyb.mycontrol.ui.components.layout.AppInsetPanel
+import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
+import cn.pxyb.mycontrol.ui.components.input.AppPickerField
 
 @Composable
 internal fun CandidateEditRow(
@@ -70,13 +67,8 @@ internal fun CandidateEditRow(
         }
     }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        color = glassCardColor(),
-    ) {
-        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    AppInsetPanel {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -109,19 +101,19 @@ internal fun CandidateEditRow(
                 }
                 Row {
                     if (canMoveUp) {
-                        IconButton(onClick = onMoveUp, modifier = Modifier.size(26.dp)) {
-                            Icon(Icons.Outlined.ArrowUpward, contentDescription = "上移", modifier = Modifier.size(16.dp))
-                        }
+                        AppHeaderIconButton(icon = Icons.Outlined.ArrowUpward, contentDescription = "上移", onClick = onMoveUp, iconSize = 18.dp)
                     }
                     if (canMoveDown) {
-                        IconButton(onClick = onMoveDown, modifier = Modifier.size(26.dp)) {
-                            Icon(Icons.Outlined.ArrowDownward, contentDescription = "下移", modifier = Modifier.size(16.dp))
-                        }
+                        AppHeaderIconButton(icon = Icons.Outlined.ArrowDownward, contentDescription = "下移", onClick = onMoveDown, iconSize = 18.dp)
                     }
                     if (canDelete) {
-                        IconButton(onClick = onDelete, modifier = Modifier.size(26.dp)) {
-                            Icon(Icons.Outlined.Delete, contentDescription = "删除", modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.error)
-                        }
+                        AppHeaderIconButton(
+                            icon = Icons.Outlined.Delete,
+                            contentDescription = "删除",
+                            onClick = onDelete,
+                            iconSize = 18.dp,
+                            iconTint = MaterialTheme.colorScheme.error,
+                        )
                     }
                 }
             }
@@ -169,47 +161,21 @@ internal fun CandidateEditRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Surface(
+                AppPickerField(
+                    label = "开始时间",
+                    value = candidate.startTime,
                     onClick = { pickingTimeTarget = "start" },
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
                     modifier = Modifier.weight(1f),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column {
-                            Text("开始时间", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(candidate.startTime, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                        }
-                        Icon(Icons.Outlined.AccessTime, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
+                )
 
                 Icon(Icons.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
 
-                Surface(
+                AppPickerField(
+                    label = "结束时间",
+                    value = candidate.endTime,
                     onClick = { pickingTimeTarget = "end" },
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
                     modifier = Modifier.weight(1f),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Column {
-                            Text("结束时间", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(candidate.endTime, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                        }
-                        Icon(Icons.Outlined.AccessTime, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
+                )
             }
         }
     }

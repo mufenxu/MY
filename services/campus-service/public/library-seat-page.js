@@ -12,7 +12,7 @@
   if (!document.querySelector("link[data-library-seat-page]")) {
     const stylesheet = document.createElement("link");
     stylesheet.rel = "stylesheet";
-    stylesheet.href = "./library-seat-page.css?v=20261108-seat-overview-v6";
+    stylesheet.href = "./library-seat-page.css?v=20261114-seat-time-slots";
     stylesheet.dataset.librarySeatPage = "1";
     document.head.append(stylesheet);
   }
@@ -814,7 +814,7 @@
   waitlistMount.innerHTML = `
     <section class="resv-panel">
       <div class="resv-panel-head">
-        <div><h3>新建自动预约任务</h3><p>提前准备，到点优先提交指定座位；已被占用时立即换相邻座位，再按号段和其他空位尝试。提交结果待确认时暂停重复预约。</p></div>
+        <div><h3>新建自动预约任务</h3><p>提前准备，到点提交。可为同一座位添加多个不重叠的时段，每段最长 4 小时，各段分别显示预约结果。</p></div>
       </div>
       <form id="seatWaitlistForm" class="resv-fields is-waitlist">
         <label class="resv-field"><span>场馆</span><select id="seatWaitlistVenue" required></select></label>
@@ -823,10 +823,13 @@
         <label class="resv-field"><span>预约目标日期</span><select id="seatWaitlistDate" required></select></label>
         <label class="resv-field"><span>开始时间</span><select id="seatWaitlistStart" required></select></label>
         <label class="resv-field"><span>使用时长</span><select id="seatWaitlistDuration">${DURATIONS.map((item) => `<option value="${item.value}"${item.value === 120 ? " selected" : ""}>${item.label}</option>`).join("")}</select></label>
+        <div id="seatAutoExtraSlots" class="seat-auto-extra-slots"></div>
+        <div class="resv-actions seat-auto-slot-actions"><button id="seatAutoAddSlot" class="ghost" type="button">添加预约时段</button></div>
+        <p id="seatAutoSlotHint" class="resv-muted seat-auto-slot-hint">单时段优先抢指定座位，失败后按原有顺序换座。</p>
         <label class="resv-field"><span>任务运行日期</span><input id="seatAutoRunDate" type="date" required></label>
         <label class="resv-field"><span>任务运行时间</span><input id="seatAutoRunTime" type="time" step="60" value="21:55" required></label>
         <label class="resv-field is-wide"><span>指定座位号 <small>可选，填了就先抢这些号</small></span><input id="seatWaitlistLabels" placeholder="逗号分隔，例如 8,12,15；没抢到会自动换相邻号"></label>
-        <fieldset class="seat-auto-range">
+        <fieldset id="seatAutoRange" class="seat-auto-range">
           <legend>换座优先号段</legend>
           <div class="seat-auto-range-inputs">
             <label class="resv-field"><span>最小座位号（含）</span><input id="seatWaitlistMin" type="number" min="1" max="999" value="1" aria-describedby="seatAutoRangeHint" required></label>
@@ -843,13 +846,15 @@
       <p id="seatWaitlistStatus" class="resv-status" role="status" aria-live="polite"></p>
     </section>
     <section class="resv-panel">
-      <div class="resv-panel-head"><div><h3>我的自动预约任务</h3><p>到点开始快速尝试，成功立即停止。可随时停用或删除；结果待确认时请先查看我的预约。</p></div><button id="seatWaitlistReload" class="ghost" type="button">刷新</button></div>
+      <div class="resv-panel-head"><div><h3>我的自动预约任务</h3><p>到点开始快速尝试。多时段始终预约同一座位，成功的时段会保留；结果待确认时请先查看我的预约。</p></div><button id="seatWaitlistReload" class="ghost" type="button">刷新</button></div>
       <div id="seatWaitlistList" class="resv-list"><div class="resv-empty">打开本页签后自动加载。</div></div>
     </section>`;
 
   const w = {
     venue: waitlistMount.querySelector("#seatWaitlistVenue"), floor: waitlistMount.querySelector("#seatWaitlistFloor"),
     preferredArea: waitlistMount.querySelector("#seatAutoPreferredArea"),
+    extraSlots: waitlistMount.querySelector("#seatAutoExtraSlots"), addSlot: waitlistMount.querySelector("#seatAutoAddSlot"),
+    slotHint: waitlistMount.querySelector("#seatAutoSlotHint"), range: waitlistMount.querySelector("#seatAutoRange"),
     date: waitlistMount.querySelector("#seatWaitlistDate"), start: waitlistMount.querySelector("#seatWaitlistStart"),
     duration: waitlistMount.querySelector("#seatWaitlistDuration"), min: waitlistMount.querySelector("#seatWaitlistMin"),
     max: waitlistMount.querySelector("#seatWaitlistMax"), labels: waitlistMount.querySelector("#seatWaitlistLabels"),
@@ -860,6 +865,46 @@
     rangeHint: waitlistMount.querySelector("#seatAutoRangeHint"),
     reload: waitlistMount.querySelector("#seatWaitlistReload"), list: waitlistMount.querySelector("#seatWaitlistList")
   };
+
+  function autoTimeSlots() {
+    const fields = [{ start: w.start, duration: w.duration }, ...Array.from(w.extraSlots.children, (row) => ({
+      start: row.querySelector("[data-slot-start]"), duration: row.querySelector("[data-slot-duration]")
+    }))];
+    return fields.map(({ start, duration }) => ({ startMinute: Number(start.value),
+      endMinute: Number(start.value) + Number(duration.value) })).sort((a, b) => a.startMinute - b.startMinute);
+  }
+
+  function syncAutoSlotMode() {
+    const multiple = w.extraSlots.children.length > 0;
+    w.preferredArea.required = multiple;
+    w.labels.required = multiple;
+    w.range.hidden = multiple;
+    w.range.disabled = multiple;
+    w.labels.previousElementSibling.innerHTML = multiple
+      ? '固定座位号 <small>只填一个座位号，所有时段都预约它</small>'
+      : '指定座位号 <small>可选，填了就先抢这些号</small>';
+    w.labels.placeholder = multiple ? "例如 8" : "逗号分隔，例如 8,12,15；没抢到会自动换相邻号";
+    w.preferredArea.previousElementSibling.textContent = multiple ? "固定阅览区" : "优先阅览区";
+    w.slotHint.textContent = multiple
+      ? "请选择固定阅览区并填写一个座位号。所有时段预约同一座位，不自动换座；单段失败不影响其他时段，已成功的预约会保留。"
+      : "单时段优先抢指定座位，失败后按原有顺序换座。";
+  }
+
+  w.addSlot.addEventListener("click", () => {
+    const lastEnd = autoTimeSlots().at(-1).endMinute;
+    if (lastEnd > 1320) {
+      setStatus(w.status, "当天已没有可添加的开始时间，请先调整已有时段。", "error");
+      return;
+    }
+    const row = document.createElement("div");
+    row.className = "seat-auto-slot-row";
+    row.innerHTML = `<label class="resv-field"><span>开始时间</span><select data-slot-start required>${startMinuteOptions().map((minute) => `<option value="${minute}"${minute === lastEnd ? " selected" : ""}>${minuteText(minute)}</option>`).join("")}</select></label>
+      <label class="resv-field"><span>使用时长</span><select data-slot-duration>${DURATIONS.map((item) => `<option value="${item.value}"${item.value === Math.min(120, 1440 - lastEnd) ? " selected" : ""}>${item.label}</option>`).join("")}</select></label>
+      <button type="button" class="ghost" data-slot-remove>移除时段</button>`;
+    row.querySelector("[data-slot-remove]").addEventListener("click", () => { row.remove(); syncAutoSlotMode(); });
+    w.extraSlots.append(row);
+    syncAutoSlotMode();
+  });
 
   function syncSeatRangeHint() {
     const range = `${w.min.value || "最小号"}～${w.max.value || "最大号"}`;
@@ -931,9 +976,10 @@
       return;
     }
     w.list.innerHTML = waitlistState.tasks.map((task) => {
-      const slotText = `${task.date || ""} ${minuteText(task.startMinute || 0)} - ${minuteText(task.endMinute || 0)}`;
+      const slots = task.timeSlots?.length ? task.timeSlots : [{ startMinute: task.startMinute, endMinute: task.endMinute }];
+      const slotText = `${task.date || ""} ${slots.map((slot) => `${minuteText(slot.startMinute)} - ${minuteText(slot.endMinute)}`).join("、")}`;
       const range = Array.isArray(task.seatLabels) && task.seatLabels.length
-        ? `指定 ${task.seatLabels.join("、")} 号优先`
+        ? `${slots.length > 1 ? "固定" : "指定"} ${task.seatLabels.join("、")} 号${slots.length > 1 ? " · 所有时段同座位" : "优先"}`
         : `座位号 ${task.minLabel} - ${task.maxLabel}`;
       const tone = task.status === "success" ? "is-ok" : ["failed", "expired"].includes(task.status) ? "is-bad" : task.enabled ? "is-info" : "";
       const runAtMs = task.runAt ? Date.parse(task.runAt) : NaN;
@@ -946,7 +992,14 @@
       const headBadge = waitingForRun
         ? `<span class="resv-badge is-info">等待 ${esc(runText)} 执行</span>`
         : `<span class="resv-badge ${tone}">${esc(task.statusText || task.status || "")}</span>`;
-      const failure = ["failed", "unconfirmed"].includes(task.status) ? task.lastFailure : null;
+      const failure = ["failed", "partial", "unconfirmed"].includes(task.status) ? task.lastFailure : null;
+      const slotStatuses = { success: "已成功", failed: "未预约成功", stopped: "已停止", expired: "已过期",
+        confirming: "正在核对", unconfirmed: "待确认", retry: "等待重试", scheduled: "等待提交" };
+      const results = slots.length > 1 ? slots.map((slot) => {
+        const result = (task.slotResults || []).find((item) => item.startMinute === slot.startMinute && item.endMinute === slot.endMinute);
+        const status = result?.status || task.status;
+        return `<p class="resv-item-meta">${minuteText(slot.startMinute)}–${minuteText(slot.endMinute)}：${esc(slotStatuses[status] || task.statusText || "等待提交")}${result?.message ? ` · ${esc(result.message)}` : ""}</p>`;
+      }).join("") : "";
       const failureDetails = failure ? [failure.message,
         failure.areaName && `阅览区：${failure.areaName}`,
         failure.seatLabel && `座位：${failure.seatLabel} 号`,
@@ -958,8 +1011,9 @@
         <p class="resv-item-meta">${esc(slotText)} · ${esc(range)}</p>
         <p class="resv-item-meta">运行时间：${esc(runText)}${waitingForRun ? "（到点自动执行一次）" : ""}</p>
         <p class="resv-item-meta">最近结果：${esc(task.lastMessage || "尚未执行")}${task.lastSeatLabel ? `（座位 ${esc(task.lastSeatLabel)}）` : ""}${task.timings?.firstRequestDelayMs != null ? ` · 首发延迟 ${esc(task.timings.firstRequestDelayMs)} 毫秒` : ""}</p>
+        ${results}
         ${failureDetails ? `<p class="resv-item-meta">最近异常：${esc(failureDetails)}</p>` : ""}
-        <div class="resv-item-actions"><button class="ghost" type="button" data-task-toggle="${esc(task.id)}"${["success", "unconfirmed"].includes(task.status) ? " disabled" : ""}>${task.enabled ? "停用" : "启用"}</button><button class="ghost" type="button" data-task-delete="${esc(task.id)}">删除</button></div>
+        <div class="resv-item-actions"><button class="ghost" type="button" data-task-toggle="${esc(task.id)}"${!task.enabled && (["success", "partial", "unconfirmed"].includes(task.status) || task.slotResults?.some((slot) => ["success", "confirming", "unconfirmed"].includes(slot.status))) ? " disabled" : ""}>${task.enabled ? "停用" : "启用"}</button><button class="ghost" type="button" data-task-delete="${esc(task.id)}">删除</button></div>
       </article>`;
     }).join("");
     w.list.querySelectorAll("[data-task-toggle]").forEach((button) => {
@@ -1041,8 +1095,16 @@
       setStatus(w.status, "指定座位号需为 1 至 999 的整数，用逗号分隔。", "error");
       return;
     }
-    const start = clampMinute(w.start.value);
-    const end = Math.min(1440, start + Number(w.duration.value || 60));
+    const timeSlots = autoTimeSlots();
+    if (timeSlots.some((slot, index) => slot.endMinute > 1440 || (index > 0 && slot.startMinute < timeSlots[index - 1].endMinute))) {
+      setStatus(w.status, "预约时段不能重叠或跨越当天，请调整开始时间和时长。", "error");
+      return;
+    }
+    if (timeSlots.length > 1 && (!w.preferredArea.value || labels.length !== 1)) {
+      setStatus(w.status, "同座位多时段任务需指定一个阅览区和一个座位号。", "error");
+      return;
+    }
+    const { startMinute: start, endMinute: end } = timeSlots[0];
     const runDate = w.runDate.value || shiftDate(w.date.value, -1);
     const runTime = w.runTime.value || "21:55";
     if (!runDate) {
@@ -1066,7 +1128,7 @@
         method: "POST",
         body: {
           venueId: venue.id, venueName: venue.name, floorId: floor.id, floorName: floor.name,
-          date: w.date.value, startMinute: start, endMinute: end,
+          date: w.date.value, startMinute: start, endMinute: end, timeSlots,
           minLabel: Number(w.min.value) || 1, maxLabel: Number(w.max.value) || 45,
           seatLabels: labels, preferredAreaId: w.preferredArea.value, runDate, runMinute, enabled: w.enabled.checked
         }
