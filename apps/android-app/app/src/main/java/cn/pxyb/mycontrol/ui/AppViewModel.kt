@@ -2155,6 +2155,11 @@ class AppViewModel(
 
     fun deletePasskey(id: String, password: String, totp: String) = accountSecurity.deletePasskey(id, password, totp)
 
+    /** 页面投递的一次性短提示，由认证外壳顶部的统一提示展示。 */
+    fun showFeedback(message: String, error: Boolean = false) {
+        mutableState.update { if (error) it.copy(error = message) else it.copy(message = message) }
+    }
+
     fun clearFeedback() {
         mutableState.update { it.copy(error = null, message = null) }
     }

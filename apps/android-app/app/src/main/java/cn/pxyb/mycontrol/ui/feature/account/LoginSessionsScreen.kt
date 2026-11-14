@@ -1,6 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.account
 
-import android.widget.Toast
+import cn.pxyb.mycontrol.ui.components.feedback.LocalAppFeedback
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -25,7 +25,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -59,7 +58,7 @@ fun LoginSessionsScreen(
     onRevokeOtherSessions: () -> Unit,
     onCreateDesktopMagicLink: ((String?, String?) -> Unit) -> Unit,
 ) {
-    val context = LocalContext.current
+    val feedback = LocalAppFeedback.current
     val clipboard = rememberAppClipboard()
     val security = state.security
     var revokeTarget by remember { mutableStateOf<SecuritySession?>(null) }
@@ -148,7 +147,7 @@ fun LoginSessionsScreen(
                 confirmMagicLink = false
                 onCreateDesktopMagicLink { url, error ->
                     if (url != null) loginUrl = url
-                    else if (error != null) Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                    else if (error != null) feedback.show(error, true)
                 }
             },
         )
@@ -176,7 +175,7 @@ fun LoginSessionsScreen(
                     AppDialogPrimaryButton("复制链接", {
                         // 免密登录链接等同于一次性凭据，标记为敏感，避免进入剪贴板历史预览。
                         clipboard.copy(url, label = "登录链接", sensitive = true)
-                        Toast.makeText(context, "已复制登录链接", Toast.LENGTH_SHORT).show()
+                        feedback.show("已复制登录链接", false)
                         loginUrl = null
                     }, Modifier.weight(1f))
                 }

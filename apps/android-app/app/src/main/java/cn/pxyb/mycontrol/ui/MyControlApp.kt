@@ -26,6 +26,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import cn.pxyb.mycontrol.BuildConfig
 import cn.pxyb.mycontrol.data.AppThemePreference
+import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackHost
+import cn.pxyb.mycontrol.ui.components.feedback.LocalAppFeedback
 import cn.pxyb.mycontrol.ui.components.layout.LocalAppNavigationHandlesBack
 import cn.pxyb.mycontrol.ui.components.layout.ProvideAdaptiveWindowContext
 import cn.pxyb.mycontrol.ui.feature.auth.LockScreen
@@ -148,7 +150,10 @@ fun MyControlApp(
                         onRecoverAccount = viewModel::recoverAccount,
                         onRecoveryCodesSaved = viewModel::acknowledgeLoginRecoveryCodes,
                     )
-                    else -> CompositionLocalProvider(LocalAppNavigationHandlesBack provides true) {
+                    else -> CompositionLocalProvider(
+                        LocalAppNavigationHandlesBack provides true,
+                        LocalAppFeedback provides remember(viewModel) { AppFeedbackHost(viewModel::showFeedback) },
+                    ) {
                         AuthenticatedShell(
                         state,
                         viewModel,

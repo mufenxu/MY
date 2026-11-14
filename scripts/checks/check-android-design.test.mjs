@@ -10,8 +10,9 @@ test('rejects business UI primitives that bypass shared components', () => {
     val color = Color(0xFF123456)
     Text(value, fontSize = 10.sp)
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {}
+    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
   `);
-  assert.deepEqual(findings.map(item => item.rule), ['button', 'field', 'dialog', 'color', 'typography', 'spacing']);
+  assert.deepEqual(findings.map(item => item.rule), ['button', 'field', 'dialog', 'color', 'typography', 'spacing', 'toast']);
   assert.equal(findings[0].line, 2);
 });
 

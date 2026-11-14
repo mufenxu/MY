@@ -1,7 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.profile
 
 import android.content.Intent
-import android.widget.Toast
 import cn.pxyb.mycontrol.data.CrashReporter
 import cn.pxyb.mycontrol.ui.components.display.AppGroupedCard
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
@@ -124,6 +123,7 @@ fun ProfileScreen(
     var confirmClearCache by remember { mutableStateOf(false) }
     var showPrivacyPolicy by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val feedback = cn.pxyb.mycontrol.ui.components.feedback.LocalAppFeedback.current
     val user = state.user ?: return
     val security = state.security
     val protected = (security?.totpEnabled == true || user.totpEnabled) && (security?.passkeyCount ?: user.passkeyCount) > 0 && (security?.recoveryCodesRemaining ?: 0) > 0
@@ -196,7 +196,7 @@ fun ProfileScreen(
                         exportScope.launch {
                             val text = withContext(Dispatchers.IO) { CrashReporter.exportText(context) }
                             if (text.isNullOrBlank()) {
-                                Toast.makeText(context, "暂无可导出的诊断日志", Toast.LENGTH_SHORT).show()
+                                feedback.show("暂无可导出的诊断日志", false)
                             } else {
                                 val share = Intent(Intent.ACTION_SEND).apply {
                                     type = "text/plain"

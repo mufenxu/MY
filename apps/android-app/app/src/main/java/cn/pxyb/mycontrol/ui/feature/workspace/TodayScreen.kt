@@ -33,7 +33,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.foundation.layout.Box
+import cn.pxyb.mycontrol.ui.components.layout.appPageContentPadding
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -73,6 +77,8 @@ import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
+private const val TODO_DELETE_UNDO_WINDOW_MS = 5_000L
+
 private enum class CampusWorkspaceSection { Today, Timetable, Campus, Todos }
 
 @Composable
@@ -104,6 +110,26 @@ fun TodayScreen(
     var editingTodoId by rememberSaveable { mutableStateOf<String?>(null) }
     val editingTodo = state.todoSnapshot.tasks.firstOrNull { it.id == editingTodoId }
     var addingTodo by rememberSaveable { mutableStateOf(false) }
+    // 删除先在界面上隐藏，5 秒内可撤销；超时或离开页面时才真正提交。
+    var pendingDeleteTodoId by remember { mutableStateOf<String?>(null) }
+    val pendingDeleteTodo = state.todoSnapshot.tasks.firstOrNull { it.id == pendingDeleteTodoId }
+    val visibleTodos = state.todoSnapshot.tasks.filterNot { it.id == pendingDeleteTodoId }
+    val currentOnDeleteTodo by rememberUpdatedState(onDeleteTodo)
+    LaunchedEffect(pendingDeleteTodoId) {
+        val id = pendingDeleteTodoId ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(TODO_DELETE_UNDO_WINDOW_MS)
+        if (pendingDeleteTodoId == id) {
+            pendingDeleteTodoId = null
+            currentOnDeleteTodo(id)
+        }
+    }
+    DisposableEffect(Unit) {
+        onDispose { pendingDeleteTodoId?.let { currentOnDeleteTodo(it) } }
+    }
+    val queueTodoDelete: (String) -> Unit = { id ->
+        pendingDeleteTodoId?.takeIf { it != id }?.let { currentOnDeleteTodo(it) }
+        pendingDeleteTodoId = id
+    }
     var confirmCalendarSync by remember { mutableStateOf(false) }
     var campusSection by rememberSaveable(initialSection) {
         mutableStateOf(when (initialSection) {
@@ -181,8 +207,8 @@ fun TodayScreen(
         7 -> "周日"
         else -> "明日"
     }
-    val activeTodos = remember(state.todoSnapshot.tasks) {
-        state.todoSnapshot.tasks.filterNot(TodoTask::completed)
+    val activeTodos = remember(visibleTodos) {
+        visibleTodos.filterNot(TodoTask::completed)
     }
     val expiringResources = remember(state.resourceExpiries, currentDate) {
         state.resourceExpiries.mapNotNull { resource ->
@@ -258,7 +284,7 @@ fun TodayScreen(
                 },
             )
         }
-        if (state.todoSnapshot.tasks.isEmpty()) {
+        if (visibleTodos.isEmpty()) {
             item(key = "todos-empty", contentType = "empty") {
                 AppPanel(onClick = { addingTodo = true }) {
                     Row(
@@ -275,8 +301,8 @@ fun TodayScreen(
                 }
             }
         } else {
-            appGridItems(state.todoSnapshot.tasks, recordColumns, TodoTask::id, "todo", animateRows = true) { task ->
-                TodoCard(task, onToggleTodo, { editingTodoId = task.id }, onDeleteTodo)
+            appGridItems(visibleTodos, recordColumns, TodoTask::id, "todo", animateRows = true) { task ->
+                TodoCard(task, onToggleTodo, { editingTodoId = task.id }, queueTodoDelete)
             }
         }
     }
@@ -329,8 +355,8 @@ fun TodayScreen(
         agendaItems(
             state = agendaState,
             timetable = state.timetable,
-            todos = state.todoSnapshot.tasks,
-            date = LocalDate.parse(selectedDate),
+            todos = visibleTodos,
+            date =LocalDate.parse(selectedDate),
             onDateChange = { selectedDate = it.toString() },
             onRefresh = refreshWorkspace,
             onOpen = { kind ->
@@ -431,6 +457,7 @@ fun TodayScreen(
         }
     }
 
+    Box(Modifier.fillMaxSize()) {
     AppSubPage(
         title = when (campusSection) {
             CampusWorkspaceSection.Today -> "日程"
@@ -510,6 +537,20 @@ fun TodayScreen(
                     onOpenSchoolAccountLogin = onOpenSchoolAccountLogin,
                 )
             }
+        }
+    }
+        pendingDeleteTodo?.let { task ->
+            AppFeedbackBanner(
+                message = "已删除「${task.title}」",
+                type = AppFeedbackType.Success,
+                onRetry = { pendingDeleteTodoId = null },
+                retryText = "撤销",
+                showCloseButton = false,
+                autoDismissDurationMillis = null,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(appPageContentPadding(contentPadding, bottomSpacing = 12.dp, topPadding = 0.dp)),
+            )
         }
     }
 

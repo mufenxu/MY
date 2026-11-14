@@ -70,6 +70,7 @@ class NotificationActionReceiver : BroadcastReceiver() {
                 }
                 intent.getIntExtra(EXTRA_NOTIFICATION_ID, 0).takeIf { it != 0 }?.let { notificationId ->
                     context.getSystemService(NotificationManager::class.java)?.cancel(notificationId)
+                    cancelEmptyNotificationGroupSummaries(context, notificationId)
                 }
                 OperationalSyncScheduler.runNow(context)
             }

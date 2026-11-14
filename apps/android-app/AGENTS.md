@@ -9,6 +9,8 @@
   所有主页面与二级页面仅固定顶部悬浮胶囊栏，以叠层覆盖内容，周围留白透明；首屏避让使用滚动内容内边距，禁止固定整块顶部占位。自定义 `body` 使用脚手架传入的顶部内边距。副标题、统计、筛选、课表切换和快捷指令进入内容滚动区；聊天输入框等必要操作区保留原位。`AppSubPage` 不再提供 `pinHeader` 开关，下拉刷新只作用于内容区。
 - **路由与返回约束**：
   新增二级路由必须在 `parentTabForSubScreen` 登记唯一父页面；页头返回和系统返回统一调用认证导航外壳的回退方法，页面内部不得混用状态关闭与 `NavController.popBackStack()`。
+- **路由注册按业务域分文件**：
+  `AuthenticatedShell.kt` 只保留外壳布局、导航动作和主标签等核心路由；成组的业务路由写成 `NavGraphBuilder` 扩展放在 `ui/navigation/*Routes.kt`（现有 `CampusRoutes.kt`、`ManagementRoutes.kt`），从 `ShellRouteContext` 取 `viewModel`、`contentPadding`、导航回调等共享依赖。新增路由优先放进所属分组文件，不要再往外壳里堆 `composable(...)`；需要新的共享依赖时给 `ShellRouteContext` 加字段，并同步加入外壳里 `remember` 的键。
 
 ## 2. 视觉与材质约束
 
@@ -49,6 +51,7 @@
   - 底部导航 Tab 切换、`AppSwitch` 开关切换、分段选择：触发 `AppHaptics.tick(haptics)`；
   - `PullToRefresh` 下拉刷新超过临界刻度：触发 `AppHaptics.refreshSnap(haptics)`；
   - 危险操作（如删除、强制同步、权限确认）：触发 `AppHaptics.heavy(haptics)`。
+  - 列表滑动操作（`AppSwipeActions`）滑过触发阈值时给一次反馈：普通操作 `tick`，标记为 `danger` 的操作（如归档）`heavy`；未过阈值松手不触发。
 
 ## 5. 组件与视觉令牌（唯一来源）
 
@@ -103,6 +106,11 @@
   - `Success` 表示已完成的操作，默认 4 秒后关闭，并采用系统无障碍建议的停留时间；
   - `Info` / `Warning` / `Error` 默认持续显示。离线、待同步、功能边界等持续状态使用 `Info` 或 `Warning`，并设置 `showCloseButton = false`，由真实状态解除提示；
   - `error = false` 仅用于成功结果，不用于一般说明；重试优先重读数据，不自动重放删除、预约等有副作用的操作。
+- **应用级短提示（外壳顶部 `AppToast`）**：
+  - 成功提示约 4 秒自动收起；错误提示持续显示，带关闭按钮，可横向滑走。只有读数据失败（`SECTION_REFRESH_ERROR_PREFIX` 开头）才显示「重试」，重试即刷新当前页。
+  - 业务页面要弹一次性短提示时用 `LocalAppFeedback.current.show(message, error)`，由外壳统一展示；**禁止在 `ui/feature`、`ui/components` 里直接调用系统 `Toast.makeText`**（`check:android-design` 的 `toast` 规则会拦截）。Activity 层（NFC 写入、内置浏览器）不在 Compose 外壳内，仍可使用系统 Toast。
+- **可撤销的移除操作**：通知归档与待办删除都先在界面隐藏，底部出现带「撤销」的成功横幅，5 秒后或离开页面时才真正提交。待办删除因此不再弹确认框；新增同类"误触可恢复"的移除操作沿用这一模式，不可恢复的操作仍走 `AppConfirmDialog`。
+- **系统通知分组**：`AlertNotifier` 按渠道分组，同一渠道有两条及以上时补发只含条数的摘要通知（不带正文、不重复响铃）；应用自行取消子通知后要调用 `cancelEmptyNotificationGroupSummaries` 收走空摘要。
 - **长列表**：可增长的记录列表接入页面 `LazyListScope`，不要把整个记录集合放进单个 `item` 的 `Column`；保留加载、空状态和稳定的项目标识。
 
 ## 8. 隐私安全与系统集成 (Security & System)
@@ -123,7 +131,7 @@
 - **严禁混用状态跳转与路由栈**：二级路由必须登记在 `parentTabForSubScreen`。
 - **领域状态必须自带 StateHolder**：`AppUiState` 只保留跨界面共享的会话与导航字段；单一业务域的数据、加载标记与忙碌标记放进 `ui/feature/<域>/` 下继承 `FeatureStateHolder` 的状态类，界面订阅该域的 `xxxState`，不要从大状态里读平铺字段。新增或迁移领域时照 `GitHubProjectsStateHolder` 的写法：私有 `mutableState`、`loadXxx()` 带 `canRequest` 守卫、失败经 `handleRequestFailure` 触发会话失效、`clearPendingState` 复位忙碌标记。领域状态搬出 `AppUiState` 后，界面投影改为显式接收该域状态（`toXxxUiState(domain: XxxUiState)`），并在 `AppViewModel` 用带 `source` 参数的 `deriveState` 组合派生；不要再把领域字段拷回大状态做中转。
 - **用户可见文案保持规范中文**（保留产品名、标准代码或国际协议字段原样）。
-- **依赖组装统一走 `AppContainer`**（`AppContainer.kt`，2026-11 引入）：SessionStore、PlatformApi、各 Preferences/Store 等跨域共享组件只在容器创建一次，AppViewModel、MainActivity 从 `MyControlApplication.container` 获取，禁止在业务组件内再次 `new`（Worker 等后台组件同理）。带跨域回调 wiring 的 StateHolder/Controller 仍在 AppViewModel 组装——它们的回调绑定 AppViewModel 私有状态，不属于容器职责。不引入 Hilt/Koin：单 module 应用下手工容器性价比最高。
+- **依赖组装统一走 `AppContainer`**（`AppContainer.kt`，2026-11 引入）：SessionStore、PlatformApi、各 Preferences/Store 等跨域共享组件只在容器创建一次，AppViewModel、MainActivity 从 `MyControlApplication.container` 获取，界面与 ViewModel 层不要再次 `new`。**后台组件是已知例外**：`OperationalSyncWorker`、`NotificationActionReceiver`、各提醒 Worker、磁贴服务与 `AuthenticatorViewModel` 目前各自创建 `SessionStore` / `PlatformApi`。这是安全的——会话锁、会话代次、已解锁凭据（`SessionStore` 伴生对象）和令牌刷新互斥锁（`PlatformHttpClient` 伴生对象）都是进程级共享；而 `PersonalWorkspaceStore`、`AlertNotifier`、`ResponseSnapshotStore` 带有按实例保存的"当前账号"，后台任务与前台共用同一实例反而可能互相改掉账号作用域。不要为了"统一"把这些后台组件改成取容器实例。带跨域回调 wiring 的 StateHolder/Controller 仍在 AppViewModel 组装——它们的回调绑定 AppViewModel 私有状态，不属于容器职责。不引入 Hilt/Koin：单 module 应用下手工容器性价比最高。
 - **PlatformApi 收敛为纯网关**：业务方法按域拆到 `OperationsRepository`（运维域：overview/incidents/tasks/backup/ct8/diagnostics）、`CampusRepository`、`IotRepository` 等；新增接口先归域，不再往 PlatformApi 平铺方法。各域数据模型与解析函数就近放在对应 Repository 文件内（private 顶层函数），需要跨文件复用时才提升为 internal。
 - **平台会话与内置浏览器登录态必须解耦**：`SessionStore.clear()` 默认只清平台会话；只有「用户主动退出登录」和「换账号」才允许清 WebView 的 Cookie 与网页本地存储（`WebSessionStore.clear()`）。会话过期、401、refresh 失败、密钥损坏都属于同一账号内的会话重建，**严禁**顺手清浏览器数据，否则用户每次重登 App 都要把所有网站重输一遍。WebView 所在 Activity 的 `onPause()` 必须调用 `CookieManager.flush()`，否则进程被系统回收时未落盘的会话 Cookie 会丢。
 
@@ -159,6 +167,7 @@
 | | `AppConfirmDialog` | 标准二次确认弹窗，危险操作必须走此组件而非自绘 |
 | | `AppDialogForm` | 弹窗内表单容器，统一字段间距与校验提示位 |
 | **`ui.components.interaction`** | `pressFeedback` | 统一按压弹性微缩放修饰符，自带触觉反馈；禁止各页面自行实现缩放动画 |
+| | `AppSwipeActions` / `AppSwipeAction` | 列表项横向滑动操作：右滑露出 `startAction`、左滑露出 `endAction`，过阈值松手触发并回弹。滑动只是快捷方式，必须同时保留等价的按钮入口；禁止各页面再手写 `detectHorizontalDragGestures` |
 | **`ui.components.clipboard`** | `rememberAppClipboard` / `copyEphemeralText` | 全应用唯一的剪贴板入口。页面用 `rememberAppClipboard()` 拿 `copy(text, label, sensitive)` 与 `readText()`；验证码、恢复密钥这类一次性凭据用 `copyEphemeralText` 到期自动清理。禁止再直接用 `ClipboardManager` 或已弃用的 `LocalClipboardManager` |
 | **`util`** | `QrUtils` | 集中统一的 Data URL Base64 二维码安全解析工具，杜绝各 Screen 私有重复实现 |
 | | `DateTimeUtils` | 集中统一的平台时间、分钟值和相对时间格式化；仅需日末端点的业务显式传入 `allowEndOfDay = true` 解析 `24:00` |
@@ -168,7 +177,7 @@
 
 ## 11. 设计检查与组件预览
 
-- 根目录运行 `npm.cmd run check:android-design`，检查业务页面的原生按钮/字段/弹窗、硬编码颜色/字号和非标准垂直间距；已接入根 `check` 和 Android CI。
+- 根目录运行 `npm.cmd run check:android-design`，检查业务页面的原生按钮/字段/弹窗、硬编码颜色/字号、非标准垂直间距和系统 Toast；已接入根 `check` 和 Android CI。
 - 公共组件目录同时检查硬编码颜色与数值字号（包括条件字号）；作为封装实现使用原生控件和紧凑内部间距不触发业务层禁用规则。
 - 专用验证码输入保留 `BasicTextField`，身份码全屏展示保留专用 `Dialog`；这些例外不允许扩展成普通表单的替代体系。
 - `app/src/debug/java/cn/pxyb/mycontrol/ui/components/DesignSystemPreviews.kt` 提供浅色、深色、深色大字号和窄屏 1.5 倍字号预览，仅进入 Debug 源集。预览涵盖按钮加载/禁用、字段错误、筛选选中、持续反馈、长名称、长指标值与单位、可复制长详情。

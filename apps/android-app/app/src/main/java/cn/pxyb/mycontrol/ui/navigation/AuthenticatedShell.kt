@@ -1,10 +1,6 @@
 package cn.pxyb.mycontrol.ui.navigation
 
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -66,7 +62,6 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -74,13 +69,10 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.dismiss
 import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import cn.pxyb.mycontrol.ui.state.SECTION_REFRESH_ERROR_PREFIX
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -97,7 +89,6 @@ import cn.pxyb.mycontrol.ui.components.glass.glassBackdropSource
 import cn.pxyb.mycontrol.ui.components.glass.rememberGlassBackdrop
 import cn.pxyb.mycontrol.ui.components.layout.AppPageBottomSpacing
 import cn.pxyb.mycontrol.ui.components.layout.AppPageHorizontalPadding
-import cn.pxyb.mycontrol.ui.components.layout.AppTabletContentMaxWidth
 import cn.pxyb.mycontrol.ui.components.layout.LocalAdaptiveWindow
 import cn.pxyb.mycontrol.ui.components.layout.ProvideAppContentLayout
 import cn.pxyb.mycontrol.ui.components.layout.resolveAuthenticatedShellInsets
@@ -110,33 +101,17 @@ import cn.pxyb.mycontrol.ui.feature.auth.QrLoginScreen
 import cn.pxyb.mycontrol.ui.feature.authenticator.AuthenticatorCloudPanel
 import cn.pxyb.mycontrol.ui.feature.authenticator.AuthenticatorScreen
 import cn.pxyb.mycontrol.ui.feature.authenticator.AuthenticatorViewModel
-import cn.pxyb.mycontrol.ui.feature.campus.FreeClassroomScreen
 import cn.pxyb.mycontrol.ui.feature.campus.account.SchoolAccountLoginDialog
-import cn.pxyb.mycontrol.ui.feature.campus.library.LibrarySeatReservationScreen
-import cn.pxyb.mycontrol.ui.feature.campus.library.LibrarySeatTab
-import cn.pxyb.mycontrol.ui.feature.campus.reservation.ReservationScreen
-import cn.pxyb.mycontrol.ui.feature.campus.water.WaterValveScreen
-import cn.pxyb.mycontrol.ui.feature.campus.chaoxing.ChaoxingScreen
-import cn.pxyb.mycontrol.ui.feature.google.GoogleAccountDeskScreen
-import cn.pxyb.mycontrol.ui.feature.news.DailyNewsScreen
 import cn.pxyb.mycontrol.ui.feature.notifications.NotificationCenterScreen
 import cn.pxyb.mycontrol.ui.feature.notifications.NotificationSettingsScreen
 import cn.pxyb.mycontrol.ui.feature.operations.OperationsScreen
-import cn.pxyb.mycontrol.ui.feature.media.MediaDownloadScreen
 import cn.pxyb.mycontrol.ui.feature.overview.OverviewScreen
 import cn.pxyb.mycontrol.ui.feature.profile.AppSettingsDialog
 import cn.pxyb.mycontrol.ui.feature.profile.ProfileScreen
-import cn.pxyb.mycontrol.ui.feature.projects.GitHubProjectsScreen
-import cn.pxyb.mycontrol.ui.feature.projects.ProjectsScreen
-import cn.pxyb.mycontrol.ui.feature.registry.RegistryImagesScreen
-import cn.pxyb.mycontrol.ui.feature.releases.AndroidReleaseScreen
 import cn.pxyb.mycontrol.ui.feature.scenes.ScenesScreen
 import cn.pxyb.mycontrol.ui.feature.search.GlobalSearchScreen
 import cn.pxyb.mycontrol.ui.feature.tools.ToolsScreen
-import cn.pxyb.mycontrol.ui.feature.workspace.TodayScreen
-import cn.pxyb.mycontrol.ui.openPlatformWebLink
 import cn.pxyb.mycontrol.ui.theme.MotionTokens
-import java.time.YearMonth
 import kotlin.math.abs
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -461,6 +436,23 @@ internal fun AuthenticatedShell(
                         .then(if (bottomDockVisible) Modifier.glassBackdropSource(glassBackdrop) else Modifier),
                 ) {
                 val pageLiftOffset = with(LocalDensity.current) { 14.dp.roundToPx() }
+                val routeContext = remember(
+                    viewModel, state, currentRoute, searchTarget, contentPadding, onRefresh,
+                    navigateBackFromSubScreen, navigateToTab, navigateToSubScreen, onSensitiveActionConfirmation,
+                ) {
+                    ShellRouteContext(
+                        viewModel = viewModel,
+                        state = state,
+                        currentRoute = currentRoute,
+                        searchTarget = searchTarget,
+                        contentPadding = contentPadding,
+                        onRefresh = onRefresh,
+                        navigateBackFromSubScreen = navigateBackFromSubScreen,
+                        navigateToTab = navigateToTab,
+                        navigateToSubScreen = navigateToSubScreen,
+                        onSensitiveActionConfirmation = onSensitiveActionConfirmation,
+                    )
+                }
                 val pageExitOffset = with(LocalDensity.current) { 6.dp.roundToPx() }
                 NavHost(
                     navController = navController,
@@ -719,109 +711,7 @@ internal fun AuthenticatedShell(
                         onSave = viewModel::saveNotificationPreferences,
                     )
                 }
-                composable(AppRoute.Projects) {
-                    val projectsState by viewModel.projectsState.collectAsStateWithLifecycle()
-                    ProjectsScreen(
-                        state = projectsState,
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onRefresh = onRefresh,
-                        onOpenGitHubProjects = { navigateToSubScreen(AppRoute.GitHubProjects) },
-                        onOpenAndroidReleases = { navigateToSubScreen(AppRoute.AndroidReleases) },
-                        onOpenRegistryImages = { navigateToSubScreen(AppRoute.RegistryImages) },
-                        onTriggerCt8 = { viewModel.triggerCt8(onSensitiveActionConfirmation) },
-                    )
-                }
-                composable(AppRoute.GoogleAccounts) {
-                    val googleAccountState by viewModel.googleAccountDeskState.collectAsStateWithLifecycle()
-                    GoogleAccountDeskScreen(
-                        focusedId = searchTarget?.takeIf { currentRoute == AppRoute.GoogleAccounts && it.destination == cn.pxyb.mycontrol.ui.feature.search.SearchDestination.GoogleAccounts }?.focusId,
-                        onFocusConsumed = viewModel::consumeSearchTarget,
-                        state = googleAccountState,
-                        contentPadding = contentPadding,
-                        onDismiss = navigateBackFromSubScreen,
-                        onRefresh = { viewModel.googleAccounts.loadGoogleAccounts(force = true) },
-                        onAddAccount = viewModel.googleAccounts::addGoogleAccount,
-                        onImportAccounts = viewModel.googleAccounts::importGoogleAccounts,
-                        onUpdateAccount = viewModel.googleAccounts::updateGoogleAccount,
-                        onDeleteAccount = viewModel.googleAccounts::deleteGoogleAccount,
-                        onBulkUpdateAccounts = viewModel.googleAccounts::bulkUpdateGoogleAccounts,
-                        onBulkArchiveAccounts = viewModel.googleAccounts::bulkSetGoogleAccountsArchived,
-                        onBulkDeleteAccounts = viewModel.googleAccounts::bulkDeleteGoogleAccounts,
-                        onAddAlias = viewModel.googleAccounts::addGoogleAlias,
-                        onUpdateAlias = viewModel.googleAccounts::updateGoogleAlias,
-                        onDeleteAlias = viewModel.googleAccounts::deleteGoogleAlias,
-                        onUploadLocalAccounts = viewModel.googleAccounts::uploadLocalGoogleAccounts,
-                        onDiscardLocalAccounts = viewModel.googleAccounts::discardLocalGoogleAccounts,
-                    )
-                }
-                composable(AppRoute.GitHubProjects) {
-                    val githubState by viewModel.githubProjectsState.collectAsStateWithLifecycle()
-                    GitHubProjectsScreen(
-                        repositories = githubState.repositories,
-                        loaded = githubState.repositoriesLoaded,
-                        busy = githubState.visibilityBusy,
-                        profile = githubState.profile,
-                        profileLoaded = githubState.profileLoaded,
-                        releases = githubState.releases,
-                        releasesLoaded = githubState.releasesLoaded,
-                        releasesRepoFullName = githubState.releasesRepoFullName,
-                        releasesBusy = githubState.releasesBusy,
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onRefresh = viewModel.githubProjects::refresh,
-                        onLoadReleases = { owner, repo -> viewModel.githubProjects.loadReleases(owner, repo) },
-                        onCreateRelease = { owner, repo, tag, name, body, draft, prerelease ->
-                            viewModel.githubProjects.createRelease(owner, repo, tag, name, body, draft, prerelease, onSensitiveActionConfirmation)
-                        },
-                        onUpdateVisibility = { owner, repo, visibility ->
-                            viewModel.githubProjects.updateVisibility(owner, repo, visibility, onSensitiveActionConfirmation)
-                        },
-                    )
-                }
-                composable(AppRoute.AndroidReleases) {
-                    val androidReleaseState by viewModel.androidReleaseState.collectAsStateWithLifecycle()
-                    val profileState by viewModel.profileState.collectAsStateWithLifecycle()
-                    AndroidReleaseScreen(
-                        state = androidReleaseState,
-                        appUpdate = profileState.appUpdate,
-                        canManage = profileState.user?.role == "super_admin",
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onRefresh = { viewModel.loadAndroidReleases(force = true) },
-                        onLoad = { viewModel.loadAndroidReleases() },
-                        onSaveDraft = { versionName, notes ->
-                            viewModel.saveAndroidReleaseDraft(versionName, notes)
-                        },
-                        onDispatchBuild = {
-                            viewModel.dispatchAndroidBuild(onSensitiveActionConfirmation)
-                        },
-                        onDownload = viewModel::downloadAndroidRelease,
-                        onInstallDownloaded = viewModel::installDownloadedAppUpdate,
-                    )
-                }
-                composable(AppRoute.RegistryImages) {
-                    val registryState by viewModel.registryImagesState.collectAsStateWithLifecycle()
-                    val profileState by viewModel.profileState.collectAsStateWithLifecycle()
-                    RegistryImagesScreen(
-                        state = registryState,
-                        canManage = profileState.user?.role == "super_admin",
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onLoad = { viewModel.loadRegistryImages() },
-                        onRefresh = { viewModel.loadRegistryImages(force = true) },
-                        onToggle = viewModel::toggleRegistryImage,
-                        onTogglePrefix = { prefix, selected -> viewModel.toggleRegistryImagePrefix(prefix, selected) },
-                        onClearSelection = viewModel::clearRegistryImageSelection,
-                        onDeleteSelected = { viewModel.deleteRegistryImages(onSensitiveActionConfirmation) },
-                        onKeepCountChange = viewModel::updateRegistryImageKeepCount,
-                        onIncludeUnknownChange = viewModel::updateRegistryImageIncludeUnknown,
-                        onPrunePreview = viewModel::previewRegistryImagePrune,
-                        onPruneConfirm = { viewModel.executeRegistryImagePrune(onSensitiveActionConfirmation) },
-                        onPruneDismiss = viewModel::discardRegistryImagePlan,
-                        onDismissFeedback = viewModel::clearRegistryImageFeedback,
-                    )
-                }
+                managementRoutes(routeContext)
                 composable(AppRoute.Search) {
                     val searchState by viewModel.globalSearchState.collectAsStateWithLifecycle()
                     GlobalSearchScreen(
@@ -858,312 +748,7 @@ internal fun AuthenticatedShell(
                         onExecuteAction = viewModel::performAssistantAction,
                     )
                 }
-                (listOf(WorkspaceDestination.Today, WorkspaceDestination.Timetable, WorkspaceDestination.Campus, WorkspaceDestination.Todos)
-                    .map { it.route() to it } + (AppRoute.Agenda to WorkspaceDestination.Today)).forEach { (route, destination) ->
-                    composable(route) {
-                        val todayState by viewModel.todayState.collectAsStateWithLifecycle()
-                        val agendaState by viewModel.agenda.state.collectAsStateWithLifecycle()
-                        val context = LocalContext.current
-                        val calendarPermissions = remember {
-                            arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)
-                        }
-                        val calendarPermissionLauncher = rememberLauncherForActivityResult(
-                            ActivityResultContracts.RequestMultiplePermissions(),
-                        ) { result ->
-                            if (calendarPermissions.all { result[it] == true }) {
-                                viewModel.syncAndroidCalendar()
-                            } else {
-                                viewModel.reportCalendarPermissionDenied()
-                            }
-                        }
-                        TodayScreen(
-                            onSectionChange = { section -> if (currentRoute == route) viewModel.selectWorkspaceSection(section) },
-                            searchTarget = searchTarget?.takeIf { currentRoute == route },
-                            onSearchTargetConsumed = viewModel::consumeSearchTarget,
-                            state = todayState,
-                            agendaState = agendaState,
-                            onRefreshAgenda = viewModel.agenda::refresh,
-                            contentPadding = contentPadding,
-                            onBack = navigateBackFromSubScreen,
-                            onRefresh = { viewModel.refreshCurrentWorkspace() },
-                            onSaveTodo = viewModel::saveTodo,
-                            onToggleTodo = viewModel::toggleTodo,
-                            onDeleteTodo = viewModel::deleteTodo,
-                            onSyncCalendar = {
-                                if (calendarPermissions.all { permission ->
-                                        ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
-                                    }
-                                ) {
-                                    viewModel.syncAndroidCalendar()
-                                } else {
-                                    calendarPermissionLauncher.launch(calendarPermissions)
-                                }
-                            },
-                            onOpenNotifications = { navigateToTab(MainTab.Notifications) },
-                            onOpenFreeClassrooms = {
-                                navigateToSubScreen(AppRoute.FreeClassrooms)
-                            },
-                            onOpenReservation = {
-                                navigateToSubScreen(AppRoute.Reservation)
-                            },
-                            onOpenLibrarySeatReservation = {
-                                navigateToSubScreen(AppRoute.LibrarySeatReservation)
-                            },
-                            onOpenWaterValve = {
-                                navigateToSubScreen(AppRoute.CampusWaterValve)
-                            },
-                            onOpenChaoxing = { navigateToSubScreen(AppRoute.Chaoxing) },
-                            onOpenSchoolAccountLogin = viewModel::openSchoolAccountLogin,
-                            onConsumeSharedDraft = viewModel::consumeSharedTodoDraft,
-                            onOpenFeature = navigateToSubScreen,
-                            initialSection = destination,
-                        )
-                    }
-                }
-                composable(AppRoute.Study) {
-                    val study by viewModel.study.state.collectAsStateWithLifecycle()
-                    val today by viewModel.todayState.collectAsStateWithLifecycle()
-                    cn.pxyb.mycontrol.ui.feature.study.StudyScreen(study, today.timetable?.courses.orEmpty(), today.todoSnapshot.tasks,
-                        contentPadding, navigateBackFromSubScreen, viewModel.study::load, viewModel.study::start, viewModel.study::finish)
-                }
-                composable(AppRoute.Energy) {
-                    val energy by viewModel.energy.state.collectAsStateWithLifecycle()
-                    cn.pxyb.mycontrol.ui.feature.campus.energy.EnergyScreen(energy, contentPadding, navigateBackFromSubScreen, viewModel.energy::load, viewModel.energy::saveSettings)
-                }
-                composable(AppRoute.Grades) {
-                    val grades by viewModel.grades.state.collectAsStateWithLifecycle()
-                    val today by viewModel.todayState.collectAsStateWithLifecycle()
-                    cn.pxyb.mycontrol.ui.feature.campus.grades.GradesScreen(grades, today.campusOverview?.gpa, contentPadding,
-                        navigateBackFromSubScreen, { viewModel.grades.load(); viewModel.refreshCampusGpa() }, viewModel.grades::save, viewModel.grades::remove, viewModel.grades::savePlan)
-                }
-                composable(AppRoute.Screenshot) {
-                    val screenshot by viewModel.screenshot.state.collectAsStateWithLifecycle()
-                    cn.pxyb.mycontrol.ui.feature.todos.ScreenshotTodoScreen(screenshot, contentPadding, navigateBackFromSubScreen, viewModel.screenshot::recognize,
-                        { task, location -> viewModel.screenshot.saveSource(task, location, viewModel.todos::saveImported) },
-                        { navigateToSubScreen(AppRoute.Todos) })
-                }
-                composable(AppRoute.DailyNews) {
-                    val dailyNewsState by viewModel.dailyNewsState.collectAsStateWithLifecycle()
-                    DailyNewsScreen(
-                        state = dailyNewsState,
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onRefresh = viewModel::refreshDailyNews,
-                    )
-                }
-                composable(AppRoute.MediaDownload) {
-                    val mediaDownloadState by viewModel.mediaDownloadState.collectAsStateWithLifecycle()
-                    LaunchedEffect(Unit) { viewModel.mediaDownload.refreshHistory() }
-                    MediaDownloadScreen(
-                        state = mediaDownloadState,
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onShareTextChange = viewModel.mediaDownload::updateShareText,
-                        onParse = viewModel.mediaDownload::parse,
-                        onDownloadQueued = viewModel.mediaDownload::reportDownloadQueued,
-                        onDownloadFailed = viewModel.mediaDownload::reportDownloadFailure,
-                        onPasteClipboard = viewModel.mediaDownload::pasteClipboard,
-                        onClipboardScanned = viewModel.mediaDownload::offerClipboardLink,
-                        onAutoPasteChange = viewModel.mediaDownload::setAutoPaste,
-                        onAcceptClipboardLink = viewModel.mediaDownload::acceptClipboardLink,
-                        onDismissClipboardLink = viewModel.mediaDownload::dismissClipboardLink,
-                        onClearHistory = viewModel.mediaDownload::clearHistory,
-                        onLinkCopied = viewModel.mediaDownload::reportLinkCopied,
-                    )
-                }
-                composable(AppRoute.FreeClassrooms) {
-                    val freeClassroomState by viewModel.freeClassroomState.collectAsStateWithLifecycle()
-                    FreeClassroomScreen(
-                        state = freeClassroomState,
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onQuery = viewModel::queryFreeClassrooms,
-                    )
-                }
-                composable(AppRoute.Chaoxing) {
-                    val chaoxingState by viewModel.chaoxing.state.collectAsStateWithLifecycle()
-                    LaunchedEffect(state.pendingChaoxingOpen) {
-                        if (state.pendingChaoxingOpen) viewModel.consumePendingChaoxingOpen()
-                    }
-                    ChaoxingScreen(
-                        state = chaoxingState,
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onRefresh = viewModel.chaoxing::refresh,
-                        onConnect = viewModel.chaoxing::connect,
-                        onDisconnect = viewModel.chaoxing::disconnect,
-                        onConnectSignProvider = viewModel.chaoxing::connectSignProvider,
-                        onDisconnectSignProvider = viewModel.chaoxing::disconnectSignProvider,
-                        onSelectCourse = viewModel.chaoxing::selectCourse,
-                        onOpenActivity = viewModel.chaoxing::openActivity,
-                        onRefreshSelected = viewModel.chaoxing::refreshSelected,
-                        onCloseActivity = viewModel.chaoxing::closeActivity,
-                        onLocate = viewModel.chaoxing::locate,
-                        onSign = viewModel.chaoxing::sign,
-                        onCaptchaVerified = viewModel.chaoxing::signWithCaptcha,
-                        onToggleAutoSign = viewModel.chaoxing::toggleAutoSign,
-                        onAddAutoSignTime = viewModel.chaoxing::addAutoSignTime,
-                        onRemoveAutoSignTime = viewModel.chaoxing::removeAutoSignTime,
-                        onSaveAutoSignLocation = viewModel.chaoxing::saveAutoSignLocation,
-                        onSelectAutoSignCourse = viewModel.chaoxing::selectAutoSignCourse,
-                        onRunAutoSign = viewModel.chaoxing::runAutoSign,
-                        onReport = viewModel.chaoxing::report,
-                        onClearFeedback = viewModel.chaoxing::clearFeedback,
-                    )
-                }
-                composable(AppRoute.CampusWaterValve) {
-                    val waterValveState by viewModel.waterValveState.collectAsStateWithLifecycle()
-                    WaterValveScreen(
-                        state = waterValveState,
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onRefresh = { force ->
-                            viewModel.refreshWaterValve(force)
-                            if (force) viewModel.refreshWaterBill(YearMonth.now().toString(), true)
-                        },
-                        onBind = viewModel::bindWaterValve,
-                        onOpen = viewModel::openWaterValve,
-                        onClose = viewModel::closeWaterValve,
-                        onUnbind = viewModel::unbindWaterValve,
-                        onReorder = viewModel::reorderWaterValves,
-                        onQueryBill = viewModel::refreshWaterBill,
-                        onClearFeedback = viewModel::clearWaterValveFeedback,
-                    )
-                }
-                composable(AppRoute.Reservation) {
-                    val today by viewModel.todayState.collectAsStateWithLifecycle()
-                    val agenda by viewModel.agenda.state.collectAsStateWithLifecycle()
-                    LaunchedEffect(Unit) { viewModel.agenda.refresh() }
-                    val guard = cn.pxyb.mycontrol.ui.feature.agenda.rememberReservationConflictGuard(today.timetable, agenda)
-                    val reservationState by viewModel.reservations.state.collectAsStateWithLifecycle()
-                    val context = LocalContext.current
-                    ReservationScreen(
-                        state = reservationState,
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onRefresh = viewModel.reservations::refreshReservation,
-                        onLoadSpaces = viewModel.reservations::loadReservationSpaces,
-                        onLoadAutoCandidateSpaces = viewModel.reservations::loadAutoCandidateSpaces,
-                        onLoadMyReservations = viewModel.reservations::loadMyReservations,
-                        onOpenOfficialReservation = {
-                            viewModel.openOfficialCampusReservation { session ->
-                                openPlatformWebLink(
-                                    context,
-                                    session.url,
-                                    "空间预约",
-                                    initialCookies = session.cookies,
-                                )
-                            }
-                        },
-                        onRefreshIdentityCode = viewModel.reservations::refreshIdentityCode,
-                        onQueryRulesAndAvailability = viewModel.reservations::queryReservationRulesAndAvailability,
-                        onQuerySpacesByTime = viewModel.reservations::queryAvailableSpacesByTime,
-                        onSubmitReservation = { request, done ->
-                            guard(request.date, cn.pxyb.mycontrol.ui.feature.agenda.agendaMinute(request.startTime) ?: 0,
-                                cn.pxyb.mycontrol.ui.feature.agenda.agendaMinute(request.endTime) ?: 0, null) {
-                                viewModel.reservations.submitReservation(request) { viewModel.agenda.refresh(); done() }
-                            }
-                        },
-                        onLoadAutoTasks = viewModel.reservations::loadAutoReservationTasks,
-                        onSaveAutoTask = viewModel.reservations::saveAutoReservationTask,
-                        onToggleAutoTask = viewModel.reservations::toggleAutoReservationTask,
-                        onDeleteAutoTask = viewModel.reservations::deleteAutoReservationTask,
-                        onCancelReservation = viewModel.reservations::cancelMyReservation,
-                        onEndReservation = viewModel.reservations::endMyReservation,
-                        onRescheduleReservation = { id, request, done ->
-                            guard(request.date, cn.pxyb.mycontrol.ui.feature.agenda.agendaMinute(request.startTime) ?: 0,
-                                cn.pxyb.mycontrol.ui.feature.agenda.agendaMinute(request.endTime) ?: 0, "room:$id") {
-                                viewModel.reservations.rescheduleMyReservation(id, request) { viewModel.agenda.refresh(); done() }
-                            }
-                        },
-                        onClearFeedback = viewModel.reservations::clearReservationFeedback,
-                    )
-                }
-                composable(AppRoute.LibrarySeatReservation) {
-                    val today by viewModel.todayState.collectAsStateWithLifecycle()
-                    val agenda by viewModel.agenda.state.collectAsStateWithLifecycle()
-                    LaunchedEffect(Unit) { viewModel.agenda.refresh() }
-                    val guard = cn.pxyb.mycontrol.ui.feature.agenda.rememberReservationConflictGuard(today.timetable, agenda)
-                    val librarySeatState by viewModel.librarySeats.state.collectAsStateWithLifecycle()
-                    val context = LocalContext.current
-                    val initialTab = if (state.pendingLibrarySeatMyReservations) {
-                        LibrarySeatTab.My
-                    } else {
-                        LibrarySeatTab.Book
-                    }
-                    LaunchedEffect(state.pendingLibrarySeatMyReservations) {
-                        if (state.pendingLibrarySeatMyReservations) {
-                            viewModel.consumePendingLibrarySeatMyReservations()
-                        }
-                    }
-                    LibrarySeatReservationScreen(
-                        state = librarySeatState,
-                        initialTab = initialTab,
-                        contentPadding = contentPadding,
-                        onBack = navigateBackFromSubScreen,
-                        onRefresh = viewModel.librarySeats::refreshLibrarySeat,
-                        onLoadOverview = { force -> viewModel.librarySeats.loadLibrarySeatOverview(force) },
-                        onInvalidateQuery = viewModel.librarySeats::clearLibrarySeatQuery,
-                        onQueryAreas = { venueId, date, startMinute, endMinute, floorId, pageSize, power, window ->
-                            viewModel.librarySeats.queryLibrarySeatAreas(
-                                venueId = venueId,
-                                date = date,
-                                startMinute = startMinute,
-                                endMinute = endMinute,
-                                floorId = floorId,
-                                pageSize = pageSize,
-                                currentPage = 1,
-                                power = power,
-                                window = window,
-                            )
-                        },
-                        onLoadSeats = viewModel.librarySeats::loadLibrarySeatSeats,
-                        onQueryFloorSeats = viewModel.librarySeats::queryLibrarySeatFloorSeats,
-                        onLoadTimeline = { seatId, date ->
-                            viewModel.librarySeats.loadLibrarySeatTimeline(seatId, date)
-                        },
-                        onSubmitReservation = { request, done ->
-                            guard(request.date, request.startMinute, request.endMinute, null) {
-                                viewModel.librarySeats.submitLibrarySeatReservation(request) { viewModel.agenda.refresh(); done() }
-                            }
-                        },
-                        onLoadReservations = viewModel.librarySeats::loadLibrarySeatReservations,
-                        onLoadReservationHistory = { viewModel.librarySeats.loadLibrarySeatReservationHistory() },
-                        onLoadMoreHistory = { viewModel.librarySeats.loadLibrarySeatReservationHistory(loadMore = true) },
-                        onLoadCurrentUse = { viewModel.librarySeats.loadLibrarySeatCurrentUse() },
-                        onLoadBreaches = { viewModel.librarySeats.loadLibrarySeatBreaches() },
-                        onLoadMoreBreaches = { viewModel.librarySeats.loadLibrarySeatBreaches(loadMore = true) },
-                        onLoadDoorLogs = { viewModel.librarySeats.loadLibrarySeatDoorLogs() },
-                        onLoadMakeLife = { reservationId ->
-                            viewModel.librarySeats.loadLibrarySeatMakeLife(reservationId)
-                        },
-                        onCheckIn = viewModel.librarySeats::checkInLibrarySeat,
-                        onLeaveSeat = viewModel.librarySeats::leaveLibrarySeat,
-                        onStopSeat = viewModel.librarySeats::stopLibrarySeat,
-                        onCancelReservation = viewModel.librarySeats::cancelLibrarySeatReservation,
-                        onOpenOfficialReservation = {
-                            viewModel.openOfficialLibrarySeatReservation { session ->
-                                openPlatformWebLink(
-                                    context,
-                                    session.url,
-                                    "座位预约",
-                                    initialCookies = session.cookies,
-                                )
-                            }
-                        },
-                        onLoadWaitlists = viewModel.librarySeats::loadLibrarySeatWaitlists,
-                        onCreateWaitlist = { request, onSuccess ->
-                            viewModel.librarySeats.createLibrarySeatWaitlist(request, onSuccess)
-                        },
-                        onSetWaitlistEnabled = { taskId, enabled, onSuccess ->
-                            viewModel.librarySeats.setLibrarySeatWaitlistEnabled(taskId, enabled, onSuccess)
-                        },
-                        onDeleteWaitlist = { taskId, onSuccess ->
-                            viewModel.librarySeats.deleteLibrarySeatWaitlist(taskId, onSuccess)
-                        },
-                        onClearFeedback = viewModel.librarySeats::clearLibrarySeatFeedback,
-                    )
-                }
+                campusRoutes(routeContext)
                 composable(AppRoute.Scenes) {
                     val scenesState by viewModel.scenesState.collectAsStateWithLifecycle()
                     ScenesScreen(

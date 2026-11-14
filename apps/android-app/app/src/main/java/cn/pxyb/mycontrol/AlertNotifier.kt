@@ -387,9 +387,50 @@ class AlertNotifier(context: Context) {
         val notification = builder.build()
         return try {
             NotificationManagerCompat.from(appContext).notify(notificationId, notification)
+            postGroupSummary(channelId, notificationId)
             true
         } catch (_: SecurityException) {
             false
+        }
+    }
+
+    /**
+     * 同一渠道有两条及以上通知时补发分组摘要，通知栏才会把它们收成一组。
+     * 摘要只写条数，不带正文，锁屏上不泄露内容；提示音仍由子通知负责。
+     */
+    private fun postGroupSummary(channelId: String, postedId: Int) {
+        val manager = appContext.getSystemService(NotificationManager::class.java) ?: return
+        val groupKey = GROUP_PREFIX + channelId
+        // 刚发出的那条可能还没出现在活动列表里，按编号并入后再计数。
+        val childIds = runCatching { manager.activeNotifications.toList() }.getOrDefault(emptyList())
+            .filter { it.notification.group == groupKey && !isGroupSummary(it) }
+            .mapTo(mutableSetOf()) { it.id }
+            .apply { add(postedId) }
+        if (childIds.size < 2) return
+        val channelName = manager.getNotificationChannel(channelId)?.name?.toString().orEmpty().ifBlank { "通知" }
+        val summaryId = groupSummaryId(groupKey)
+        val summary = NotificationCompat.Builder(appContext, channelId)
+            .setSmallIcon(R.drawable.ic_stat_my_notification)
+            .setContentTitle(channelName)
+            .setContentText("${childIds.size} 条新通知")
+            .setGroup(groupKey)
+            .setGroupSummary(true)
+            .setGroupAlertBehavior(NotificationCompat.GROUP_ALERT_CHILDREN)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(true)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    appContext,
+                    summaryId,
+                    DeepLinks.openIntent(appContext, destination = "notifications"),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
+            .build()
+        // 调用方已核对通知权限；这里仍兜住权限在两次调用之间被收回的情况。
+        try {
+            NotificationManagerCompat.from(appContext).notify(summaryId, summary)
+        } catch (_: SecurityException) {
         }
     }
 
@@ -513,7 +554,6 @@ class AlertNotifier(context: Context) {
         const val CHANNEL_SCHEDULE = "mycontrol_schedule"
         const val CHANNEL_DEVICES = "mycontrol_devices"
         const val CHANNEL_SECURITY = "mycontrol_security"
-        const val GROUP_PREFIX = "mycontrol.group."
         const val KEY_REMOTE_REMINDER_SEEN = "remote_reminder_seen"
         const val REMOTE_REMINDER_WINDOW_MS = 36 * 60 * 60_000L
         const val REMOTE_TODO_PREFIX = "todo."
@@ -523,6 +563,30 @@ class AlertNotifier(context: Context) {
         const val TASK_BASE = 42000
         const val PERSONAL_BASE = 43000
         const val COURSE_NOTICE_WINDOW_MS = 15 * 60_000L
+    }
+}
+
+private const val GROUP_PREFIX = "mycontrol.group."
+
+private fun groupSummaryId(groupKey: String): Int = 0x7F000000 or (groupKey.hashCode() and 0xFFFF)
+
+private fun isGroupSummary(notification: android.service.notification.StatusBarNotification): Boolean =
+    notification.notification.flags and android.app.Notification.FLAG_GROUP_SUMMARY != 0
+
+/**
+ * 应用自己取消子通知后（通知按钮里的已读、归档等），清掉已经没有子通知的分组摘要。
+ * 用户手动滑掉最后一条时系统会自动收走摘要，代码取消则不会。
+ * [removedNotificationId] 是刚取消的那条：它可能仍在活动列表里，计数时排除。
+ */
+internal fun cancelEmptyNotificationGroupSummaries(context: Context, removedNotificationId: Int? = null) {
+    val manager = context.getSystemService(NotificationManager::class.java) ?: return
+    val grouped = runCatching { manager.activeNotifications.toList() }.getOrDefault(emptyList())
+        .filter { it.notification.group?.startsWith(GROUP_PREFIX) == true }
+    grouped.filter(::isGroupSummary).forEach { summary ->
+        val children = grouped.count {
+            !isGroupSummary(it) && it.notification.group == summary.notification.group && it.id != removedNotificationId
+        }
+        if (children == 0) manager.cancel(summary.id)
     }
 }
 

@@ -9,6 +9,7 @@ const rules = [
   ['color', /\bColor\s*\(\s*0x[\da-f]+/gi, '颜色统一来自 ui/theme/Color.kt'],
   ['typography', /\bfontSize\s*=\s*(?:if\s*\([^)]*\)\s*)?[\d.]+\.sp/g, '文字使用主题排版样式，不覆盖数值字号'],
   ['spacing', /verticalArrangement\s*=\s*Arrangement\.spacedBy\(\s*(?:10|14)\.dp\s*\)/g, '列表和区块间距使用 12.dp，紧凑内容使用 4.dp 或 8.dp'],
+  ['toast', /\bToast\s*\.\s*makeText\s*\(/g, '短提示使用 LocalAppFeedback 或 AppFeedbackBanner，不直接调用系统 Toast'],
 ];
 
 export function checkAndroidDesignSource(file, source) {
@@ -16,7 +17,7 @@ export function checkAndroidDesignSource(file, source) {
   // 保留换行以报告原始行号，避免注释和展示给用户的代码片段触发规则。
   const code = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"""[\s\S]*?"""|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g,
     value => value.replace(/[^\n]/g, ' '));
-  return rules.filter(([rule]) => !sharedComponent || ['color', 'typography'].includes(rule))
+  return rules.filter(([rule]) => !sharedComponent || ['color', 'typography', 'toast'].includes(rule))
     .flatMap(([rule, pattern, message]) => [...code.matchAll(pattern)].map(match => ({
     file,
     line: code.slice(0, match.index).split('\n').length,

@@ -30,7 +30,6 @@ import cn.pxyb.mycontrol.data.CampusCourse
 import cn.pxyb.mycontrol.data.TodoCourseRef
 import cn.pxyb.mycontrol.data.TodoTask
 import cn.pxyb.mycontrol.ui.components.dialog.AppDialogForm
-import cn.pxyb.mycontrol.ui.components.dialog.AppConfirmDialog
 import cn.pxyb.mycontrol.ui.components.display.AppListCard
 import cn.pxyb.mycontrol.ui.components.filter.AppChoiceRow
 import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
@@ -45,7 +44,7 @@ import java.util.UUID
 
 @Composable
 internal fun TodoCard(task: TodoTask, onToggle: (String) -> Unit, onEdit: () -> Unit, onDelete: (String) -> Unit) {
-    var confirmDelete by remember(task.id) { mutableStateOf(false) }
+    // 删除不再弹确认：调用方把它排进可撤销的延迟删除，误触可在提示里撤回。
     AppSwipeActions(
         itemKey = task.id,
         startAction = AppSwipeAction(
@@ -71,21 +70,10 @@ internal fun TodoCard(task: TodoTask, onToggle: (String) -> Unit, onEdit: () -> 
         trailing = {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             IconButton(onClick = onEdit) { Icon(Icons.Outlined.Edit, "编辑") }
-            IconButton(onClick = { confirmDelete = true }) { Icon(Icons.Outlined.DeleteOutline, "删除") }
+            IconButton(onClick = { onDelete(task.id) }) { Icon(Icons.Outlined.DeleteOutline, "删除") }
             }
         }
     ) }
-    if (confirmDelete) {
-        AppConfirmDialog(
-            title = "删除待办？",
-            detail = "将删除“${task.title}”及其提醒设置，删除后无法恢复。",
-            confirmLabel = "确认删除",
-            icon = Icons.Outlined.DeleteOutline,
-            danger = true,
-            onDismiss = { confirmDelete = false },
-            onConfirm = { confirmDelete = false; onDelete(task.id) },
-        )
-    }
 }
 
 @Composable
