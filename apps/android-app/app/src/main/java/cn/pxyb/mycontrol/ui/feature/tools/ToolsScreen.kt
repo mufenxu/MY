@@ -11,9 +11,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -81,7 +79,6 @@ import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.filter.AppFilterChip
 import cn.pxyb.mycontrol.ui.components.input.AppSwitch
-import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.PullToRefresh
 import cn.pxyb.mycontrol.ui.components.layout.appPageContentPadding
@@ -305,14 +302,8 @@ private fun TelemetryInsightPanel(insight: DeviceTelemetryInsight) {
     val humidityValues = remember(insight.series) {
         insight.series.mapNotNull(TelemetrySeriesPoint::humidity)
     }
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = glassCardColor(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        shadowElevation = 0.dp,
-    ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    AppPanel {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Column(Modifier.weight(1f)) {
                     Text("24 小时环境趋势", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -479,15 +470,9 @@ private fun ToolSectionTitle(
 private fun ModernMqttStatusPanel(
     messagesReceived: Long,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = glassCardColor(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        shadowElevation = 0.dp,
-    ) {
+    AppPanel {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Bento 三格指标 (清爽极浅彩底 + 亮色加粗数字)
@@ -570,15 +555,9 @@ private fun ModernEnvironmentCard(device: DeviceInfo?) {
         else -> "环境偏热 · 注意降温 ☀️"
     }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        color = glassCardColor(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        shadowElevation = 0.dp,
-    ) {
+    AppPanel {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
@@ -696,8 +675,6 @@ private fun ModernRelayCard(
     val switchEnabled = enabled && canOperate && available && isKnown && !busy
     var pendingEnabled by remember(target.deviceId, target.relayId) { mutableStateOf<Boolean?>(null) }
 
-    val interactionSource = remember { MutableInteractionSource() }
-
     val targetBg = if (isOn) target.activeBgGradient.first.copy(alpha = 0.55f) else glassCardColor()
     val animatedBg by animateColorAsState(
         targetValue = targetBg,
@@ -705,27 +682,26 @@ private fun ModernRelayCard(
         label = "relay-bg",
     )
 
-    val targetBorder = if (isOn) target.activeAccent.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+    // 关闭时与普通卡片一致不带描边；开启时描边淡入设备强调色。
     val animatedBorder by animateColorAsState(
-        targetValue = targetBorder,
+        targetValue = target.activeAccent.copy(alpha = if (isOn) 0.35f else 0f),
         animationSpec = MotionTokens.standardTween(),
         label = "relay-border",
     )
+    val animatedDivider by animateColorAsState(
+        targetValue = (if (isOn) target.activeAccent else MaterialTheme.colorScheme.outlineVariant).copy(alpha = 0.3f),
+        animationSpec = MotionTokens.standardTween(),
+        label = "relay-divider",
+    )
 
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .pressFeedback(interactionSource)
-            .clickable(enabled = switchEnabled) {
-                pendingEnabled = !isOn
-            },
-        shape = RoundedCornerShape(24.dp),
-        color = animatedBg,
+    AppPanel(
+        onClick = { pendingEnabled = !isOn },
+        enabled = switchEnabled,
+        containerColor = animatedBg,
         border = BorderStroke(1.dp, animatedBorder),
-        shadowElevation = 0.dp,
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
@@ -771,7 +747,7 @@ private fun ModernRelayCard(
                 )
             }
 
-            HorizontalDivider(color = animatedBorder.copy(alpha = 0.3f))
+            HorizontalDivider(color = animatedDivider)
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,

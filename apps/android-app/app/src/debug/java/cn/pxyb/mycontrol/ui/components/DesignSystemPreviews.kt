@@ -112,6 +112,10 @@ private fun ComponentsPreview(dark: Boolean) {
                         AppDetailRow("暂无数据", "")
                     }
                 }
+                // 选中态：主色细描边 + 极浅主色底，深浅色下都要能与普通卡片区分
+                AppPanel(onClick = {}, selected = true) {
+                    Text("选中的卡片", Modifier.padding(16.dp), style = MaterialTheme.typography.titleSmall)
+                }
             }
         }
     }

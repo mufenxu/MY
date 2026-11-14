@@ -12,7 +12,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -34,7 +33,6 @@ import androidx.compose.material.icons.outlined.RocketLaunch
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -70,6 +68,7 @@ import cn.pxyb.mycontrol.ui.components.feedback.rememberFeedbackShownAt
 import cn.pxyb.mycontrol.ui.components.input.AppTextField
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.components.layout.AppFormContentMaxWidth
+import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.components.layout.glassShimmer
 import cn.pxyb.mycontrol.ui.components.picker.AppWheelPicker
@@ -225,15 +224,9 @@ private fun AndroidReleasePlanCard(
         versionName.trim() != draft.versionName ||
         notes.trim() != draft.notes
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = glassCardColor(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-        shadowElevation = 0.dp,
-    ) {
+    AppPanel {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
@@ -501,15 +494,9 @@ private fun AndroidReleaseCard(
         AppUpdatePhase.Installing,
     )
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = glassCardColor(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-        shadowElevation = 0.dp,
-    ) {
+    AppPanel {
         Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(

@@ -59,9 +59,8 @@ import cn.pxyb.mycontrol.data.kind
 import cn.pxyb.mycontrol.ui.components.display.AppIconTile
 import cn.pxyb.mycontrol.ui.components.interaction.AppSwipeAction
 import cn.pxyb.mycontrol.ui.components.interaction.AppSwipeActions
-import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
+import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.theme.AccentColors
-import cn.pxyb.mycontrol.ui.theme.AppCardShape
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.util.DateTimeUtils.formatLocalDateTime
@@ -110,23 +109,11 @@ internal fun NotificationCard(
             onTrigger = { onArchive(alert.id) },
         ),
     ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(AppCardShape)
-                .clickable(onClick = onOpen),
-            shape = AppCardShape,
-            color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.06f) else glassCardColor(),
-            border = BorderStroke(
-                width = if (selected) 1.5.dp else if (urgent) 1.1.dp else 0.5.dp,
-                color = when {
-                    selected -> MaterialTheme.colorScheme.primary
-                    urgent -> ColorTokens.Red.foreground
-                    !alert.read -> MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
-                    else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-                },
-            ),
-            shadowElevation = 0.dp,
+        // 选中外观由 AppPanel 统一提供；未读靠标题字重与蓝点表达，只有未读高优先保留红色描边。
+        AppPanel(
+            onClick = onOpen,
+            selected = selected,
+            border = if (urgent) BorderStroke(1.dp, ColorTokens.Red.foreground) else null,
         ) {
             Column(
                 modifier = Modifier

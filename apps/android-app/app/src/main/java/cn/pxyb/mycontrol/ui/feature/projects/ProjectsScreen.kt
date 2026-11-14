@@ -4,14 +4,12 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoMode
 import androidx.compose.material.icons.outlined.Code
@@ -19,7 +17,6 @@ import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -43,7 +40,6 @@ import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.GlassShimmerList
 import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
-import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.sectionError
 import cn.pxyb.mycontrol.ui.state.blocksAction
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
@@ -122,15 +118,9 @@ private fun ModernCt8Panel(
     enabled: Boolean,
     onTrigger: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = glassCardColor(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
-        shadowElevation = 0.dp,
-    ) {
+    AppPanel {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(

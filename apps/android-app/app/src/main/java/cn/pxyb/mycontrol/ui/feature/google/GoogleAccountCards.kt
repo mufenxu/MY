@@ -3,9 +3,6 @@ package cn.pxyb.mycontrol.ui.feature.google
 import cn.pxyb.mycontrol.ui.components.display.AppAvatar
 import cn.pxyb.mycontrol.ui.components.display.AppMetricDashboard
 import cn.pxyb.mycontrol.ui.components.display.AppMetricCard
-import cn.pxyb.mycontrol.ui.theme.AppCardShape
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,7 +26,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,7 +35,7 @@ import cn.pxyb.mycontrol.data.GoogleAccountRecord
 import cn.pxyb.mycontrol.ui.components.display.AppStatusBadge
 import cn.pxyb.mycontrol.ui.components.display.AppStatusSemantic
 import cn.pxyb.mycontrol.ui.components.filter.AppSegmentedControl
-import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
+import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 
 @Composable
@@ -126,21 +122,9 @@ internal fun GoogleAccountRow(
     bulkSelected: Boolean,
     onClick: () -> Unit,
 ) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(AppCardShape)
-            .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onClick),
-        shape = AppCardShape,
-        color = glassCardColor(),
-        border = BorderStroke(
-            if (bulkSelected || selected) 1.2.dp else 0.6.dp,
-            if (bulkSelected || selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.65f),
-        ),
-        shadowElevation = 0.dp,
-    ) {
+    AppPanel(onClick = onClick, selected = bulkSelected || selected) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {

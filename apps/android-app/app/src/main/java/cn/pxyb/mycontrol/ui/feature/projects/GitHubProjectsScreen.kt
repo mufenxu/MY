@@ -1,7 +1,6 @@
 package cn.pxyb.mycontrol.ui.feature.projects
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,7 +29,6 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.RocketLaunch
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,8 +44,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -72,7 +68,7 @@ import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
 import cn.pxyb.mycontrol.ui.components.layout.AppAdaptivePanes
 import cn.pxyb.mycontrol.ui.components.layout.AppListDetailMinWidth
 import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
-import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
+import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.useTwoPaneLayout
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
@@ -346,14 +342,8 @@ private fun GitHubReleasesPane(
 
 @Composable
 private fun GitHubReleaseCard(release: GitHubReleaseRecord) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = glassCardColor(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-        shadowElevation = 0.dp,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+    AppPanel {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -418,16 +408,8 @@ private fun GitHubRepositoryCard(
 ) {
     val isPrivate = repository.visibility == "private"
     val isInternal = repository.visibility == "internal"
-    Surface(
-        onClick = onOpenReleases,
-        enabled = enabled,
-        modifier = Modifier.fillMaxWidth().semantics { this.selected = selected },
-        shape = RoundedCornerShape(20.dp),
-        color = if (selected) MaterialTheme.colorScheme.surfaceContainerHigh else glassCardColor(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-        shadowElevation = 0.dp,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+    AppPanel(onClick = onOpenReleases, enabled = enabled, selected = selected) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -567,14 +549,8 @@ private fun GitHubMetricItem(icon: ImageVector, tint: Color, text: String) {
 
 @Composable
 private fun GitHubAccountCard(profile: GitHubProfileRecord) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = glassCardColor(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-        shadowElevation = 0.dp,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+    AppPanel {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 GitHubAvatar(name = profile.login, avatarUrl = profile.avatarUrl, size = 46.dp)
                 Spacer(modifier = Modifier.width(12.dp))
@@ -630,14 +606,8 @@ private fun GitHubAccountCard(profile: GitHubProfileRecord) {
 @Composable
 private fun GitHubRepositoriesSummaryCard(repositories: List<GitHubRepositoryRecord>) {
     val owner = repositories.first().ownerName()
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        color = glassCardColor(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-        shadowElevation = 0.dp,
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+    AppPanel {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 GitHubAvatar(name = owner, avatarUrl = null, size = 46.dp)
                 Spacer(modifier = Modifier.width(12.dp))

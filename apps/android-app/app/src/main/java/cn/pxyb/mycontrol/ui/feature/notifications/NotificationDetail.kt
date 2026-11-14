@@ -1,6 +1,5 @@
 package cn.pxyb.mycontrol.ui.feature.notifications
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,9 +62,8 @@ import cn.pxyb.mycontrol.ui.components.layout.AppSubPage
 import cn.pxyb.mycontrol.ui.components.layout.AppAdaptivePanes
 import cn.pxyb.mycontrol.ui.components.layout.AppReadingContentMaxWidth
 import cn.pxyb.mycontrol.ui.components.layout.PullToRefresh
-import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
+import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.isRefreshing
-import cn.pxyb.mycontrol.ui.theme.AppCardShape
 import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.components.feedback.AppLinearProgressIndicator
 
@@ -157,13 +155,7 @@ internal fun NotificationTwoPaneLayout(
 
 @Composable
 private fun NotificationDetailPlaceholder(modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier,
-        shape = AppCardShape,
-        color = glassCardColor(),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        shadowElevation = 0.dp,
-    ) {
+    AppPanel(modifier = modifier) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -207,13 +199,7 @@ private fun NotificationDetailPane(
     val accent = notificationKindColors(kind)
     val snoozed = alert.isSnoozedAt()
 
-    Surface(
-        modifier = modifier,
-        shape = AppCardShape,
-        color = glassCardColor(),
-        border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
-        shadowElevation = 0.dp,
-    ) {
+    AppPanel(modifier = modifier) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
