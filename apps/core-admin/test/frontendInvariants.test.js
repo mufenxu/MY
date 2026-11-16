@@ -133,7 +133,7 @@ test('Ant Design feedback is bound to the application context', () => {
 
   assert.match(app, /import \{ App as AntApp/);
   assert.match(app, /bindFeedbackApis\(AntApp\.useApp\(\)\)/);
-  assert.match(app, /<AntApp component=\{false\}>[\s\S]*?<FeedbackBinder \/>/);
+  assert.match(app, /<AntApp>[\s\S]*?<FeedbackBinder \/>[\s\S]*?<\/AntApp>/);
   assert.match(feedback, /export function bindFeedbackApis/);
 });
 
