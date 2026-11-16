@@ -876,17 +876,8 @@
 
   function syncAutoSlotMode() {
     const multiple = w.extraSlots.children.length > 0;
-    w.preferredArea.required = multiple;
-    w.labels.required = multiple;
-    w.range.hidden = multiple;
-    w.range.disabled = multiple;
-    w.labels.previousElementSibling.innerHTML = multiple
-      ? '固定座位号 <small>只填一个座位号，所有时段都预约它</small>'
-      : '指定座位号 <small>可选，填了就先抢这些号</small>';
-    w.labels.placeholder = multiple ? "例如 8" : "逗号分隔，例如 8,12,15；没抢到会自动换相邻号";
-    w.preferredArea.previousElementSibling.textContent = multiple ? "固定阅览区" : "优先阅览区";
     w.slotHint.textContent = multiple
-      ? "请选择固定阅览区并填写一个座位号。所有时段预约同一座位，不自动换座；单段失败不影响其他时段，已成功的预约会保留。"
+      ? "首次成功前按指定号、相邻号、号段及其他空位换座；任一时段成功后固定该座位，其他时段继续尝试，成功预约会保留。"
       : "单时段优先抢指定座位，失败后按原有顺序换座。";
   }
 
@@ -979,7 +970,7 @@
       const slots = task.timeSlots?.length ? task.timeSlots : [{ startMinute: task.startMinute, endMinute: task.endMinute }];
       const slotText = `${task.date || ""} ${slots.map((slot) => `${minuteText(slot.startMinute)} - ${minuteText(slot.endMinute)}`).join("、")}`;
       const range = Array.isArray(task.seatLabels) && task.seatLabels.length
-        ? `${slots.length > 1 ? "固定" : "指定"} ${task.seatLabels.join("、")} 号${slots.length > 1 ? " · 所有时段同座位" : "优先"}`
+        ? `指定 ${task.seatLabels.join("、")} 号优先${slots.length > 1 ? " · 所有时段同座位" : ""}`
         : `座位号 ${task.minLabel} - ${task.maxLabel}`;
       const tone = task.status === "success" ? "is-ok" : ["failed", "expired"].includes(task.status) ? "is-bad" : task.enabled ? "is-info" : "";
       const runAtMs = task.runAt ? Date.parse(task.runAt) : NaN;
@@ -1098,10 +1089,6 @@
     const timeSlots = autoTimeSlots();
     if (timeSlots.some((slot, index) => slot.endMinute > 1440 || (index > 0 && slot.startMinute < timeSlots[index - 1].endMinute))) {
       setStatus(w.status, "预约时段不能重叠或跨越当天，请调整开始时间和时长。", "error");
-      return;
-    }
-    if (timeSlots.length > 1 && (!w.preferredArea.value || labels.length !== 1)) {
-      setStatus(w.status, "同座位多时段任务需指定一个阅览区和一个座位号。", "error");
       return;
     }
     const { startMinute: start, endMinute: end } = timeSlots[0];

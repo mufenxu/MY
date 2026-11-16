@@ -1446,30 +1446,51 @@ export function createReservationService({
   }
 
   async function runLibrarySeatAutoTaskSlots(task, input, prepared, shouldStop, recordFailure, deadline) {
-    const previousSeat = (task.slot_results || []).find((slot) => slot.seatId
-      && ["success", "confirming", "unconfirmed"].includes(slot.status));
-    const seat = previousSeat ? { seatId: previousSeat.seatId, seatLabel: previousSeat.seatLabel,
+    const previousSuccess = (task.slot_results || []).find((slot) => slot.seatId && slot.status === "success");
+    const previousSeat = previousSuccess || (task.slot_results || []).find((slot) => slot.seatId
+      && ["confirming", "unconfirmed"].includes(slot.status));
+    let lockedSeat = Boolean(previousSuccess);
+    let candidateRejected = false;
+    let seat = previousSeat ? { seatId: previousSeat.seatId, seatLabel: previousSeat.seatLabel,
       label: Number(previousSeat.seatLabel), areaName: previousSeat.areaName,
-      areaId: input.preferredAreaId, tier: "preferred" } : prepared.candidates[0];
+      areaId: previousSeat.areaId || input.preferredAreaId, tier: previousSeat.tier || "preferred" } : prepared.candidates[0];
     const runs = input.timeSlots.map((slot) => {
       const saved = (task.slot_results || []).find((row) => row.startMinute === slot.startMinute && row.endMinute === slot.endMinute);
       const pending = ["confirming", "unconfirmed"].includes(saved?.status);
-      return { slot, nextAt: 0, lastFailure: saved?.lastFailure || null,
+      return { slot, nextAt: 0, lastFailure: saved?.lastFailure || null, seatUnavailable: false,
         result: saved?.status === "success" ? saved : null,
         prepared: { candidates: seat ? [seat] : [], blocked: new Set(), fixedSeat: true,
           pending: pending ? { ...seat, ...saved } : null, pendingRefused: false }
       };
     });
     const slotResults = () => runs.map((run) => ({ ...run.slot, seatId: seat?.seatId || null,
-      seatLabel: seat?.seatLabel || null, areaName: seat?.areaName || null,
+      seatLabel: seat?.seatLabel || null, areaId: seat?.areaId || null, areaName: seat?.areaName || null, tier: seat?.tier || null,
       status: run.prepared.pending ? "confirming" : run.nextAt ? "retry" : "scheduled",
       message: run.prepared.pending ? "正在核对该时段预约。" : run.nextAt ? "等待下一次尝试。" : "等待提交。",
       ...run.result, lastFailure: run.lastFailure }));
     try {
-      if (!seat) throw new Error("所选阅览区中未找到指定座位，请核对座位号。");
       // 每段首轮提交后再轮流重试；一个时段的退避或待确认不会独占整个窗口。
       while (Date.now() < deadline && runs.some((run) => !run.result)) {
+        if (!seat) {
+          if (await shouldStop() || prepared.timings.attempts >= 40) break;
+          try {
+            const fresh = await prepareLibrarySeatAutoTaskSeats({ task: input, client: prepared.client });
+            prepared.candidates = fresh.candidates;
+            prepared.blocked = new Set();
+            seat = prepared.candidates[0];
+          } catch (error) {
+            for (const run of runs.filter((item) => !item.result)) {
+              run.lastFailure = recordFailure(error, null, "availability", run.slot);
+            }
+            if (error?.status && error.status < 500 && error.status !== 429) throw error;
+          }
+          for (const run of runs.filter((item) => !item.result)) {
+            run.prepared.candidates = seat ? [seat] : [];
+            run.nextAt = seat ? 0 : Date.now() + LIBRARY_SEAT_AUTO_TASK_RETRY_INTERVAL_MS;
+          }
+        }
         for (const run of runs) {
+          if (!seat) break;
           if (run.result || run.nextAt > Date.now()) continue;
           if (await shouldStop()) break;
           if (!run.prepared.pending && prepared.timings.attempts >= 40) {
@@ -1489,11 +1510,29 @@ export function createReservationService({
             run.lastFailure = recordFailure(error, seat, "submit", run.slot);
             scan = { status: "failed", message: error.message || "该时段预约失败。" };
           }
+          if (scan.status === "success") lockedSeat = true;
+          candidateRejected ||= scan.candidateRejected === true;
+          run.seatUnavailable = scan.seatUnavailable === true;
           if (["success", "failed", "stopped", "expired", "inactive"].includes(scan.status)) {
             run.result = { status: run.prepared.pending ? "unconfirmed" : scan.status === "inactive" ? "stopped" : scan.status,
               message: scan.message || "该预约时段已结束。" };
           } else {
             run.nextAt = Date.now() + Math.max(LIBRARY_SEAT_AUTO_TASK_RETRY_INTERVAL_MS, Number(scan.retryAfterMs) || 0);
+          }
+          // 首次成功前保留候选回退；待确认请求必须先核实，不能带着未知预约换座。
+          if (!lockedSeat && !runs.some((item) => item.prepared.pending)
+            && (candidateRejected || runs.some((item) => item.seatUnavailable))) {
+            prepared.blocked.add(seat.seatId);
+            seat = prepared.candidates.find((candidate) => !prepared.blocked.has(candidate.seatId));
+            candidateRejected = false;
+            for (const item of runs.filter((row) => !row.result || row.seatUnavailable)) {
+              item.result = null;
+              item.seatUnavailable = false;
+              item.prepared.candidates = seat ? [seat] : [];
+              item.nextAt = seat ? 0 : Date.now() + LIBRARY_SEAT_AUTO_TASK_RETRY_INTERVAL_MS;
+            }
+            await repository.updateLibrarySeatAutoTask(task.user_id, task.id, { slot_results: slotResults() }, nowIso());
+            break;
           }
           await repository.updateLibrarySeatAutoTask(task.user_id, task.id, { slot_results: slotResults() }, nowIso());
         }
