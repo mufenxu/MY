@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFile, readdir } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { cp, mkdtemp, readFile, readdir, rm, symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
 
 import { loadImageBuildGraph } from './resolve-image-targets.mjs';
 
@@ -82,6 +86,48 @@ test('each image build stage copies every local package the app installs', async
     }
   }
   assert.deepEqual(problems, []);
+});
+
+test('official website builds using only the sources copied into its Docker stage', async (t) => {
+  const dockerfile = await readFile(new URL('platform-api.Dockerfile', dockerDir), 'utf8');
+  const stage = splitStages(dockerfile).find((item) => item.name === 'official-website-build');
+  assert.ok(stage, 'the platform image must build the official website');
+  const buildAt = stage.lines.findIndex((line) => /^RUN\s+npm\s+run\s+build\b/.test(line));
+  assert.ok(buildAt >= 0, 'the website stage must run its production build');
+
+  const fixtureRoot = await mkdtemp(path.join(tmpdir(), 'my-website-docker-'));
+  t.after(() => rm(fixtureRoot, { recursive: true, force: true }));
+  let workdir = '/';
+  for (const line of stage.lines.slice(0, buildAt)) {
+    const workdirMatch = /^WORKDIR\s+(\S+)/.exec(line);
+    if (workdirMatch) workdir = path.posix.resolve(workdir, workdirMatch[1]);
+    const copy = /^COPY\s+(\S+\/)\s+(\S+)\s*$/.exec(line);
+    if (!copy) continue;
+    const destination = path.join(fixtureRoot, path.posix.resolve(workdir, copy[2]).slice(1));
+    await cp(new URL(copy[1], repoRoot), destination, {
+      recursive: true,
+      filter: (source) => {
+        const name = path.basename(source);
+        return !['node_modules', 'dist', 'test', '__tests__', '.git'].includes(name)
+          && (!name.startsWith('.env') || name === '.env.example')
+          && name !== 'project.private.config.json';
+      },
+    });
+  }
+
+  const appDirectory = path.join(fixtureRoot, workdir.slice(1));
+  // 复用已安装的工具，源码仍由该阶段的 COPY 决定，避免测试联网安装依赖。
+  await symlink(
+    fileURLToPath(new URL('apps/official-website/node_modules/', repoRoot)),
+    path.join(appDirectory, 'node_modules'),
+    process.platform === 'win32' ? 'junction' : 'dir',
+  );
+  const result = spawnSync(process.execPath, [
+    fileURLToPath(new URL('apps/official-website/node_modules/vite/bin/vite.js', repoRoot)),
+    'build',
+  ], { cwd: appDirectory, encoding: 'utf8' });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, `website Docker stage build failed:\n${result.stdout}\n${result.stderr}`);
 });
 
 test('every shared package copied into an image triggers a rebuild of that image', async () => {

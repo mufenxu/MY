@@ -13,6 +13,7 @@ RUN npm run build && npm prune --omit=dev --no-audit --no-fund
 
 FROM ${NODE_IMAGE} AS official-website-build
 WORKDIR /build/apps/official-website
+COPY packages/pearl-tokens/ /build/packages/pearl-tokens/
 COPY apps/official-website/package*.json ./
 RUN npm ci --no-audit --no-fund
 COPY apps/official-website/ ./
