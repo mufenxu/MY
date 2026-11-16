@@ -11,25 +11,15 @@ function initThemeToggle() {
   const toggle = document.getElementById('theme-toggle');
   if (!toggle) return;
 
-  function updateLabel() {
-    const isDark = document.documentElement.dataset.theme === 'dark';
-    const label = isDark ? '切换至浅色模式' : '切换至深色模式';
-    toggle.setAttribute('aria-label', label);
-    toggle.setAttribute('title', label);
+  function updateSelection() {
+    toggle.value = window.myPlatformTheme.getThemePreference();
   }
 
-  toggle.addEventListener('click', () => {
-    const nextTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-    document.documentElement.dataset.theme = nextTheme;
-    try {
-      localStorage.setItem('my-official-theme', nextTheme);
-    } catch {
-      // 受限浏览器环境下仍允许本次切换生效。
-    }
-    updateLabel();
+  toggle.addEventListener('change', () => {
+    window.myPlatformTheme.setTheme(toggle.value);
   });
-
-  updateLabel();
+  window.myPlatformTheme.subscribeTheme(updateSelection);
+  updateSelection();
 }
 
 // Interactive Particle Background

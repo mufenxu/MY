@@ -92,11 +92,11 @@
 }
 
 .stat-card .panel-meta {
-  font-size: 10.5px;
+  font-size: var(--type-caption);
 }
 
 .stat-card .panel-meta:first-child {
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 600;
 }
 
@@ -131,13 +131,13 @@
   align-items: center;
   gap: 7px;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: var(--type-caption);
   white-space: nowrap;
 }
 
 .toolbar-hint {
   color: var(--ink-faint);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 .toolbar-sep {
@@ -199,7 +199,7 @@
   border-bottom: 1px solid var(--line);
   color: var(--ink-soft);
   background: var(--surface-solid);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 620;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -263,21 +263,21 @@
 .cell-stack small {
   overflow: hidden;
   color: var(--ink-soft);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .cell-mono {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   font-variant-numeric: tabular-nums;
 }
 
 .cell-soft {
   overflow: hidden;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: var(--type-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -344,7 +344,7 @@
 .incident-copy small {
   overflow: hidden;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -358,7 +358,7 @@
 
 .incident-meta small {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   white-space: nowrap;
 }
 
@@ -408,7 +408,7 @@
 
 .detail-eyebrow {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   font-weight: 620;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -433,7 +433,7 @@
 .detail-desc {
   margin: 0;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-caption);
   line-height: 1.6;
 }
 
@@ -463,7 +463,7 @@
 
 .detail-grid dt {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   letter-spacing: 0.02em;
 }
 
@@ -471,7 +471,7 @@
   margin: 0;
   overflow: hidden;
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -486,7 +486,7 @@
 
 .detail-section-title {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 650;
   letter-spacing: 0.04em;
 }
@@ -537,14 +537,14 @@
 
 .timeline-row strong {
   color: var(--ink);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   font-weight: 600;
   line-height: 1.45;
 }
 
 .timeline-row small {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
 }
 
 /* ── 图表框 ───────────────────────────────────────────────────── */
@@ -580,7 +580,7 @@
   flex-wrap: wrap;
   gap: 5px 14px;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
 }
 
 .chart-legend span {
@@ -767,7 +767,7 @@
 .code-grid code {
   color: var(--leaf-text);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   letter-spacing: 0.04em;
 }
 
@@ -929,17 +929,17 @@
 
 .trace-record > header code {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
 }
 
 .trace-stage strong {
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 650;
 }
 
 .trace-stage small {
   color: var(--ink-soft);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
 }
 
 /* 工具条内的下拉选择保持固定宽度，避免占满整行 */
@@ -1036,7 +1036,7 @@
 
 .config-toggle small {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
 }
 
 .config-toggle input {
@@ -1064,13 +1064,13 @@
   align-items: baseline;
   gap: 6px;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 600;
 }
 
 .config-field > span small {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   font-weight: 500;
 }
 
@@ -1140,21 +1140,21 @@
 
 .config-window-copy strong {
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 650;
 }
 
 .config-window-copy small {
   overflow: hidden;
   color: var(--ink-soft);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .config-window-time {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1162,7 +1162,7 @@
 .config-hint {
   margin: 0;
   color: var(--ink-faint);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 .config-submit {
@@ -1180,7 +1180,7 @@
   flex-direction: column;
   gap: 5px;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 600;
 }
 
@@ -1244,7 +1244,7 @@
 
 .config-item-copy > small {
   color: var(--ink-soft);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
 }
 
 .config-keys {
@@ -1260,7 +1260,7 @@
   color: var(--ink-muted);
   background: rgba(var(--shade), 0.06);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--type-caption);
 }
 
 :root[data-theme="dark"] .config-keys code {
@@ -1275,7 +1275,7 @@
   padding: 20px 16px;
   border-top: 1px solid var(--line);
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: var(--type-caption);
   text-align: center;
 }
 
@@ -1290,7 +1290,7 @@
 
 .version-tag {
   color: var(--blue);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -1305,7 +1305,7 @@
 .version-copy strong {
   overflow: hidden;
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 620;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1313,7 +1313,7 @@
 
 .version-copy small {
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: var(--type-caption);
 }
 
 
@@ -1353,7 +1353,7 @@ a.data-row:hover .capability-open {
   gap: 5px;
   margin-top: 10px;
   color: var(--blue);
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 600;
   text-decoration: none;
 }
@@ -1417,7 +1417,7 @@ a.data-row:hover .capability-open {
 
 .restore-target-label {
   color: var(--ink-soft);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   font-weight: 600;
 }
 
@@ -1432,13 +1432,13 @@ a.data-row:hover .capability-open {
 
 .restore-target small {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
 }
 
 .restore-warning {
   margin: 10px 0;
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   line-height: 1.55;
 }
 
@@ -1488,7 +1488,7 @@ a.data-row:hover .capability-open {
   color: var(--ink-soft);
   background: var(--surface);
   box-shadow: var(--edge);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 .quality-item svg {
@@ -1498,7 +1498,7 @@ a.data-row:hover .capability-open {
 
 .quality-item strong {
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 650;
 }
 
@@ -1704,7 +1704,7 @@ a.data-row:hover .capability-open {
   border-radius: 999px;
   color: var(--ink-soft);
   background: rgba(var(--shade), 0.05);
-  font-size: 11px;
+  font-size: var(--type-caption);
 }
 
 :root[data-theme="dark"] .stat-chips > span {
@@ -1713,7 +1713,7 @@ a.data-row:hover .capability-open {
 
 .stat-chips strong {
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
@@ -1811,7 +1811,7 @@ a.data-row:hover .capability-open {
 .row-pick small {
   overflow: hidden;
   color: var(--ink-soft);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1839,7 +1839,7 @@ a.data-row:hover .capability-open {
 
 .config-field > small {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
 }
 
 .notify-send-button {
@@ -1858,7 +1858,7 @@ a.data-row:hover .capability-open {
   display: block;
   margin-bottom: 5px;
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 650;
 }
 
@@ -1869,7 +1869,7 @@ a.data-row:hover .capability-open {
   margin: 0;
   padding-left: 15px;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
   line-height: 1.55;
 }
 
@@ -1885,7 +1885,7 @@ a.data-row:hover .capability-open {
 
 .message-preview > span {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   font-weight: 600;
 }
 
@@ -1906,7 +1906,7 @@ a.data-row:hover .capability-open {
 
 .message-preview > small {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
 }
 
 .preference-form {
@@ -1998,7 +1998,7 @@ a.data-row:hover .capability-open {
   border-top: 1px solid var(--line);
   color: var(--amber);
   background: var(--amber-soft);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 .panel-note span {
@@ -2038,7 +2038,7 @@ a.data-row:hover .capability-open {
   padding: 0;
   margin-bottom: 6px;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 600;
 }
 
@@ -2101,7 +2101,7 @@ a.data-row:hover .capability-open {
 .code-row > span {
   flex: none;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 600;
 }
 
@@ -2111,7 +2111,7 @@ a.data-row:hover .capability-open {
   overflow: hidden;
   color: var(--ink);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2128,7 +2128,7 @@ a.data-row:hover .capability-open {
 
 .col-endpoint code {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 .compat-list {
@@ -2181,7 +2181,7 @@ a.data-row:hover .capability-open {
 
 .secret-dialog-eyebrow {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   font-weight: 650;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -2198,7 +2198,7 @@ a.data-row:hover .capability-open {
 .secret-dialog-copy {
   margin: 0 0 12px;
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   line-height: 1.55;
 }
 
@@ -2220,7 +2220,7 @@ a.data-row:hover .capability-open {
   overflow: auto;
   color: var(--ink);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   white-space: nowrap;
 }
 
@@ -2439,7 +2439,7 @@ a.data-row:hover .capability-open {
   color: var(--ink-muted);
   background: rgba(var(--shade), 0.06);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
 }
 
 :root[data-theme="dark"] .trace-id {
@@ -2470,13 +2470,13 @@ a.data-row:hover .capability-open {
 
 .trace-stage strong {
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 640;
 }
 
 .trace-stage small {
   color: var(--ink-soft);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
 }
 
 .trace-stage > i {
@@ -2529,14 +2529,14 @@ a.data-row:hover .capability-open {
 
 .check-card strong {
   color: var(--ink);
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 640;
 }
 
 .check-card small {
   overflow: hidden;
   color: var(--ink-soft);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2636,7 +2636,7 @@ a.data-row:hover .capability-open {
 
 .public-status-header span {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-caption);
 }
 
 .public-overall-status {
@@ -2675,7 +2675,7 @@ a.data-row:hover .capability-open {
 
 .public-overall-status time {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-caption);
   white-space: nowrap;
 }
 
@@ -2713,7 +2713,7 @@ a.data-row:hover .capability-open {
 
 .public-section-heading span {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-caption);
 }
 
 .public-service-list {
@@ -2749,7 +2749,7 @@ a.data-row:hover .capability-open {
 
 .public-service-list small {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-caption);
 }
 
 .public-service-state {
@@ -2757,7 +2757,7 @@ a.data-row:hover .capability-open {
   align-items: center;
   gap: 7px;
   color: var(--leaf-text);
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -2827,7 +2827,7 @@ a.data-row:hover .capability-open {
 .public-incident-list small,
 .public-incident-list article > span {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-caption);
 }
 
 .public-status-page > footer {
@@ -2836,7 +2836,7 @@ a.data-row:hover .capability-open {
   align-items: center;
   justify-content: space-between;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-caption);
 }
 
 .public-status-page > footer a {

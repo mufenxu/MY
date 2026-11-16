@@ -2,33 +2,36 @@
    MY Platform Official Website - Translucent Frosted Glass System
    ========================================================================== */
 
+@import "../../packages/pearl-tokens/tokens.css";
+@import "../../packages/pearl-tokens/theme.css";
+
 :root {
-  --color-bg-main: #FAF8F5;
-  --color-bg-surface: rgba(255, 255, 255, 0.82);
-  --color-bg-card: rgba(255, 255, 255, 0.9);
-  --color-bg-subtle: #F4EFE9;
+  --color-bg-main: var(--canvas);
+  --color-bg-surface: var(--glass-bg);
+  --color-bg-card: var(--surface-solid);
+  --color-bg-subtle: var(--groove-bg);
 
-  --color-text-primary: #1F1D1B;
-  --color-text-secondary: #5E5852;
-  --color-text-muted: #8F877F;
+  --color-text-primary: var(--ink);
+  --color-text-secondary: var(--ink-muted);
+  --color-text-muted: var(--ink-soft);
 
-  --color-accent-gold: #D97724;
-  --color-accent-amber: #F59E0B;
-  --color-accent-emerald: #10B981;
-  --color-accent-sky: #0EA5E9;
-  --color-accent-purple: #8B5CF6;
+  --color-accent-gold: var(--blue);
+  --color-accent-amber: var(--amber);
+  --color-accent-emerald: var(--leaf-text);
+  --color-accent-sky: var(--blue);
+  --color-accent-purple: var(--violet);
   
-  --color-border: rgba(232, 226, 217, 0.8);
-  --color-border-glow: rgba(217, 119, 36, 0.3);
+  --color-border: var(--line-strong);
+  --color-border-glow: var(--blue-glow);
 
   --shadow-sm: 0 4px 12px rgba(31, 29, 27, 0.04);
   --shadow-md: 0 12px 32px -4px rgba(31, 29, 27, 0.08);
   --shadow-luxury: 0 24px 48px -12px rgba(31, 29, 27, 0.12);
   --shadow-hyper: 0 30px 60px -15px rgba(31, 29, 27, 0.14), 0 0 30px rgba(217, 119, 36, 0.08);
 
-  --radius-sm: 10px;
-  --radius-md: 18px;
-  --radius-lg: 28px;
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-xl);
   --radius-full: 9999px;
 
   --transition-fast: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -37,15 +40,6 @@
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-bg-main: #171513;
-  --color-bg-surface: rgba(39, 36, 33, 0.86);
-  --color-bg-card: rgba(42, 38, 35, 0.92);
-  --color-bg-subtle: #312c28;
-  --color-text-primary: #F7F3EE;
-  --color-text-secondary: #C9C1B9;
-  --color-text-muted: #9F968E;
-  --color-border: rgba(223, 211, 199, 0.14);
-  --color-border-glow: rgba(245, 158, 11, 0.24);
   --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.2);
   --shadow-md: 0 12px 32px -4px rgba(0, 0, 0, 0.32);
   --shadow-luxury: 0 24px 48px -12px rgba(0, 0, 0, 0.4);
@@ -72,7 +66,7 @@
 }
 
 html {
-  font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   background-color: var(--color-bg-main);
   color: var(--color-text-primary);
   overflow-x: clip;
@@ -100,12 +94,13 @@ textarea {
   text-decoration: none;
   -webkit-tap-highlight-color: transparent !important;
   -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
-  outline: none !important;
 }
 
-a:focus, a:active, a:focus-visible,
-button:focus, button:active, button:focus-visible {
-  outline: none !important;
+a:focus-visible,
+button:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
   -webkit-tap-highlight-color: transparent !important;
 }
 
@@ -290,7 +285,7 @@ button:focus, button:active, button:focus-visible {
   padding: 6px 12px;
   background: rgba(245, 158, 11, 0.1);
   border-radius: var(--radius-full);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 700;
   color: var(--color-accent-gold);
   white-space: nowrap;
@@ -693,7 +688,7 @@ button:focus, button:active, button:focus-visible {
 .metric-detail {
   min-height: 18px;
   color: var(--color-text-muted);
-  font-size: 11px;
+  font-size: var(--type-caption);
   line-height: 1.5;
 }
 
@@ -745,7 +740,7 @@ button:focus, button:active, button:focus-visible {
 }
 
 .waveform-title {
-  font-size: 10px;
+  font-size: var(--type-caption);
   font-weight: 700;
   color: var(--color-text-muted);
   letter-spacing: 0;
@@ -813,7 +808,7 @@ button:focus, button:active, button:focus-visible {
 
 .section-badge {
   display: inline-block;
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 800;
   color: var(--color-accent-gold);
   letter-spacing: 0;
@@ -1143,7 +1138,7 @@ button:focus, button:active, button:focus-visible {
     height: 32px;
     padding: 5px 10px;
     gap: 4px !important;
-    font-size: 11px;
+    font-size: var(--type-caption);
   }
 
   .top-console-btn .btn-arrow {
@@ -1186,7 +1181,7 @@ button:focus, button:active, button:focus-visible {
 
   .shimmer-btn {
     padding: 5px 10px;
-    font-size: 11px;
+    font-size: var(--type-caption);
     height: 30px;
     gap: 3px;
   }
@@ -1207,5 +1202,5 @@ button:focus, button:active, button:focus-visible {
     height: 15px;
   }
 
-  .badge-tag { font-size: 11px; padding: 5px 10px; }
+  .badge-tag { font-size: var(--type-caption); padding: 5px 10px; }
 }

@@ -597,6 +597,30 @@ class CampusRepository internal constructor(private val http: PlatformHttpClient
         return envelope.optJSONObject("data") ?: envelope
     }
 
+    /** 服务端课程提醒偏好。必须回源：缓存里的旧值会把刚保存的提前量盖回去。 */
+    suspend fun courseReminderPreference(): CampusCourseReminderPreference = withContext(Dispatchers.IO) {
+        http.withRequestMetadata(allowCache = false) {
+            parseCourseReminderPreference(campusData(CAMPUS_ACADEMIC_INTEGRATIONS_PATH).optJSONObject("reminder"))
+        }.value
+    }
+
+    /**
+     * 只改提前量。接口按整份偏好覆盖，所以先读出是否启用和企业微信收件人再原样带回，
+     * 否则会把网页端配置好的服务端提醒关掉。
+     */
+    suspend fun saveCourseReminderLead(leadMinutes: Int): CampusCourseReminderPreference = withContext(Dispatchers.IO) {
+        http.withRequestMetadata(allowCache = false) {
+            val current = parseCourseReminderPreference(campusData(CAMPUS_ACADEMIC_INTEGRATIONS_PATH).optJSONObject("reminder"))
+            if (current.leadMinutes == leadMinutes) return@withRequestMetadata current
+            val envelope = http.execute(
+                CAMPUS_ACADEMIC_REMINDER_PATH,
+                method = "PUT",
+                body = courseReminderLeadBody(current, leadMinutes),
+            ).json
+            parseCourseReminderPreference(envelope.optJSONObject("data") ?: envelope)
+        }.value
+    }
+
     /** 让学校给已绑定学校账号的手机号下发短信验证码。 */
     internal suspend fun sendSchoolSmsCode(phone: String): SchoolSmsChallenge = withContext(Dispatchers.IO) {
         val envelope = http.execute(
@@ -653,6 +677,24 @@ internal data class SchoolSmsChallenge(
     val maskedPhone: String,
     val expiresInSeconds: Int,
 )
+
+/** campus-service 的课程提醒偏好：应用收件箱、企业微信提醒与本机课前提醒共用其中的提前量。 */
+data class CampusCourseReminderPreference(
+    val enabled: Boolean = false,
+    val recipientId: String = "",
+    val leadMinutes: Int = COURSE_REMINDER_DEFAULT_MINUTES,
+)
+
+internal fun parseCourseReminderPreference(json: JSONObject?): CampusCourseReminderPreference = CampusCourseReminderPreference(
+    enabled = json?.optBoolean("enabled") ?: false,
+    recipientId = json?.campusOptionalText("recipientId").orEmpty(),
+    leadMinutes = normalizeCourseReminderMinutes(json?.optInt("leadMinutes", COURSE_REMINDER_DEFAULT_MINUTES) ?: COURSE_REMINDER_DEFAULT_MINUTES),
+)
+
+internal fun courseReminderLeadBody(current: CampusCourseReminderPreference, leadMinutes: Int): JSONObject = JSONObject()
+    .put("enabled", current.enabled)
+    .put("recipientId", current.recipientId)
+    .put("leadMinutes", normalizeCourseReminderMinutes(leadMinutes))
 
 /**
  * 服务端对不存在的字段可能返回 JSON null，`optString` 会得到字面量 "null"，

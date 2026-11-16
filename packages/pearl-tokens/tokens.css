@@ -5,8 +5,9 @@
    ========================================================================== */
 
 :root {
-  font-family: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont,
+  --font-sans: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont,
     "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -16,8 +17,8 @@
   /* ── 墨色层次 ───────────────────────────────────────────────── */
   --ink: #101418;
   --ink-muted: #596368;
-  --ink-soft: #7e888c;
-  --ink-faint: #99a2a5;
+  --ink-soft: #5f6b70;
+  --ink-faint: #637075;
 
   /* ── 强调色 ─────────────────────────────────────────────────── */
   --blue: #236de9;
@@ -86,9 +87,16 @@
   --fs-display-xl: 56px;
   --fs-display-l: 40px;
   --fs-display-m: 28px;
-  --type-caption: 12px;
+  --type-caption: 12.5px;
   --type-label: 13px;
-  --type-body: 13.5px;
+  --type-body: 14px;
+  --type-control: 13px;
+  --type-table: 13px;
+  --type-table-header: 12.5px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
   --track-eyebrow: 0.14em;
 
   /* ── 仪器化装饰 ─────────────────────────────────────────────── */
@@ -118,6 +126,8 @@
   --layer-toast: 400;
   --control-h: 34px;
   --control-h-sm: 29px;
+  --control-h-lg: 40px;
+  --table-head-h: 40px;
   --row-h: 52px;
   --cell-px: 16px;
 
@@ -173,7 +183,7 @@
   --ink: #eef2f1;
   --ink-muted: #b0babd;
   --ink-soft: #8d979a;
-  --ink-faint: #6c7679;
+  --ink-faint: #8d979a;
 
   --blue: #4c8dff;
   --blue-hover: #3d7ff2;

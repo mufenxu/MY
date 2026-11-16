@@ -7,16 +7,21 @@
   "main": "index.js",
   "exports": {
     ".": "./index.js",
+    "./theme.js": "./theme.js",
+    "./theme.css": "./theme.css",
     "./tokens.css": "./tokens.css",
     "./components.css": "./components.css"
   },
   "files": [
     "index.js",
+    "theme.js",
+    "theme.css",
     "tokens.css",
     "components.css"
   ],
   "scripts": {
-    "check": "node --test test/tokens.test.mjs"
+    "generate": "node generate.mjs",
+    "check": "node generate.mjs --check && node --test test/*.test.mjs"
   },
   "engines": {
     "node": ">=20.0.0"

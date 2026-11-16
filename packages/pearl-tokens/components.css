@@ -1,12 +1,14 @@
 /* ==========================================================================
    珍珠玻璃（Pearl Glass）通用组件：按钮 / 表单 / 面板 / 表格 / 标签 / 分页 / 空态
-   两个 Web 后台共用同一套类名，页面级样式留在各应用自己的 CSS 里。
+   三个 Web 后台共用组件语汇，页面级样式留在各应用自己的 CSS 里。
    ========================================================================== */
 
 /* ==========================================================================
    组件层 · 按钮 / 字段 / 分段 / 标签 / 面板 / 表格 / 读数 / 浮层
    同时桥接历史类名，让尚未改写的视图直接落到新语汇上。
    ========================================================================== */
+
+@import "./theme.css";
 
 /* ── 按钮 ─────────────────────────────────────────────────────── */
 .btn {
@@ -16,11 +18,11 @@
   height: var(--control-h);
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 0 14px;
+  gap: var(--space-sm);
+  padding: 0 var(--space-md);
   border: 1px solid transparent;
   border-radius: var(--r-sm);
-  font-size: 12.5px;
+  font-size: var(--type-control);
   font-weight: 620;
   letter-spacing: 0.005em;
   white-space: nowrap;
@@ -35,10 +37,10 @@
 
 .btn-sm {
   height: var(--control-h-sm);
-  padding: 0 10px;
+  padding: 0 var(--space-sm);
   border-radius: var(--r-xs);
   gap: 5px;
-  font-size: 12px;
+  font-size: var(--type-caption);
 }
 
 .btn-block {
@@ -153,7 +155,7 @@
   align-items: center;
   gap: 4px;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 600;
 }
 
@@ -164,13 +166,13 @@
 
 .field-hint {
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   line-height: 1.5;
 }
 
 .field-error {
   color: var(--red-text);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 .input-shell {
@@ -179,7 +181,7 @@
   height: var(--control-h);
   align-items: center;
   gap: 8px;
-  padding: 0 11px;
+  padding: 0 var(--space-md);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
   color: var(--ink-soft);
@@ -248,7 +250,7 @@
 
 .input-group > span {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 600;
 }
 
@@ -318,18 +320,18 @@
   align-items: center;
   gap: 9px;
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-caption);
 }
 
 .toggle-field > span {
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 600;
   color: var(--ink-muted);
 }
 
 .toggle-field small {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
 }
 
 .toggle-field input[type="checkbox"] {
@@ -503,7 +505,7 @@
   border-radius: 7px;
   color: var(--ink-soft);
   background: transparent;
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 600;
   white-space: nowrap;
   transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
@@ -531,7 +533,7 @@
   border-radius: 999px;
   color: var(--ink-muted);
   background: rgba(var(--shade), 0.065);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -643,7 +645,7 @@
   gap: 5px;
   padding: 0 8px;
   border-radius: 999px;
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   font-weight: 620;
   white-space: nowrap;
 }
@@ -685,8 +687,8 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 13px 18px 10px;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-xl) var(--space-sm);
 }
 
 .panel-title {
@@ -706,7 +708,7 @@
 
 .panel-meta {
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 .panel-tools {
@@ -716,7 +718,7 @@
 }
 
 .panel-body {
-  padding: 0 18px 16px;
+  padding: 0 var(--space-xl) var(--space-lg);
 }
 
 /* 历史面板类名 → 新面板 */
@@ -755,7 +757,7 @@
 
 .ops-panel > header > div > span {
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: var(--type-caption);
   font-weight: 650;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -788,7 +790,7 @@
 .section-bar > div > span {
   margin-top: 3px;
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 .section-count {
@@ -797,7 +799,7 @@
   border-radius: 999px;
   color: var(--ink-muted);
   background: rgba(var(--shade), 0.06);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   font-weight: 650;
 }
 
@@ -813,7 +815,7 @@
 
 .view-eyebrow {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   font-weight: 650;
   letter-spacing: var(--track-eyebrow);
   text-transform: uppercase;
@@ -852,20 +854,20 @@
 .table {
   width: 100%;
   min-width: 640px;
-  font-size: 12.5px;
+  font-size: var(--type-table);
 }
 
 .table th {
   position: sticky;
   top: 0;
   z-index: 1;
-  height: 36px;
+  height: var(--table-head-h);
   padding: 0 var(--cell-px);
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-  color: var(--ink-soft);
+  color: var(--ink-muted);
   background: var(--surface-solid);
-  font-size: 11px;
+  font-size: var(--type-table-header);
   font-weight: 620;
   letter-spacing: 0.02em;
   text-align: left;
@@ -961,7 +963,7 @@
   display: block;
   margin-top: 1px;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
 }
 
 .code-chip {
@@ -973,7 +975,7 @@
   color: var(--ink-muted);
   background: rgba(var(--shade), 0.06);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--type-caption);
   white-space: nowrap;
 }
 
@@ -1000,7 +1002,7 @@
 
 .pager-info {
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 .pager-info b {
@@ -1023,7 +1025,7 @@
   padding: 0 7px;
   border-radius: var(--r-xs);
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 600;
   transition: color 0.18s ease, background 0.18s ease;
 }
@@ -1052,7 +1054,7 @@
 .ops-table-head {
   color: var(--ink-soft);
   background: transparent;
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 620;
 }
 
@@ -1076,13 +1078,13 @@
 .control-table-head,
 .backup-table-head {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 620;
 }
 
 .table-value {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1117,7 +1119,7 @@
 
 .metric-label {
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   font-weight: 600;
 }
 
@@ -1159,7 +1161,7 @@
 
 .metric-foot {
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 .metric.has-attention .metric-figure {
@@ -1193,7 +1195,7 @@
   gap: 16px;
   padding: 5px 0;
   border-bottom: 1px solid var(--plate-line);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 .spec-row:last-child {
@@ -1203,7 +1205,7 @@
 .spec-row dt {
   color: var(--plate-soft);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--type-caption);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1298,7 +1300,7 @@
   border-radius: 999px;
   color: var(--ink-muted);
   background: rgba(var(--shade), 0.06);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 620;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -1366,7 +1368,7 @@
   gap: 8px;
   padding: 9px 12px;
   border-radius: var(--r-sm);
-  font-size: 12px;
+  font-size: var(--type-caption);
   line-height: 1.45;
 }
 
@@ -1411,7 +1413,7 @@
   border-radius: var(--r-xs);
   color: inherit;
   background: transparent;
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   font-weight: 600;
 }
 
@@ -1436,7 +1438,7 @@
   max-height: calc(100dvh - 40px);
   flex-direction: column;
   border: 1px solid var(--glass-line);
-  border-radius: var(--r-xl);
+  border-radius: var(--r-lg);
   background: var(--surface-solid);
   box-shadow: var(--edge), var(--e3);
 }
@@ -1447,8 +1449,8 @@
   flex: none;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-  padding: 18px 20px 4px;
+  gap: var(--space-md);
+  padding: var(--space-lg) var(--space-xl) var(--space-md);
 }
 
 .modal-title {
@@ -1461,12 +1463,12 @@
 .modal-sub {
   margin-top: 3px;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: var(--type-caption);
 }
 
 .modal-body {
   min-height: 0;
-  padding: 12px 20px 18px;
+  padding: var(--space-xl);
   overflow-y: auto;
 }
 
@@ -1476,8 +1478,8 @@
   flex: none;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 20px;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-xl);
   border-top: 1px solid var(--line);
 }
 
@@ -1576,7 +1578,7 @@
   border-radius: var(--r-sm);
   color: var(--ink-muted);
   background: var(--groove-bg);
-  font-size: 12px;
+  font-size: var(--type-caption);
   line-height: 1.55;
   word-break: break-word;
 }
@@ -1647,7 +1649,7 @@
 .kv-label {
   margin-bottom: 3px;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 600;
 }
 
@@ -1666,7 +1668,7 @@
   background: var(--dark-surface);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
   line-height: 1.65;
   white-space: pre;
 }
@@ -1706,7 +1708,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--type-caption);
 }
 
 .session-error-screen span {
@@ -1786,7 +1788,7 @@
 .ops-kpis small {
   overflow: hidden;
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1924,7 +1926,7 @@
 
 .navigation-transition-panel small {
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 @keyframes nav-panel-in {
@@ -2022,7 +2024,7 @@
   border-bottom: 1px solid var(--line);
   color: var(--leaf-text);
   background: var(--lime-soft);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 .command-palette-feedback.error {
@@ -2073,7 +2075,7 @@
   border-radius: 7px;
   color: var(--blue);
   background: var(--blue-soft);
-  font-size: 10px;
+  font-size: var(--type-caption);
   font-weight: 700;
 }
 
@@ -2100,7 +2102,7 @@
 
 .command-result-main small {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
 }
 
 .command-result-main > svg {
@@ -2110,7 +2112,7 @@
 
 .command-result-status {
   color: var(--ink-soft);
-  font-size: 11px;
+  font-size: var(--type-caption);
 }
 
 .command-result > .icon-action {
@@ -2129,5 +2131,5 @@
   align-items: center;
   justify-content: center;
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: var(--type-caption);
 }

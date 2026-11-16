@@ -1,9 +1,9 @@
-import React from 'react';
-import { Result, Button, Typography } from 'antd';
+import React, { lazy, Suspense } from 'react';
+import { Button } from 'antd';
 import { SyncOutlined, HomeOutlined } from '@ant-design/icons';
 import { reportExperience } from '../utils/runtime';
 
-const { Paragraph, Text } = Typography;
+const Result = lazy(() => import('antd/es/result/index.js'));
 
 class ErrorBoundary extends React.Component {
     constructor(props) {
@@ -35,7 +35,7 @@ class ErrorBoundary extends React.Component {
             // Render fallback UI
             return (
                 <div style={{ padding: '50px', background: 'var(--bg-color)', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Result
+                    <Suspense fallback={<p role="alert">页面遇到了一些问题，请重新加载。</p>}><Result
                         status="500"
                         title="页面遇到了一些问题"
                         subTitle="很抱歉，在渲染该页面时发生了意外错误。我们的开发人员已被通知。"
@@ -50,15 +50,11 @@ class ErrorBoundary extends React.Component {
                     >
                         {import.meta.env.DEV && (
                             <div className="desc">
-                                <Paragraph>
-                                    <Text strong style={{ fontSize: 16 }}>错误详情（仅供开发参考）:</Text>
-                                </Paragraph>
-                                <Paragraph>
-                                    <Text type="danger">{this.state.error?.toString()}</Text>
-                                </Paragraph>
+                                <p><strong style={{ fontSize: 16 }}>错误详情（仅供开发参考）:</strong></p>
+                                <p style={{ color: 'var(--red)' }}>{this.state.error?.toString()}</p>
                             </div>
                         )}
-                    </Result>
+                    </Result></Suspense>
                 </div>
             );
         }

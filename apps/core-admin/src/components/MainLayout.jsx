@@ -17,8 +17,6 @@ import {
     CloseOutlined,
     ReloadOutlined,
     HomeOutlined,
-    SunOutlined,
-    MoonOutlined,
     ShoppingOutlined,
     RightOutlined,
 } from '@ant-design/icons';
@@ -26,6 +24,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router';
 import UserAvatar from './UserAvatar';
 import { IS_PLATFORM_SSO, logoutPlatformSession } from '../utils/runtime';
 import { message } from '../utils/feedback';
+import { getThemePreference, setTheme, subscribeTheme } from '@my-platform/pearl-tokens/theme.js';
 
 const InlineRouteFallback = () => (
     <div className="route-inline-loading">
@@ -130,7 +129,7 @@ const MainLayout = () => {
     const [drawerVisible, setDrawerVisible] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
-    const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('theme') === 'dark');
+    const [themePreference, setThemePreference] = useState(getThemePreference);
     const [openTabs, setOpenTabs] = useState(['/dashboard']);
     const [refreshKey, setRefreshKey] = useState(0);
     const [viewportWidth, setViewportWidth] = useState(() => (typeof window === 'undefined' ? 375 : window.innerWidth));
@@ -193,14 +192,7 @@ const MainLayout = () => {
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
     }, []);
 
-    // 深浅主题：同时驱动珍珠令牌（data-theme）与 antd（dark 类 + 上层 algorithm）
-    useEffect(() => {
-        const root = document.documentElement;
-        root.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
-        root.classList.toggle('dark', isDarkMode);
-        localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
-        window.dispatchEvent(new Event('themeChanged'));
-    }, [isDarkMode]);
+    useEffect(() => subscribeTheme(() => setThemePreference(getThemePreference())), []);
 
     // 抽屉打开时允许 Esc 关闭
     useEffect(() => {
@@ -211,8 +203,6 @@ const MainLayout = () => {
         document.addEventListener('keydown', handleKey);
         return () => document.removeEventListener('keydown', handleKey);
     }, [drawerVisible]);
-
-    const toggleTheme = useCallback(() => setIsDarkMode((prev) => !prev), []);
 
     const handleLogout = useCallback(async () => {
         try {
@@ -394,16 +384,12 @@ const MainLayout = () => {
                                 </button>
                             </Tooltip>
                         )}
-                        <Tooltip title={isDarkMode ? '切换到白天模式' : '切换到黑夜模式'}>
-                            <button
-                                type="button"
-                                className="icon-btn"
-                                onClick={toggleTheme}
-                                aria-label={isDarkMode ? '切换到白天模式' : '切换到黑夜模式'}
-                            >
-                                {isDarkMode ? <SunOutlined /> : <MoonOutlined />}
-                            </button>
-                        </Tooltip>
+                        <select className="theme-select" value={themePreference}
+                            onChange={(event) => setTheme(event.target.value)} aria-label="外观主题">
+                            <option value="light">浅色</option>
+                            <option value="dark">深色</option>
+                            <option value="system">跟随系统</option>
+                        </select>
                         {!isMobile && (
                             <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
                                 <button

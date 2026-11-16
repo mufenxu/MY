@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.NotificationsActive
@@ -18,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.data.AlertPreferences
+import cn.pxyb.mycontrol.data.COURSE_REMINDER_LEAD_OPTIONS
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.display.AppActionRow
 import cn.pxyb.mycontrol.ui.components.display.AppDivider
@@ -50,6 +52,10 @@ fun NotificationSettingsScreen(
     var morningHour by rememberSaveable { mutableStateOf(preferences.morningBriefHour) }
     var eveningHour by rememberSaveable { mutableStateOf(preferences.eveningBriefHour) }
     var classFocusEnabled by rememberSaveable { mutableStateOf(preferences.classFocusEnabled) }
+    // 这一项会被后台同步按服务端的值刷新，跟着最新偏好重置，避免把旧值当成未保存的修改再写回去。
+    var courseReminderMinutes by rememberSaveable(preferences.courseReminderMinutes) {
+        mutableStateOf(preferences.courseReminderMinutes)
+    }
     var pickingHour by rememberSaveable { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
@@ -66,6 +72,7 @@ fun NotificationSettingsScreen(
         morningBriefHour = morningHour,
         eveningBriefHour = eveningHour,
         classFocusEnabled = classFocusEnabled,
+        courseReminderMinutes = courseReminderMinutes,
     )
 
     AppSubPage(
@@ -98,6 +105,23 @@ fun NotificationSettingsScreen(
                 }
                 AppDivider()
                 AppSwitchRow("上课专注模式", classFocusEnabled, { classFocusEnabled = it }, enabled = !saving, subtitle = "上课期间静音普通提醒，紧急故障仍会通知")
+            }
+        }
+        item(key = "course-reminder-title") {
+            AppSectionHeader(title = "课前提醒", subtitle = "上课前多久提醒，校园服务的课程提醒同步使用这个时间")
+        }
+        item(key = "course-reminder") {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                COURSE_REMINDER_LEAD_OPTIONS.forEach { minutes ->
+                    AppFilterChip(
+                        label = if (minutes % 60 == 0) "${minutes / 60} 小时" else "$minutes 分钟",
+                        selected = courseReminderMinutes == minutes,
+                        onClick = { if (!saving) courseReminderMinutes = minutes },
+                    )
+                }
             }
         }
         item(key = "severity-title") { AppSectionHeader(title = "告警接收级别", subtitle = "选择需要收到的告警范围") }

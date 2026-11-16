@@ -199,7 +199,7 @@ class AlertNotifier(context: Context) {
                 }.forEach { task ->
                     val id = "todo:${task.id}:${task.reminderAt}"
                     if (id !in existingIds) {
-                        add(AppAlertRecord(id, "todo", task.id, "待办提醒：${task.title}", "截止时间临近，打开今日工作台处理。", now))
+                        add(AppAlertRecord(id, "todo", task.id, "待办提醒：${task.title}", todoReminderBody(task.dueAt), now))
                     }
                 }
             }
@@ -208,11 +208,13 @@ class AlertNotifier(context: Context) {
                 val week = Regex("第(\\d+)周").find(timetable?.currentCalendarText.orEmpty())
                     ?.groupValues?.getOrNull(1)?.toIntOrNull()
                 val today = LocalDate.now()
+                // 与定时提醒用同一个提前量，否则后台同步会抢在设定时间之前把提醒发出去。
+                val noticeWindowMillis = personalStore.readAlertPreferences().courseReminderMinutes * 60_000L
                 timetable?.courses.orEmpty().filter { course ->
                     course.day == today.dayOfWeek.value && (week == null || course.weeks.isEmpty() || week in course.weeks)
                 }.forEach { course ->
                     val start = parseCourseStart(today, course.timeRange) ?: return@forEach
-                    if (now in (start - COURSE_NOTICE_WINDOW_MS)..start) {
+                    if (now in (start - noticeWindowMillis)..start) {
                         val id = "course:$today:${course.id}"
                         if (id !in existingIds) {
                             add(
@@ -562,7 +564,6 @@ class AlertNotifier(context: Context) {
         const val INCIDENT_BASE = 41000
         const val TASK_BASE = 42000
         const val PERSONAL_BASE = 43000
-        const val COURSE_NOTICE_WINDOW_MS = 15 * 60_000L
     }
 }
 

@@ -14,20 +14,12 @@
                     <strong>好爱学习</strong>
                     <small>考试业务管理后台</small>
                 </span>
-                <button type="button" class="login-theme-toggle" :aria-pressed="isDarkTheme"
-                    :aria-label="isDarkTheme ? '切换到浅色主题' : '切换到深色主题'"
-                    :title="isDarkTheme ? '切换到浅色主题' : '切换到深色主题'" @click="handleThemeToggle">
-                    <svg v-if="isDarkTheme" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="1.6" />
-                        <path
-                            d="M12 3.2v2.1M12 18.7v2.1M4.2 12h2.1M17.7 12h2.1M6.5 6.5l1.5 1.5M16 16l1.5 1.5M17.5 6.5L16 8M8 16l-1.5 1.5"
-                            stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-                    </svg>
-                    <svg v-else viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.4 8.4 0 1 0 10.2 10.2Z" stroke="currentColor"
-                            stroke-width="1.6" stroke-linejoin="round" />
-                    </svg>
-                </button>
+                <select class="theme-select login-theme-select" :value="themePreference"
+                    aria-label="外观主题" @change="setTheme($event.target.value)">
+                    <option value="light">浅色</option>
+                    <option value="dark">深色</option>
+                    <option value="system">跟随系统</option>
+                </select>
             </header>
 
             <div class="login-heading">
@@ -129,7 +121,7 @@ import {
 import http from '@/utils/http';
 import { fetchWithTimeout, resolveAppUrl } from '@/utils/runtime';
 import { createSequentialPoller } from '@/utils/sequentialPoller';
-import { getCurrentTheme, toggleTheme } from '@/utils/theme';
+import { getThemePreference, setTheme, subscribeTheme } from '@/utils/theme';
 
 const router = useRouter();
 const route = useRoute();
@@ -149,11 +141,8 @@ const loginCopy = {
 };
 
 // --- 主题 ---
-const isDarkTheme = ref(getCurrentTheme() === 'dark');
-
-const handleThemeToggle = () => {
-    isDarkTheme.value = toggleTheme() === 'dark';
-};
+const themePreference = ref(getThemePreference());
+let unsubscribeTheme;
 
 function unwrapPayload(payload) {
     if (!payload) return {};
@@ -572,19 +561,10 @@ const handleLogin = async () => {
     await submitAccountLogin();
 };
 
-// 系统主题变化时同步开关图标（手动选择过主题时 theme.js 不会跟随）
-const themeQuery = typeof window.matchMedia === 'function'
-    ? window.matchMedia('(prefers-color-scheme: dark)')
-    : null;
-const syncThemeIcon = () => {
-    isDarkTheme.value = getCurrentTheme() === 'dark';
-};
-
 onMounted(async () => {
     document.title = loginCopy.pageTitle;
     document.documentElement.classList.add(AUTH_STANDALONE_CLASS);
-    syncThemeIcon();
-    themeQuery?.addEventListener?.('change', syncThemeIcon);
+    unsubscribeTheme = subscribeTheme(() => { themePreference.value = getThemePreference(); });
 
     const runtimeConfig = await loadRuntimeConfig();
     scanLoginConfig = runtimeConfig.scanLogin || scanLoginConfig;
@@ -605,7 +585,7 @@ onMounted(async () => {
 onUnmounted(() => {
     stopPolling();
     stopQrCreation();
-    themeQuery?.removeEventListener?.('change', syncThemeIcon);
+    unsubscribeTheme?.();
     document.documentElement.classList.remove(AUTH_STANDALONE_CLASS);
 });
 </script>
@@ -676,40 +656,9 @@ onUnmounted(() => {
     }
 }
 
-/* ── 主题开关 ─────────────────────────────────────────────────── */
-.login-theme-toggle {
-    display: grid;
-    flex: none;
-    width: 30px;
-    height: 30px;
+/* ── 主题选择 ─────────────────────────────────────────────────── */
+.login-theme-select {
     margin-left: auto;
-    place-items: center;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: transparent;
-    color: var(--ink-soft);
-    cursor: pointer;
-    transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
-}
-
-.login-theme-toggle:hover {
-    border-color: var(--line-strong);
-    background: var(--hover-bg);
-    color: var(--ink);
-}
-
-.login-theme-toggle:active {
-    transform: scale(0.96);
-}
-
-.login-theme-toggle:focus-visible {
-    outline: 2px solid var(--focus);
-    outline-offset: 2px;
-}
-
-.login-theme-toggle svg {
-    width: 16px;
-    height: 16px;
 }
 
 /* ── 认证卡片 ─────────────────────────────────────────────────── */
@@ -769,7 +718,7 @@ onUnmounted(() => {
 
 .login-brand-copy small {
     color: var(--ink-faint);
-    font-size: 11px;
+    font-size: var(--type-caption);
     letter-spacing: 0.04em;
 }
 
@@ -1022,7 +971,7 @@ onUnmounted(() => {
     position: static;
     padding-top: 5px;
     color: var(--red-text);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     line-height: 1.4;
 }
 
@@ -1047,7 +996,7 @@ onUnmounted(() => {
 .login-tip {
     margin: 0;
     color: var(--ink-soft);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     line-height: 1.6;
 }
 
@@ -1076,7 +1025,7 @@ onUnmounted(() => {
     z-index: 1;
     margin: 18px 0 auto;
     color: var(--ink-faint);
-    font-size: 11px;
+    font-size: var(--type-caption);
     text-align: center;
 }
 

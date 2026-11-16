@@ -81,20 +81,20 @@
     --el-mask-color: rgba(255, 255, 255, 0.66);
     --el-mask-color-extra-light: rgba(255, 255, 255, 0.32);
 
-    --el-border-radius-base: 9px;
-    --el-border-radius-small: 7px;
+    --el-border-radius-base: var(--r-sm);
+    --el-border-radius-small: var(--r-xs);
     --el-border-radius-round: 999px;
 
     --el-font-family: inherit;
-    --el-font-size-base: 13px;
-    --el-font-size-small: 12px;
-    --el-font-size-extra-small: 11.5px;
+    --el-font-size-base: var(--type-body);
+    --el-font-size-small: var(--type-caption);
+    --el-font-size-extra-small: var(--type-caption);
     --el-font-size-medium: 13.5px;
     --el-font-size-large: 15px;
 
-    --el-component-size: 34px;
-    --el-component-size-small: 28px;
-    --el-component-size-large: 40px;
+    --el-component-size: var(--control-h);
+    --el-component-size-small: var(--control-h-sm);
+    --el-component-size-large: var(--control-h-lg);
 
     --el-box-shadow-light: var(--e2);
     --el-box-shadow: var(--e3);
@@ -140,8 +140,16 @@
 .el-button {
     --el-button-font-weight: 600;
     border-radius: var(--el-border-radius-base);
-    font-size: 12.5px;
+    font-size: var(--type-control);
     letter-spacing: 0.005em;
+}
+
+.el-button:not(.is-circle) {
+    padding-inline: var(--space-md);
+}
+
+.el-button--small:not(.is-circle) {
+    padding-inline: var(--space-sm);
 }
 
 .el-button--primary {
@@ -308,29 +316,31 @@
 /* ── 表格 ─────────────────────────────────────────────────────── */
 .el-table {
     --el-table-border-color: var(--line);
-    --el-table-header-bg-color: transparent;
+    --el-table-header-bg-color: var(--surface-solid);
     --el-table-tr-bg-color: transparent;
-    --el-table-bg-color: transparent;
+    --el-table-bg-color: var(--surface-solid);
     --el-table-row-hover-bg-color: var(--hover-bg);
-    --el-table-header-text-color: var(--ink-faint);
-    --el-table-text-color: var(--ink-muted);
+    --el-table-header-text-color: var(--ink-muted);
+    --el-table-text-color: var(--ink);
     --el-table-expanded-cell-bg-color: transparent;
-    background: transparent;
-    font-size: 12.5px;
+    background: var(--surface-solid);
+    font-size: var(--type-table);
 }
 
 .el-table th.el-table__cell {
-    padding: 9px 0;
+    height: var(--table-head-h);
+    padding: var(--space-sm) 0;
     border-bottom: 1px solid var(--line);
-    background: transparent;
-    font-size: 11px;
+    background: var(--surface-solid);
+    font-size: var(--type-table-header);
     font-weight: 640;
     letter-spacing: 0.06em;
     text-transform: uppercase;
 }
 
 .el-table td.el-table__cell {
-    padding: 10px 0;
+    height: var(--row-h);
+    padding: var(--space-sm) 0;
     border-bottom: 1px solid var(--line);
 }
 
@@ -343,7 +353,7 @@
 }
 
 .el-table .cell {
-    padding-inline: 12px;
+    padding-inline: var(--cell-px);
     line-height: 1.5;
 }
 
@@ -402,7 +412,7 @@
     height: 22px;
     padding: 0 7px;
     border-radius: 7px;
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-weight: 600;
     line-height: 20px;
 }
@@ -410,7 +420,7 @@
 .el-tag.el-tag--small {
     height: 20px;
     padding: 0 6px;
-    font-size: 11px;
+    font-size: var(--type-caption);
     line-height: 18px;
 }
 
@@ -495,7 +505,7 @@
     --el-pagination-button-bg-color: transparent;
     --el-pagination-hover-color: var(--blue);
     gap: 2px;
-    font-size: 12px;
+    font-size: var(--type-caption);
 }
 
 .el-pagination.is-background .el-pager li,
@@ -506,7 +516,7 @@
     border-radius: 8px;
     background: transparent;
     color: var(--ink-muted);
-    font-size: 12px;
+    font-size: var(--type-caption);
 }
 
 .el-pagination.is-background .el-pager li:hover {
@@ -523,13 +533,13 @@
 /* ── 表单 ─────────────────────────────────────────────────────── */
 .el-form-item__label {
     color: var(--ink-muted);
-    font-size: 12px;
+    font-size: var(--type-caption);
     font-weight: 600;
 }
 
 .el-form-item__error {
     color: var(--red-text);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     padding-top: 4px;
 }
 
@@ -564,7 +574,7 @@
 
 .el-dialog__header {
     margin: 0;
-    padding: 16px 20px 12px;
+    padding: var(--space-lg) var(--space-xl) var(--space-md);
     border-bottom: 1px solid var(--line);
 }
 
@@ -592,13 +602,13 @@
 }
 
 .el-dialog__body {
-    padding: 18px 20px;
+    padding: var(--space-xl);
     color: var(--ink-muted);
-    font-size: 13px;
+    font-size: var(--type-body);
 }
 
 .el-dialog__footer {
-    padding: 0 20px 16px;
+    padding: 0 var(--space-xl) var(--space-lg);
 }
 
 .el-overlay {
@@ -677,7 +687,7 @@
     border-radius: 8px;
     background: var(--plate-bg);
     color: var(--plate-ink);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     box-shadow: none;
     padding: 6px 9px;
 }
@@ -699,7 +709,7 @@
 
 .el-loading-spinner .el-loading-text {
     color: var(--ink-soft);
-    font-size: 12px;
+    font-size: var(--type-caption);
 }
 
 /* ==========================================================================
@@ -783,7 +793,7 @@
 
 .list-metric-strip span {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 580;
     letter-spacing: 0.03em;
     white-space: nowrap;
@@ -873,7 +883,7 @@
 .row-actions .el-button {
     height: 26px;
     padding: 0 6px;
-    font-size: 12px;
+    font-size: var(--type-caption);
 }
 
 /* ── 空态 ─────────────────────────────────────────────────────── */
@@ -930,14 +940,14 @@
 .section-subtitle {
     margin-top: 2px;
     color: var(--ink-faint);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-weight: 500;
 }
 
 .form-helper-text {
     margin: 0;
     color: var(--ink-faint);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     line-height: 1.6;
 }
 
@@ -1069,7 +1079,7 @@
 .stat-label {
     margin-top: 3px;
     color: var(--ink-muted);
-    font-size: 12px;
+    font-size: var(--type-caption);
     font-weight: 600;
 }
 
@@ -1077,7 +1087,7 @@
     margin-top: 1px;
     overflow: hidden;
     color: var(--ink-faint);
-    font-size: 11px;
+    font-size: var(--type-caption);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -1156,14 +1166,14 @@
 
 .dashboard-action-copy span {
     color: var(--ink-muted);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-weight: 580;
 }
 
 .dashboard-action-copy small {
     overflow: hidden;
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -1210,7 +1220,7 @@
 
 .chart-kpis span {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 .chart-kpis strong {
@@ -1304,7 +1314,7 @@
 .dashboard-recent-main strong {
     overflow: hidden;
     color: var(--ink);
-    font-size: 12px;
+    font-size: var(--type-caption);
     font-weight: 580;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1313,7 +1323,7 @@
 .dashboard-recent-main small {
     overflow: hidden;
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -1322,7 +1332,7 @@
     flex: none;
     color: var(--ink-faint);
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 .dashboard-recent-empty {
@@ -1331,7 +1341,7 @@
     place-items: center;
     padding: 30px 0;
     color: var(--ink-faint);
-    font-size: 12px;
+    font-size: var(--type-caption);
 }
 
 /* ==========================================================================
@@ -1405,7 +1415,7 @@
     border-radius: 999px;
     background: var(--chip-bg);
     color: var(--ink-soft);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 620;
 }
 
@@ -1454,7 +1464,7 @@
 
 .category-meta-label {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 560;
 }
 
@@ -1470,7 +1480,7 @@
     margin-top: 8px;
     overflow: hidden;
     color: var(--ink-faint);
-    font-size: 11px;
+    font-size: var(--type-caption);
     line-height: 1.5;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1540,7 +1550,7 @@
     border-radius: 7px;
     background: var(--surface-solid);
     color: var(--ink-soft);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 600;
     transition: color 0.16s ease, border-color 0.16s ease;
 }
@@ -1566,7 +1576,7 @@
     margin-top: 4px;
     overflow: hidden;
     color: var(--ink-faint);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     line-height: 1.55;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -1590,7 +1600,7 @@
 
 .exam-card-count .count-label {
     color: var(--ink-faint);
-    font-size: 11px;
+    font-size: var(--type-caption);
 }
 
 .exam-card-meta-grid {
@@ -1619,13 +1629,13 @@
 
 .exam-card-meta-grid span {
     color: var(--ink-faint);
-    font-size: 10px;
+    font-size: var(--type-caption);
 }
 
 .exam-card-meta-grid strong {
     overflow: hidden;
     color: var(--ink-muted);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1663,7 +1673,7 @@
 .exam-time {
     color: var(--ink-faint);
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 .exam-paper-cell {
@@ -1682,7 +1692,7 @@
     border-radius: 7px;
     background: var(--blue-soft);
     color: var(--blue);
-    font-size: 12px;
+    font-size: var(--type-caption);
 }
 
 .exam-paper-name {
@@ -1712,7 +1722,7 @@
 }
 
 .score-badge .score-unit {
-    font-size: 10px;
+    font-size: var(--type-caption);
     opacity: 0.7;
 }
 
@@ -1741,7 +1751,7 @@
 .accuracy-text {
     color: var(--ink-muted);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--type-caption);
     font-weight: 600;
 }
 
@@ -1778,7 +1788,7 @@
 .accuracy-pct {
     color: var(--ink-faint);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--type-caption);
 }
 
 /* 考生 */
@@ -1809,7 +1819,7 @@
 .learning-primary-cell span {
     overflow: hidden;
     color: var(--ink-faint);
-    font-size: 11px;
+    font-size: var(--type-caption);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -1820,7 +1830,7 @@
     gap: 4px;
     flex-wrap: wrap;
     color: var(--ink-faint);
-    font-size: 11px;
+    font-size: var(--type-caption);
 }
 
 .learning-progress-cell {
@@ -1831,7 +1841,7 @@
 
 .learning-progress-cell span {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 .learning-ops-card .el-tabs__header {
@@ -1899,7 +1909,7 @@
 .feedback-summary {
     overflow: hidden;
     color: var(--ink-faint);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -1926,7 +1936,7 @@
 .feedback-user-meta {
     color: var(--ink-faint);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--type-caption);
 }
 
 .feedback-table .el-table__row {
@@ -1958,7 +1968,7 @@
 
 .operation-dialog-intro span {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 620;
     letter-spacing: 0.04em;
 }
@@ -1971,7 +1981,7 @@
 
 .operation-dialog-intro small {
     color: var(--ink-soft);
-    font-size: 11px;
+    font-size: var(--type-caption);
     line-height: 1.5;
 }
 
@@ -2070,7 +2080,7 @@
 
 .danger-confirm-desc {
     color: var(--ink-soft);
-    font-size: 12px;
+    font-size: var(--type-caption);
     line-height: 1.6;
 }
 
@@ -2110,7 +2120,7 @@
     flex-wrap: wrap;
     margin-top: 3px;
     color: var(--ink-faint);
-    font-size: 11px;
+    font-size: var(--type-caption);
 }
 
 .user-detail-stat-grid {
@@ -2140,7 +2150,7 @@
 
 .user-detail-stat-card .analysis-stat-label {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 .user-detail-section {
@@ -2190,7 +2200,7 @@
 
 .analysis-stat-label {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 /* 分享弹窗 */
@@ -2225,7 +2235,7 @@
 
 .feedback-message-label {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 620;
     letter-spacing: 0.03em;
 }
@@ -2264,7 +2274,7 @@
 .feedback-detail-meta {
     margin-top: 3px;
     color: var(--ink-faint);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
 }
 
 .feedback-user-panel {
@@ -2281,7 +2291,7 @@
 
 .feedback-contact {
     color: var(--ink-faint);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
 }
 
 .feedback-message-block.is-reply {
@@ -2309,12 +2319,12 @@
 .feedback-reply-box .el-checkbox {
     height: auto;
     color: var(--ink-muted);
-    font-size: 12px;
+    font-size: var(--type-caption);
 }
 
 .feedback-reply-box .el-checkbox__label {
     color: var(--ink-muted);
-    font-size: 12px;
+    font-size: var(--type-caption);
 }
 
 /* 预览标签 */
@@ -2326,7 +2336,7 @@
     border-radius: 999px;
     background: var(--amber-soft);
     color: var(--amber);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 640;
 }
 

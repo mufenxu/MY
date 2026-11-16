@@ -6,10 +6,8 @@ import {
   LoaderCircle,
   LogOut,
   Menu,
-  Moon,
   RefreshCw,
   Search,
-  Sun,
   X,
 } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -22,6 +20,7 @@ import { ApplicationsView } from './ApplicationsView.jsx';
 import { ServicesView } from './ServicesView.jsx';
 import { BackupRecoveryView } from './BackupRecoveryView.jsx';
 import { CommandPalette } from './CommandPalette.jsx';
+import { getThemePreference, setTheme, subscribeTheme } from '@my-platform/pearl-tokens/theme.js';
 
 const loadAutomationView = () => import('./AutomationView.jsx');
 const loadNotificationView = () => import('./NotificationServiceView.jsx');
@@ -95,13 +94,7 @@ export function Dashboard({ session, onLogout }) {
   const [monitoringEnabled, setMonitoringEnabled] = useState(true);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [theme, setTheme] = useState(() => {
-    try {
-      return window.localStorage.getItem('my-console-theme') || 'light';
-    } catch {
-      return 'light';
-    }
-  });
+  const [themePreference, setThemePreference] = useState(getThemePreference);
   const [density, setDensity] = useState(() => {
     try {
       return window.localStorage.getItem('my-console-density') || 'standard';
@@ -217,17 +210,7 @@ export function Dashboard({ session, onLogout }) {
     loadServices();
   }, [loadServices]);
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    // 移动端浏览器地址栏 / 状态栏底色跟随主题，避免深色页面顶出浅色条
-    const themeColor = document.querySelector('meta[name="theme-color"]');
-    if (themeColor) themeColor.setAttribute('content', theme === 'dark' ? '#0f1319' : '#f1f3f2');
-    try {
-      window.localStorage.setItem('my-console-theme', theme);
-    } catch {
-      // Theme still applies for the current page when storage is unavailable.
-    }
-  }, [theme]);
+  useEffect(() => subscribeTheme(() => setThemePreference(getThemePreference())), []);
 
   useEffect(() => {
     document.documentElement.dataset.density = density;
@@ -531,15 +514,16 @@ export function Dashboard({ session, onLogout }) {
               >
                 <AlignJustify size={17} />
               </button>
-              <button
-                className="icon-button"
-                type="button"
-                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                aria-label={theme === 'light' ? '切换到深色模式' : '切换到浅色模式'}
-                title={theme === 'light' ? '深色模式' : '浅色模式'}
+              <select
+                className="theme-select"
+                value={themePreference}
+                onChange={(event) => setTheme(event.target.value)}
+                aria-label="外观主题"
               >
-                {theme === 'light' ? <Moon size={17} /> : <Sun size={17} />}
-              </button>
+                <option value="light">浅色</option>
+                <option value="dark">深色</option>
+                <option value="system">跟随系统</option>
+              </select>
               <div ref={notificationRef} className="notification-wrap">
                 <button
                   className="icon-button notification-button"

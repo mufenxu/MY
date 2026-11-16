@@ -7,7 +7,10 @@ import cn.pxyb.mycontrol.data.*
 import cn.pxyb.mycontrol.ui.feature.agenda.courseAgenda
 import org.json.JSONObject
 import java.security.MessageDigest
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
 class PersonalReminderWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -38,6 +41,13 @@ class PersonalReminderWorker(context: Context, params: WorkerParameters) : Corou
     }
 }
 
+private val TODO_REMINDER_TIME_FORMAT = DateTimeFormatter.ofPattern("M月d日 HH:mm")
+
+/** 提醒可能提前一天，也可能准点，正文直接写出截止时间，不再笼统地说「临近」。 */
+internal fun todoReminderBody(dueAt: Long?, zone: ZoneId = ZoneId.systemDefault()): String =
+    if (dueAt == null) "打开今日工作台处理。"
+    else "截止时间 ${TODO_REMINDER_TIME_FORMAT.format(Instant.ofEpochMilli(dueAt).atZone(zone))}，打开今日工作台处理。"
+
 object PersonalReminderScheduler {
     fun schedule(context: Context, username: String, todos: TodoSnapshot, timetable: CampusTimetable?) {
         val account = accountStorageScope(username) ?: return
@@ -62,16 +72,24 @@ object PersonalReminderScheduler {
         }
         todos.tasks.filter { !it.completed && it.reminderStatus != "dismissed" && it.reminderAt != null }.forEach {
             val reminderAt = it.reminderAt ?: return@forEach
-            add("todo:${it.id}:$reminderAt", "todo", it.id, "待办提醒：${it.title}", "截止时间临近，打开今日工作台处理。",
+            add("todo:${it.id}:$reminderAt", "todo", it.id, "待办提醒：${it.title}", todoReminderBody(it.dueAt),
                 reminderAt, (it.dueAt ?: reminderAt) + TimeUnit.DAYS.toMillis(1))
         }
-        if (timetable != null) (0..7).forEach { offset ->
-            val date = LocalDate.now().plusDays(offset.toLong())
-            courseAgenda(timetable, date).forEach {
-                val courseId = it.id.removePrefix("course:").removeSuffix(":$date")
-                val course = timetable.courses.firstOrNull { row -> row.id == courseId }
-                val occurrenceId = course?.let { row -> cn.pxyb.mycontrol.ui.feature.agenda.courseOccurrenceId(row, timetable, date) } ?: courseId
-                add("course:$date:$courseId", "course", occurrenceId, "课程即将开始：${it.title}", it.location, it.start - TimeUnit.MINUTES.toMillis(15), it.start)
+        if (timetable != null) {
+            // 直接读已落盘的偏好：界面状态在登录后的头几百毫秒里可能还是默认值。
+            val courseLeadMillis = TimeUnit.MINUTES.toMillis(
+                PersonalWorkspaceStore(context).apply { setAccount(username) }.readAlertPreferences().courseReminderMinutes.toLong(),
+            )
+            (0..7).forEach { offset ->
+                val date = LocalDate.now().plusDays(offset.toLong())
+                courseAgenda(timetable, date).forEach {
+                    val courseId = it.id.removePrefix("course:").removeSuffix(":$date")
+                    val course = timetable.courses.firstOrNull { row -> row.id == courseId }
+                    val occurrenceId = course?.let { row -> cn.pxyb.mycontrol.ui.feature.agenda.courseOccurrenceId(row, timetable, date) } ?: courseId
+                    // 提前量最长一小时，正文带上上课时间，免得只看到「即将开始」。
+                    val body = listOf(course?.timeRange.orEmpty(), it.location).filter(String::isNotBlank).joinToString(" · ")
+                    add("course:$date:$courseId", "course", occurrenceId, "课程即将开始：${it.title}", body, it.start - courseLeadMillis, it.start)
+                }
             }
         }
         // 临时未取得课表时保留已排好的课程提醒。

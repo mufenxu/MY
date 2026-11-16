@@ -89,7 +89,7 @@
 .brand-copy small {
   overflow: hidden;
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   letter-spacing: 0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -113,7 +113,7 @@
 .rail-group-label {
   padding: 12px 9px 5px;
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: var(--type-caption);
   font-weight: 640;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -225,7 +225,7 @@
 
 .rail-user-copy small {
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
 }
 
 .app-shell[data-collapsed="true"] .rail-user {
@@ -483,7 +483,7 @@
   border-radius: 999px;
   color: var(--ink-muted);
   background: var(--surface-solid);
-  font-size: 11px;
+  font-size: var(--type-caption);
 }
 
 .route-inline-loading {

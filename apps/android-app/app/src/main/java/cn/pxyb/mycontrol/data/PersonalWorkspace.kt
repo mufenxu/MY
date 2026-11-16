@@ -545,6 +545,13 @@ data class AppAlertRecord(
     val actions: List<AppNotificationAction> = emptyList(),
 )
 
+/** 与 campus-service 课程提醒接受的取值一致：服务端提醒和本机提醒共用同一个提前量。 */
+internal val COURSE_REMINDER_LEAD_OPTIONS = listOf(5, 10, 15, 30, 60)
+internal const val COURSE_REMINDER_DEFAULT_MINUTES = 15
+
+internal fun normalizeCourseReminderMinutes(value: Int): Int =
+    value.takeIf { it in COURSE_REMINDER_LEAD_OPTIONS } ?: COURSE_REMINDER_DEFAULT_MINUTES
+
 @Immutable
 data class AlertPreferences(
     val quietHoursEnabled: Boolean = false,
@@ -559,6 +566,7 @@ data class AlertPreferences(
     val iotAlerts: Boolean = true,
     val campusAlerts: Boolean = true,
     val backupAlerts: Boolean = true,
+    val courseReminderMinutes: Int = COURSE_REMINDER_DEFAULT_MINUTES,
 )
 
 @Immutable
@@ -681,6 +689,10 @@ class PersonalWorkspaceStore(context: Context) {
         iotAlerts = scopedKey(KEY_IOT_ALERTS)?.let { preferences.getBoolean(it, true) } ?: true,
         campusAlerts = scopedKey(KEY_CAMPUS_ALERTS)?.let { preferences.getBoolean(it, true) } ?: true,
         backupAlerts = scopedKey(KEY_BACKUP_ALERTS)?.let { preferences.getBoolean(it, true) } ?: true,
+        courseReminderMinutes = normalizeCourseReminderMinutes(
+            scopedKey(KEY_COURSE_REMINDER_MINUTES)?.let { preferences.getInt(it, COURSE_REMINDER_DEFAULT_MINUTES) }
+                ?: COURSE_REMINDER_DEFAULT_MINUTES,
+        ),
     )
 
     fun writeAlertPreferences(value: AlertPreferences) {
@@ -698,6 +710,7 @@ class PersonalWorkspaceStore(context: Context) {
             .putBoolean("account_${scope}_$KEY_IOT_ALERTS", value.iotAlerts)
             .putBoolean("account_${scope}_$KEY_CAMPUS_ALERTS", value.campusAlerts)
             .putBoolean("account_${scope}_$KEY_BACKUP_ALERTS", value.backupAlerts)
+            .putInt("account_${scope}_$KEY_COURSE_REMINDER_MINUTES", normalizeCourseReminderMinutes(value.courseReminderMinutes))
             .apply()
     }
 
@@ -799,6 +812,7 @@ class PersonalWorkspaceStore(context: Context) {
         const val KEY_IOT_ALERTS = "iot_alerts"
         const val KEY_CAMPUS_ALERTS = "campus_alerts"
         const val KEY_BACKUP_ALERTS = "backup_alerts"
+        const val KEY_COURSE_REMINDER_MINUTES = "course_reminder_minutes"
         const val KEY_ASSISTANT_SNAPSHOT = "assistant_snapshot"
         const val KEY_NOTIFICATION_QUEUE = "notification_queue"
         const val KEY_QUICK_SCENE = "quick_scene"

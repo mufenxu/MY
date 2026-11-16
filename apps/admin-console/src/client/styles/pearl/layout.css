@@ -103,7 +103,7 @@
 }
 
 .brand-sub {
-  font-size: 10px;
+  font-size: var(--type-caption);
   letter-spacing: 0.08em;
   color: var(--ink-soft);
   white-space: nowrap;
@@ -129,7 +129,7 @@
 .nav-group-title {
   padding: 4px 10px 5px;
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   font-weight: 650;
   letter-spacing: 0.07em;
   white-space: nowrap;
@@ -203,7 +203,7 @@
   display: inline-flex;
   align-items: center;
   color: var(--ink-faint);
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-variant-numeric: tabular-nums;
 }
 
@@ -243,7 +243,7 @@
   padding: 7px 8px;
   border-radius: var(--r-xs);
   color: var(--ink-muted);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 .env-chip i {
@@ -367,7 +367,7 @@
   color: var(--ink-soft);
   background: var(--input-bg);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   font-weight: 600;
 }
 
@@ -544,7 +544,7 @@
 
 .user-role {
   color: var(--ink-soft);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
 }
 
 .mobile-menu-button {
@@ -589,7 +589,7 @@
   align-items: center;
   gap: 7px;
   color: var(--ink-faint);
-  font-size: 10.5px;
+  font-size: var(--type-caption);
   font-weight: 650;
   letter-spacing: var(--track-eyebrow);
   text-transform: uppercase;

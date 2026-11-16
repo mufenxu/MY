@@ -79,7 +79,7 @@
 .rail-brand-copy small {
     overflow: hidden;
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     letter-spacing: 0.02em;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -111,7 +111,7 @@
 .rail-group-label {
     padding: 2px 9px 4px;
     color: var(--ink-faint);
-    font-size: 10px;
+    font-size: var(--type-caption);
     font-weight: 640;
     letter-spacing: 0.13em;
     text-transform: uppercase;
@@ -163,7 +163,7 @@
     border-radius: 999px;
     background: var(--red-swatch);
     color: #fff;
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 700;
     letter-spacing: 0;
 }
@@ -270,7 +270,7 @@
     gap: 4px;
     overflow: hidden;
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -315,7 +315,7 @@
 .user-menu-role {
     margin-top: 2px;
     color: var(--ink-faint);
-    font-size: 11px;
+    font-size: var(--type-caption);
 }
 
 .user-menu-item {

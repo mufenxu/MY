@@ -127,7 +127,7 @@
 .stage-eyebrow,
 .prop-kicker {
     color: var(--blue);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 680;
     letter-spacing: 0.14em;
     line-height: 1.3;
@@ -159,7 +159,7 @@
     padding: 0 9px;
     border: 1px solid transparent;
     border-radius: 999px;
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-weight: 620;
 }
 
@@ -191,7 +191,7 @@
     background: transparent;
     color: var(--blue);
     cursor: pointer;
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-weight: 640;
     line-height: 23px;
     transition: background 0.16s ease;
@@ -229,7 +229,7 @@
     background: transparent;
     box-shadow: none;
     color: var(--ink-muted);
-    font-size: 12px;
+    font-size: var(--type-caption);
     font-weight: 620;
     gap: 5px;
 }
@@ -328,7 +328,7 @@
     gap: 8px;
     margin-bottom: 10px;
     color: var(--ink-soft);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-weight: 620;
     letter-spacing: 0.02em;
 }
@@ -344,13 +344,13 @@
 
 .overview-card-head small {
     color: var(--ink-faint);
-    font-size: 11px;
+    font-size: var(--type-caption);
 }
 
 .overview-card-title {
     margin-bottom: 10px;
     color: var(--ink-soft);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-weight: 620;
     letter-spacing: 0.02em;
 }
@@ -403,7 +403,7 @@
 
 .overview-stats span {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 .overview-next-action {
@@ -415,7 +415,7 @@
     background: var(--blue-soft);
     color: var(--blue);
     cursor: pointer;
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-weight: 640;
     line-height: 1.4;
     text-align: center;
@@ -448,7 +448,7 @@
 
 .type-count-grid span {
     color: var(--ink-soft);
-    font-size: 11px;
+    font-size: var(--type-caption);
 }
 
 .type-count-grid strong {
@@ -466,7 +466,7 @@
     gap: 4px 10px;
     margin-bottom: 10px;
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 .question-map-legend span {
@@ -515,7 +515,7 @@
     color: var(--ink-muted);
     cursor: pointer;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--type-caption);
     font-variant-numeric: tabular-nums;
     font-weight: 600;
     transition: transform 0.14s ease, border-color 0.14s ease, background 0.14s ease,
@@ -526,7 +526,7 @@
     grid-column: 1 / -1;
     padding: 10px 0;
     color: var(--ink-faint);
-    font-size: 11px;
+    font-size: var(--type-caption);
     text-align: center;
 }
 
@@ -594,7 +594,7 @@
 .stage-header p {
     margin: 0;
     color: var(--ink-soft);
-    font-size: 12px;
+    font-size: var(--type-caption);
     line-height: 1.5;
 }
 
@@ -613,7 +613,7 @@
     background: var(--red-soft);
     color: var(--red-text);
     cursor: pointer;
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-weight: 640;
     transition: transform 0.16s ease, background 0.16s ease;
 }
@@ -642,7 +642,7 @@
 
 .stage-completion span {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 /* 滚动区 */
@@ -684,7 +684,7 @@
 }
 
 .empty-tip span {
-    font-size: 11.5px;
+    font-size: var(--type-caption);
 }
 
 /* 题目卡 */
@@ -746,7 +746,7 @@
     box-shadow: var(--groove-inset);
     color: var(--ink-muted);
     font-family: var(--font-mono);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-variant-numeric: tabular-nums;
     font-weight: 640;
 }
@@ -762,7 +762,7 @@
     padding: 0 7px;
     border: 1px solid transparent;
     border-radius: 6px;
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 620;
 }
 
@@ -771,7 +771,7 @@
     align-items: center;
     gap: 4px;
     color: var(--amber);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 620;
     white-space: nowrap;
 }
@@ -792,7 +792,7 @@
 .question-delete-btn.el-button {
     flex: none;
     color: var(--ink-faint);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
 }
 
 .question-delete-btn.el-button:hover {
@@ -833,7 +833,7 @@
     border-radius: 8px;
     background: var(--ex-soft);
     color: var(--ink-muted);
-    font-size: 12px;
+    font-size: var(--type-caption);
     line-height: 1.5;
 }
 
@@ -856,7 +856,7 @@
     box-shadow: inset 0 0 0 1px var(--line);
     color: inherit;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--type-caption);
     font-weight: 640;
 }
 
@@ -879,7 +879,7 @@
     border: 1px solid var(--line);
     border-radius: 8px;
     background: var(--ex-soft);
-    font-size: 12px;
+    font-size: var(--type-caption);
 }
 
 .fill-answer-preview span {
@@ -901,7 +901,7 @@
     border: 1px solid var(--line);
     border-radius: 7px;
     background: color-mix(in srgb, var(--ex-soft) 55%, transparent);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     line-height: 1.6;
 }
 
@@ -979,7 +979,7 @@
 
 .prop-subtitle {
     color: var(--ink-soft);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     line-height: 1.4;
 }
 
@@ -1022,7 +1022,7 @@
 
 .inspector-summary span {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 .inspector-summary strong {
@@ -1056,14 +1056,14 @@
     gap: 6px 10px;
     margin-bottom: 9px;
     color: var(--ink-muted);
-    font-size: 12px;
+    font-size: var(--type-caption);
     font-weight: 640;
     letter-spacing: 0.01em;
 }
 
 .prop-section-tip {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 500;
 }
 
@@ -1078,7 +1078,7 @@
     height: 25px;
     padding: 0 8px;
     border-radius: 7px;
-    font-size: 11px;
+    font-size: var(--type-caption);
     gap: 4px;
 }
 
@@ -1108,7 +1108,7 @@
     background: transparent;
     box-shadow: none !important;
     color: var(--ink-soft);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-weight: 620;
     line-height: 27px;
     transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
@@ -1198,7 +1198,7 @@
     box-shadow: inset 0 0 0 1px var(--line);
     color: var(--ink-muted);
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 640;
 }
 
@@ -1217,7 +1217,7 @@
     min-height: 40px !important;
     padding: 5px 8px;
     background: var(--input-bg);
-    font-size: 12px;
+    font-size: var(--type-caption);
     line-height: 1.55;
 }
 
@@ -1244,7 +1244,7 @@
     background: transparent;
     box-shadow: none;
     color: var(--blue);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-weight: 620;
 }
 
@@ -1284,7 +1284,7 @@
 
 .empty-prop span {
     max-width: 220px;
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     line-height: 1.6;
 }
 
@@ -1430,14 +1430,14 @@
 
 .tool-label {
     color: var(--ink-muted);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-weight: 620;
 }
 
 .mobile-tool-divider {
     margin: 18px 0 10px;
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 640;
     letter-spacing: 0.1em;
 }
@@ -1490,7 +1490,7 @@
 
 .tool-row-desc {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     line-height: 1.4;
 }
 
@@ -1533,7 +1533,7 @@
 
 .mobile-editor-heading > span {
     color: var(--blue);
-    font-size: 10px;
+    font-size: var(--type-caption);
     font-weight: 680;
     letter-spacing: 0.12em;
 }
@@ -1547,7 +1547,7 @@
 
 .mobile-editor-heading small {
     color: var(--ink-soft);
-    font-size: 11px;
+    font-size: var(--type-caption);
 }
 
 .mobile-editor-badge {
@@ -1557,7 +1557,7 @@
     background: var(--blue-soft);
     color: var(--blue);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--type-caption);
     font-weight: 640;
 }
 
@@ -1600,13 +1600,13 @@
 
 .mobile-editor-summary span {
     color: var(--ink-faint);
-    font-size: 10px;
+    font-size: var(--type-caption);
 }
 
 .mobile-editor-summary strong {
     overflow: hidden;
     color: var(--ink);
-    font-size: 12px;
+    font-size: var(--type-caption);
     font-weight: 640;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1638,13 +1638,13 @@
     gap: 6px 10px;
     margin-bottom: 9px;
     color: var(--ink-muted);
-    font-size: 12px;
+    font-size: var(--type-caption);
     font-weight: 640;
 }
 
 .mobile-section-title small {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 500;
 }
 
@@ -1659,7 +1659,7 @@
     height: 25px;
     padding: 0 8px;
     border-radius: 7px;
-    font-size: 11px;
+    font-size: var(--type-caption);
 }
 
 .mobile-type-radio.el-radio-group {
@@ -1702,7 +1702,7 @@
 .mobile-option-check .el-checkbox__label {
     color: var(--ink-muted);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--type-caption);
     font-weight: 640;
 }
 
@@ -1714,7 +1714,7 @@
 .mobile-option-input .el-textarea__inner {
     min-height: 40px !important;
     padding: 5px 8px;
-    font-size: 12px;
+    font-size: var(--type-caption);
     line-height: 1.55;
 }
 
@@ -1733,7 +1733,7 @@
     background: transparent;
     box-shadow: none;
     color: var(--blue);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
 }
 
 .mobile-add-option-btn.el-button:hover {
@@ -1842,7 +1842,7 @@
 .batch-pane-head span,
 .batch-review-head span {
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     line-height: 1.45;
 }
 
@@ -1856,7 +1856,7 @@
 .tip-actions .el-button {
     height: 25px;
     padding: 0 8px;
-    font-size: 11px;
+    font-size: var(--type-caption);
     gap: 4px;
 }
 
@@ -1883,7 +1883,7 @@
     padding: 10px 12px;
     background: var(--input-bg);
     font-family: var(--font-mono);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     line-height: 1.7;
     resize: none;
 }
@@ -1918,7 +1918,7 @@
     flex: none;
     padding-top: 2px;
     color: var(--ink-faint);
-    font-size: 10px;
+    font-size: var(--type-caption);
     font-weight: 620;
     letter-spacing: 0.06em;
 }
@@ -1936,7 +1936,7 @@
     background: var(--surface-solid);
     color: var(--ink-muted);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--type-caption);
     line-height: 16px;
     white-space: nowrap;
 }
@@ -1956,21 +1956,21 @@
 .tip-note {
     margin-top: 8px;
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     line-height: 1.6;
 }
 
 .tip-template-head {
     margin: 10px 0 6px;
     color: var(--ink-soft);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 620;
 }
 
 .tip-template-input .el-textarea__inner {
     padding: 8px 10px;
     font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     line-height: 1.6;
 }
 
@@ -2000,7 +2000,7 @@
 
 .batch-import-options .el-checkbox__label {
     color: var(--ink-muted);
-    font-size: 11px;
+    font-size: var(--type-caption);
 }
 
 .batch-preview-empty {
@@ -2029,7 +2029,7 @@
 
 .batch-preview-empty span {
     max-width: 260px;
-    font-size: 11px;
+    font-size: var(--type-caption);
     line-height: 1.6;
 }
 
@@ -2109,7 +2109,7 @@
     height: 21px;
     padding: 0 7px;
     border-radius: 6px;
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 .batch-quality-issues {
@@ -2128,7 +2128,7 @@
     gap: 4px 10px;
     margin-bottom: 6px;
     color: var(--ink-muted);
-    font-size: 11px;
+    font-size: var(--type-caption);
     font-weight: 640;
 }
 
@@ -2177,7 +2177,7 @@
 .quality-issue-title {
     flex: none;
     color: var(--ink-muted);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     font-weight: 620;
     white-space: nowrap;
 }
@@ -2186,7 +2186,7 @@
     overflow: hidden;
     flex: 1;
     color: var(--ink-faint);
-    font-size: 10px;
+    font-size: var(--type-caption);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -2194,7 +2194,7 @@
 .quality-locate-icon {
     flex: none;
     color: var(--ink-faint);
-    font-size: 11px;
+    font-size: var(--type-caption);
 }
 
 /* 预览列表 */
@@ -2237,7 +2237,7 @@
     flex: none;
     color: var(--ink-faint);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--type-caption);
     font-weight: 620;
 }
 
@@ -2259,7 +2259,7 @@
     overflow: hidden;
     flex: 1 1 160px;
     color: var(--ink-muted);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     line-height: 1.45;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2269,7 +2269,7 @@
     flex: none;
     height: 22px;
     padding: 0 6px;
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 .preview-edit-panel {
@@ -2294,7 +2294,7 @@
 
 .preview-edit-field > span {
     color: var(--ink-faint);
-    font-size: 10px;
+    font-size: var(--type-caption);
     font-weight: 620;
 }
 
@@ -2307,14 +2307,14 @@
 
 .preview-edit-field-head > span {
     color: var(--ink-faint);
-    font-size: 10px;
+    font-size: var(--type-caption);
     font-weight: 620;
 }
 
 .preview-edit-field-head .el-button {
     height: 22px;
     padding: 0 6px;
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 .preview-type-radio.el-radio-group {
@@ -2337,7 +2337,7 @@
     background: transparent;
     box-shadow: none !important;
     color: var(--ink-soft);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     line-height: 24px;
 }
 
@@ -2379,7 +2379,7 @@
 .preview-edit-option-label {
     color: var(--ink-muted);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--type-caption);
     font-weight: 640;
 }
 
@@ -2390,7 +2390,7 @@
 
 .preview-edit-option .el-textarea__inner {
     padding: 4px 7px;
-    font-size: 11px;
+    font-size: var(--type-caption);
     line-height: 1.5;
 }
 
@@ -2423,7 +2423,7 @@
     gap: 4px;
     margin-right: auto;
     color: var(--ink-faint);
-    font-size: 11px;
+    font-size: var(--type-caption);
 }
 
 .batch-dialog-footer-note strong {
@@ -2472,7 +2472,7 @@
 .ai-batch-tip {
     margin-left: 8px;
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     line-height: 1.5;
 }
 
@@ -2491,7 +2491,7 @@
     gap: 6px 10px;
     margin-bottom: 7px;
     color: var(--ink-muted);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     font-weight: 640;
 }
 
@@ -2503,7 +2503,7 @@
 .ai-batch-picker-actions .el-button {
     height: 24px;
     padding: 0 7px;
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 .ai-batch-question-list {
@@ -2542,7 +2542,7 @@
     flex: none;
     color: var(--ink-faint);
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--type-caption);
 }
 
 .ai-batch-question-type {
@@ -2558,7 +2558,7 @@
 .ai-batch-question-content {
     overflow: hidden;
     color: var(--ink-muted);
-    font-size: 11.5px;
+    font-size: var(--type-caption);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -2611,13 +2611,13 @@
 
 .ai-batch-generating-copy strong {
     color: var(--ink);
-    font-size: 12px;
+    font-size: var(--type-caption);
     font-weight: 640;
 }
 
 .ai-batch-generating-copy span {
     color: var(--ink-soft);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 .ai-batch-generating-progress {
@@ -2698,7 +2698,7 @@
     border-radius: var(--r-sm);
     background: var(--red-soft);
     color: var(--red-text);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
     line-height: 1.5;
 }
 
@@ -2731,7 +2731,7 @@
 .ai-analysis-subtitle {
     margin-top: 2px;
     color: var(--ink-faint);
-    font-size: 11px;
+    font-size: var(--type-caption);
     line-height: 1.5;
 }
 
@@ -2760,7 +2760,7 @@
 }
 
 .ai-analysis-loading span {
-    font-size: 11px;
+    font-size: var(--type-caption);
 }
 
 .ai-analysis-card {
@@ -2787,7 +2787,7 @@
     align-items: center;
     gap: 4px 10px;
     color: var(--ink-faint);
-    font-size: 10.5px;
+    font-size: var(--type-caption);
 }
 
 .ai-analysis-meta .el-tag {
@@ -2806,7 +2806,7 @@
     height: 26px;
     padding: 0 9px;
     border-radius: 7px;
-    font-size: 11px;
+    font-size: var(--type-caption);
 }
 
 .ai-analysis-content {

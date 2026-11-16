@@ -399,8 +399,12 @@ class AppViewModel(
     init {
         viewModelScope.launch {
             combine(mutableState, campusData.state) { current, campus ->
-                current.user?.username?.takeIf { !current.locked }?.let { Triple(it, current.todoSnapshot, campus.timetable) }
-            }.distinctUntilChanged().debounce(500).collectLatest { inputs ->
+                // 课前提醒的提前量也在键里：改了设置要立刻按新时间重排，调度器自己会读落盘的值。
+                current.user?.username?.takeIf { !current.locked }?.let {
+                    Triple(it, current.todoSnapshot, campus.timetable) to current.alertPreferences.courseReminderMinutes
+                }
+            }.distinctUntilChanged().debounce(500).collectLatest { keyed ->
+                val inputs = keyed?.first
                 if (inputs != null) withContext(Dispatchers.IO) {
                     try {
                         cn.pxyb.mycontrol.PersonalReminderScheduler.schedule(getApplication(), inputs.first, inputs.second, inputs.third)

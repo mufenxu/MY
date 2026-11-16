@@ -1,8 +1,9 @@
 import { Suspense, lazy, memo, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router';
-import { App as AntApp, Button, ConfigProvider, Result, Spin, theme as antdTheme } from 'antd';
+import { App as AntApp, Button, ConfigProvider, Spin, theme as antdTheme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
-import { control, font, radius, resolvePalette } from '@my-platform/pearl-tokens';
+import { control, font, radius, resolvePalette, spacing, typography } from '@my-platform/pearl-tokens';
+import { getCurrentTheme, subscribeTheme } from '@my-platform/pearl-tokens/theme.js';
 import ErrorBoundary from './components/ErrorBoundary';
 import api from './utils/api';
 import { APP_BASE_PATH, IS_PLATFORM_SSO, redirectToPlatformLogin } from './utils/runtime';
@@ -19,6 +20,7 @@ const CourseOrders = lazy(() => import('./pages/CourseOrders'));
 const PublicQuery = lazy(() => import('./pages/PublicQuery'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const MainLayout = lazy(() => import('./components/MainLayout'));
+const Result = lazy(() => import('antd/es/result/index.js'));
 
 function FeedbackBinder() {
   bindFeedbackApis(AntApp.useApp());
@@ -91,8 +93,9 @@ const buildPearlTheme = (dark) => {
       borderRadiusSM: radius.xs,
       controlHeight: control.height,
       fontFamily: font.sans,
-      fontSize: 13,
-      fontSizeLG: 14,
+      fontSize: typography.body,
+      fontSizeSM: typography.caption,
+      fontSizeLG: 16,
       boxShadow: dark
         ? '0 1px 3px rgba(0, 0, 0, 0.32), 0 12px 30px rgba(0, 0, 0, 0.28)'
         : '0 1px 3px rgba(46, 58, 62, 0.06), 0 12px 30px rgba(46, 58, 62, 0.055)',
@@ -104,21 +107,26 @@ const buildPearlTheme = (dark) => {
     components: {
       Button: {
         controlHeight: control.height,
+        contentFontSize: typography.control,
+        contentFontSizeSM: typography.caption,
         borderRadius: radius.sm,
         fontWeight: 600,
         primaryShadow: 'none',
         defaultShadow: 'none',
         dangerShadow: 'none',
-        paddingInline: 14,
+        paddingInline: spacing.md,
+        paddingInlineSM: spacing.sm,
       },
       Input: {
         controlHeight: control.height,
-        paddingInline: 12,
+        fontSize: typography.control,
+        paddingInline: spacing.md,
         activeShadow: `0 0 0 3px ${dark ? 'rgba(76, 141, 255, 0.34)' : 'rgba(35, 109, 233, 0.22)'}`,
       },
-      InputNumber: { controlHeight: control.height },
+      InputNumber: { controlHeight: control.height, fontSize: typography.control },
       Select: {
         controlHeight: control.height,
+        fontSize: typography.control,
         optionSelectedBg: dark ? 'rgba(76, 141, 255, 0.16)' : 'rgba(35, 109, 233, 0.1)',
       },
       Table: {
@@ -127,12 +135,12 @@ const buildPearlTheme = (dark) => {
         headerSplitColor: 'transparent',
         rowHoverBg: palette.hover,
         borderColor: palette.line,
-        cellPaddingBlock: 10,
-        cellPaddingInline: 14,
+        cellPaddingBlock: spacing.md,
+        cellPaddingInline: control.cellPx,
         headerBorderRadius: radius.sm,
       },
-      Card: { borderRadiusLG: radius.lg, headerHeight: 50, paddingLG: 18 },
-      Modal: { borderRadiusLG: radius.lg, paddingContentHorizontalLG: 18 },
+      Card: { borderRadiusLG: radius.lg, headerHeight: 50, paddingLG: spacing.xl },
+      Modal: { borderRadiusLG: radius.lg, paddingContentHorizontalLG: spacing.xl },
       Tabs: { titleFontSize: 13, horizontalItemPadding: '10px 0' },
       Segmented: {
         itemSelectedBg: palette.surfaceSolid,
@@ -156,16 +164,10 @@ function App() {
     error: null,
   }));
   const [sessionRetry, setSessionRetry] = useState(0);
-  const [isDarkMode, setIsDarkMode] = useState(
-    localStorage.getItem('theme') === 'dark' || document.documentElement.getAttribute('data-theme') === 'dark'
-  );
+  const [isDarkMode, setIsDarkMode] = useState(() => getCurrentTheme() === 'dark');
 
   useEffect(() => {
-    const readTheme = () => (
-      localStorage.getItem('theme') === 'dark' || document.documentElement.getAttribute('data-theme') === 'dark'
-    );
-    const handleThemeChange = () => setIsDarkMode(readTheme());
-    window.addEventListener('themeChanged', handleThemeChange);
+    const unsubscribeTheme = subscribeTheme(() => setIsDarkMode(getCurrentTheme() === 'dark'));
 
     // 网络断线检测
     const handleOnline = () => message.success('网络已恢复连接');
@@ -174,7 +176,7 @@ function App() {
     window.addEventListener('offline', handleOffline);
 
     return () => {
-      window.removeEventListener('themeChanged', handleThemeChange);
+      unsubscribeTheme();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
@@ -224,7 +226,7 @@ function App() {
     const isPermissionError = !IS_PLATFORM_SSO && status === 403;
     const isRateLimited = status === 429;
     return (
-      <Result
+      <Suspense fallback={<RouteFallback />}><Result
         status={isMappingError || isPermissionError ? '403' : isRateLimited ? 'warning' : '500'}
         title={isMappingError ? '统一账号尚未完成映射' : isPermissionError ? '当前账号无后台权限' : isRateLimited ? '请求过于频繁' : '综合管理服务暂时不可用'}
         subTitle={isMappingError
@@ -241,13 +243,13 @@ function App() {
           }}>重试</Button>,
           <Button key="home" onClick={() => { window.location.href = IS_PLATFORM_SSO ? '/console' : '/'; }}>返回管理中心</Button>,
         ].filter(Boolean)}
-      />
+      /></Suspense>
     );
   }
 
   return (
     <ConfigProvider locale={zhCN} theme={buildPearlTheme(isDarkMode)}>
-      <AntApp component={false}>
+      <AntApp>
         <FeedbackBinder />
         <ErrorBoundary homePath={IS_PLATFORM_SSO ? '/console' : '/'}>
           <Suspense fallback={<RouteFallback />}>

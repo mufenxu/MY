@@ -1,3 +1,4 @@
+/* global Worker */
 /**
  * 批量导入题目工具模块（ESM 版）
  * 从 batch-import-utils.js 全局 IIFE 迁移为 ES Module。
@@ -466,6 +467,24 @@ export async function readQuestionsFromSpreadsheetFile(file) {
     if (!['csv', 'xlsx'].includes(extension)) throw new Error('只支持 .xlsx 或 .csv 文件');
     const isCsv = extension === 'csv';
     const arrayBuffer = await file.arrayBuffer();
+    // Worker 与 Node 共用下方解析路径，保持压缩包、行列限制和单元格语义一致。
+    if (!isCsv && typeof window !== 'undefined' && typeof window.Worker === 'function') {
+        return new Promise((resolve, reject) => {
+            const worker = new Worker(new URL('./spreadsheet.worker.js', import.meta.url), { type: 'module' });
+            const fail = (message) => {
+                worker.terminate();
+                reject(new Error(message));
+            };
+            worker.onmessage = ({ data }) => {
+                worker.terminate();
+                if (data.error) reject(new Error(data.error));
+                else resolve(data.text);
+            };
+            worker.onerror = () => fail('表格解析失败，请重试或将文件另存为 CSV 后导入');
+            worker.onmessageerror = () => fail('无法读取表格解析结果，请重试');
+            worker.postMessage({ arrayBuffer, fileName }, [arrayBuffer]);
+        });
+    }
     let rows;
     if (isCsv) {
         const Papa = await getCsvParser();

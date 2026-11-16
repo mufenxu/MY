@@ -40,7 +40,7 @@
 
 /* 图标按钮统一为方块命中区 */
 .ant-btn-icon-only.ant-btn-text {
-  border-radius: 9px;
+  border-radius: var(--r-sm);
 }
 
 /* ── 卡片 ─────────────────────────────────────────────────────── */
@@ -53,7 +53,7 @@
 
 .ant-card .ant-card-head {
   min-height: 50px;
-  padding: 0 18px;
+  padding: 0 var(--space-xl);
   border-bottom: 1px solid var(--line);
 }
 
@@ -65,13 +65,13 @@
 
 .ant-card .ant-card-extra {
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 /* ── 表格 ─────────────────────────────────────────────────────── */
 .ant-table-wrapper .ant-table {
-  background: transparent;
-  font-size: 12.5px;
+  background: var(--surface-solid);
+  font-size: var(--type-table);
 }
 
 .ant-table-wrapper .ant-table-container {
@@ -80,12 +80,12 @@
 }
 
 .ant-table-wrapper .ant-table-thead > tr > th {
-  height: 38px;
-  padding: 8px 14px;
+  height: var(--table-head-h);
+  padding: var(--space-sm) var(--cell-px);
   border-bottom: 1px solid var(--line) !important;
-  color: var(--ink-soft) !important;
+  color: var(--ink-muted) !important;
   background: var(--groove-bg) !important;
-  font-size: 11px;
+  font-size: var(--type-table-header);
   font-weight: 620;
   letter-spacing: 0.02em;
 }
@@ -95,7 +95,8 @@
 }
 
 .ant-table-wrapper .ant-table-tbody > tr > td {
-  padding: 10px 14px;
+  height: var(--row-h);
+  padding: var(--space-sm) var(--cell-px);
   border-bottom: 1px solid var(--line) !important;
   color: var(--ink);
 }
@@ -199,12 +200,12 @@
 
 .ant-form-item .ant-form-item-label > label {
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: var(--type-caption);
   font-weight: 600;
 }
 
 .ant-form-item-explain-error {
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 /* ── 标签 ─────────────────────────────────────────────────────── */
@@ -216,7 +217,7 @@
   padding: 0 8px;
   border: 0;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--type-caption);
   font-weight: 620;
   line-height: 1;
 }
@@ -287,7 +288,7 @@
 
 .ant-tooltip .ant-tooltip-inner {
   border-radius: 8px;
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 /* ── 弹窗与抽屉 ───────────────────────────────────────────────── */
@@ -360,7 +361,7 @@
 
 .ant-segmented .ant-segmented-item {
   border-radius: 8px;
-  font-size: 12px;
+  font-size: var(--type-caption);
 }
 
 .ant-segmented .ant-segmented-item-selected {
@@ -380,7 +381,7 @@
 
 .ant-descriptions .ant-descriptions-item-label {
   color: var(--ink-soft);
-  font-size: 12px;
+  font-size: var(--type-caption);
 }
 
 .ant-descriptions .ant-descriptions-item-content {
@@ -399,7 +400,7 @@
 
 .ant-statistic .ant-statistic-title {
   color: var(--ink-soft);
-  font-size: 11.5px;
+  font-size: var(--type-caption);
 }
 
 .ant-spin .ant-spin-dot-item {

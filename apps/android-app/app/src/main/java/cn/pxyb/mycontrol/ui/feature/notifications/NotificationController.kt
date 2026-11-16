@@ -51,6 +51,7 @@ class NotificationController(
         }
     }
     private var deviceRegistered = false
+    @Volatile private var courseReminderPulledAt = 0L
     private val preferenceMutex = Mutex()
 
     fun cancelPending() = scope.coroutineContext.cancelChildren()
@@ -58,6 +59,7 @@ class NotificationController(
     fun reset() {
         cancelPending()
         deviceRegistered = false
+        courseReminderPulledAt = 0L
     }
 
     fun markRead(id: String) {
@@ -122,10 +124,18 @@ class NotificationController(
                             ),
                         )
                     }
-                    withStore {
-                        writeAlertPreferences(preferences)
+                    // 服务端课程提醒（应用收件箱、企业微信）与本机课前提醒共用提前量，先写服务端，失败时本机保持原值。
+                    val saved = if (previous.courseReminderMinutes != preferences.courseReminderMinutes) {
+                        preferences.copy(
+                            courseReminderMinutes = api.campus.saveCourseReminderLead(preferences.courseReminderMinutes).leadMinutes,
+                        )
+                    } else {
+                        preferences
                     }
-                    appState.update { it.copy(alertPreferences = preferences, error = null, message = "提醒设置已保存。") }
+                    withStore {
+                        writeAlertPreferences(saved)
+                    }
+                    appState.update { it.copy(alertPreferences = saved, error = null, message = "提醒设置已保存。") }
                 }
                 onComplete(null)
             } catch (error: Exception) {
@@ -166,6 +176,17 @@ class NotificationController(
                             ).also { writeAlertPreferences(it) }
                         }
                         appState.update { it.copy(alertPreferences = merged) }
+                    }
+                    // 课前提醒提前量以服务端为准（网页端也能改）。通知每 90 秒同步一次，这里单独限流。
+                    val now = System.currentTimeMillis()
+                    if (now - courseReminderPulledAt !in 0 until COURSE_REMINDER_PULL_INTERVAL_MS) {
+                        courseReminderPulledAt = now
+                        request { api.campus.courseReminderPreference() }.getOrNull()?.let { remote ->
+                            val merged = withStore {
+                                readAlertPreferences().copy(courseReminderMinutes = remote.leadMinutes).also { writeAlertPreferences(it) }
+                            }
+                            appState.update { it.copy(alertPreferences = merged) }
+                        }
                     }
                 }
             }
@@ -219,5 +240,9 @@ class NotificationController(
     private suspend fun <T> withStore(block: PersonalWorkspaceStore.() -> T): T {
         val session = api.http.currentSession()
         return withContext(Dispatchers.IO) { sessionStore.withRequestSession(session) { store.block() } }
+    }
+
+    private companion object {
+        const val COURSE_REMINDER_PULL_INTERVAL_MS = 10 * 60_000L
     }
 }
