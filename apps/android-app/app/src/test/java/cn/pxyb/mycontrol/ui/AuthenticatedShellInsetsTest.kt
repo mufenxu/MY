@@ -34,4 +34,35 @@ class AuthenticatedShellInsetsTest {
 
         assertEquals(120.dp, insets.contentBottom)
     }
+
+    @Test
+    fun tabletWithBottomBarReservesItsHeightOnSecondaryPages() {
+        val insets = resolveAuthenticatedShellInsets(
+            safeTop = 24.dp,
+            safeStart = 0.dp,
+            safeEnd = 0.dp,
+            safeBottom = 20.dp,
+            isSubScreen = true,
+            isTablet = true,
+        )
+
+        assertEquals(110.dp, insets.contentBottom)
+    }
+
+    @Test
+    fun navigationRailFreesTheBottomOnEveryPage() {
+        listOf(true, false).forEach { isSubScreen ->
+            val insets = resolveAuthenticatedShellInsets(
+                safeTop = 24.dp,
+                safeStart = 0.dp,
+                safeEnd = 0.dp,
+                safeBottom = 20.dp,
+                isSubScreen = isSubScreen,
+                isTablet = true,
+                usesNavigationRail = true,
+            )
+
+            assertEquals(36.dp, insets.contentBottom)
+        }
+    }
 }

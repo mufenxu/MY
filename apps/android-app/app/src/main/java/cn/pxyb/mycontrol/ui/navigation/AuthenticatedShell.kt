@@ -334,7 +334,8 @@ internal fun AuthenticatedShell(
     val keyboardVisible by remember(imeInsets, density) {
         derivedStateOf { imeInsets.getBottom(density) > 0 }
     }
-    val bottomDockAllowed = isTablet || !isSubScreen
+    val useRail = adaptive.usesNavigationRail
+    val bottomDockAllowed = !useRail && (isTablet || !isSubScreen)
     val bottomDockVisible = bottomDockAllowed && !keyboardVisible
     var bottomDockHeightPx by remember { mutableIntStateOf(0) }
     val bottomDockHeight = with(LocalDensity.current) { bottomDockHeightPx.toDp() }
@@ -390,6 +391,28 @@ internal fun AuthenticatedShell(
                     end = if (layoutDirection == LayoutDirection.Ltr) padding.calculateRightPadding(layoutDirection) else padding.calculateLeftPadding(layoutDirection),
                 ),
         ) {
+            if (useRail) {
+                AppNavigationRail(
+                    selectedTab = primaryTabForRoute(currentRoute) ?: state.selectedTab,
+                    onSelectTab = navigateToTab,
+                    unreadAlerts = settingsProfileState.unreadAlerts,
+                    onOpenNotifications = {
+                        viewModel.openWorkspace(WorkspaceDestination.Notifications)
+                        navigateToSubScreen(AppRoute.Notifications)
+                    },
+                    onOpenSearch = {
+                        searchFocusRequest++
+                        viewModel.openGlobalSearch()
+                        navigateToSubScreen(AppRoute.Search)
+                    },
+                    onOpenQrLogin = viewModel::openQrScanner,
+                    onOpenSettings = { settingsOpen = true },
+                    contentPadding = PaddingValues(
+                        top = padding.calculateTopPadding(),
+                        bottom = padding.calculateBottomPadding(),
+                    ),
+                )
+            }
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -410,6 +433,7 @@ internal fun AuthenticatedShell(
                     safeBottom = padding.calculateBottomPadding(),
                     isSubScreen = isSubScreen,
                     isTablet = isTablet,
+                    usesNavigationRail = useRail,
                 )
                 val contentBottom = if (bottomDockAllowed) {
                     maxOf(shellInsets.contentBottom, padding.calculateBottomPadding() + bottomDockHeight)
@@ -803,6 +827,18 @@ internal fun AuthenticatedShell(
                     assistant = if (state.assistantButtonVisible && !state.assistantOpen && !settingsOpen) ({
                         AssistantDockButton(expanded = isTablet, onOpen = viewModel::openAssistant)
                     }) else null,
+                )
+            }
+
+            // 导航轨布局没有底栏可停靠，助手入口悬浮在内容区右下角。
+            if (useRail && state.assistantButtonVisible && !state.assistantOpen && !settingsOpen && !keyboardVisible) {
+                AssistantDockButton(
+                    expanded = true,
+                    onOpen = viewModel::openAssistant,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .padding(AppPageHorizontalPadding),
                 )
             }
 

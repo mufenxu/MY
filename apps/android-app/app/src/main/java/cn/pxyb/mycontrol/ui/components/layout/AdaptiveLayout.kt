@@ -65,6 +65,10 @@ data class AdaptiveWindowInfo(
 
     val isCompact: Boolean
         get() = widthSizeClass == WindowWidthSizeClass.Compact
+
+    /** 展开宽度改用侧边导航轨；窗口过矮时轨道放不下主标签与快捷操作，保留底栏。 */
+    val usesNavigationRail: Boolean
+        get() = isExpanded && heightSizeClass != WindowHeightSizeClass.Compact
 }
 
 val LocalAdaptiveWindow = compositionLocalOf {

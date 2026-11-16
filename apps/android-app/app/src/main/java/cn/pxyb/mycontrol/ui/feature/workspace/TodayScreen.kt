@@ -367,6 +367,7 @@ fun TodayScreen(
                     else -> campusSection = CampusWorkspaceSection.Todos
                 }
             },
+            wide = isTablet,
         )
         item(key = "todo-actions") {
             cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton(

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -54,7 +55,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.R
-import cn.pxyb.mycontrol.data.AppThemePreference
 import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
 import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.components.layout.unreadBadgeLabel
@@ -64,7 +64,7 @@ import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 /**
- * 现代平板自适应侧边导航轨（Navigation Rail）
+ * 展开宽度（>= 840dp）下的侧边导航轨，取代底部胶囊导航以让出纵向空间。
  */
 @Composable
 fun AppNavigationRail(
@@ -75,9 +75,8 @@ fun AppNavigationRail(
     onOpenSearch: () -> Unit,
     onOpenQrLogin: () -> Unit,
     onOpenSettings: () -> Unit,
-    themePreference: AppThemePreference,
-    onToggleTheme: () -> Unit,
     modifier: Modifier = Modifier,
+    contentPadding: PaddingValues = PaddingValues(),
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val haptics = LocalHapticFeedback.current
@@ -96,6 +95,8 @@ fun AppNavigationRail(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .heightIn(min = maxHeight)
+                // 表面延伸到状态栏与手势区下方，内容避开系统安全区。
+                .padding(contentPadding)
                 .padding(vertical = 12.dp, horizontal = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween,

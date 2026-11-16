@@ -11,6 +11,13 @@
   新增二级路由必须在 `parentTabForSubScreen` 登记唯一父页面；页头返回和系统返回统一调用认证导航外壳的回退方法，页面内部不得混用状态关闭与 `NavController.popBackStack()`。
 - **路由注册按业务域分文件**：
   `AuthenticatedShell.kt` 只保留外壳布局、导航动作和主标签等核心路由；成组的业务路由写成 `NavGraphBuilder` 扩展放在 `ui/navigation/*Routes.kt`（现有 `CampusRoutes.kt`、`ManagementRoutes.kt`），从 `ShellRouteContext` 取 `viewModel`、`contentPadding`、导航回调等共享依赖。新增路由优先放进所属分组文件，不要再往外壳里堆 `composable(...)`；需要新的共享依赖时给 `ShellRouteContext` 加字段，并同步加入外壳里 `remember` 的键。
+- **大屏与平板适配（`ui/components/layout/AdaptiveLayout.kt`）**：
+  - 窗口按宽度分三档：紧凑 `< 600dp`、中等 `600–839dp`、展开 `>= 840dp`，取自 `LocalAdaptiveWindow`，按实际窗口计算，分屏与折叠屏同样生效。
+  - 导航形态由外壳决定，页面不要自行判断：`AdaptiveWindowInfo.usesNavigationRail`（展开宽度且窗口高度不低于 480dp）为真时显示侧边导航轨 `AppNavigationRail`、不显示底栏，助手入口悬浮在内容区右下角；其余情况沿用底部胶囊导航（中等宽度下二级页面也保留底栏）。
+  - 页面内是否分栏一律用 `useTwoPaneLayout()` 判断：它读的是扣除导航轨、安全区和最大宽度后的**内容区宽度**，并随系统字号抬高阈值。不要用 `LocalAdaptiveWindow` 的窗口宽度或 `LocalConfiguration.screenWidthDp` 决定页面分栏。
+  - 三种现成骨架：列表-详情用 `AppAdaptivePanes`（阈值 `AppListDetailMinWidth`）；两块并列分区用 `AppSectionColumns`（窄时自动回落单列）；同构卡片用 `adaptiveGridColumnCount` + `appGridItems`。禁止手写 `if (宽度 > …) Row else Column`。
+  - 新增路由必须在 `contentMaxWidthForRoute`（`AppRoutes.kt`）登记宽度用途：阅读 `AppReadingContentMaxWidth`(760)、表单 `AppFormContentMaxWidth`(720)、工作台 `AppWorkspaceContentMaxWidth`(1200)，未登记的回落到 `AppTabletContentMaxWidth`(1120)。归入工作台宽度的页面必须同时提供分栏或网格，不能只是单列拉宽。
+  - 弹窗统一用 `AppDialog`：手机为底部弹层，中等及以上宽度居中，宽度取 `AppDialogSize`。
 
 ## 2. 视觉与材质约束
 
@@ -182,6 +189,7 @@
 - 公共组件目录同时检查硬编码颜色与数值字号（包括条件字号）；作为封装实现使用原生控件和紧凑内部间距不触发业务层禁用规则。
 - 专用验证码输入保留 `BasicTextField`，身份码全屏展示保留专用 `Dialog`；这些例外不允许扩展成普通表单的替代体系。
 - `app/src/debug/java/cn/pxyb/mycontrol/ui/components/DesignSystemPreviews.kt` 提供浅色、深色、深色大字号和窄屏 1.5 倍字号预览，仅进入 Debug 源集。预览涵盖按钮加载/禁用、字段错误、筛选选中、持续反馈、长名称、长指标值与单位、可复制长详情。
+- 同目录的 `AdaptiveLayoutPreviews.kt` 提供平板竖屏（700dp）、平板横屏（1280dp，含深色与 1.5 倍字号）和矮窗口预览，用于检查导航轨切换点、`AppSectionColumns` 与 `AppAdaptivePanes` 的回落；断点与各路由宽度由 JVM 单测 `AdaptiveLayoutTest` 锁定。改动大屏骨架后两处都要看。
 - 源码检查和 Kotlin 编译不能代替实际渲染、TalkBack 或真机性能验证；报告时分别说明。
 - 「状态 → 维护 → 环境变量对照表」（`ui/feature/envreference/`）是根目录 `.env.example` 的中文说明，纯本地静态内容，不请求服务器、不显示真实取值。`.env.example` 增删或改名变量时必须同步 `EnvReferenceCatalog.kt`，根目录 `npm.cmd run check:env-reference` 会校验两侧变量名一致（已接入根 `check` 和 Android CI）；条目只能用 `required(` / `keep(` / `optional(` 构造，密钥类条目不得填写 `example`。
 

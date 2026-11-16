@@ -122,11 +122,13 @@ internal fun resolveAuthenticatedShellInsets(
     safeBottom: Dp,
     isSubScreen: Boolean,
     isTablet: Boolean = false,
+    usesNavigationRail: Boolean = false,
 ): AuthenticatedShellInsets = AuthenticatedShellInsets(
     navigationTop = safeTop,
     navigationStart = safeStart,
     navigationEnd = safeEnd,
-    contentBottom = safeBottom + if (isSubScreen && !isTablet) 16.dp else 90.dp,
+    // 侧边导航轨不占用底部空间；只有显示底栏的页面才为它预留高度。
+    contentBottom = safeBottom + if (usesNavigationRail || (isSubScreen && !isTablet)) 16.dp else 90.dp,
 )
 
 internal fun appPageContentPadding(
