@@ -49,6 +49,18 @@ internal fun todoDueAtMillis(date: String?, time: String, zone: ZoneId = ZoneId.
 }
 
 /**
+ * 切换完成状态。服务端在完成时会把提醒状态置为 dismissed，
+ * 取消完成时如果不改回来，这条待办就再也不会提醒。
+ */
+internal fun toggleTodoCompletion(task: TodoTask): TodoTask {
+    if (!task.completed) return task.copy(completed = true, reminderStatus = "dismissed")
+    // 完成前已经提醒过的不重发：按提醒时间（没有则按截止时间）和上次提醒时间还原成当时的状态。
+    val triggerAt = task.reminderAt ?: task.dueAt
+    val alreadyReminded = triggerAt != null && task.remindedAt != null && task.remindedAt >= triggerAt
+    return task.copy(completed = false, reminderStatus = if (alreadyReminded) "sent" else "pending")
+}
+
+/**
  * 保存时的截止与提醒字段。截止时间和提前量都没动时原样返回，
  * 避免只改标题就把已经提醒过的待办重新排进提醒。
  */

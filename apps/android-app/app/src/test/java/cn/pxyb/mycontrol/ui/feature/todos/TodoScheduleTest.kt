@@ -113,6 +113,62 @@ class TodoScheduleTest {
     }
 
     @Test
+    fun `取消完成后恢复尚未发出的提醒`() {
+        // 完成后服务端回写的快照里提醒状态是 dismissed。
+        val completed = TodoTask("t", "误点完成", completed = true, dueAt = due, reminderAt = due - hour, reminderStatus = "dismissed")
+
+        val reopened = toggleTodoCompletion(completed)
+
+        assertEquals(false, reopened.completed)
+        assertEquals("pending", reopened.reminderStatus)
+        assertEquals(due - hour, reopened.reminderAt)
+    }
+
+    @Test
+    fun `取消完成不会重发已经提醒过的待办`() {
+        val completed = TodoTask(
+            "t", "提醒过再完成", completed = true, dueAt = due, reminderAt = due - hour,
+            reminderStatus = "dismissed", remindedAt = due - hour + 1_000,
+        )
+
+        val reopened = toggleTodoCompletion(completed)
+
+        assertEquals("sent", reopened.reminderStatus)
+        assertEquals(due - hour + 1_000, reopened.remindedAt)
+    }
+
+    @Test
+    fun `改期后取消完成按新的提醒时间重新提醒`() {
+        // 上次提醒早于现在的提醒时间，说明提醒时间之后改过，不算已提醒。
+        val completed = TodoTask(
+            "t", "改期后完成", completed = true, dueAt = due, reminderAt = due - hour,
+            reminderStatus = "dismissed", remindedAt = due - 48 * hour,
+        )
+
+        assertEquals("pending", toggleTodoCompletion(completed).reminderStatus)
+    }
+
+    @Test
+    fun `只有截止时间的待办取消完成后按截止时间判断`() {
+        val notReminded = TodoTask("t", "网页待办", completed = true, dueAt = due, reminderStatus = "dismissed")
+        val reminded = notReminded.copy(remindedAt = due + 1_000)
+
+        assertEquals("pending", toggleTodoCompletion(notReminded).reminderStatus)
+        assertEquals("sent", toggleTodoCompletion(reminded).reminderStatus)
+    }
+
+    @Test
+    fun `标记完成时关闭提醒并保留提醒时间`() {
+        val task = TodoTask("t", "完成", dueAt = due, reminderAt = due - hour)
+
+        val done = toggleTodoCompletion(task)
+
+        assertEquals(true, done.completed)
+        assertEquals("dismissed", done.reminderStatus)
+        assertEquals(due - hour, done.reminderAt)
+    }
+
+    @Test
     fun `提前量文案覆盖各档位`() {
         assertEquals("不提醒", todoReminderLeadLabel(null))
         assertEquals("准时", todoReminderLeadLabel(0))

@@ -188,7 +188,7 @@ test('homepage formal cockpit keeps summary and alert content tied to live obser
   assert.match(app, /onOpenConfiguration=\{\(\) => navigateToView\('configuration'\)\}/);
   assert.doesNotMatch(app, /网关响应耗时陡增/);
   assert.match(styles, /\.dependency-service-copy > strong\s*\{[^}]*font-size:\s*12\.5px/s);
-  assert.match(styles, /\.dependency-service-metrics small\s*\{[^}]*font-size:\s*10px/s);
+  assert.match(styles, /\.dependency-service-metrics small\s*\{[^}]*font-size:\s*var\(--type-caption\)/s);
 });
 
 test('backup view manages scheduled and S3-compatible offsite backups without exposing saved secrets', () => {

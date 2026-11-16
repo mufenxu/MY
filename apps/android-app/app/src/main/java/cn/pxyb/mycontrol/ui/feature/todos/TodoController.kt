@@ -74,7 +74,7 @@ class TodoController(
         mutateLocal(afterLocalSave = onSaved) { repository.enqueue(TodoMutation("upsert", task)) }
     }
 
-    fun toggle(id: String) = mutateLocal { repository.updateTask(id) { it.copy(completed = !it.completed) } }
+    fun toggle(id: String) = mutateLocal { repository.updateTask(id, ::toggleTodoCompletion) }
 
     fun delete(id: String, afterLocalSave: () -> Unit = {}) = mutateLocal(afterLocalSave) { repository.enqueue(TodoMutation("delete", id = id)) }
 
