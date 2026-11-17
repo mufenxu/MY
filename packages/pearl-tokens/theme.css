@@ -1,3 +1,17 @@
+/* 原生触摸高亮可能按内部文字/图标的矩形命中区绘制，反馈统一作用于控件本身。 */
+:root {
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(button, [role="button"]) {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+:where(button, a[href], [role="button"]):active:not(:disabled):not([aria-disabled="true"]):not(.is-disabled):not(.ant-btn-disabled) {
+  filter: brightness(0.94);
+}
+
 .theme-menu {
   --theme-trigger-size: var(--control-h);
   --theme-icon-size: 18px;

@@ -17,6 +17,15 @@
   box-shadow: none;
 }
 
+/* 波纹内部会把百分比/椭圆圆角转成像素值；经挂载容器继承按钮的完整四角。 */
+.ant-btn > div:has(> .ant-wave) {
+  border-radius: inherit;
+}
+
+.ant-btn > div > .ant-wave {
+  border-radius: inherit !important;
+}
+
 .ant-btn-primary:not(:disabled) {
   box-shadow: var(--e-accent);
 }
