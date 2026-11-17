@@ -24,7 +24,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router';
 import UserAvatar from './UserAvatar';
 import { IS_PLATFORM_SSO, logoutPlatformSession } from '../utils/runtime';
 import { message } from '../utils/feedback';
-import { getThemePreference, setTheme, subscribeTheme } from '@my-platform/pearl-tokens/theme.js';
+import { mountThemeMenu } from '@my-platform/pearl-tokens/theme-menu.js';
 
 const InlineRouteFallback = () => (
     <div className="route-inline-loading">
@@ -129,7 +129,7 @@ const MainLayout = () => {
     const [drawerVisible, setDrawerVisible] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
-    const [themePreference, setThemePreference] = useState(getThemePreference);
+    const themeMenuRef = useRef(null);
     const [openTabs, setOpenTabs] = useState(['/dashboard']);
     const [refreshKey, setRefreshKey] = useState(0);
     const [viewportWidth, setViewportWidth] = useState(() => (typeof window === 'undefined' ? 375 : window.innerWidth));
@@ -192,7 +192,7 @@ const MainLayout = () => {
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
     }, []);
 
-    useEffect(() => subscribeTheme(() => setThemePreference(getThemePreference())), []);
+    useEffect(() => mountThemeMenu(themeMenuRef.current), []);
 
     // 抽屉打开时允许 Esc 关闭
     useEffect(() => {
@@ -384,12 +384,7 @@ const MainLayout = () => {
                                 </button>
                             </Tooltip>
                         )}
-                        <select className="theme-select" value={themePreference}
-                            onChange={(event) => setTheme(event.target.value)} aria-label="外观主题">
-                            <option value="light">浅色</option>
-                            <option value="dark">深色</option>
-                            <option value="system">跟随系统</option>
-                        </select>
+                        <div ref={themeMenuRef} className="theme-menu theme-menu--compact" />
                         {!isMobile && (
                             <Tooltip title={isFullscreen ? '退出全屏' : '全屏'}>
                                 <button

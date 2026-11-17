@@ -20,7 +20,7 @@ import { ApplicationsView } from './ApplicationsView.jsx';
 import { ServicesView } from './ServicesView.jsx';
 import { BackupRecoveryView } from './BackupRecoveryView.jsx';
 import { CommandPalette } from './CommandPalette.jsx';
-import { getThemePreference, setTheme, subscribeTheme } from '@my-platform/pearl-tokens/theme.js';
+import { mountThemeMenu } from '@my-platform/pearl-tokens/theme-menu.js';
 
 const loadAutomationView = () => import('./AutomationView.jsx');
 const loadNotificationView = () => import('./NotificationServiceView.jsx');
@@ -94,7 +94,7 @@ export function Dashboard({ session, onLogout }) {
   const [monitoringEnabled, setMonitoringEnabled] = useState(true);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [themePreference, setThemePreference] = useState(getThemePreference);
+  const themeMenuRef = useRef(null);
   const [density, setDensity] = useState(() => {
     try {
       return window.localStorage.getItem('my-console-density') || 'standard';
@@ -210,7 +210,7 @@ export function Dashboard({ session, onLogout }) {
     loadServices();
   }, [loadServices]);
 
-  useEffect(() => subscribeTheme(() => setThemePreference(getThemePreference())), []);
+  useEffect(() => mountThemeMenu(themeMenuRef.current), []);
 
   useEffect(() => {
     document.documentElement.dataset.density = density;
@@ -514,16 +514,7 @@ export function Dashboard({ session, onLogout }) {
               >
                 <AlignJustify size={17} />
               </button>
-              <select
-                className="theme-select"
-                value={themePreference}
-                onChange={(event) => setTheme(event.target.value)}
-                aria-label="外观主题"
-              >
-                <option value="light">浅色</option>
-                <option value="dark">深色</option>
-                <option value="system">跟随系统</option>
-              </select>
+              <div ref={themeMenuRef} className="theme-menu theme-menu--compact" />
               <div ref={notificationRef} className="notification-wrap">
                 <button
                   className="icon-button notification-button"

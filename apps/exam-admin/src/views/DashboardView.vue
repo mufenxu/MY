@@ -134,12 +134,7 @@
                     <span v-else-if="uiPreviewMode" class="topbar-sub">预览数据</span>
                 </div>
                 <div class="topbar-actions">
-                    <select class="theme-select" :value="themePreference"
-                        aria-label="外观主题" @change="setTheme($event.target.value)">
-                        <option value="light">浅色</option>
-                        <option value="dark">深色</option>
-                        <option value="system">跟随系统</option>
-                    </select>
+                    <div ref="themeMenuRef" class="theme-menu"></div>
                 </div>
             </header>
             <main class="admin-content">
@@ -1897,7 +1892,7 @@ import { createMockAdminApi } from '@/api/adminMock';
 import { createCartoonAvatar } from '@/utils/cartoonAvatar';
 import { isUiPreviewMode } from '@/utils/uiPreview';
 import { IS_PLATFORM_SSO, logoutPlatformSession, resolveAppUrl } from '@/utils/runtime';
-import { getThemePreference, setTheme, subscribeTheme } from '@/utils/theme';
+import { mountThemeMenu } from '@my-platform/pearl-tokens/theme-menu.js';
 import DashboardNavMenu from '@/components/DashboardNavMenu.vue';
 import { usePasswordDialog } from '@/features/account/usePasswordDialog';
 import { useExamResults } from '@/features/exam-results/useExamResults';
@@ -1920,8 +1915,8 @@ const faviconUrl = resolveAppUrl('/favicon.png');
 
         
         
-        const themePreference = ref(getThemePreference());
-        let unsubscribeTheme;
+        const themeMenuRef = ref(null);
+        let unmountThemeMenu;
 
         const activeMenu = ref('dashboard');
         const loading = ref(false);
@@ -2730,7 +2725,7 @@ const faviconUrl = resolveAppUrl('/favicon.png');
         };
         // --- Lifecycle ---
         onMounted(async () => {
-            unsubscribeTheme = subscribeTheme(() => { themePreference.value = getThemePreference(); });
+            unmountThemeMenu = mountThemeMenu(themeMenuRef.value);
             const runtime = await loadRuntimeConfig();
             Object.assign(runtimeConfig.scanLogin, runtime.scanLogin || {});
             if (hasSession) {
@@ -2788,7 +2783,7 @@ const faviconUrl = resolveAppUrl('/favicon.png');
         });
 
         onBeforeUnmount(() => {
-            unsubscribeTheme?.();
+            unmountThemeMenu?.();
             stopBindRequests();
             viewRequestControllers.forEach((controller) => controller.abort());
             viewRequestControllers.clear();

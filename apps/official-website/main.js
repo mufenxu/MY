@@ -1,5 +1,7 @@
 // MY Platform Official Website - Dynamic Floating Island & Responsive Motion Engine
 
+import { mountThemeMenu } from '../../packages/pearl-tokens/theme-menu.js';
+
 document.addEventListener('DOMContentLoaded', () => {
   initThemeToggle();
   initQuantumCanvas();
@@ -11,15 +13,7 @@ function initThemeToggle() {
   const toggle = document.getElementById('theme-toggle');
   if (!toggle) return;
 
-  function updateSelection() {
-    toggle.value = window.myPlatformTheme.getThemePreference();
-  }
-
-  toggle.addEventListener('change', () => {
-    window.myPlatformTheme.setTheme(toggle.value);
-  });
-  window.myPlatformTheme.subscribeTheme(updateSelection);
-  updateSelection();
+  mountThemeMenu(toggle);
 }
 
 // Interactive Particle Background

@@ -14,12 +14,7 @@
                     <strong>好爱学习</strong>
                     <small>考试业务管理后台</small>
                 </span>
-                <select class="theme-select login-theme-select" :value="themePreference"
-                    aria-label="外观主题" @change="setTheme($event.target.value)">
-                    <option value="light">浅色</option>
-                    <option value="dark">深色</option>
-                    <option value="system">跟随系统</option>
-                </select>
+                <div ref="themeMenuRef" class="theme-menu theme-menu--compact login-theme-menu"></div>
             </header>
 
             <div class="login-heading">
@@ -121,7 +116,7 @@ import {
 import http from '@/utils/http';
 import { fetchWithTimeout, resolveAppUrl } from '@/utils/runtime';
 import { createSequentialPoller } from '@/utils/sequentialPoller';
-import { getThemePreference, setTheme, subscribeTheme } from '@/utils/theme';
+import { mountThemeMenu } from '@my-platform/pearl-tokens/theme-menu.js';
 
 const router = useRouter();
 const route = useRoute();
@@ -141,8 +136,8 @@ const loginCopy = {
 };
 
 // --- 主题 ---
-const themePreference = ref(getThemePreference());
-let unsubscribeTheme;
+const themeMenuRef = ref(null);
+let unmountThemeMenu;
 
 function unwrapPayload(payload) {
     if (!payload) return {};
@@ -564,7 +559,7 @@ const handleLogin = async () => {
 onMounted(async () => {
     document.title = loginCopy.pageTitle;
     document.documentElement.classList.add(AUTH_STANDALONE_CLASS);
-    unsubscribeTheme = subscribeTheme(() => { themePreference.value = getThemePreference(); });
+    unmountThemeMenu = mountThemeMenu(themeMenuRef.value);
 
     const runtimeConfig = await loadRuntimeConfig();
     scanLoginConfig = runtimeConfig.scanLogin || scanLoginConfig;
@@ -585,7 +580,7 @@ onMounted(async () => {
 onUnmounted(() => {
     stopPolling();
     stopQrCreation();
-    unsubscribeTheme?.();
+    unmountThemeMenu?.();
     document.documentElement.classList.remove(AUTH_STANDALONE_CLASS);
 });
 </script>
@@ -657,7 +652,7 @@ onUnmounted(() => {
 }
 
 /* ── 主题选择 ─────────────────────────────────────────────────── */
-.login-theme-select {
+.login-theme-menu {
     margin-left: auto;
 }
 

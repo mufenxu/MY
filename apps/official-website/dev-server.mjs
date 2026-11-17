@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = 5188;
-const SHARED_STYLES = new Map(['tokens.css', 'theme.css'].map((file) => [
+const SHARED_ASSETS = new Map(['tokens.css', 'theme.css', 'theme-menu.js', 'theme.js', 'index.js'].map((file) => [
   `/packages/pearl-tokens/${file}`,
   path.resolve(__dirname, '../../packages/pearl-tokens', file),
 ]));
@@ -23,11 +23,11 @@ const server = http.createServer((req, res) => {
   let reqPath = new URL(req.url, `http://localhost:${PORT}`).pathname;
   if (reqPath === '/') reqPath = '/index.html';
 
-  const sharedStyle = SHARED_STYLES.get(reqPath);
-  const filePath = sharedStyle || path.join(__dirname,
+  const sharedAsset = SHARED_ASSETS.get(reqPath);
+  const filePath = sharedAsset || path.join(__dirname,
     reqPath === '/website-assets/theme-bootstrap.js' ? 'public/website-assets/theme-bootstrap.js' : reqPath);
 
-  if (!sharedStyle && !filePath.startsWith(__dirname)) {
+  if (!sharedAsset && !filePath.startsWith(__dirname)) {
     res.writeHead(403);
     res.end('Access Denied');
     return;

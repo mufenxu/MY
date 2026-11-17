@@ -145,47 +145,6 @@ select:focus-visible {
   pointer-events: auto;
 }
 
-.theme-toggle {
-  width: 42px;
-  height: 42px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  border: 1px solid var(--color-border);
-  border-radius: 50%;
-  background: var(--color-bg-surface);
-  color: var(--color-text-primary);
-  box-shadow: var(--shadow-md);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  cursor: pointer;
-  transition: transform var(--transition-fast), background-color var(--transition-fast), color var(--transition-fast);
-}
-
-.theme-toggle:hover {
-  transform: translateY(-2px);
-}
-
-.theme-toggle:focus-visible {
-  outline: 2px solid var(--color-accent-gold) !important;
-  outline-offset: 2px;
-}
-
-.theme-icon {
-  width: 18px;
-  height: 18px;
-}
-
-.theme-icon-moon,
-:root[data-theme="dark"] .theme-icon-sun {
-  display: none;
-}
-
-:root[data-theme="dark"] .theme-icon-moon {
-  display: block;
-}
-
 /* Logo */
 .brand-logo {
   display: flex;
@@ -1146,14 +1105,9 @@ select:focus-visible {
     height: 12px;
   }
 
-  .theme-toggle {
-    width: 32px;
-    height: 32px;
-  }
-
-  .theme-icon {
-    width: 16px;
-    height: 16px;
+  .top-actions .theme-menu {
+    --theme-trigger-size: var(--control-h);
+    --theme-icon-size: 18px;
   }
 
   .hero-section { padding: 82px 16px 50px; }
@@ -1192,14 +1146,9 @@ select:focus-visible {
     padding: 4px 9px;
   }
 
-  .theme-toggle {
-    width: 30px;
-    height: 30px;
-  }
-
-  .theme-icon {
-    width: 15px;
-    height: 15px;
+  .top-actions .theme-menu {
+    --theme-trigger-size: 32px;
+    --theme-icon-size: 17px;
   }
 
   .badge-tag { font-size: var(--type-caption); padding: 5px 10px; }
