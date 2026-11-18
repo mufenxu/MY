@@ -28,7 +28,8 @@ internal fun AssistantDockButton(modifier: Modifier = Modifier, expanded: Boolea
     val haptics = LocalHapticFeedback.current
     Surface(
         onClick = { AppHaptics.tick(haptics); onOpen() },
-        modifier = modifier.heightIn(min = 56.dp).widthIn(min = if (expanded) 96.dp else 56.dp).pressFeedback(interaction, pressedScale = 0.97f),
+        // 与紧凑底栏同高（54dp），并排停靠时不比导航胶囊高一截。
+        modifier = modifier.heightIn(min = 54.dp).widthIn(min = if (expanded) 96.dp else 54.dp).pressFeedback(interaction, pressedScale = 0.97f),
         interactionSource = interaction,
         shape = CircleShape,
         color = MaterialTheme.colorScheme.primary,
@@ -36,7 +37,7 @@ internal fun AssistantDockButton(modifier: Modifier = Modifier, expanded: Boolea
         shadowElevation = 1.dp,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
-            Icon(Icons.Outlined.AutoAwesome, contentDescription = if (expanded) null else "打开 AI 助手", modifier = Modifier.size(24.dp))
+            Icon(Icons.Outlined.AutoAwesome, contentDescription = if (expanded) null else "打开 AI 助手", modifier = Modifier.size(22.dp))
             if (expanded) Text("助手", style = MaterialTheme.typography.labelLarge)
         }
     }

@@ -7,7 +7,6 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -22,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -38,7 +36,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
+import cn.pxyb.mycontrol.ui.components.layout.AppPanel
 import cn.pxyb.mycontrol.ui.components.layout.glassShimmer
 import cn.pxyb.mycontrol.ui.theme.BrandCyan
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
@@ -120,15 +118,8 @@ fun AppSkeletonRow(
     lineWidths: List<Float> = listOf(0.68f, 0.42f),
 ) {
     val dark = isAppInDarkTheme()
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .glassShimmer(dark),
-        shape = RoundedCornerShape(20.dp),
-        color = glassCardColor(),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
-        shadowElevation = 0.dp,
-    ) {
+    // 与 AppListCard 共用同一张卡片表面，加载态与数据到达后的描边、投影完全对齐。
+    AppPanel(modifier = modifier.glassShimmer(dark)) {
         Row(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,

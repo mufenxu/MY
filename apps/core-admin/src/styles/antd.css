@@ -186,6 +186,15 @@
   border-radius: 10px !important;
 }
 
+/* affix 包裹层（带前缀/后缀/清除按钮）里的原生 input 必须保持直角：
+   antd 本来给的就是 0，上面那条 !important 会把它一起压成 10px。
+   内层 input 没有内边距、高度只有一行（约 20px），10px 圆角已接近胶囊，
+   而光标正好画在最左端的圆角起弧处，Chrome 会按圆角裁剪绘制区，
+   把光标切成一半高的一小截。圆角由外壳负责，内层只需负责别裁掉光标。 */
+.ant-input-affix-wrapper > .ant-input {
+  border-radius: 0 !important;
+}
+
 .ant-input,
 .ant-input-number,
 .ant-picker {
