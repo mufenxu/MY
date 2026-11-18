@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
-import { extname, join, relative, resolve, sep } from "node:path";
+import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { brotliCompress, constants as zlibConstants, gzip } from "node:zlib";
 
@@ -109,9 +109,11 @@ export function createStaticAssetHandler({
       contentEncoding = "gzip";
     }
 
-    const cacheControl = url.searchParams.has("v")
-      ? "public, max-age=31536000, immutable"
-      : (asset.contentType.startsWith("text/html") ? "no-cache" : "public, max-age=3600");
+    // HTML 必须先判断：它是版本串的载体，自己被长期缓存后就没有办法再让任何资源更新。
+    // 否则一条带 ?v= 的首页链接就能把旧首页钉在浏览器里一年。
+    const cacheControl = asset.contentType.startsWith("text/html")
+      ? "no-cache"
+      : (url.searchParams.has("v") ? "public, max-age=31536000, immutable" : "public, max-age=3600");
     const headers = {
       ...securityHeaders(),
       "x-request-id": getRequestId(),
@@ -147,7 +149,8 @@ export function createStaticAssetHandler({
     if (pathname === "/") pathname = "/index.html";
     const filePath = resolve(publicRoot, pathname.replace(/^[/\\]+/, ""));
     const relativePath = relative(publicRoot, filePath);
-    if (relativePath === ".." || relativePath.startsWith(`..${sep}`)) {
+    // Windows 上目标在另一个盘符时 relative() 返回绝对路径，不以 .. 开头，要单独拒绝。
+    if (relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) {
       json(res, 403, { ok: false, error: "Forbidden" });
       return;
     }

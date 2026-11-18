@@ -163,7 +163,8 @@ export default function AutomationView({ services, loading, refreshing, onRefres
             : '状态读取失败',
         },
         {
-          id: 'notification', name: '通知调度', icon: BellRing, tone: 'green', href: '/?view=notification',
+          // 相对地址：线上控制台挂在 /console（`/` 是品牌官网），本地开发直连时在 `/`。
+          id: 'notification', name: '通知调度', icon: BellRing, tone: 'green', href: '?view=notification',
           state: notificationAvailable ? (Number(retryingCount || 0) > 0 ? 'degraded' : 'healthy') : 'offline',
           detail: notificationAvailable ? `${pendingNotifications} 个待处理任务 · ${retryingCount || 0} 个重试中` : '状态读取失败',
         },

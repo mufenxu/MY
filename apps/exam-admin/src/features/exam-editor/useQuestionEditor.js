@@ -34,6 +34,8 @@ export function useQuestionEditor({
     resetSelectionAfterLoad: resetSelectionAfterLoadOverride,
     scrollQuestionIntoView,
     selectedIndex,
+    message = ElMessage,
+    messageBox = ElMessageBox,
 } = {}) {
     const showMobileProperties = () => {
         if (typeof isResponsiveEditor === 'function' && isResponsiveEditor()) {
@@ -59,7 +61,7 @@ export function useQuestionEditor({
 
     const addQuestion = (type) => {
         if (!readRef(canEdit)) {
-            ElMessage.warning('管理员分配的试卷只能查看，不能新增题目');
+            message.warning('管理员分配的试卷只能查看，不能新增题目');
             return;
         }
 
@@ -88,11 +90,11 @@ export function useQuestionEditor({
 
     const deleteQuestion = (index) => {
         if (!readRef(canEdit)) {
-            ElMessage.warning('管理员分配的试卷只能查看，不能删除题目');
+            message.warning('管理员分配的试卷只能查看，不能删除题目');
             return Promise.resolve();
         }
 
-        return ElMessageBox.confirm('确定删除这道题吗？', '提示', {
+        return messageBox.confirm('确定删除这道题吗？', '提示', {
             confirmButtonText: '确定',
             cancelButtonText: '取消',
             type: 'warning',
@@ -148,7 +150,7 @@ export function useQuestionEditor({
         const added = addQuestionOption(question);
         if (!added) {
             if (question && question.type !== 'judge' && question.type !== 'fill') {
-                ElMessage.warning('最多支持 8 个选项');
+                message.warning('最多支持 8 个选项');
             }
             return;
         }

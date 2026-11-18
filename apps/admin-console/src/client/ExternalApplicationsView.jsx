@@ -180,8 +180,13 @@ function SecretDialog({ result, onClose }) {
   const [copied, setCopied] = useState(false);
   if (!result) return null;
   async function copySecret() {
-    await navigator.clipboard.writeText(result.clientSecret);
-    setCopied(true);
+    try {
+      await navigator.clipboard.writeText(result.clientSecret);
+      setCopied(true);
+    } catch {
+      // 剪贴板被浏览器拒绝时密钥仍显示在对话框里，可以手动复制。
+      setCopied(false);
+    }
   }
   return (
     <div className="dialog-backdrop">
@@ -220,6 +225,7 @@ export default function ExternalApplicationsView({ session }) {
   const [editor, setEditor] = useState(undefined);
   const [secretResult, setSecretResult] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [rotateTarget, setRotateTarget] = useState(null);
   const superAdmin = session?.user?.role === 'super_admin';
 
   const load = useCallback(async (quiet = false) => {
@@ -283,7 +289,9 @@ export default function ExternalApplicationsView({ session }) {
     }
   }
 
-  async function rotateSecret(application) {
+  async function rotateSecret() {
+    const application = rotateTarget;
+    if (!application) return;
     setBusyId(application.id);
     setError('');
     try {
@@ -291,6 +299,7 @@ export default function ExternalApplicationsView({ session }) {
         method: 'POST',
         body: '{}',
       });
+      setRotateTarget(null);
       setSecretResult(result);
       await load(true);
     } catch (requestError) {
@@ -365,7 +374,7 @@ export default function ExternalApplicationsView({ session }) {
                     {superAdmin && (
                       <div className="row-actions">
                         <button className="icon-action" type="button" title="编辑应用" aria-label={`编辑应用：${application.name}`} onClick={() => openEditor(application)}><Pencil size={15} aria-hidden="true" /></button>
-                        {application.kind !== 'direct' && <button className="icon-action" type="button" title="轮换客户端密钥" aria-label={`轮换客户端密钥：${application.name}`} onClick={() => rotateSecret(application)}><KeyRound size={15} aria-hidden="true" /></button>}
+                        {application.kind !== 'direct' && <button className="icon-action" type="button" title="轮换客户端密钥" aria-label={`轮换客户端密钥：${application.name}`} onClick={() => setRotateTarget(application)}><KeyRound size={15} aria-hidden="true" /></button>}
                         <button className="icon-action danger" type="button" title="删除应用" aria-label={`删除应用：${application.name}`} onClick={() => setDeleteTarget(application)}><Trash2 size={15} aria-hidden="true" /></button>
                       </div>
                     )}
@@ -379,6 +388,7 @@ export default function ExternalApplicationsView({ session }) {
 
       {editor !== undefined && <ApplicationEditor application={editor} busy={Boolean(busyId)} error={error} onClose={() => setEditor(undefined)} onSave={saveApplication} />}
       <SecretDialog result={secretResult} onClose={() => setSecretResult(null)} />
+      <ConfirmDialog open={Boolean(rotateTarget)} title="轮换客户端密钥" description="轮换后旧密钥立即失效，外部项目需要换上新密钥才能继续登录。" detail={rotateTarget?.name} confirmLabel="轮换密钥" busy={busyId === rotateTarget?.id} onCancel={() => setRotateTarget(null)} onConfirm={rotateSecret} />
       <ConfirmDialog open={Boolean(deleteTarget)} title="删除外部应用" description="删除后该项目将无法继续使用 MY 登录。" detail={deleteTarget?.name} confirmLabel="删除应用" busy={busyId === deleteTarget?.id} onCancel={() => setDeleteTarget(null)} onConfirm={deleteApplication} />
     </section>
   );

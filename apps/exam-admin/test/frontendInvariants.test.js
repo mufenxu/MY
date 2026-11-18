@@ -99,3 +99,33 @@ test('dashboard views cancel stale requests and retain their last successful dat
   assert.match(source, /v-loading="viewLoading\.feedbacks"/);
   assert.doesNotMatch(source, /categories\.value\s*=\s*\[\]/);
 });
+
+test('dashboard tone classes and the analysis dialog have matching styles', () => {
+  const dashboard = readSource('src/views/DashboardView.vue');
+  const styles = readSource('src/assets/css/pearl-admin.css');
+
+  // 快捷入口卡片的类名由 tone 拼出，每个取值都必须有对应规则，否则语义色不会生效。
+  const tones = new Set([...dashboard.matchAll(/tone:\s*(?:[^,\n]*\?\s*)?'([a-z]+)'(?:\s*:\s*'([a-z]+)')?/g)]
+    .flatMap((match) => [match[1], match[2]].filter(Boolean)));
+  assert.ok(tones.size >= 4);
+  for (const tone of tones) {
+    assert.match(styles, new RegExp(`\\.dashboard-action-card\\.is-${tone}\\s*\\{`), `missing style for tone ${tone}`);
+  }
+
+  // 试卷分析弹窗的趋势柱：高度类由 is-height-1..10 表示。
+  assert.match(dashboard, /heightClass: `is-height-\$\{/);
+  for (let step = 1; step <= 10; step += 1) {
+    assert.match(styles, new RegExp(`\\.analysis-bar-fill\\.is-height-${step}\\s*\\{`));
+  }
+  for (const name of ['analysis-bars', 'analysis-bar-track', 'analysis-bar-fill', 'analysis-stat-grid', 'analysis-grid', 'analysis-hero']) {
+    assert.match(dashboard, new RegExp(`class="${name}"`));
+    assert.match(styles, new RegExp(`\\.${name}\\s*\\{`), `missing style for ${name}`);
+  }
+});
+
+test('exam editor confirms unsaved changes on every in-app navigation', () => {
+  const detail = readSource('src/views/ExamDetailView.vue');
+
+  assert.match(detail, /onBeforeRouteLeave\(async \(to\) => \{\s*if \(!isDirty\.value \|\| !canEdit\.value \|\| to\.name === 'Login'\) return true;/);
+  assert.match(detail, /window\.addEventListener\('beforeunload', handleBeforeUnload\)/);
+});

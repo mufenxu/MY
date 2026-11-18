@@ -21,6 +21,34 @@ let csrfTokenMemory = '';
 // 刷新期间排队的请求
 let failedQueue = [];
 
+// refresh token 用过即作废，服务端发现同一个 token 被用第二次会吊销该账号的全部会话。
+// isRefreshing 只能在单个标签页内去重，多个标签页同时 401 时要靠跨标签页的锁串行化：
+// 后拿到锁的标签页先看 refresh 是否已由别的标签页完成，完成了就直接重放请求。
+const REFRESH_LOCK_NAME = 'core-admin-auth-refresh';
+const REFRESH_MARK_KEY = 'core_admin_refreshed_at';
+
+const withRefreshLock = (task) => (
+    typeof navigator !== 'undefined' && navigator.locks?.request
+        ? navigator.locks.request(REFRESH_LOCK_NAME, task)
+        : task()
+);
+
+const readRefreshMark = () => {
+    try {
+        return Number(localStorage.getItem(REFRESH_MARK_KEY)) || 0;
+    } catch {
+        return 0;
+    }
+};
+
+const writeRefreshMark = () => {
+    try {
+        localStorage.setItem(REFRESH_MARK_KEY, String(Date.now()));
+    } catch {
+        // 存储不可用时退化为每个标签页各自刷新
+    }
+};
+
 const processQueue = (error) => {
     failedQueue.forEach(prom => {
         if (error) {
@@ -115,35 +143,42 @@ api.interceptors.response.use(
 
             originalRequest._retry = true;
             isRefreshing = true;
+            const failedAt = Date.now();
 
             try {
-                const csrfToken = readCookie(CSRF_COOKIE_NAME) || csrfTokenMemory;
-                const res = await axios.post(
-                    (import.meta.env.VITE_API_URL || API_BASE_PATH) + '/auth/refresh',
-                    {},
-                    {
-                        timeout: 12000,
-                        withCredentials: true,
-                        headers: {
-                            'X-Core-Admin-Client': 'web',
-                            ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
-                        },
-                    }
-                );
+                const res = await withRefreshLock(async () => {
+                    // 等锁期间别的标签页已经换过 token：新 Cookie 对本标签页同样有效，不再重复刷新。
+                    if (readRefreshMark() >= failedAt) return null;
 
-                if (res.data.success) {
+                    const csrfToken = readCookie(CSRF_COOKIE_NAME) || csrfTokenMemory;
+                    const response = await axios.post(
+                        (import.meta.env.VITE_API_URL || API_BASE_PATH) + '/auth/refresh',
+                        {},
+                        {
+                            timeout: 12000,
+                            withCredentials: true,
+                            headers: {
+                                'X-Core-Admin-Client': 'web',
+                                ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+                            },
+                        }
+                    );
+                    if (!response.data.success) throw new Error('Refresh failed');
+                    writeRefreshMark();
+                    return response;
+                });
+
+                if (res) {
                     rememberCsrfToken(res);
                     clearLegacyCredentials();
                     if (res.data.user) {
                         localStorage.setItem('user', JSON.stringify(res.data.user));
                     }
-
-                    processQueue(null);
-
-                    return api(originalRequest);
-                } else {
-                    throw new Error('Refresh failed');
                 }
+
+                processQueue(null);
+
+                return api(originalRequest);
             } catch (refreshError) {
                 processQueue(refreshError, null);
                 clearLegacyCredentials();

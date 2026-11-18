@@ -65,7 +65,8 @@ const CourseConfig = () => {
                 message.error(res.data.message || '保存失败');
             }
         } catch (error) {
-            if (error.name !== 'ValidationError') {
+            // antd 表单校验失败抛出的对象带 errorFields，字段下方已有提示，不再弹「保存失败」。
+            if (!error?.errorFields) {
                 message.error(error.response?.data?.message || '保存失败');
             }
         }

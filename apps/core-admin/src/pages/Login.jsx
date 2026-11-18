@@ -166,7 +166,9 @@ const Login = () => {
             const errorMsg = err.response?.data?.error || err.response?.data?.message || '登录失败，请检查网络';
             message.error(errorMsg);
 
-            if (err.response?.status === 403) {
+            // Turnstile 的 token 只能校验一次。服务端先验人机再验密码，
+            // 所以任何失败（包括密码错误的 401）之后都必须换一个新 token，否则下一次提交必然被拒。
+            if (turnstileConfig.enabled) {
                 setCaptchaToken(null);
                 turnstileRef.current?.reset();
             }

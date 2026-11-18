@@ -16,6 +16,16 @@ const buildVersionPlugin = () => ({
   }
 })
 
+// React 运行时与路由很少变动，单独成包后业务代码发版不会让它的缓存失效。
+// 必须按模块路径归组：对象写法只收包的入口模块，运行时主体会落回入口文件。
+const reactVendorPackages = ['react', 'react-dom', 'scheduler', 'react-router']
+
+function manualChunks(id) {
+  const normalizedId = id.replace(/\\/g, '/')
+  if (reactVendorPackages.some((name) => normalizedId.includes(`/node_modules/${name}/`))) return 'react-vendor'
+  return undefined
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   base: './',
@@ -26,7 +36,12 @@ export default defineConfig({
   build: {
     cssCodeSplit: true,
     manifest: true,
-    chunkSizeWarningLimit: 650
+    chunkSizeWarningLimit: 650,
+    rollupOptions: {
+      output: {
+        manualChunks
+      }
+    }
   },
   server: {
     port: 5174,

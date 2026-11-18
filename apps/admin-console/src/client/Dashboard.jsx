@@ -14,7 +14,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { getNavigationGroup, NAV_GROUPS, resolveConsoleView } from './navigation.js';
 import { PLATFORM_BRAND_ICON } from './brand.js';
 import { requestJson } from './api.js';
-import { ViewLoadingFallback, ViewModuleBoundary, getGreeting, NAVIGATION_ICONS, VIEW_ICONS } from './shared.jsx';
+import { ROLE_LABELS, ViewLoadingFallback, ViewModuleBoundary, getGreeting, NAVIGATION_ICONS, VIEW_ICONS } from './shared.jsx';
 import { OverviewView } from './OverviewView.jsx';
 import { ApplicationsView } from './ApplicationsView.jsx';
 import { ServicesView } from './ServicesView.jsx';
@@ -151,13 +151,14 @@ export function Dashboard({ session, onLogout }) {
   }, []);
 
   useEffect(() => {
-    const activeLoader = VIEW_MODULE_LOADERS[activeFilter];
-    activeLoader?.();
+    // 预加载只是提前取模块；失败时由真正渲染该视图的 lazy 边界负责报错，这里不能留下未处理的拒绝。
+    const warm = (viewId) => VIEW_MODULE_LOADERS[viewId]?.().catch(() => {});
+    warm(activeFilter);
     const relatedViews = getNavigationGroup(activeFilter).views.map((view) => view.id);
     const preloadTargets = activeFilter === 'all'
       ? ['monitoring', 'incidents', 'tasks']
       : relatedViews.filter((viewId) => viewId !== activeFilter);
-    const preload = () => preloadTargets.forEach((viewId) => VIEW_MODULE_LOADERS[viewId]?.());
+    const preload = () => preloadTargets.forEach(warm);
     const idleId = window.requestIdleCallback
       ? window.requestIdleCallback(preload, { timeout: 1800 })
       : window.setTimeout(preload, 600);
@@ -344,11 +345,14 @@ export function Dashboard({ session, onLogout }) {
   const incidentCount = operationsSummary?.incidents?.length || 0;
 
   async function handleLogout() {
+    // 服务端没有确认撤销会话时不能把界面切到登录页：Cookie 仍然有效，刷新即恢复登录态。
     try {
       await requestJson('/api/auth/logout', { method: 'POST' });
-    } finally {
-      onLogout();
+    } catch (requestError) {
+      setError(`退出登录失败：${requestError.message}`);
+      return;
     }
+    onLogout();
   }
 
   const launchService = useCallback((service) => {
@@ -540,7 +544,7 @@ export function Dashboard({ session, onLogout }) {
               <span className="avatar" aria-hidden="true"><img src={PLATFORM_BRAND_ICON} alt="" /></span>
               <span className="user-meta">
                 <span className="user-name">{username}</span>
-                <span className="user-role">{session.authDisabled ? '本地调试' : '超级管理员'}</span>
+                <span className="user-role">{session.authDisabled ? '本地调试' : (ROLE_LABELS[session.user?.role] || '管理员')}</span>
               </span>
             </div>
           </header>

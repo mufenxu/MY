@@ -29,6 +29,7 @@
         <label class="resv-field is-wide"><span>申请主题</span><input id="libroomRescheduleTitle" maxlength="80" required></label>
         <label class="resv-field is-wide"><span>申请内容 <small>改期相当于重新提交申请，需要重新填写</small></span><textarea id="libroomRescheduleContent" maxlength="500" rows="3" required></textarea></label>
         <label class="resv-field"><span>联系电话</span><input id="libroomRescheduleMobile" inputmode="numeric" maxlength="11" required></label>
+        <label class="resv-field libroom-switch"><input id="libroomRescheduleOpen" type="checkbox"><span>公开本次申请</span></label>
         <div class="resv-actions is-wide"><button id="libroomRescheduleQuery" class="ghost" type="button">查该时段空闲房间</button><button id="libroomRescheduleSubmit" type="submit">确认改期</button></div>
       </form>
       <div id="libroomRescheduleFree" class="resv-muted"></div>
@@ -42,7 +43,7 @@
     form: mount.querySelector("#libroomRescheduleForm"), date: mount.querySelector("#libroomRescheduleDate"),
     start: mount.querySelector("#libroomRescheduleStart"), end: mount.querySelector("#libroomRescheduleEnd"),
     space: mount.querySelector("#libroomRescheduleSpace"), title: mount.querySelector("#libroomRescheduleTitle"),
-    content: mount.querySelector("#libroomRescheduleContent"), mobile: mount.querySelector("#libroomRescheduleMobile"),
+    content: mount.querySelector("#libroomRescheduleContent"), mobile: mount.querySelector("#libroomRescheduleMobile"), open: mount.querySelector("#libroomRescheduleOpen"),
     query: mount.querySelector("#libroomRescheduleQuery"), submit: mount.querySelector("#libroomRescheduleSubmit"),
     free: mount.querySelector("#libroomRescheduleFree"), formStatus: mount.querySelector("#libroomRescheduleStatus")
   };
@@ -210,6 +211,8 @@
     nodes.title.value = record.title || "";
     nodes.content.value = "";
     nodes.mobile.value = "";
+    // 改期是重新提交申请：是否公开由用户明确勾选，默认不公开，与新建预约一致。
+    nodes.open.checked = false;
     nodes.free.textContent = "改动时段后点击“查该时段空闲房间”。";
     formStatus("");
     await ensureSpaces();
@@ -296,7 +299,7 @@
         method: "POST",
         body: {
           areaId: Number(nodes.space.value), date: nodes.date.value, startTime: start, endTime: end,
-          title: nodes.title.value.trim(), content: nodes.content.value.trim(), mobile: nodes.mobile.value.trim(), open: true
+          title: nodes.title.value.trim(), content: nodes.content.value.trim(), mobile: nodes.mobile.value.trim(), open: nodes.open.checked
         }
       });
       formStatus("改期成功。", "ok");
@@ -311,6 +314,12 @@
     }
   });
 
+  document.addEventListener("resv:reset", () => {
+    records = [];
+    loaded = false;
+    nodes.list.innerHTML = "";
+    status("");
+  });
   document.addEventListener("resv:activate", (event) => {
     if (event.detail?.view !== "libroom" || event.detail?.tab !== "records") return;
     load();

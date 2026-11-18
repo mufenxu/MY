@@ -472,6 +472,8 @@ async function init() {
   await loadAuthStatus();
   await academicIntegrations.load();
   await refresh({ initial: true });
+  // 首次路由发生在登录状态返回之前，那时 #admin 会被改写、#evaluation 的加载会被跳过；状态就绪后补跑一次。
+  handleRouting();
 }
 
 function initDialog() {
@@ -734,6 +736,7 @@ async function loginApp() {
     await loadAuthStatus();
     await academicIntegrations.load();
     await refresh();
+    handleRouting();
   } catch (error) {
     if (embeddedWechat && (!error?.status || error.status === 504)) {
       nativeFallbackSubmitted = true;
@@ -805,7 +808,13 @@ async function registerWithInvite() {
 
 async function logoutApp() {
   if (state.appAuth?.platformSso) {
-    await p.logout();
+    nodes.appLogoutButton.disabled = true;
+    try {
+      await p.logout();
+    } catch (error) {
+      setNotice(error.message || "退出失败，请检查网络后重试。", "error");
+      nodes.appLogoutButton.disabled = false;
+    }
     return;
   }
   nodes.appLogoutButton.disabled = true;
@@ -1135,7 +1144,7 @@ function renderUsers() {
     const schoolText = schoolAccountLabel(user);
     const lastLogin = user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : "从未登录";
     return `
-      <article class="admin-user-row ${user.disabled ? "disabled" : ""}">
+      <article class="admin-user-row ${user.disabled ? "disabled" : ""}" data-role="${user.role === "admin" ? "admin" : "user"}" data-school-bound="${user.hasSchoolSession ? "true" : "false"}">
         <div class="admin-user-main">
           <strong>${escapeHtml(user.username)}${isSelf ? "（当前）" : ""}</strong>
           <span>${escapeHtml(user.role === "admin" ? "管理员" : "普通用户")} · ${escapeHtml(user.disabled ? "已停用" : "已启用")}</span>
@@ -1232,6 +1241,9 @@ function clearAllData() {
   renderInvites();
   renderAuth();
   renderOverview();
+  // 预约相关脚本各自把数据缓存在内存里；锁定或换账号时通知它们一并清空，
+  // 否则下一个登录的人会看到上一个人的预约记录。
+  document.dispatchEvent(new CustomEvent("resv:reset"));
 }
 
 async function refresh({ initial = false } = {}) {
@@ -3865,8 +3877,9 @@ function handleRouting() {
   const sections = ["#overview", "#study", "#rooms", "#reservation", "#evaluation", "#campus", "#energy", "#admin"];
 
   if (!sections.includes(hash)) return;
+  // 登录状态还没返回时不知道是不是管理员，先不改写地址，等 init() 结束后的那次路由再判断。
   if (hash === "#admin" && !isAdminUser()) {
-    window.location.hash = "#overview";
+    if (state.appAuth) window.location.hash = "#overview";
     return;
   }
   document.body.dataset.route = hash.slice(1);
@@ -3928,12 +3941,22 @@ if (document.readyState === "complete" || document.readyState === "interactive")
 
 function toggleTheme() {
   const isDark = document.body.classList.toggle("dark-theme");
-  localStorage.setItem("hgu-theme", isDark ? "dark" : "light");
+  try {
+    localStorage.setItem("hgu-theme", isDark ? "dark" : "light");
+  } catch {
+    // 存储受限的内嵌浏览器里只在本次会话内生效
+  }
   updateThemeToggle(isDark);
 }
 
 function initTheme() {
-  const saved = localStorage.getItem("hgu-theme") || "light";
+  // initTheme 是 init() 的第一步：这里抛错会让登录门永远停在「正在检查访问会话」。
+  let saved = "light";
+  try {
+    saved = localStorage.getItem("hgu-theme") || "light";
+  } catch {
+    saved = "light";
+  }
   if (saved === "dark") {
     document.body.classList.add("dark-theme");
     updateThemeToggle(true);

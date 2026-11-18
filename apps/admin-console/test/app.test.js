@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createApp } from '../src/app.js';
+import { createApp, staticAssetCacheControl } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { withFetchServer as withServer } from '../test-support/fetch-server.js';
 
@@ -455,4 +455,26 @@ test('configuration, task, and trace routes preserve role and console-request bo
     assert.equal(traced.status, 200);
   });
   assert.deepEqual(calls, [['propose', 'local-admin'], ['trace', 'trace-parent']]);
+});
+
+test('only content-hashed build assets are cached as immutable', () => {
+  const immutable = 'public, max-age=31536000, immutable';
+  assert.equal(staticAssetCacheControl('/app/dist/assets/index-BdRdHTus.js'), immutable);
+  assert.equal(staticAssetCacheControl('C:\\app\\dist\\assets\\index-CjhfVPgn.css'), immutable);
+  // 文件名固定的资源更新后必须能被浏览器重新取回
+  for (const file of ['theme-bootstrap.js', 'favicon.svg', 'favicon.ico', 'apple-touch-icon.png', 'index.html']) {
+    assert.equal(staticAssetCacheControl('/app/dist/' + file), 'no-cache', file);
+  }
+  assert.equal(staticAssetCacheControl('/app/dist/assets/logo.svg'), 'no-cache');
+});
+
+test('missing hashed assets return 404 instead of the SPA shell', async () => {
+  const config = { ...loadConfig({ NODE_ENV: 'development' }), metricsToken: 'm'.repeat(32) };
+  const app = createApp({ config });
+  await withServer(app, async (origin) => {
+    const response = await fetch(`${origin}/assets/removed-chunk-0a1b2c3d.js`, { headers: { Accept: '*/*' } });
+    assert.equal(response.status, 404);
+    assert.doesNotMatch(response.headers.get('content-type') || '', /text\/html/);
+    await response.arrayBuffer();
+  });
 });

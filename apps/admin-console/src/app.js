@@ -65,6 +65,14 @@ import { EXTERNAL_AUTH_GUIDE_CSS, buildExternalAuthGuideContract, renderExternal
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.resolve(__dirname, '..', 'dist');
 
+// 只有 Vite 输出到 assets/ 且文件名带内容哈希的产物可以长期缓存；
+// theme-bootstrap.js、图标等文件名固定的资源必须每次回源校验，否则更新后旧版本会留存一年。
+export function staticAssetCacheControl(filePath) {
+  return /[\\/]assets[\\/][^\\/]+-[A-Za-z0-9_-]{8,}\.[^\\/]+$/.test(String(filePath || ''))
+    ? 'public, max-age=31536000, immutable'
+    : 'no-cache';
+}
+
 const ANDROID_APP_USER_AGENT_PREFIX = 'MY-Control-Android/';
 const WEB_LOGIN_ALLOWED_PATHS = [
   '/console',
@@ -1285,9 +1293,16 @@ export function createApp({
   });
 
   if (fs.existsSync(distPath)) {
-    app.use(express.static(distPath, { maxAge: '1y', immutable: true, index: false }));
+    app.use(express.static(distPath, {
+      index: false,
+      setHeaders(res, filePath) {
+        res.setHeader('Cache-Control', staticAssetCacheControl(filePath));
+      },
+    }));
     app.get('*splat', (req, res, next) => {
       if (req.path.startsWith('/api/')) return next();
+      // 发版后旧标签页会请求已不存在的带哈希产物：要给 404，而不是把 index.html 当成脚本返回。
+      if (req.path.startsWith('/assets/')) return next();
       res.setHeader('Cache-Control', 'no-cache');
       return res.sendFile(path.join(distPath, 'index.html'));
     });

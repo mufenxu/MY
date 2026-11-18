@@ -297,7 +297,7 @@ const CourseCategoryConfig = () => {
                 onCancel={() => setIsModalVisible(false)}
                 width={isMobile ? '94%' : 700}
                 style={{ top: isMobile ? 12 : 32 }}
-                destroyOnClose
+                destroyOnHidden
             >
                 <Form form={form} layout="vertical" style={{ marginTop: 8 }}>
                     <Form.Item label="排序" name="sort">

@@ -43,6 +43,7 @@ export function useExamDetailData({
     resetRenderedQuestionWindow,
     scrollQuestionIntoView,
     selectedIndex,
+    message = ElMessage,
 } = {}) {
     const loading = ref(false);
     const saving = ref(false);
@@ -128,7 +129,7 @@ export function useExamDetailData({
             }
         } catch (err) {
             console.error('Load exam info error:', err);
-            ElMessage.error('加载题库信息失败');
+            message.error('加载题库信息失败');
         }
     };
 
@@ -147,7 +148,7 @@ export function useExamDetailData({
             dirtyTrackingReady = true;
         } catch (err) {
             console.error('Load questions error:', err);
-            ElMessage.error('加载题目失败');
+            message.error('加载题目失败');
         } finally {
             suppressDirtyTracking = false;
             loading.value = false;
@@ -156,7 +157,7 @@ export function useExamDetailData({
 
     const openEditDialog = () => {
         if (!canEdit.value) {
-            ElMessage.warning('管理员分配的试卷只能查看，不能编辑');
+            message.warning('管理员分配的试卷只能查看，不能编辑');
             return;
         }
 
@@ -170,7 +171,7 @@ export function useExamDetailData({
 
     const updateExamInfo = async () => {
         if (!canEdit.value) {
-            ElMessage.warning('管理员分配的试卷只能查看，不能编辑');
+            message.warning('管理员分配的试卷只能查看，不能编辑');
             return;
         }
 
@@ -180,17 +181,17 @@ export function useExamDetailData({
             if (res.data.code === 0) {
                 Object.assign(examInfo, res.data.data);
                 editDialog.visible = false;
-                ElMessage.success('更新成功');
+                message.success('更新成功');
             }
         } catch (err) {
             console.error('Update exam info error:', err);
-            ElMessage.error('更新失败');
+            message.error('更新失败');
         }
     };
 
     const saveExam = async () => {
         if (!canEdit.value) {
-            ElMessage.warning('管理员分配的试卷只能查看，不能保存修改');
+            message.warning('管理员分配的试卷只能查看，不能保存修改');
             return;
         }
 
@@ -199,7 +200,7 @@ export function useExamDetailData({
             selectedIndex.value = questions.value.indexOf(invalidQuestion);
             scrollQuestionIntoView?.(selectedIndex.value);
             showMobileProperties();
-            ElMessage.warning('请先补全题目内容、选项和答案后再保存');
+            message.warning('请先补全题目内容、选项和答案后再保存');
             return;
         }
 
@@ -209,14 +210,14 @@ export function useExamDetailData({
 
             await examApi.saveQuestions(payload, baseQuestions);
 
-            ElMessage.success('保存成功');
+            message.success('保存成功');
             isDirty.value = false;
             await Promise.all([loadExamInfo(), loadQuestions()]);
         } catch (err) {
             console.error('Save exam error:', err);
             const isRevisionConflict = err.response?.status === 409
                 || err.response?.data?.code === 'QUESTION_REVISION_CONFLICT';
-            ElMessage.error(isRevisionConflict
+            message.error(isRevisionConflict
                 ? '题目已被其他管理员更新，请重新加载后再编辑'
                 : '保存失败');
         } finally {

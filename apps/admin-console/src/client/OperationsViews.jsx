@@ -47,6 +47,7 @@ import {
 } from './release-presentation.js';
 import { SegmentedTabs, SelectControl } from './UiControls.jsx';
 import { EmptyState, StatusTag } from './Pearl.jsx';
+import { ROLE_LABELS } from './shared.jsx';
 
 const STATE_SHORT = {
   healthy: '在线',
@@ -55,8 +56,7 @@ const STATE_SHORT = {
   unmonitored: '未监测',
 };
 const INCIDENT_LABELS = { open: '待处理', acknowledged: '已确认', resolved: '已恢复' };
-const ROLE_LABELS = { viewer: '只读管理员', operator: '运维管理员', super_admin: '超级管理员' };
-const RELEASE_TONE = { success: 'ok', failure: 'danger', queued: 'info', running: 'info', unknown: 'neutral' };
+const RELEASE_TONE ={ success: 'ok', failure: 'danger', queued: 'info', running: 'info', unknown: 'neutral' };
 const SERVICE_BINDINGS = [
   { id: 'core', label: 'Core 业务账号', short: 'Core' },
   { id: 'exam', label: '考试业务账号', short: '考试' },
@@ -431,7 +431,11 @@ export function IncidentsView({ session, targetEntityId = '', onNavigate }) {
                   className={`incident-item ${selectedId === incident.id ? 'is-selected' : ''}`}
                   data-entity-id={incident.id}
                   key={incident.id}
-                  onClick={() => setSelectedId(incident.id)}
+                  onClick={() => {
+                    // 备注属于当前事件：切到别的事件时清空，避免给 A 写的备注提交到 B 上。
+                    if (incident.id !== selectedId) setNote('');
+                    setSelectedId(incident.id);
+                  }}
                 >
                   <span className={`sev is-${incident.severity}`}><CircleAlert size={14} /></span>
                   <span className="incident-copy"><strong>{incident.title}</strong><small>{incident.description}</small></span>

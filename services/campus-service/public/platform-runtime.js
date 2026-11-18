@@ -12,12 +12,18 @@
     return `${appBase}${normalized}`;
   }
 
+  // 与 packages/platform-browser-runtime 的 logoutPlatformSession 保持同一语义：
+  // 服务端没有确认撤销会话就抛错，调用方不能把用户带离页面并让其误以为已退出。
   async function logout() {
-    await global.fetch("/api/auth/logout", {
+    const response = await global.fetch("/api/auth/logout", {
       method: "POST",
       credentials: "same-origin",
       headers: { "X-Platform-Request": "console" }
-    }).catch(() => {});
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || "统一平台退出失败，请稍后重试。");
+    }
     global.location.replace("/");
   }
 

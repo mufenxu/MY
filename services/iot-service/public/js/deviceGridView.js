@@ -289,7 +289,7 @@
       clearTimeout(controlTimeouts[key]);
 
       try {
-        await requestJson(`/api/devices/${deviceId}/relays/${relayId}/control`, {
+        await requestJson(`/api/devices/${encodeURIComponent(deviceId)}/relays/${encodeURIComponent(relayId)}/control`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: targetStatus })
@@ -340,7 +340,7 @@
       }
 
       try {
-        const data = await requestJson(`/api/devices/${deviceId}/history`, {
+        const data = await requestJson(`/api/devices/${encodeURIComponent(deviceId)}/history`, {
           timeoutMs: historyRequestTimeoutMs
         });
         setLastHistoryData(data);

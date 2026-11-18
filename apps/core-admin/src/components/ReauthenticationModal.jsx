@@ -17,7 +17,13 @@ const ReauthenticationModal = ({
     }, [form, open]);
 
     const handleConfirm = async () => {
-        const values = await form.validateFields();
+        let values;
+        try {
+            values = await form.validateFields();
+        } catch {
+            // 校验失败时字段下方已有提示；不处理会变成未捕获的 Promise 拒绝并被体验监控上报。
+            return;
+        }
         await onConfirm(values);
     };
 

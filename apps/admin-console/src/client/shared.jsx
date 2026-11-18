@@ -113,6 +113,8 @@ export class ViewModuleBoundary extends Component {
   }
 }
 
+export const ROLE_LABELS = { viewer: '只读管理员', operator: '运维管理员', super_admin: '超级管理员' };
+
 export function hasRole(role, required) {
   const levels = { viewer: 1, operator: 2, super_admin: 3 };
   return (levels[role] || 0) >= (levels[required] || 0);

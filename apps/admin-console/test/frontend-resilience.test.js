@@ -182,7 +182,7 @@ test('homepage formal cockpit keeps summary and alert content tied to live obser
 
   assert.match(app, /className="hero-grid" aria-label="全网运行摘要"/);
   assert.match(app, /const healthyCount = counts\.healthy \?\? 0/);
-  assert.match(app, /const incidentCount = operationsSummary\?\.incidents\?\.length \?\? attentionCount/);
+  assert.match(app, /const incidentCount = Math\.max\(operationsSummary\?\.incidents\?\.length \?\? 0, attentionCount\)/);
   assert.match(app, /incidents\.slice\(0, 3\)\.map/);
   assert.match(app, /className="quick-item"\s+type="button"/s);
   assert.match(app, /onOpenConfiguration=\{\(\) => navigateToView\('configuration'\)\}/);
@@ -228,4 +228,60 @@ test('external application editor reports save failures inside the dialog', () =
   assert.match(view, /error && <div className="error-banner" role="alert">/);
   assert.match(view, /<ApplicationEditor application=\{editor\} busy=\{Boolean\(busyId\)\} error=\{error\}/);
   assert.match(view, /onClick=\{\(\) => openEditor\(application\)\}/);
+});
+
+test('first paint placeholder is styled by the stylesheet because the console CSP forbids inline styles', () => {
+  const index = readSource('index.html');
+  const server = readSource('src', 'app.js');
+  const shared = readSource('src', 'client', 'shared.jsx');
+  const styles = readSource('src', 'client', 'styles.css');
+
+  // style-src 不含 'unsafe-inline' 时，内联 <style> 与 style 属性都不会生效
+  assert.match(server, /styleSrc: \["'self'"\]/);
+  assert.doesNotMatch(index, /<style\b/i);
+  assert.doesNotMatch(index, /\sstyle\s*=/i);
+  // 占位结构与 React 的 LoadingScreen 一致，接管时不会跳变
+  assert.match(index, /<main class="loading-screen">/);
+  assert.match(shared, /<main className="loading-screen">/);
+  assert.match(styles, /\.loading-screen\s*\{/);
+  assert.match(styles, /\.spin\s*\{/);
+});
+
+test('console session, transfer and deep-link fixes stay in place', () => {
+  const dashboard = readSource('src', 'client', 'Dashboard.jsx');
+  const backup = readSource('src', 'client', 'BackupRecoveryView.jsx');
+  const notifications = readSource('src', 'client', 'NotificationServiceView.jsx');
+  const platform = readSource('src', 'client', 'PlatformControlViews.jsx');
+  const automation = readSource('src', 'client', 'AutomationView.jsx');
+
+  // 服务端没有确认撤销会话时，界面不能切到登录页。
+  assert.match(dashboard, /await requestJson\('\/api\/auth\/logout', \{ method: 'POST' \}\);\s*\} catch \(requestError\) \{[\s\S]*?return;\s*\}\s*onLogout\(\);/);
+  assert.doesNotMatch(dashboard, /finally \{\s*onLogout\(\);/);
+  // 顶栏角色来自会话，而不是写死。
+  assert.match(dashboard, /ROLE_LABELS\[session\.user\?\.role\]/);
+  // 大文件上传不能沿用 12 秒默认超时。
+  assert.match(backup, /\/api\/backups\/upload[\s\S]*?timeoutMs: 10 \* 60 \* 1000/);
+  assert.match(notifications, /\/api\/notifications\/cmcc\/media[\s\S]*?timeoutMs: 2 \* 60 \* 1000/);
+  // 深链目标只同步一次，不能把每次渲染都新建的数组当作依赖。
+  assert.match(platform, /\}, \[targetAvailable, targetEntityId\]\);/);
+  // 线上站点根路径是品牌官网，控制台入口不能指向 `/`。
+  assert.doesNotMatch(platform, /<a href="\/"/);
+  assert.doesNotMatch(automation, /href: '\/\?view=/);
+});
+
+test('incident notes, row shortcuts, secret rotation and module preloading stay safe', () => {
+  const operations = readSource('src', 'client', 'OperationsViews.jsx');
+  const backup = readSource('src', 'client', 'BackupRecoveryView.jsx');
+  const dashboard = readSource('src', 'client', 'Dashboard.jsx');
+  const external = readSource('src', 'client', 'ExternalApplicationsView.jsx');
+
+  // 备注随事件切换清空，不会被提交到另一条事件上。
+  assert.match(operations, /if \(incident\.id !== selectedId\) setNote\(''\);/);
+  // 行内按钮的回车/空格不被行级快捷键吞掉。
+  assert.match(backup, /function handleBackupRowKeyDown\(event, backup\) \{[\s\S]*?if \(event\.target !== event\.currentTarget\) return;/);
+  // 预加载失败不留下未处理的 Promise 拒绝。
+  assert.match(dashboard, /VIEW_MODULE_LOADERS\[viewId\]\?\.\(\)\.catch\(\(\) => \{\}\)/);
+  // 轮换密钥必须先确认。
+  assert.match(external, /onClick=\{\(\) => setRotateTarget\(application\)\}/);
+  assert.match(external, /<ConfirmDialog open=\{Boolean\(rotateTarget\)\}[\s\S]*?onConfirm=\{rotateSecret\} \/>/);
 });

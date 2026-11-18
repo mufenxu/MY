@@ -93,7 +93,7 @@ Alibaba Cloud Container Registry is the primary production image source. GitHub 
 
 | Capability | Canonical owner | Compatibility rule |
 | --- | --- | --- |
-| Unified operations, release, backup and CT8 automation UI | `admin-console` | Core `/ct8-monitor` redirects to `/?view=automation` |
+| Unified operations, release, backup and CT8 automation UI | `admin-console` | Core `/ct8-monitor` redirects to `/console?view=automation` |
 | CT8 API | `core-api` `/api/ct8/*` | `/api/github/*` is deprecated and remains only as a transition alias |
 | Generic MQTT devices, relays, history and live monitoring | `iot-service` | Core `/iot-monitor` redirects to `/apps/iot/`; Core may call the IoT API but must not add another MQTT UI |
 | Tuya-backed air-energy workflows | `core-api` | Remains a Core provider until an explicit data migration moves models, jobs and audit history together |

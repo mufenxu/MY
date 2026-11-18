@@ -167,6 +167,8 @@ export function BackupRecoveryView({ session, BackupQualityStrip, BackupOffsiteP
   }
 
   function handleBackupRowKeyDown(event, backup) {
+    // 只处理焦点在行本身时的按键；行内的同步/下载/删除按钮要保留它们自己的回车与空格行为。
+    if (event.target !== event.currentTarget) return;
     if (event.key !== 'Enter' && event.key !== ' ') return;
     event.preventDefault();
     setSelectedBackup(backup);
@@ -250,6 +252,8 @@ export function BackupRecoveryView({ session, BackupQualityStrip, BackupOffsiteP
         headers: {
           'Content-Type': file.type || 'application/gzip',
         },
+        // 与服务端 PLATFORM_BACKUP_TRANSFER_TIMEOUT_MS 的上限一致；默认的 12 秒传不完备份包。
+        timeoutMs: 10 * 60 * 1000,
       });
       if (result.backup) setSelectedBackup(result.backup);
       setActionMessage('备份包已上传');

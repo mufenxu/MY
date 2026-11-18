@@ -39,7 +39,12 @@ function loadScript() {
         script.src = CAPTCHA_SCRIPT_URL;
         script.async = true;
         script.onload = () => resolve();
-        script.onerror = () => reject(new Error('AI 验证码脚本加载失败'));
+        script.onerror = () => {
+            // 失败后必须能重试：留着已失败的节点和已 reject 的 Promise，之后每次登录都会直接失败。
+            script.remove();
+            scriptPromise = null;
+            reject(new Error('AI 验证码脚本加载失败'));
+        };
         document.head.appendChild(script);
     });
 

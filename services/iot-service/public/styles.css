@@ -562,8 +562,19 @@ h1 {
   cursor: pointer;
 }
 
+/* 视觉隐藏而不是 display:none：后者会把开关从 Tab 顺序和读屏里一并移除。 */
 .toggle-control input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.toggle-control input:focus-visible + .toggle-track {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .toggle-track {

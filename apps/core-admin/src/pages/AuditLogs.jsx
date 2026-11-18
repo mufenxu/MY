@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Table, Pagination } from 'antd';
 import { FileSearchOutlined } from '@ant-design/icons';
 import api from '../utils/api';
+import { message } from '../utils/feedback';
 import dayjs from 'dayjs';
 import useIsMobile from '../hooks/useIsMobile';
 
@@ -50,6 +51,8 @@ const AuditLogs = () => {
             }
         } catch (error) {
             console.error('Failed to fetch audit logs:', error);
+            // 不提示的话，加载失败和「还没有修改记录」在界面上无法区分。
+            message.error(error.response?.data?.message || '修改记录加载失败，请稍后重试');
         } finally {
             setLoading(false);
         }

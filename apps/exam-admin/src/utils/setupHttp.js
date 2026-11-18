@@ -105,7 +105,7 @@ export function setupHttpInterceptors() {
                     else ElMessage.error(message);
                 }
             } else if (error.config?.showGlobalError !== false) {
-                ElMessage.error('网络连接失败，请检查网络');
+                ElMessage.error(error.name === 'TimeoutError' ? error.message : '网络连接失败，请检查网络');
             }
             return Promise.reject(error);
         },

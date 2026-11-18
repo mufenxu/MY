@@ -40,6 +40,17 @@
 - Add browser-storage and server integration regressions for WebView reopen persistence, 30-day expiry, cookie-free WeChat login, stale-cookie recovery and regular-browser isolation.
 - Document the compatibility invariants that must be preserved when changing authentication, cookies or browser asset loading. This implementation supersedes the navigation-based workaround recorded in 0.2.3.
 
+### Reliability
+
+- Keep the discussion-room reschedule private unless the user ticks 公开本次申请: the form used to send `open: true` unconditionally, turning a private booking public on every reschedule.
+- Stay on the page when the unified-platform logout request fails instead of redirecting home with the platform session still valid.
+- Count 未绑定学校账号 and the role filter in the admin workspace from `data-role` / `data-school-bound` on each row; the old text match broke when the label changed to 未连接学校账号 and had reported 0 since.
+- Clear cached reservation records, seat records and auto-task lists on lock or account switch (`resv:reset`), so the next person to sign in on the same tab no longer sees the previous user's reservations.
+- Re-run routing once the session is known: refreshing on `#evaluation` loads the list again and administrators stay on `#admin` instead of being sent back to the overview.
+- Never serve the HTML shell as `immutable`, even when the URL carries `?v=`; reject cross-drive paths in the static handler on Windows.
+- Only request the discussion-room auto-task list while the reservation route is open, report failed enable/disable/delete actions, and keep theme initialisation from aborting start-up when storage is blocked.
+- Re-version six browser scripts that had been edited after their `?v=` was set (`platform-runtime.js`, `academic-integrations.js`, `app.js`, `libroom-page.js`, `libroom-auto-page.js`, `library-seat-page.js`), so browsers holding the year-long `immutable` copy pick up the current code.
+
 ## 0.2.4 - 2026-07-13
 
 ### Reliability

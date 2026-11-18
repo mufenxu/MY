@@ -55,7 +55,11 @@ function setWindowTimer(callback, delay) {
     return setTimeout(callback, delay);
 }
 
-export function useBatchImport({ canEdit, existingQuestions } = {}) {
+export function useBatchImport({
+    canEdit,
+    existingQuestions,
+    message = ElMessage,
+} = {}) {
     const canEditValue = () => (isRefLike(canEdit) ? Boolean(canEdit.value) : Boolean(canEdit));
     const existingQuestionList = () => (
         isRefLike(existingQuestions) ? existingQuestions.value || [] : existingQuestions || []
@@ -166,7 +170,7 @@ export function useBatchImport({ canEdit, existingQuestions } = {}) {
         if (!text.trim()) {
             clearBatchPreviewQuality();
             if (!silent) {
-                ElMessage.warning('请输入题目文本');
+                message.warning('请输入题目文本');
             }
             return [];
         }
@@ -185,11 +189,11 @@ export function useBatchImport({ canEdit, existingQuestions } = {}) {
         }
 
         if (parsedQuestions.length === 0) {
-            ElMessage.warning('未识别到题目，请检查格式');
+            message.warning('未识别到题目，请检查格式');
         } else if (batchBlockingIssueCount.value > 0) {
-            ElMessage.warning(`识别 ${parsedQuestions.length} 道题，发现 ${batchBlockingIssueCount.value} 项必须处理的问题`);
+            message.warning(`识别 ${parsedQuestions.length} 道题，发现 ${batchBlockingIssueCount.value} 项必须处理的问题`);
         } else {
-            ElMessage.success(`成功识别 ${parsedQuestions.length} 道题目`);
+            message.success(`成功识别 ${parsedQuestions.length} 道题目`);
         }
 
         return parsedQuestions;
@@ -211,10 +215,10 @@ export function useBatchImport({ canEdit, existingQuestions } = {}) {
                 document.execCommand('copy');
                 document.body.removeChild(textarea);
             }
-            ElMessage.success('已复制 AI 整理模板');
+            message.success('已复制 AI 整理模板');
         } catch (err) {
             console.error('Copy batch format guide error:', err);
-            ElMessage.error('复制失败，请手动复制下方模板');
+            message.error('复制失败，请手动复制下方模板');
         }
     };
 
@@ -234,7 +238,7 @@ export function useBatchImport({ canEdit, existingQuestions } = {}) {
         if (!file) return;
 
         if (!isSupportedBatchSpreadsheetFile(file)) {
-            ElMessage.warning('请选择 .xlsx 或 .csv 文件');
+            message.warning('请选择 .xlsx 或 .csv 文件');
             return;
         }
 
@@ -246,7 +250,7 @@ export function useBatchImport({ canEdit, existingQuestions } = {}) {
                 batchForm.text = '';
                 batchSpreadsheetFileName.value = '';
                 clearBatchPreviewQuality();
-                ElMessage.warning('未从文件中读取到可导入的题目，请检查首个工作表');
+                message.warning('未从文件中读取到可导入的题目，请检查首个工作表');
                 return;
             }
 
@@ -254,13 +258,14 @@ export function useBatchImport({ canEdit, existingQuestions } = {}) {
             batchSpreadsheetFileName.value = file.name;
             const parsedQuestions = runBatchParse({ silent: true });
             if (parsedQuestions.length === 0) {
-                ElMessage.warning('文件已读取，但未识别到题目，请检查表头或内容');
+                message.warning('文件已读取，但未识别到题目，请检查表头或内容');
                 return;
             }
-            ElMessage.success(`已从 ${file.name} 识别 ${parsedQuestions.length} 道题目`);
+            message.success(`已从 ${file.name} 识别 ${parsedQuestions.length} 道题目`);
         } catch (err) {
             console.error('Batch spreadsheet import error:', err);
-            ElMessage.error('读取 Excel/CSV 失败，请检查文件格式');
+            // 解析层抛出的是具体原因（超过 10 MiB、行列超限、不支持的压缩格式等），直接告诉用户。
+            message.error(err?.message || '读取 Excel/CSV 失败，请检查文件格式');
         } finally {
             batchSpreadsheetImporting.value = false;
         }
@@ -345,7 +350,7 @@ export function useBatchImport({ canEdit, existingQuestions } = {}) {
     const addBatchPreviewOption = (question) => {
         if (!question || question.type === 'judge' || question.type === 'fill') return;
         if (question.options.length >= BATCH_OPTION_LABELS.length) {
-            ElMessage.warning('最多支持 8 个选项');
+            message.warning('最多支持 8 个选项');
             return;
         }
 
@@ -360,7 +365,7 @@ export function useBatchImport({ canEdit, existingQuestions } = {}) {
     const removeBatchPreviewOption = (question, optionIndex) => {
         if (!question || question.type === 'judge' || question.type === 'fill') return;
         if (question.options.length <= 2) {
-            ElMessage.warning('至少保留 2 个选项');
+            message.warning('至少保留 2 个选项');
             return;
         }
 

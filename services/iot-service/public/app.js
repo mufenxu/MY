@@ -1030,10 +1030,13 @@ function connectRealtime() {
   setBadge(elements.wsBadge, '连接实时通道', 'badge badge-warning');
 
   socket.addEventListener('open', () => {
+    // 只在首次连接或确实断开过之后提示，避免空闲连接被代理周期性切断时反复弹出。
+    const announce = !state.wsEverConnected || state.wsRetryCount > 1;
+    state.wsEverConnected = true;
     state.wsRetryCount = 0; // 重置指数退避重试计数器
     setBadge(elements.wsBadge, '实时在线', 'badge badge-success');
     addEvent('实时通道已连接');
-    showToast('实时通道就绪', '已成功挂载 WS 消息推送引擎。', 'success');
+    if (announce) showToast('实时通道就绪', '已成功挂载 WS 消息推送引擎。', 'success');
   });
 
   socket.addEventListener('message', (event) => {
@@ -1060,15 +1063,11 @@ function connectRealtime() {
       return;
     }
 
-    // 指数退避及重试限制
-    if (state.wsRetryCount >= 20) {
-      setBadge(elements.wsBadge, '连接受限', 'badge badge-danger');
-      showToast('实时通道离线', '网络异常导致重试次数过多，已停止自动重连，请尝试刷新页面。', 'error');
-      return;
-    }
-
+    // 指数退避，封顶 30 秒后持续重试：断网再久，恢复后也能自己连回来，不需要刷新页面。
+    // 加一点随机抖动，避免多个标签页在同一时刻一起重连。
     setBadge(elements.wsBadge, '实时离线', 'badge badge-warning');
-    const delay = Math.min(30000, 3000 * Math.pow(2, state.wsRetryCount));
+    const backoff = Math.min(30000, 3000 * Math.pow(2, Math.min(state.wsRetryCount, 10)));
+    const delay = Math.round(backoff * (0.8 + Math.random() * 0.4));
     state.wsRetryCount++;
     state.socketRetryTimer = setTimeout(connectRealtime, delay);
   });
@@ -1220,24 +1219,30 @@ async function handleLogout() {
 
   try {
     if (state.platformSso) {
-      await fetch('/api/auth/logout', {
+      const response = await fetch('/api/auth/logout', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'X-Platform-Request': 'console' }
-      }).catch(() => {});
+      });
+      if (!response.ok) throw new Error(`统一平台退出失败（HTTP ${response.status}）`);
       window.location.replace('/');
       return;
     }
     await requestJson('/api/auth/logout', { method: 'POST' });
-    showToast('会话已清除', '已安全登出控制后台。', 'info');
-  } finally {
-    state.authenticated = false;
-    state.platformSso = false;
-    updateAuthUi();
-    renderCreatedApiKey(null);
-    renderLockedMeta();
+  } catch (error) {
+    // 服务端没有确认撤销会话时保持已登录界面：会话仍然有效，刷新即恢复登录态。
+    showToast('退出失败', error.message || '请检查网络后重试。', 'error');
     endAction('auth-logout', elements.logoutButton);
+    return;
   }
+
+  showToast('会话已清除', '已安全登出控制后台。', 'info');
+  state.authenticated = false;
+  state.platformSso = false;
+  updateAuthUi();
+  renderCreatedApiKey(null);
+  renderLockedMeta();
+  endAction('auth-logout', elements.logoutButton);
 }
 
 async function handleSave(event) {
@@ -1383,8 +1388,10 @@ async function boot() {
     const savedTheme = localStorage.getItem('mqttapi_theme') || 'light';
     switchTheme(savedTheme);
 
+    // 统一控制台用 /apps/iot/?page=<tab> 深链到具体板块，优先于上次停留的 tab。
+    const requestedTab = new URLSearchParams(window.location.search).get('page');
     const savedTab = localStorage.getItem('mqttapi_current_tab') || 'devices';
-    switchTab(savedTab);
+    switchTab(paneMeta[requestedTab] ? requestedTab : savedTab);
 
     // 2. 优先确认鉴权状态，再决定是否连接实时通道与拉取受保护 API
     await loadAuthStatus();
@@ -1532,7 +1539,16 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && state.autoRefresh) {
     refreshStatus().catch((error) => showToast('状态同步异常', error.message, 'error'));
   }
+  if (!document.hidden) reconnectRealtimeNow();
 });
+
+// 网络恢复或页面回到前台时不等退避计时器，立即重连一次。
+function reconnectRealtimeNow() {
+  if (state.socket || !canUseRealtime()) return;
+  clearTimeout(state.socketRetryTimer);
+  connectRealtime();
+}
+window.addEventListener('online', reconnectRealtimeNow);
 
 bindSecretFieldToggle(elements.mqttPassword, elements.mqttPasswordClear);
 bindSecretFieldToggle(elements.authPassword, elements.authPasswordClear);

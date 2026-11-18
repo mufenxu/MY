@@ -21,6 +21,7 @@ import {
     WarningOutlined
 } from '@ant-design/icons';
 import api from '../utils/api';
+import { IS_PLATFORM_SSO } from '../utils/runtime';
 import SecretSettings from '../components/SecretSettings';
 import CourseConfig from '../components/CourseConfig';
 import CourseCategoryConfig from '../components/CourseCategoryConfig';
@@ -519,11 +520,14 @@ const Settings = () => {
     }
     const isSuperAdmin = currentUser?.role === 'super_admin';
     const [adminLoading, setAdminLoading] = useState(false);
+    // 服务端当前的用户名：用户名输入框是必填且预填的，不能用“有没有值”判断是否改名
+    const [savedUsername, setSavedUsername] = useState('');
 
     const loadAdminInfo = useCallback(async () => {
         try {
             const res = await api.get('/settings/admin');
             if (res.data.success) {
+                setSavedUsername(res.data.result.userId || '');
                 adminForm.setFieldsValue({
                     username: res.data.result.userId
                 });
@@ -532,6 +536,21 @@ const Settings = () => {
             message.error('加载管理员信息失败');
         }
     }, [adminForm]);
+
+    // 改密后服务端已吊销本账号的全部令牌，当前会话随即失效，这里只负责收尾：
+    // 让服务端清掉 Cookie（令牌已失效时可能返回 401，不影响结果），再清本地状态并回到登录页。
+    const endRevokedSession = useCallback(async () => {
+        try {
+            await api.post('/auth/logout', {}, { skipAuthRedirect: true, skipAuthRefresh: true });
+        } catch {
+            // 会话在服务端已经失效，本地照常清理
+        }
+        localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        window.dispatchEvent(new Event('core-auth-expired'));
+        navigate('/login');
+    }, [navigate]);
 
     useEffect(() => {
         if (!isSuperAdmin) return;
@@ -558,41 +577,27 @@ const Settings = () => {
 
             const res = await api.post('/settings/admin', payload);
             if (res.data.success) {
-                const hasUsernameChange = values.username;
-                const hasPasswordChange = values.newPassword;
+                const nextUsername = res.data.result?.userId || values.username;
+                const usernameChanged = nextUsername !== savedUsername;
+                const passwordChanged = Boolean(values.newPassword);
 
-                // 显示成功消息
-                message.success('管理员信息已更新');
+                setSavedUsername(nextUsername);
+                adminForm.setFieldsValue({
+                    username: nextUsername,
+                    currentPassword: '',
+                    newPassword: '',
+                    confirmPassword: ''
+                });
 
-                // 如果修改了用户名或密码,需要重新登录
-                if (hasUsernameChange || hasPasswordChange) {
-                    Modal.info({
-                        title: '需要重新登录',
-                        content: hasPasswordChange
-                            ? '密码已修改,系统将在 3 秒后自动退出,请使用新密码重新登录。'
-                            : '用户名已修改,系统将在 3 秒后自动退出,请使用新用户名重新登录。',
-                        okText: '确定',
-                        onOk: () => {
-                            localStorage.removeItem('token');
-                            localStorage.removeItem('user');
-                            navigate('/login');
-                        }
-                    });
-
-                    // 3秒后自动退出
-                    setTimeout(() => {
-                        localStorage.removeItem('token');
-                        localStorage.removeItem('user');
-                        navigate('/login');
-                    }, 3000);
-                } else {
-                    // 如果只是清空了密码字段,清空表单
-                    adminForm.setFieldsValue({
-                        currentPassword: '',
-                        newPassword: '',
-                        confirmPassword: ''
-                    });
+                // 统一登录托管下，会话不绑定 Core 本地密码，无需重新登录。
+                if (passwordChanged && !IS_PLATFORM_SSO) {
+                    message.success('密码已修改，请使用新密码重新登录');
+                    await endRevokedSession();
+                    return;
                 }
+
+                // 改名不会让当前会话失效，只需提醒下次登录用新用户名。
+                message.success(usernameChanged ? '用户名已更新，下次登录请使用新用户名' : '管理员信息已更新');
             } else {
                 message.error(res.data.error || '更新失败');
             }
@@ -624,10 +629,10 @@ const Settings = () => {
                         </div>
                         <div className="panel-body">
                             <div className="settings-inline">
-                                <Button type="primary" icon={<FileTextOutlined />} onClick={() => { window.location.href = '/course-orders'; }}>
+                                <Button type="primary" icon={<FileTextOutlined />} onClick={() => navigate('/course-orders')}>
                                     查看订单
                                 </Button>
-                                <Button icon={<AppstoreOutlined />} onClick={() => { window.location.href = '/query'; }}>
+                                <Button icon={<AppstoreOutlined />} onClick={() => navigate('/query')}>
                                     查询记录
                                 </Button>
                                 <Button icon={<ApiOutlined />} onClick={() => { window.location.href = '/console?view=notification'; }}>

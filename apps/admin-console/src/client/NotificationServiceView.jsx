@@ -476,6 +476,8 @@ export default function NotificationServiceView({ session }) {
             }
             : {}),
         }),
+        // 附件最大 6MB（base64 后约 8MB），默认的 12 秒在慢网络下传不完。
+        timeoutMs: 2 * 60 * 1000,
       });
       setMessage(`富媒体消息已提交到网关，投递目标 ${result.targetMasked || '--'}`);
       setCmccMediaForm({ mediaType: cmccMediaForm.mediaType, content: '', mediaUrl: '', fileBase64: '', fileName: '', mimeType: '' });

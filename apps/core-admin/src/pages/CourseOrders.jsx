@@ -36,6 +36,10 @@ const canResubmit = (record) => ['ReconcilePending', 'Failed'].includes(record.s
 const CourseOrders = () => {
     const isMobile = useIsMobile();
     const searchDebounceRef = useRef(null);
+    // 防抖期间累积的筛选项：多个筛选共用一个定时器，逐项合并才不会互相覆盖
+    const pendingFiltersRef = useRef({});
+    // 只让最后一次列表请求落到界面上，避免慢的旧响应盖掉新条件的结果
+    const listRequestRef = useRef(0);
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(false);
     const [total, setTotal] = useState(0);
@@ -76,17 +80,20 @@ const CourseOrders = () => {
     }, []);
 
     const fetchOrders = useCallback(async () => {
+        const requestId = listRequestRef.current + 1;
+        listRequestRef.current = requestId;
         setLoading(true);
         try {
             const res = await api.get('/course-order/admin/list', { params: query });
+            if (requestId !== listRequestRef.current) return;
             if (res.data.code === 200) {
                 setOrders(res.data.data.list);
                 setTotal(res.data.data.total);
             }
         } catch {
-            message.error('订单加载失败');
+            if (requestId === listRequestRef.current) message.error('订单加载失败');
         } finally {
-            setLoading(false);
+            if (requestId === listRequestRef.current) setLoading(false);
         }
     }, [query]);
 
@@ -110,8 +117,11 @@ const CourseOrders = () => {
         if (searchDebounceRef.current) {
             clearTimeout(searchDebounceRef.current);
         }
+        pendingFiltersRef.current = { ...pendingFiltersRef.current, [field]: value };
         searchDebounceRef.current = setTimeout(() => {
-            setQuery(prev => ({ ...prev, [field]: value, page: 1 }));
+            const filters = pendingFiltersRef.current;
+            pendingFiltersRef.current = {};
+            setQuery(prev => ({ ...prev, ...filters, page: 1 }));
         }, 250);
     };
 
@@ -206,8 +216,11 @@ const CourseOrders = () => {
     const openEditModal = (record) => {
         fetchCategories();
         setEditingOrder(record);
+        // 先清空：上一次取消编辑时留下的密码、平台等字段不能带进这一笔订单
+        createForm.resetFields();
         createForm.setFieldsValue({
             account: record.account,
+            categoryId: record.categoryId || undefined,
             remoteOid: record.remoteOid,
             remoteOrderId: record.remoteOrderId,
             courseName: record.courseName,
@@ -599,6 +612,7 @@ const CourseOrders = () => {
                 onCancel={() => {
                     setCreateModalOpen(false);
                     setEditingOrder(null);
+                    createForm.resetFields();
                 }}
                 onOk={handleSubmitOrder}
                 confirmLoading={createLoading}
@@ -607,7 +621,7 @@ const CourseOrders = () => {
                 width={isMobile ? '94%' : 680}
                 style={{ top: isMobile ? 12 : 48 }}
                 styles={{ body: { maxHeight: '70vh', overflowY: 'auto', paddingTop: 4 } }}
-                destroyOnClose
+                destroyOnHidden
             >
                 <p className="settings-note" style={{ marginBottom: 14 }}>
                     {editingOrder
@@ -746,7 +760,7 @@ const CourseOrders = () => {
                 footer={null}
                 width={isMobile ? '90%' : 400}
                 centered
-                destroyOnClose
+                destroyOnHidden
             >
                 <div style={{ textAlign: 'center' }}>
                     <span className="danger-glyph">
@@ -789,7 +803,7 @@ const CourseOrders = () => {
                 footer={null}
                 width={isMobile ? '90%' : 420}
                 centered
-                destroyOnClose
+                destroyOnHidden
             >
                 <div style={{ textAlign: 'center' }}>
                     <h3 style={{ margin: '0 0 12px', fontSize: 15, fontWeight: 680 }}>重新提交这笔订单？</h3>

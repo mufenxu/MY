@@ -205,3 +205,67 @@ test('operator settings hide super-admin security and secret surfaces', () => {
   assert.match(settings, /filter\(\(item\) => isSuperAdmin \|\| !\['1', '2', '3', '4'\]\.includes\(item\.key\)\)/);
   assert.match(settings, /defaultActiveKey=\{isSuperAdmin \? '1' : '6'\}/);
 });
+
+test('heat pump data points map each device code to exactly one switch case', () => {
+  const source = readSource('src', 'pages', 'AirEnergyMonitor.jsx');
+  const mapBody = source.match(/const DP_MAP = \{([\s\S]*?)\};/)[1];
+  const codes = [...mapBody.matchAll(/:\s*'([^']+)'/g)].map((match) => match[1]);
+
+  // 两个键映射到同一个设备码时，switch 里靠后的 case 永远不会命中。
+  assert.equal(new Set(codes).size, codes.length);
+  assert.match(source, /case DP_MAP\.WATER_BACK: d\.currentTemp = val; d\.waterBackTemp = val; break;/);
+});
+
+test('order editor never carries values over from a previous edit', () => {
+  const source = readSource('src', 'pages', 'CourseOrders.jsx');
+
+  assert.match(
+    source,
+    /setEditingOrder\(record\);[\s\S]*?createForm\.resetFields\(\);\s*createForm\.setFieldsValue\(\{[\s\S]*?categoryId: record\.categoryId/,
+  );
+  assert.match(source, /onCancel=\{\(\) => \{[\s\S]*?setEditingOrder\(null\);\s*createForm\.resetFields\(\);/);
+});
+
+test('in-app links stay inside the router basename and the platform console lives at /console', () => {
+  const settings = readSource('src', 'pages', 'Settings.jsx');
+  const app = readSource('src', 'App.jsx');
+
+  assert.doesNotMatch(settings, /window\.location\.href = '\/(?:course-orders|query)'/);
+  assert.match(settings, /navigate\('\/course-orders'\)/);
+  assert.match(settings, /navigate\('\/query'\)/);
+  assert.match(app, /window\.location\.replace\(`\/console\?view=\$\{encodeURIComponent\(view\)\}`\)/);
+});
+
+test('saving the admin account ends the session only after a real password change', () => {
+  const settings = readSource('src', 'pages', 'Settings.jsx');
+
+  assert.match(settings, /usernameChanged = nextUsername !== savedUsername/);
+  assert.match(settings, /if \(passwordChanged && !IS_PLATFORM_SSO\) \{[\s\S]*?await endRevokedSession\(\);/);
+  assert.match(settings, /endRevokedSession = useCallback[\s\S]*?api\.post\('\/auth\/logout'[\s\S]*?core-auth-expired/);
+  assert.doesNotMatch(settings, /hasUsernameChange = values\.username/);
+  assert.doesNotMatch(settings, /setTimeout\(\(\) => \{\s*localStorage\.removeItem\('token'\)/);
+});
+
+test('every failed login requests a fresh Turnstile token', () => {
+  const login = readSource('src', 'pages', 'Login.jsx');
+
+  assert.match(
+    login,
+    /if \(turnstileConfig\.enabled\) \{\s*setCaptchaToken\(null\);\s*turnstileRef\.current\?\.reset\(\);/,
+  );
+  assert.doesNotMatch(login, /status === 403\) \{\s*setCaptchaToken/);
+});
+
+test('token refresh is serialised across tabs and stale order responses are dropped', () => {
+  const api = readSource('src', 'utils', 'api.js');
+  const orders = readSource('src', 'pages', 'CourseOrders.jsx');
+
+  // refresh token 用过即作废：多个标签页必须排队，后到者发现已刷新就直接重放。
+  assert.match(api, /navigator\.locks\.request\(REFRESH_LOCK_NAME, task\)/);
+  assert.match(api, /if \(readRefreshMark\(\) >= failedAt\) return null;/);
+  assert.match(api, /if \(!response\.data\.success\) throw new Error\('Refresh failed'\);\s*writeRefreshMark\(\);/);
+
+  assert.match(orders, /if \(requestId !== listRequestRef\.current\) return;/);
+  assert.match(orders, /pendingFiltersRef\.current = \{ \.\.\.pendingFiltersRef\.current, \[field\]: value \};/);
+  assert.doesNotMatch(orders, /destroyOnClose/);
+});

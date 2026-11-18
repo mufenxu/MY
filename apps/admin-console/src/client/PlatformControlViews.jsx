@@ -491,9 +491,12 @@ export function DiagnosticsView({ services, session, targetEntityId = '' }) {
   const [error, setError] = useState('');
   const canRun = hasRole(session.user?.role, 'operator');
 
+  // 只在深链目标本身变化（或它所在的服务列表首次到位）时同步一次。
+  // monitoredServices 每次渲染都是新数组，直接作依赖会让下拉框被反复改回目标服务。
+  const targetAvailable = Boolean(targetEntityId) && monitoredServices.some((service) => service.id === targetEntityId);
   useEffect(() => {
-    if (targetEntityId && monitoredServices.some((service) => service.id === targetEntityId)) setServiceId(targetEntityId);
-  }, [monitoredServices, targetEntityId]);
+    if (targetAvailable) setServiceId(targetEntityId);
+  }, [targetAvailable, targetEntityId]);
 
   async function runTrace() {
     setBusy('trace'); setError('');
@@ -622,7 +625,7 @@ export function PublicStatusView() {
   const OverallIcon = meta.icon;
   return (
     <main className="public-status-page">
-      <header className="public-status-header"><a href="/" className="public-brand-mark" aria-label="返回管理控制台"><img src={PLATFORM_BRAND_ICON} alt="" /></a><div><strong>{data?.platformName || 'MY Platform'}</strong><span>服务状态</span></div></header>
+      <header className="public-status-header"><a href="/console" className="public-brand-mark" aria-label="返回管理控制台"><img src={PLATFORM_BRAND_ICON} alt="" /></a><div><strong>{data?.platformName || 'MY Platform'}</strong><span>服务状态</span></div></header>
       <section className={`public-overall-status ${meta.className}`}>
         <OverallIcon size={28} />
         <div><h1>{meta.label}</h1><p>{data?.stale ? '部分状态数据已过期，当前结论可能不完整。' : '状态来自平台实时健康检查，不使用人工覆盖。'}</p></div>
@@ -643,7 +646,7 @@ export function PublicStatusView() {
           </section>
         </>
       )}
-      <footer><span>自动更新间隔 30 秒</span><a href="/">管理控制台 <ArrowRight size={14} /></a></footer>
+      <footer><span>自动更新间隔 30 秒</span><a href="/console">管理控制台 <ArrowRight size={14} /></a></footer>
     </main>
   );
 }

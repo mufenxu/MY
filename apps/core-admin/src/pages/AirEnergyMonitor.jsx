@@ -19,7 +19,6 @@ import api from '../utils/api';
 const DP_MAP = {
     POWER: 'switch',
     TEMP_SET: 'temp_set',
-    TEMP_CURRENT: 'WATER_BACK_TEMP',
     OUT_TEMP: 'OUT_TEMP',
     WATER_OUT: 'WATER_OUT_TEMP',
     WATER_BACK: 'WATER_BACK_TEMP',
@@ -158,10 +157,11 @@ const AirEnergyMonitor = () => {
                 switch (item.code) {
                     case DP_MAP.POWER: d.powerOn = val === true; break;
                     case DP_MAP.TEMP_SET: d.targetTemp = val; break;
-                    case DP_MAP.TEMP_CURRENT: d.currentTemp = val; break;
                     case DP_MAP.OUT_TEMP: d.outdoorTemp = val; break;
                     case DP_MAP.WATER_OUT: d.waterOutTemp = val; break;
-                    case DP_MAP.WATER_BACK: d.waterBackTemp = val; break;
+                    // 设备没有独立的「当前水温」数据点，回水温度同时作为当前水温。
+                    // 两者必须在同一个 case 里赋值：同值的 case 只有第一个会命中。
+                    case DP_MAP.WATER_BACK: d.currentTemp = val; d.waterBackTemp = val; break;
                     case DP_MAP.CURRENT: d.runCurrent = val; break;
                     case DP_MAP.VOLTAGE: d.acinVol = val; break;
                     case DP_MAP.FREQ: d.runFreq = val; break;

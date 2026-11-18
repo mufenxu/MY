@@ -1,6 +1,6 @@
 // 样式入口：Element Plus 在前，本应用样式在后。
-// 珍珠令牌目前只有登录页在用，跟随登录页分包按需加载（见 LoginView.vue）；
-// Dashboard / ExamDetail 迁移时再把令牌与组件层提到这里。
+// 珍珠令牌与共享样式由三个路由页面各自在 <style> 里 @import，随页面分包加载；
+// 入口不承担这部分体积，代价是共享部分在各页面的 CSS 里各有一份（原因见 ExamDetailView.vue）。
 import { createApp } from 'vue';
 import 'element-plus/es/components/message/style/css';
 import 'element-plus/es/components/message-box/style/css';
@@ -154,6 +154,13 @@ async function startApplication() {
     for (const [key, component] of Object.entries(icons)) {
         app.component(key, component);
     }
+
+    // Vue 把组件渲染与事件处理里的未捕获错误交给 errorHandler，不会冒到 window.onerror，
+    // 所以 installExperienceMonitoring 收不到，需要在这里补报。
+    app.config.errorHandler = (error) => {
+        console.error(error);
+        void reportExperience({ event: 'ui_error', outcome: 'error', error });
+    };
 
     app.use(router);
     app.mount('#app');

@@ -1208,7 +1208,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { session } from '@/utils/session';
 import { createExamDetailApi } from '@/api/examDetail';
@@ -1533,19 +1533,23 @@ const confirmBatchImport = () => {
     markQuestionChanged();
 };
 
-const goBack = () => {
-    if (isDirty.value && canEdit.value) {
-        ElMessageBox.confirm('当前试卷还有未保存的题目修改，确定离开吗？', '未保存修改', {
+// 所有站内离开（返回按钮、浏览器后退/前进、其它路由跳转）都在这里确认一次；
+// beforeunload 只能拦住刷新和关闭标签页。会话失效跳登录页时不拦，否则会卡在一个已无法保存的页面上。
+onBeforeRouteLeave(async (to) => {
+    if (!isDirty.value || !canEdit.value || to.name === 'Login') return true;
+    try {
+        await ElMessageBox.confirm('当前试卷还有未保存的题目修改，确定离开吗？', '未保存修改', {
             confirmButtonText: '离开',
             cancelButtonText: '继续编辑',
             type: 'warning',
-        }).then(() => {
-            isDirty.value = false;
-            goBack();
-        }).catch(() => { });
-        return;
+        });
+        return true;
+    } catch {
+        return false;
     }
+});
 
+const goBack = () => {
     router.push(getDashboardReturnRoute());
 };
 
@@ -1600,7 +1604,9 @@ onBeforeUnmount(() => {
 
 <style>
 /* 编辑器与后台共用珍珠令牌与 Element Plus 桥接；本页专属布局在 pearl-exam.css。
-   两条 import 与 DashboardView 指向同一模块，打包后只保留一份。 */
+   这里的 @import 会被整份内联进本页 CSS，与 DashboardView 各打包一份（实测 2026-11-17）。
+   不要为去重改成 <script> 里的模块引入：打包器会把共享样式排到本页专属的 Element Plus
+   组件样式之前，pearl-admin.css 里与其同特异性的覆盖（如 .el-tabs__item、.el-drawer__header）会失效。 */
 @import '@my-platform/pearl-tokens/tokens.css';
 @import '@my-platform/pearl-tokens/components.css';
 @import '@/assets/css/pearl-admin.css';

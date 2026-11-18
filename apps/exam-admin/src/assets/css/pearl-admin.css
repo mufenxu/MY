@@ -1119,22 +1119,26 @@
     transform: translateY(-1px);
 }
 
-.dashboard-action-card.is-blue {
+/* 语义色：类名由 DashboardView 的 tone（primary / success / warning / danger / neutral）拼出。
+   neutral 用弱化墨色，这样只有需要关注的卡片带颜色。 */
+.dashboard-action-card.is-neutral {
+    --stat-ink: var(--ink-muted);
+}
+
+.dashboard-action-card.is-primary {
     --stat-ink: var(--blue);
 }
 
-.dashboard-action-card.is-green {
+.dashboard-action-card.is-success {
     --stat-ink: var(--leaf-text);
 }
 
-.dashboard-action-card.is-amber,
-.dashboard-action-card.is-orange {
+.dashboard-action-card.is-warning {
     --stat-ink: var(--amber);
 }
 
-.dashboard-action-card.is-violet,
-.dashboard-action-card.is-purple {
-    --stat-ink: var(--violet);
+.dashboard-action-card.is-danger {
+    --stat-ink: var(--red-text);
 }
 
 .dashboard-action-icon {
@@ -2201,6 +2205,161 @@
 .analysis-stat-label {
     color: var(--ink-faint);
     font-size: var(--type-caption);
+}
+
+/* 试卷分析弹窗的布局：珍珠化迁移时随旧样式一并删除，这里按令牌补回。 */
+.category-analysis-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.category-analysis-dialog .analysis-section {
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-bottom: 0;
+}
+
+.analysis-hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.analysis-hero > div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.analysis-hero span {
+    color: var(--ink-faint);
+    font-size: var(--type-caption);
+    font-weight: 600;
+}
+
+.analysis-hero strong {
+    overflow: hidden;
+    color: var(--ink);
+    font-size: 15px;
+    font-weight: 680;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.analysis-hero small {
+    color: var(--ink-muted);
+    font-size: var(--type-caption);
+}
+
+.analysis-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.analysis-stat-card.is-primary .analysis-stat-value {
+    color: var(--blue);
+}
+
+.analysis-stat-card.is-success .analysis-stat-value {
+    color: var(--leaf-text);
+}
+
+.analysis-stat-card.is-warning .analysis-stat-value {
+    color: var(--amber);
+}
+
+.analysis-stat-card.is-violet .analysis-stat-value {
+    color: var(--violet);
+}
+
+.analysis-bars {
+    display: grid;
+    min-height: 150px;
+    grid-template-columns: repeat(14, minmax(0, 1fr));
+    align-items: end;
+    gap: 6px;
+}
+
+.analysis-bar-item {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+}
+
+.analysis-bar-track {
+    display: flex;
+    width: 100%;
+    height: 104px;
+    align-items: flex-end;
+    justify-content: center;
+    border-radius: var(--r-xs);
+    background: var(--groove-bg);
+}
+
+.analysis-bar-fill {
+    display: block;
+    width: 60%;
+    max-width: 18px;
+    min-height: 6px;
+    border-radius: 6px 6px 2px 2px;
+    background: var(--blue);
+}
+
+.analysis-bar-fill.is-height-1 { height: 10%; }
+.analysis-bar-fill.is-height-2 { height: 20%; }
+.analysis-bar-fill.is-height-3 { height: 30%; }
+.analysis-bar-fill.is-height-4 { height: 40%; }
+.analysis-bar-fill.is-height-5 { height: 50%; }
+.analysis-bar-fill.is-height-6 { height: 60%; }
+.analysis-bar-fill.is-height-7 { height: 70%; }
+.analysis-bar-fill.is-height-8 { height: 80%; }
+.analysis-bar-fill.is-height-9 { height: 90%; }
+.analysis-bar-fill.is-height-10 { height: 100%; }
+
+.analysis-bar-date,
+.analysis-bar-score {
+    overflow: hidden;
+    max-width: 100%;
+    color: var(--ink-faint);
+    font-size: 10.5px;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.analysis-bar-score {
+    color: var(--ink-muted);
+    font-family: var(--font-mono);
+    font-weight: 660;
+}
+
+.analysis-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: 14px;
+}
+
+@media (max-width: 640px) {
+    .analysis-stat-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .analysis-bars {
+        gap: 3px;
+    }
+
+    .analysis-bar-date {
+        display: none;
+    }
+
+    .analysis-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 /* 分享弹窗 */

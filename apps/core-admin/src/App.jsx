@@ -48,7 +48,8 @@ const PrivateRoute = ({ children, session }) => {
 
 const PlatformViewRedirect = ({ view }) => {
   useEffect(() => {
-    window.location.replace(`/?view=${encodeURIComponent(view)}`);
+    // 站点根路径 `/` 是品牌官网，统一控制台在 /console。
+    window.location.replace(`/console?view=${encodeURIComponent(view)}`);
   }, [view]);
   return <RouteFallback />;
 };
@@ -170,8 +171,9 @@ function App() {
     const unsubscribeTheme = subscribeTheme(() => setIsDarkMode(getCurrentTheme() === 'dark'));
 
     // 网络断线检测
-    const handleOnline = () => message.success('网络已恢复连接');
-    const handleOffline = () => message.error('网络连接已断开，请检查您的网络', 0);
+    // 断网提示常驻，恢复时用同一个 key 把它替换掉；否则常驻提示会一直留在屏幕上并随每次断网叠加。
+    const handleOnline = () => message.success({ key: 'network-status', content: '网络已恢复连接' });
+    const handleOffline = () => message.error({ key: 'network-status', content: '网络连接已断开，请检查您的网络', duration: 0 });
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 

@@ -21,8 +21,10 @@ function adminRows() {
   return adminList ? [...adminList.querySelectorAll(".admin-user-row")] : [];
 }
 
+// 角色与学校账号绑定状态读行上的 data- 属性（由 app.js 的 renderUsers 输出），
+// 不要去匹配界面文案：文案一改，统计就会静默归零。
 function adminRowRole(row) {
-  return row.querySelector(".admin-user-main span")?.textContent.includes("管理员") ? "admin" : "user";
+  return row.dataset.role === "admin" ? "admin" : "user";
 }
 
 function updateAdminDirectory() {
@@ -50,7 +52,7 @@ function updateAdminDirectory() {
 
   const disabledCount = rows.filter((row) => row.classList.contains("disabled")).length;
   const adminCount = rows.filter((row) => adminRowRole(row) === "admin").length;
-  const unboundCount = rows.filter((row) => row.querySelector(".admin-user-meta")?.textContent.includes("未绑定学号/工号")).length;
+  const unboundCount = rows.filter((row) => row.dataset.schoolBound === "false").length;
   if (adminStats.total) adminStats.total.textContent = rows.length;
   if (adminStats.enabled) adminStats.enabled.textContent = rows.length - disabledCount;
   if (adminStats.admin) adminStats.admin.textContent = adminCount;

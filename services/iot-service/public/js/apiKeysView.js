@@ -162,7 +162,7 @@
         );
         if (!ok) return;
 
-        await requestJson(`/api/keys/${keyId}`, { method: 'DELETE' });
+        await requestJson(`/api/keys/${encodeURIComponent(keyId)}`, { method: 'DELETE' });
         if (latestCreatedKey && latestCreatedKey.keyId === keyId) {
           renderCreatedKey(null);
         }

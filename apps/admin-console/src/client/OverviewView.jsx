@@ -217,7 +217,9 @@ export function OverviewView({
   const serviceTotal = total || services.length;
   const healthyCount = counts.healthy ?? 0;
   const incidents = operationsSummary?.incidents || [];
-  const incidentCount = operationsSummary?.incidents?.length ?? attentionCount;
+  // 服务已经异常但事件还没生成（或已被关闭）时，incidents 是空数组而不是 undefined；
+  // 取两者较大值，摘要才不会在有服务离线时显示「全部服务在线」。
+  const incidentCount = Math.max(operationsSummary?.incidents?.length ?? 0, attentionCount);
   const lastRefreshLabel = refreshedAt ? formatCheckedAt(refreshedAt) : '等待首次同步';
   const history = operationsSummary?.history || {};
   const overviewState = loading

@@ -111,7 +111,10 @@ http.request = async function request(rawConfig) {
     const abortFromExternalSignal = () => controller.abort(externalSignal?.reason);
     if (externalSignal?.aborted) abortFromExternalSignal();
     else externalSignal?.addEventListener('abort', abortFromExternalSignal, { once: true });
-    const timer = timeout > 0 ? setTimeout(() => controller.abort(), timeout) : null;
+    let timedOut = false;
+    const timer = timeout > 0
+        ? setTimeout(() => { timedOut = true; controller.abort(); }, timeout)
+        : null;
     const headers = new Headers(config.headers || {});
     const fetchOptions = {
         method,
@@ -153,7 +156,15 @@ http.request = async function request(rawConfig) {
 
         return await applyResponseSuccess(httpResponse);
     } catch (error) {
-        if (error.name === 'AbortError') error.message = '请求超时，请稍后再试';
+        if (error.name === 'AbortError') {
+            // DOMException 的 message 只读，不能原地改写；并且「超时」和「调用方主动取消」要分开：
+            // 取消是预期行为（切页、组件卸载），不进全局拦截器，也就不会弹「网络连接失败」。
+            if (!timedOut) throw error;
+            const timeoutError = new Error('请求超时，请稍后再试');
+            timeoutError.name = 'TimeoutError';
+            timeoutError.config = config;
+            return applyResponseError(timeoutError);
+        }
         return applyResponseError(error);
     } finally {
         if (timer) clearTimeout(timer);

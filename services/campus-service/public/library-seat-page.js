@@ -1150,6 +1150,14 @@
 
   /* ------------------------------------------------------------------ 路由 */
 
+  document.addEventListener("resv:reset", () => {
+    recordsState.loaded = false;
+    r.body.innerHTML = "";
+    r.currentPanel.hidden = true;
+    waitlistState.loaded = false;
+    waitlistState.tasks = [];
+    w.list.innerHTML = "";
+  });
   document.addEventListener("resv:activate", (event) => {
     if (event.detail?.view !== "seat") return;
     if (event.detail.tab === "query") initQuery();

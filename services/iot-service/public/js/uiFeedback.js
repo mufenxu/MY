@@ -29,7 +29,9 @@
     function showToast(title, desc = '', type = 'info') {
       if (!container) return;
 
-      const key = `${title}:${desc}`;
+      // 错误文案末尾带请求 ID（形如 ` [1a2b3c4d]`），每次都不同；去重时忽略它，
+      // 否则后端故障期间每次轮询都会弹出一条「新」提示。
+      const key = `${title}:${String(desc).replace(/\s*\[[0-9a-f-]{6,}\]\s*$/i, '')}`;
       const now = Date.now();
       if (recentToasts.has(key) && now - recentToasts.get(key) < TOAST_DEDUPE_MS) {
         return;
@@ -120,6 +122,9 @@
         setTimeout(() => {
           if (showInput && inputEl) {
             inputEl.focus();
+          } else if (type === 'danger') {
+            // 危险操作默认落在「取消」上，误按回车不会执行。
+            cancelBtn.focus();
           } else {
             confirmBtn.focus();
           }
@@ -152,6 +157,8 @@
           }
 
           if (event.key === 'Enter') {
+            // 焦点在「取消」上时回车就是取消，不能被当成确认。
+            if (document.activeElement === cancelBtn) return;
             event.preventDefault();
             onConfirm();
           }
