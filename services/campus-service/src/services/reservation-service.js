@@ -38,6 +38,7 @@ import {
   scanLibrarySeatWaitlist
 } from "../lib/library-seat-waitlist.js";
 import {
+  LIBRARY_SEAT_AUTO_TASK_MAX_ATTEMPTS,
   LIBRARY_SEAT_AUTO_TASK_RETRY_INTERVAL_MS,
   LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS,
   LIBRARY_SEAT_AUTO_TASK_PREWARM_MS,
@@ -352,10 +353,11 @@ export function createReservationService({
     });
   }
 
-  async function requestLibrarySeatJson(jar, pathname, data = {}, { token = "", onDispatch } = {}) {
+  async function requestLibrarySeatJson(jar, pathname, data = {}, { token = "", onDispatch, timeoutMs } = {}) {
     const response = await fetchWithJar(`${LIBRARY_SEAT_API_BASE}${pathname}`, {
       jar,
       onDispatch,
+      timeoutMs,
       method: "POST",
       headers: {
         accept: "application/json, text/plain, */*",
@@ -1422,7 +1424,10 @@ export function createReservationService({
       if (Date.now() - value.preparedAt > 120_000) preparedLibrarySeatTasks.delete(id);
     }
     const jar = await readSessionJar();
-    const minimumExpiry = Date.now() + LIBRARY_SEAT_AUTO_TASK_PREWARM_MS + LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS + 30_000;
+    // 令牌本地兜底有效期只有 10 分钟，窗口拉长后不能要求它覆盖全程，否则每次预热
+    // 都必然强制换一次令牌（多一个失败点）。运行中鉴权失败会自动换令牌重试。
+    const tokenCoverageMs = Math.min(LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS, 3 * 60_000);
+    const minimumExpiry = Date.now() + LIBRARY_SEAT_AUTO_TASK_PREWARM_MS + tokenCoverageMs + 30_000;
     if (!cachedLibrarySeatToken(jar) || Date.parse(jar.meta.librarySeat.expiresAt) <= minimumExpiry) {
       const token = await getLibrarySeatMemberToken({ force: true });
       jar.meta ||= {};
@@ -1436,7 +1441,16 @@ export function createReservationService({
       timings.responseAt = new Date().toISOString();
       timings.firstResponseAt ||= timings.responseAt;
     } });
-    const seats = await prepareLibrarySeatAutoTaskSeats({ task: input, client, topology: true });
+    let seats;
+    try {
+      seats = await prepareLibrarySeatAutoTaskSeats({ task: input, client, topology: true });
+    } catch (error) {
+      // 座位布局只是提前排好优先级；放号高峰拉不到布局不该让整次任务作废，
+      // 退回「实时空位」模式继续准备。
+      logger.warn("library_seat_auto_topology_prepare_failed", { taskId: task.id, code: error?.code || null,
+        status: error?.status || null });
+      seats = await prepareLibrarySeatAutoTaskSeats({ task: input, client });
+    }
     const prepared = { ...seats, jar, client, timings, fingerprint, preparedAt: Date.now() };
     timings.preparedAt = new Date().toISOString();
     preparedLibrarySeatTasks.set(task.id, prepared);
@@ -1460,7 +1474,8 @@ export function createReservationService({
       return { slot, nextAt: 0, lastFailure: saved?.lastFailure || null, seatUnavailable: false,
         result: saved?.status === "success" ? saved : null,
         prepared: { candidates: seat ? [seat] : [], blocked: new Set(), fixedSeat: true,
-          pending: pending ? { ...seat, ...saved } : null, pendingRefused: false }
+          pending: pending ? { ...seat, ...saved } : null, pendingRefused: false,
+          pendingSince: pending ? Date.now() : 0, pendingCleanChecks: 0 }
       };
     });
     const slotResults = () => runs.map((run) => ({ ...run.slot, seatId: seat?.seatId || null,
@@ -1472,9 +1487,9 @@ export function createReservationService({
       // 每段首轮提交后再轮流重试；一个时段的退避或待确认不会独占整个窗口。
       while (Date.now() < deadline && runs.some((run) => !run.result)) {
         if (!seat) {
-          if (await shouldStop() || prepared.timings.attempts >= 40) break;
+          if (await shouldStop() || prepared.timings.attempts >= LIBRARY_SEAT_AUTO_TASK_MAX_ATTEMPTS) break;
           try {
-            const fresh = await prepareLibrarySeatAutoTaskSeats({ task: input, client: prepared.client });
+            const fresh = await prepareLibrarySeatAutoTaskSeats({ task: input, client: prepared.client, maxAreas: 10 });
             prepared.candidates = fresh.candidates;
             prepared.blocked = new Set();
             seat = prepared.candidates[0];
@@ -1493,7 +1508,7 @@ export function createReservationService({
           if (!seat) break;
           if (run.result || run.nextAt > Date.now()) continue;
           if (await shouldStop()) break;
-          if (!run.prepared.pending && prepared.timings.attempts >= 40) {
+          if (!run.prepared.pending && prepared.timings.attempts >= LIBRARY_SEAT_AUTO_TASK_MAX_ATTEMPTS) {
             run.result = { status: "failed", message: "已达到本次任务的尝试次数上限。" };
             continue;
           }
@@ -1508,6 +1523,11 @@ export function createReservationService({
               } });
           } catch (error) {
             run.lastFailure = recordFailure(error, seat, "submit", run.slot);
+            // 学校排队/无响应属于可重试，别让一个时段把它整段判死。
+            if (!error?.status || error.status >= 500 || error.status === 429) {
+              run.nextAt = Date.now() + 2_000;
+              continue;
+            }
             scan = { status: "failed", message: error.message || "该时段预约失败。" };
           }
           if (scan.status === "success") lockedSeat = true;
@@ -1570,8 +1590,10 @@ export function createReservationService({
         return result;
       }
       const owner = randomUUID();
+      // 锁要覆盖整个尝试窗口，否则窗口跑到一半就可能被另一个实例重新认领并重复提交。
       const claimed = await repository.claimLibrarySeatAutoTask(user.id, task.id, owner,
-        actualNow.toISOString(), new Date(actualNow.getTime() + 3 * 60_000).toISOString());
+        actualNow.toISOString(),
+        new Date(actualNow.getTime() + LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS + 60_000).toISOString());
       if (!claimed) return { status: "skipped", message: "任务已停用或正在执行。" };
       task = claimed;
       const input = normalizeLibrarySeatAutoTaskInput(task);
@@ -1591,27 +1613,48 @@ export function createReservationService({
         return lastFailure;
       };
       try {
-        if (prepared?.fingerprint !== fingerprint || Date.now() - prepared.preparedAt > 120_000) {
-          prepared = await prepareLibrarySeatAutoTask(task, user);
-        }
-        prepared.timings.startedAt = new Date().toISOString();
         const deadline = Math.min(Date.now() + LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS, plan.endMs);
+        // 放号高峰连「准备」都可能失败（拉不到空位/布局）。准备失败不等于没机会，
+        // 在窗口内反复重试，学校一恢复就能立刻进入抢座。
+        const needsPrepare = !prepared || prepared.fingerprint !== fingerprint
+          || Date.now() - prepared.preparedAt > 120_000;
+        if (needsPrepare) {
+          prepared = null;
+          while (!shouldStop() && Date.now() < deadline) {
+            try {
+              prepared = await prepareLibrarySeatAutoTask(task, user);
+              break;
+            } catch (error) {
+              prepared = null;
+              recordFailure(error, null, "prepare");
+              if (error?.status && error.status < 500 && error.status !== 429) throw error;
+              await new Promise((resolve) => setTimeout(resolve, Math.max(1, Math.min(2_000, deadline - Date.now()))));
+            }
+          }
+          if (!prepared && !shouldStop()) {
+            result = { status: "failed", message: lastFailure?.message
+              ? `学校座位预约系统持续无响应，未能开始预约：${lastFailure.message}`
+              : "学校座位预约系统持续无响应，未能开始预约。" };
+          }
+        }
+        if (prepared) prepared.timings.startedAt = new Date().toISOString();
         const shouldStopScan = async () => {
           if (shouldStop() || Date.now() >= deadline) return true;
           // 首次提交使用刚取得的任务锁；换座和重试前核对停用或编辑状态。
-          if (!prepared.timings.attempts) return false;
+          if (!prepared?.timings.attempts) return false;
           const current = await repository.getLibrarySeatAutoTask(user.id, task.id);
           return !current?.enabled || current.run_owner !== owner
             || JSON.stringify(normalizeLibrarySeatAutoTaskInput(current)) !== fingerprint;
         };
-        if (input.timeSlots.length > 1) {
+        if (!result && prepared && input.timeSlots.length > 1) {
           result = await runLibrarySeatAutoTaskSlots(task, input, prepared, shouldStopScan, recordFailure, deadline);
         }
-        while (!result && !shouldStop() && Date.now() < deadline && prepared.timings.attempts < 40) {
+        while (!result && prepared && !shouldStop() && Date.now() < deadline
+          && prepared.timings.attempts < LIBRARY_SEAT_AUTO_TASK_MAX_ATTEMPTS) {
           const scan = await scanLibrarySeatAutoTask({ task: input, client: prepared.client, prepared,
             now: new Date(), shouldStop: shouldStopScan, onAttempt: () => { prepared.timings.attempts++; },
             onFailure: recordFailure,
-            maxAttemptsPerScan: Math.min(8, 40 - prepared.timings.attempts) });
+            maxAttemptsPerScan: Math.min(8, LIBRARY_SEAT_AUTO_TASK_MAX_ATTEMPTS - prepared.timings.attempts) });
           if (scan.status === "success") {
             result = { status: "success", message: scan.message, areaName: scan.seat.areaName,
               seatId: scan.seat.seatId, seatLabel: scan.seat.seatLabel };
@@ -1636,7 +1679,7 @@ export function createReservationService({
               break;
             }
             try {
-              const fresh = await prepareLibrarySeatAutoTaskSeats({ task: input, client: prepared.client });
+              const fresh = await prepareLibrarySeatAutoTaskSeats({ task: input, client: prepared.client, maxAreas: 10 });
               prepared.candidates = fresh.candidates;
               prepared.blocked = new Set();
               prepared.topology = false;
@@ -1650,10 +1693,10 @@ export function createReservationService({
           if (delay >= remaining) break;
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
-        result ||= prepared.pending
+        result ||= prepared?.pending
           ? { status: "unconfirmed", message: "提交结果仍待学校确认，请查看我的预约，任务已停止重复提交。" }
           : { status: shouldStop() ? "stopped" : "failed", message: shouldStop()
-            ? "服务停止，任务已暂停。" : "快速尝试窗口内未能预约成功。" };
+            ? "服务停止，任务已暂停。" : "尝试窗口内未能预约成功。" };
       } catch (error) {
         if (!lastFailure) recordFailure(error, null, prepared ? "run" : "prepare");
         result = { status: "failed", message: error.message || "自动预约执行失败。" };

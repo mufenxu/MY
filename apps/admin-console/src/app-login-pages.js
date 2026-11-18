@@ -233,9 +233,53 @@ export function renderAppLoginTransitionHtml(redirectUrl) {
 </html>`;
 }
 
-export function renderAppLoginErrorHtml(title, message) {
+// 错误页的样式以外链方式提供（见 app.js 的 /app-login-error.css）：
+// 控制台全局 CSP 是 style-src 'self'，内联 <style> 在浏览器里不会生效。
+export const APP_LOGIN_ERROR_CSS = `
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0b0f19;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: rgba(17, 24, 39, 0.88);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: 24px;
+      padding: 36px 28px 30px;
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+    }
+    .icon-box {
+      width: 56px;
+      height: 56px;
+      border-radius: 18px;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 18px;
+    }
+    .title { font-size: 18px; font-weight: 700; color: #ef4444; margin-bottom: 8px; }
+    .message { font-size: 13.5px; color: #94a3b8; line-height: 1.5; margin-bottom: 20px; }
+    .hint { font-size: 12px; color: #64748b; }
+`;
+
+export function renderAppLoginErrorHtml(title, message, hint = '请返回安卓 App 重新发起跳转') {
   const safeTitle = escapeHtmlAttribute(title || '出错了');
   const safeMessage = escapeHtmlAttribute(message || '操作无法完成');
+  const safeHint = escapeHtmlAttribute(hint);
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -294,7 +338,7 @@ export function renderAppLoginErrorHtml(title, message) {
     </div>
     <div class="title">${safeTitle}</div>
     <div class="message">${safeMessage}</div>
-    <div class="hint">请返回安卓 App 重新发起跳转</div>
+    <div class="hint">${safeHint}</div>
   </div>
 </body>
 </html>`;

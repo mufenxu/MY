@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_BASE_PATH, IS_PLATFORM_SSO, redirectToPlatformLogin } from './runtime';
+import { storeUserSummary } from './userSummary';
 
 const CSRF_COOKIE_NAME = 'core_admin_csrf';
 const AUTH_REQUEST_PATHS = new Set([
@@ -172,7 +173,7 @@ api.interceptors.response.use(
                     rememberCsrfToken(res);
                     clearLegacyCredentials();
                     if (res.data.user) {
-                        localStorage.setItem('user', JSON.stringify(res.data.user));
+                        storeUserSummary(res.data.user);
                     }
                 }
 

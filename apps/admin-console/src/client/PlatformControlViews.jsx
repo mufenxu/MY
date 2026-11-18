@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -89,8 +89,13 @@ export function TaskCenterView({ onNavigate, targetEntityId = '' }) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // 深链定位只做一次：任务列表每 15 秒轮询刷新，如果每次都重跑，
+  // 用户的筛选会被清空、页面会被反复滚回目标行。
+  const locatedTaskRef = useRef('');
   useEffect(() => {
     if (!targetEntityId || !data?.tasks) return undefined;
+    if (locatedTaskRef.current === targetEntityId) return undefined;
+    locatedTaskRef.current = targetEntityId;
     setStatusFilter('all');
     setSourceFilter('all');
     const frame = window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
@@ -103,7 +108,9 @@ export function TaskCenterView({ onNavigate, targetEntityId = '' }) {
   useEffect(() => {
     const hasActive = data?.tasks?.some((task) => ['pending', 'running', 'action_required'].includes(task.status));
     if (!hasActive) return undefined;
-    const timer = window.setInterval(() => load(true), 15000);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') load(true);
+    }, 15000);
     return () => window.clearInterval(timer);
   }, [data?.tasks, load]);
 
@@ -617,8 +624,18 @@ export function PublicStatusView() {
 
   useEffect(() => {
     load();
-    const timer = window.setInterval(load, 30000);
-    return () => window.clearInterval(timer);
+    // 公开状态页常被长期挂在后台标签页里：隐藏时不轮询，回到前台立即补一次。
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') load();
+    }, 30000);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [load]);
 
   const meta = PUBLIC_STATUS_META[data?.overall] || PUBLIC_STATUS_META.unknown;

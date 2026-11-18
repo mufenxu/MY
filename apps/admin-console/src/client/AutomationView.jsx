@@ -211,7 +211,9 @@ export default function AutomationView({ services, loading, refreshing, onRefres
 
   useEffect(() => {
     if (!taskRunning) return undefined;
-    const interval = window.setInterval(() => loadCt8({ quiet: true }), 15000);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') loadCt8({ quiet: true });
+    }, 15000);
     return () => window.clearInterval(interval);
   }, [loadCt8, taskRunning]);
 

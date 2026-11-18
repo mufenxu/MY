@@ -846,7 +846,7 @@
       <p id="seatWaitlistStatus" class="resv-status" role="status" aria-live="polite"></p>
     </section>
     <section class="resv-panel">
-      <div class="resv-panel-head"><div><h3>我的自动预约任务</h3><p>到点开始快速尝试。多时段始终预约同一座位，成功的时段会保留；结果待确认时请先查看我的预约。</p></div><button id="seatWaitlistReload" class="ghost" type="button">刷新</button></div>
+      <div class="resv-panel-head"><div><h3>我的自动预约任务</h3><p>到点开始抢座，学校系统繁忙时会持续重试约 10 分钟，不会一次失败就收工。多时段始终预约同一座位，成功的时段会保留；结果待确认时请先查看我的预约。</p></div><button id="seatWaitlistReload" class="ghost" type="button">刷新</button></div>
       <div id="seatWaitlistList" class="resv-list"><div class="resv-empty">打开本页签后自动加载。</div></div>
     </section>`;
 

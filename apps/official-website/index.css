@@ -401,6 +401,7 @@ select:focus-visible {
   line-height: 1.16;
   letter-spacing: 0;
   margin-bottom: 20px;
+  text-wrap: balance;
 }
 
 .gradient-headline {
@@ -423,15 +424,6 @@ select:focus-visible {
   max-width: 720px;
   margin: 0 auto 36px;
   font-weight: 400;
-}
-
-.hero-cta-group {
-  display: flex;
-  gap: 16px;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
 }
 
 .hero-highlights-chips {
@@ -476,6 +468,7 @@ select:focus-visible {
 
 .chip-dot.blue { background: #3B82F6; box-shadow: 0 0 8px rgba(59, 130, 246, 0.6); }
 .chip-dot.orange { background: #D97724; box-shadow: 0 0 8px rgba(217, 119, 36, 0.6); }
+.chip-dot.green { background: var(--leaf-text); box-shadow: 0 0 8px rgba(63, 122, 18, 0.6); }
 .chip-dot.purple { background: #8B5CF6; box-shadow: 0 0 8px rgba(139, 92, 246, 0.6); }
 
 .btn,
@@ -816,6 +809,7 @@ select:focus-visible {
 .icon-amber { background: rgba(245, 158, 11, 0.12); color: var(--color-accent-amber); }
 .icon-sky { background: rgba(14, 165, 233, 0.12); color: var(--color-accent-sky); }
 .icon-purple { background: rgba(139, 92, 246, 0.12); color: var(--color-accent-purple); }
+.icon-blue { background: var(--blue-soft); color: var(--blue); }
 
 .feature-title {
   font-size: 20px;
@@ -1111,7 +1105,7 @@ select:focus-visible {
   }
 
   .hero-section { padding: 82px 16px 50px; }
-  .hero-cta-group { flex-direction: column; width: 100%; max-width: 320px; margin-left: auto; margin-right: auto; margin-bottom: 16px; }
+  .gradient-headline { display: inline-block; text-wrap: balance; }
   .hero-highlights-chips { gap: 8px; margin-bottom: 36px; }
   .chip-item { padding: 5px 12px; font-size: 12px; }
   .btn-hero-primary { width: 100%; text-align: center; }
@@ -1123,7 +1117,8 @@ select:focus-visible {
 
   .futuristic-banner { flex-direction: column; text-align: center; padding: 32px 18px; }
   .footer-container { flex-direction: column; gap: 28px; text-align: center; }
-  .footer-links-group { justify-content: center; gap: 36px; }
+  .footer-links-group { justify-content: center; flex-wrap: wrap; gap: 22px 20px; }
+  .footer-col { min-width: 92px; }
 }
 
 /* Small Mobile Screens (< 480px / iPhone SE) */

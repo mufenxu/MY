@@ -350,6 +350,7 @@ export function IncidentsView({ session, targetEntityId = '', onNavigate }) {
   const [message, setMessage] = useState('');
   const canOperate = roleAtLeast(session.user?.role, 'operator');
 
+  const locatedIncidentRef = useRef('');
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -359,7 +360,12 @@ export function IncidentsView({ session, targetEntityId = '', onNavigate }) {
       const data = await requestJson(`/api/incidents${query}`);
       setIncidents(data.incidents || []);
       setSelectedId((current) => {
-        if (targetEntityId && (data.incidents || []).some((item) => item.id === targetEntityId)) return targetEntityId;
+        // 深链目标只在首次到达时选中一次；之后用户选了别的事件，刷新列表不能再跳回去。
+        if (targetEntityId && locatedIncidentRef.current !== targetEntityId
+          && (data.incidents || []).some((item) => item.id === targetEntityId)) {
+          locatedIncidentRef.current = targetEntityId;
+          return targetEntityId;
+        }
         return (data.incidents || []).some((item) => item.id === current) ? current : data.incidents?.[0]?.id || null;
       });
     } catch (requestError) {
@@ -525,8 +531,12 @@ export function ReleasesView({ session, targetEntityId = '' }) {
     await runRequest((signal) => requestJson('/api/releases', { signal }), setData);
   }, [runRequest]);
   useEffect(() => { load(); }, [load]);
+  // 同上：深链只定位一次，之后的轮询刷新不再收起用户展开的历史、也不再抢滚动位置。
+  const locatedReleaseRef = useRef('');
   useEffect(() => {
     if (!targetEntityId || !data) return undefined;
+    if (locatedReleaseRef.current === targetEntityId) return undefined;
+    locatedReleaseRef.current = targetEntityId;
     const buildIndex = (data.builds || []).findIndex((build) => build.id === targetEntityId);
     if (buildIndex >= 0) {
       setHistoryExpanded(buildIndex >= RELEASE_HISTORY_COLLAPSED_LIMIT);

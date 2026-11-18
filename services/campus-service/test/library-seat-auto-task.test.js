@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createLibrarySeatClient } from "../src/lib/library-seat.js";
 import {
   LIBRARY_SEAT_AUTO_TASK_DEFAULT_RUN_MINUTE,
+  LIBRARY_SEAT_AUTO_TASK_MAX_ATTEMPTS,
+  LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS,
   librarySeatAutoTaskNextRunDelay,
   librarySeatAutoTaskRunAtMs,
   librarySeatAutoTaskRunPlan,
@@ -285,8 +288,157 @@ test("unavailable confirmation keeps a submission pending without changing seats
   assert.equal(lookups, 2);
 });
 
+test("the task rides out a seven-minute school outage and still books a seat", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: beijingNow("2026-11-08", 1315).getTime() });
+  const task = normalizeLibrarySeatAutoTaskInput(baseInput);
+  // 7 分钟超过旧的 5 分钟窗口：只靠加长窗口才能撑到学校恢复。
+  const recoverAt = Date.now() + 7 * 60_000;
+  const timeout = (seconds) => Object.assign(
+    new Error(`学校座位预约系统 ${seconds} 秒内没有响应（系统繁忙），本次提交结果未知。`),
+    { status: 504, code: "LIBRARY_SEAT_TIMEOUT" });
+  const prepared = { candidates: [{ seatId: "s8", seatLabel: "8", areaId: "a1", areaName: "甲区",
+    tier: "preferred", label: 8 }], blocked: new Set() };
+  let submissions = 0;
+  const client = {
+    getMyReservations: async () => {
+      if (Date.now() < recoverAt) throw timeout(15);
+      return [];
+    },
+    submitReservation: async () => {
+      if (Date.now() < recoverAt) throw timeout(30);
+      submissions++;
+    }
+  };
+
+  const deadline = Date.now() + 10 * 60_000;
+  let success = null;
+  let confirmingSeen = 0;
+  while (Date.now() < deadline) {
+    const scan = await scanLibrarySeatAutoTask({ task, client, prepared, now: new Date(), maxAttemptsPerScan: 1 });
+    if (scan.status === "success") { success = scan; break; }
+    if (scan.status === "confirming") confirmingSeen++;
+    assert.ok(["confirming", "retry", "empty"].includes(scan.status), `unexpected ${scan.status}`);
+    t.mock.timers.tick(Math.max(750, Number(scan.retryAfterMs) || 0));
+  }
+
+  assert.ok(confirmingSeen > 3, "学校卡住期间应处于待确认状态");
+  assert.ok(success, "学校恢复后应继续尝试并预约成功");
+  assert.equal(success.seat.seatLabel, "8");
+  assert.equal(submissions, 1, "确认没有生效后才重新提交，且不再重复提交");
+});
+
 test("deadline wake-up does not add a fixed delay", () => {
   const task = normalizeLibrarySeatAutoTaskInput(baseInput);
   const now = new Date("2026-11-08T21:54:59.800+08:00");
   assert.equal(librarySeatAutoTaskNextRunDelay([task], now, { prewarmMs: 0 }), 200);
+});
+
+test("the retry window defaults to ten minutes and the attempt budget covers all of it", () => {
+  if (!process.env.LIBRARY_SEAT_AUTO_WINDOW_MS) {
+    assert.equal(LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS, 10 * 60_000);
+  }
+  // 次数预算必须撑满整个窗口，否则窗口拉长后仍会被旧的固定次数上限提前截停。
+  assert.ok(LIBRARY_SEAT_AUTO_TASK_MAX_ATTEMPTS * 7_500 >= LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS);
+  assert.ok(LIBRARY_SEAT_AUTO_TASK_MAX_ATTEMPTS >= 40);
+});
+
+test("a timed-out submission resumes retrying once the school confirms nothing was booked", async () => {
+  const task = normalizeLibrarySeatAutoTaskInput(baseInput);
+  const prepared = { candidates: [{ seatId: "s8", seatLabel: "8", areaId: "a1", tier: "preferred", label: 8 }], blocked: new Set() };
+  let submissions = 0;
+  const options = { task, prepared, now: beijingNow("2026-11-08", 1315), client: {
+    submitReservation: async () => {
+      submissions++;
+      throw Object.assign(new Error("学校座位预约系统 30 秒内没有响应（系统繁忙），本次提交结果未知。"),
+        { status: 504, code: "LIBRARY_SEAT_TIMEOUT" });
+    },
+    getMyReservations: async () => []
+  } };
+
+  const first = await scanLibrarySeatAutoTask(options);
+  assert.equal(first.status, "confirming");
+  assert.equal(prepared.pending.seatId, "s8");
+  assert.equal(submissions, 1);
+
+  // 学校已经卡了一阵：核对间隔够了，两次「查不到」之后必须放行重新提交。
+  prepared.pendingSince = Date.now() - 30_000;
+  const resumed = await scanLibrarySeatAutoTask(options);
+  assert.equal(resumed.status, "retry");
+  assert.equal(prepared.pending, null);
+  assert.match(resumed.message, /继续尝试/);
+
+  assert.equal((await scanLibrarySeatAutoTask(options)).status, "confirming");
+  assert.equal(submissions, 2);
+});
+
+test("a confirmation lookup that fails resets the clean-read counter", async () => {
+  const task = normalizeLibrarySeatAutoTaskInput(baseInput);
+  const prepared = { candidates: [{ seatId: "s8" }], blocked: new Set() };
+  let lookups = 0;
+  const options = { task, prepared, now: beijingNow("2026-11-08", 1315), client: {
+    submitReservation: async () => { throw Object.assign(new Error("超时"), { status: 504, code: "LIBRARY_SEAT_TIMEOUT" }); },
+    getMyReservations: async () => {
+      lookups++;
+      if (lookups === 1) return [];
+      if (lookups === 2) throw Object.assign(new Error("查询超时"), { status: 504, code: "LIBRARY_SEAT_TIMEOUT" });
+      return [];
+    }
+  } };
+  await scanLibrarySeatAutoTask(options);
+  assert.equal(prepared.pendingCleanChecks, 1);
+  prepared.pendingSince = Date.now() - 30_000;
+  assert.equal((await scanLibrarySeatAutoTask(options)).status, "confirming");
+  assert.equal(prepared.pendingCleanChecks, 0);
+  // 计数清零后要重新连续核对两次，才允许重新提交。
+  prepared.pendingSince = Date.now() - 30_000;
+  assert.equal((await scanLibrarySeatAutoTask(options)).status, "confirming");
+  assert.equal(prepared.pendingCleanChecks, 1);
+  assert.equal((await scanLibrarySeatAutoTask(options)).status, "retry");
+});
+
+test("an availability query timeout retries instead of failing the whole task", async () => {
+  const task = normalizeLibrarySeatAutoTaskInput(baseInput);
+  const failures = [];
+  const result = await scanLibrarySeatAutoTask({ task, now: beijingNow("2026-11-08", 1315),
+    onFailure: (error, candidate, stage) => failures.push({ code: error.code, stage }),
+    client: {
+      listAreas: async () => {
+        throw Object.assign(new Error("学校座位预约系统 15 秒内没有响应（系统繁忙），本次提交结果未知。"),
+          { status: 504, code: "LIBRARY_SEAT_TIMEOUT" });
+      }
+    } });
+  assert.equal(result.status, "retry");
+  assert.ok(result.retryAfterMs > 0);
+  assert.deepEqual(failures, [{ code: "LIBRARY_SEAT_TIMEOUT", stage: "availability" }]);
+});
+
+test("an aborted upstream request is reported as a school timeout, not an English DOM error", async () => {
+  const client = createLibrarySeatClient({
+    token: "token",
+    requestImpl: async () => {
+      throw Object.assign(new Error("This operation was aborted"), { name: "AbortError", code: 20 });
+    }
+  });
+  await assert.rejects(() => client.getMyReservations(), (error) => {
+    assert.equal(error.code, "LIBRARY_SEAT_TIMEOUT");
+    assert.equal(error.status, 504);
+    assert.match(error.message, /学校座位预约系统 \d+ 秒内没有响应/);
+    return true;
+  });
+});
+
+test("the submission timeout is configurable per call", async () => {
+  const calls = [];
+  const client = createLibrarySeatClient({
+    token: "token",
+    requestImpl: async (pathname, data, options) => {
+      calls.push(options.timeoutMs);
+      return { payload: { code: 200, data: null }, status: 200, ok: true };
+    }
+  });
+  await client.submitReservation({ seatId: "s8", date: "2026-11-09", startMinute: 540, endMinute: 660 },
+    { timeoutMs: 30_000 });
+  await client.getMyReservations();
+  assert.equal(calls[0], 30_000);
+  assert.equal(calls[1], 15_000);
 });

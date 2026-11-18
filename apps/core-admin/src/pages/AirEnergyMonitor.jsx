@@ -229,6 +229,11 @@ const AirEnergyMonitor = () => {
         let timer = 0;
         let controller = null;
         const poll = async () => {
+            // 标签页在后台时不请求设备云接口；回到前台由 visibilitychange 立即补一次。
+            if (document.hidden) {
+                timer = -1;
+                return;
+            }
             controller = new AbortController();
             if (timer === 0) {
                 await Promise.all([
@@ -242,8 +247,16 @@ const AirEnergyMonitor = () => {
         };
         void poll();
 
+        const handleVisibility = () => {
+            if (stopped || document.hidden || !autoRefresh) return;
+            window.clearTimeout(timer);
+            void poll();
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+
         return () => {
             stopped = true;
+            document.removeEventListener('visibilitychange', handleVisibility);
             window.clearTimeout(timer);
             controller?.abort();
         };

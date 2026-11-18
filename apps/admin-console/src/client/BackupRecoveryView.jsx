@@ -96,7 +96,11 @@ export function BackupRecoveryView({ session, BackupQualityStrip, BackupOffsiteP
 
   useEffect(() => {
     if (!activeJob || activeJob.status !== 'running') return undefined;
+    // 上一次查询还没返回时不再发下一次：接口慢于 2.2 秒时并发的响应会让完成分支重复执行。
+    let inFlight = false;
     const timer = window.setInterval(async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
         const result = await requestJson(`/api/backups/jobs/${encodeURIComponent(activeJob.id)}`);
         if (!result.job || result.job.id !== activeJob.id) return;
@@ -126,6 +130,8 @@ export function BackupRecoveryView({ session, BackupQualityStrip, BackupOffsiteP
           return;
         }
         setActionError(error.message);
+      } finally {
+        inFlight = false;
       }
     }, 2200);
     return () => window.clearInterval(timer);

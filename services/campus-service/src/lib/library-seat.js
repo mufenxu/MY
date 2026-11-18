@@ -1,4 +1,4 @@
-import { HttpError } from "./http.js";
+import { HttpError, isUpstreamNetworkFailure } from "./http.js";
 
 export const LIBRARY_SEAT_ORIGIN = "https://libic.hgu.edu.cn";
 export const LIBRARY_SEAT_API_BASE = `${LIBRARY_SEAT_ORIGIN}/jsq`;
@@ -33,6 +33,32 @@ function writeSeatAvailabilityCache(key, seats) {
 
 function fail(status, message, code = "LIBRARY_SEAT_REQUEST_FAILED", details = null) {
   throw new HttpError(status, message, details, code);
+}
+
+function isAbortError(error) {
+  return Boolean(error) && (error.name === "AbortError" || error.code === "ABORT_ERR" || error.code === 20);
+}
+
+/**
+ * 学校在放号高峰会排队几十秒甚至几分钟。请求被 AbortController 掐断时抛出的是
+ * 没有 status 的 DOMException（message 是英文 "This operation was aborted"），
+ * 上层只能把它当成"未知原因"，界面和 last_failure 里也就只剩一句英文。
+ * 这里统一翻译成带状态码的 HttpError：
+ * - 504 LIBRARY_SEAT_TIMEOUT：本地等超时了，请求可能已经送达，结果未知；
+ * - 502 LIBRARY_SEAT_NETWORK：连接都没建立，肯定没送达，可以放心重试。
+ */
+export function librarySeatTransportError(error, timeoutMs, endpoint = "") {
+  if (error?.status) return error;
+  if (isAbortError(error)) {
+    const seconds = Math.max(1, Math.round(Number(timeoutMs) / 1000));
+    return new HttpError(504, `学校座位预约系统 ${seconds} 秒内没有响应（系统繁忙），本次提交结果未知。`,
+      { endpoint, timeoutMs, timeout: true }, "LIBRARY_SEAT_TIMEOUT");
+  }
+  if (isUpstreamNetworkFailure(error)) {
+    return new HttpError(502, "连接学校座位预约系统失败，请稍后重试。",
+      { endpoint, cause: String(error?.code || error?.message || "") }, "LIBRARY_SEAT_NETWORK");
+  }
+  return error;
 }
 
 function dataOf(payload) {
@@ -409,9 +435,9 @@ export function createLibrarySeatClient({
 } = {}) {
   let currentToken = stringValue(token);
 
-  async function defaultRequestImpl(pathname, data, { token: memberToken }) {
+  async function defaultRequestImpl(pathname, data, { token: memberToken, timeoutMs: requestTimeoutMs = timeoutMs } = {}) {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), requestTimeoutMs);
     try {
       const response = await fetchImpl(`${String(baseUrl).replace(/\/+$/, "")}${pathname}`, {
         method: "POST",
@@ -431,18 +457,24 @@ export function createLibrarySeatClient({
     }
   }
 
-  async function request(pathname, data = {}, { retry = true, tokenRequired = true, conflict = false } = {}) {
+  async function request(pathname, data = {}, { retry = true, tokenRequired = true, conflict = false, timeoutMs: callTimeoutMs } = {}) {
     if (tokenRequired && !currentToken) {
       if (typeof getMemberToken !== "function") fail(401, "座位预约会话未连接，请先登录学校账号。", "LIBRARY_SEAT_AUTH_REQUIRED");
       currentToken = stringValue(await getMemberToken());
       if (!currentToken) fail(401, "座位预约会话已过期，请重新登录学校账号。", "LIBRARY_SEAT_AUTH_EXPIRED");
     }
 
-    const rawResult = await (requestImpl || defaultRequestImpl)(pathname, data || {}, {
-      token: currentToken,
-      baseUrl,
-      timeoutMs
-    });
+    const effectiveTimeoutMs = Math.max(1_000, Math.trunc(Number(callTimeoutMs) || timeoutMs));
+    let rawResult;
+    try {
+      rawResult = await (requestImpl || defaultRequestImpl)(pathname, data || {}, {
+        token: currentToken,
+        baseUrl,
+        timeoutMs: effectiveTimeoutMs
+      });
+    } catch (error) {
+      throw librarySeatTransportError(error, effectiveTimeoutMs, pathname);
+    }
     const payload = rawResult && Object.hasOwn(rawResult, "payload") ? rawResult.payload : rawResult;
     const statusCode = Number(rawResult?.status || 200);
     const ok = rawResult?.ok !== undefined ? Boolean(rawResult.ok) : statusCode >= 200 && statusCode < 300;
@@ -452,7 +484,7 @@ export function createLibrarySeatClient({
     if (authError && retry && typeof getMemberToken === "function") {
       currentToken = stringValue(await getMemberToken());
       if (!currentToken) fail(401, "座位预约会话已过期，请重新登录学校账号。", "LIBRARY_SEAT_AUTH_EXPIRED");
-      return request(pathname, data, { retry: false, tokenRequired, conflict });
+      return request(pathname, data, { retry: false, tokenRequired, conflict, timeoutMs: effectiveTimeoutMs });
     }
     if (authError) fail(401, upstreamMessage(payload, "座位预约会话已过期，请重新登录学校账号。"), "LIBRARY_SEAT_AUTH_EXPIRED");
     if (!ok || (payload && ((payload.code !== undefined && code !== 200 && payload.status !== true) || payload.status === false))) {
@@ -579,12 +611,12 @@ export function createLibrarySeatClient({
       ),
       { roomId: input.roomId ?? input.areaId }
     ),
-    submitReservation: async (input = {}) => {
+    submitReservation: async (input = {}, options = {}) => {
       const normalized = normalizeLibrarySeatReservationInput(input);
       return request(
         `/static/frontApi/make/freeBook/${normalized.seatId}/${normalized.date}/${normalized.startMinute}/${normalized.endMinute}?capToken=${encodeURIComponent(normalized.capToken)}`,
         {},
-        { conflict: true }
+        { conflict: true, timeoutMs: options.timeoutMs }
       );
     }
   });

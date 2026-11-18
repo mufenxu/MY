@@ -7,6 +7,7 @@ import { createSequentialPoller } from '../utils/sequentialPoller';
 import { Turnstile } from '@marsidev/react-turnstile';
 import './Login.css';
 import { message } from '../utils/feedback';
+import { storeUserSummary } from '../utils/userSummary';
 
 // --- 三只探头的小动物：看输入、眯眼、躲到卡片后面 ---
 
@@ -156,7 +157,7 @@ const Login = () => {
             if (res.data.success) {
                 localStorage.removeItem('token');
                 localStorage.removeItem('refreshToken');
-                localStorage.setItem('user', JSON.stringify(res.data.user));
+                storeUserSummary(res.data.user);
                 window.dispatchEvent(new Event('core-auth-changed'));
                 message.success('登录成功');
                 navigate('/dashboard');
@@ -288,7 +289,7 @@ const ScanLogin = ({ navigate }) => {
             if (res.data.user) {
                 localStorage.removeItem('token');
                 localStorage.removeItem('refreshToken');
-                if (res.data.user) localStorage.setItem('user', JSON.stringify(res.data.user));
+                if (res.data.user) storeUserSummary(res.data.user);
                 window.dispatchEvent(new Event('core-auth-changed'));
                 sessionStorage.removeItem('active_qr_token');
                 message.success('扫码登录成功');

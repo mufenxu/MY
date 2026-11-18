@@ -4,9 +4,13 @@ import { mapWithConcurrency } from "./bounded-concurrency.js";
  * 图书馆座位「自动预约任务」：定点执行型。
  *
  * 与候补任务的区别（两者是不同功能，别混）：
- * - 自动预约任务：到用户设定的运行时刻（默认 21:55）启动短时快速尝试，
- *   抢到即成功；快速尝试窗口结束即停止。
+ * - 自动预约任务：到用户设定的运行时刻（默认 21:55）启动，持续尝试约 10 分钟，
+ *   抢到即成功；窗口结束仍未成功即停止。
  * - 候补任务：进入时段就持续监听，有人退座就抢，直到时段结束。
+ *
+ * 「学校卡住」是本功能的主要失败场景：放号瞬间学校会排队几十秒到几分钟，本地请求
+ * 会超时。超时的提交结果未知（可能已经受理），所以先进入待确认状态反复核对
+ * 「我的预约」，确认学校没生成这笔预约后才重新提交；整段窗口都留给它。
  *
  * 选座优先级（由高到低）：
  *   指定座位 → 指定座位的相邻号 → 座位号范围内（默认 1-45）→ 整个阅览区任意空位。
@@ -17,6 +21,8 @@ const SAFE_ID = /^[A-Za-z0-9_-]+$/;
 const DEFAULT_MIN_LABEL = 1;
 const DEFAULT_MAX_LABEL = 45;
 const NEIGHBOUR_RADIUS = 20;
+// 运行中刷新空位只取最空的几个阅览区：每个区一次查询，取太多会把窗口耗在查询上。
+const REFRESH_MAX_AREAS = 10;
 
 export const LIBRARY_SEAT_AUTO_TASK_DEFAULT_MIN_LABEL = DEFAULT_MIN_LABEL;
 export const LIBRARY_SEAT_AUTO_TASK_DEFAULT_MAX_LABEL = DEFAULT_MAX_LABEL;
@@ -26,7 +32,22 @@ export const LIBRARY_SEAT_AUTO_TASK_DEFAULT_RUN_MINUTE = 21 * 60 + 55;
 
 export const LIBRARY_SEAT_AUTO_TASK_PREWARM_MS = 45_000;
 export const LIBRARY_SEAT_AUTO_TASK_RETRY_INTERVAL_MS = 750;
-export const LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS = 60_000;
+// 放号瞬间学校会排队几十秒到几分钟。窗口太短（原来 60 秒）会出现「学校刚恢复、
+// 我们已经收工」，所以给到 10 分钟；窗口结束仍在待确认状态才算这次真的没抢到。
+export const LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS = Math.max(60_000,
+  Math.trunc(Number(process.env.LIBRARY_SEAT_AUTO_WINDOW_MS)) || 10 * 60_000);
+// 提交次数上限跟着窗口伸缩，按「平均 7.5 秒一次提交」预算，避免次数上限先于
+// 窗口把任务截停（40 次是 5 分钟时代的预算，窗口拉长后必须同步放宽）。
+export const LIBRARY_SEAT_AUTO_TASK_MAX_ATTEMPTS = Math.max(40,
+  Math.ceil(LIBRARY_SEAT_AUTO_TASK_RETRY_WINDOW_MS / 7_500));
+// 提交请求单独给长一点的超时：放号高峰排队很常见，15 秒就掐断只会制造
+// 大量「结果未知」，反而更难处理。
+export const LIBRARY_SEAT_AUTO_TASK_SUBMIT_TIMEOUT_MS = Math.max(5_000,
+  Math.trunc(Number(process.env.LIBRARY_SEAT_AUTO_SUBMIT_TIMEOUT_MS)) || 30_000);
+// 提交超时后要核对「我的预约」：单次查不到不代表没受理（记录可能还没同步），
+// 连续核对到阈值且间隔够久，才认定这次提交没有生效。
+export const LIBRARY_SEAT_AUTO_TASK_CONFIRM_GRACE_MS = 5_000;
+const CONFIRM_CLEAN_CHECKS = 2;
 
 function fail(message, code = "INVALID_LIBRARY_SEAT_AUTO_TASK") {
   const error = new Error(message);
@@ -358,35 +379,50 @@ function successfulSeat(candidate) {
     message: librarySeatAutoTaskTierText(candidate.tier, candidate.label), seat: candidate };
 }
 
+function minuteOfTime(text) {
+  const match = String(text || "").match(/(?:^|\s)(\d{1,2}):(\d{2})/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+}
+
+function overlapsSlot(row, task) {
+  const start = minuteOfTime(row.startTime);
+  const end = minuteOfTime(row.endTime);
+  return start !== null && end !== null && start < task.endMinute && end > task.startMinute;
+}
+
+function clearPending(prepared) {
+  prepared.pending = null;
+  prepared.pendingRefused = false;
+  prepared.pendingSince = 0;
+  prepared.pendingCleanChecks = 0;
+}
+
 async function confirmPendingReservation(prepared, task, client, shouldStop = () => false, onFailure = () => {}) {
   const candidate = prepared.pending;
   if (!candidate) return null;
+  const nowMs = Date.now();
+  const pendingSince = Number(prepared.pendingSince) > 0 ? Number(prepared.pendingSince) : nowMs;
   let stage = "confirm";
   try {
     const rows = await client.getMyReservations();
-    const minute = (text) => {
-      const match = String(text || "").match(/(?:^|\s)(\d{1,2}):(\d{2})/);
-      return match ? Number(match[1]) * 60 + Number(match[2]) : null;
-    };
-    const active = (Array.isArray(rows) ? rows : []).filter((row) => row.date === task.date
+    // 学校返回的日期可能是 "2026-11-19" 也可能是 "2026-11-19 00:00:00"，只比前 10 位。
+    const sameDate = (value) => String(value || "").slice(0, 10) === task.date;
+    const active = (Array.isArray(rows) ? rows : []).filter((row) => sameDate(row.date)
       && ["RESERVE", "CHECK_IN", "LEAVE"].includes(row.status));
     const matched = active.find((row) => row.seatId === candidate.seatId
-      && minute(row.startTime) === task.startMinute && minute(row.endTime) === task.endMinute);
+      && minuteOfTime(row.startTime) === task.startMinute && minuteOfTime(row.endTime) === task.endMinute);
     if (matched) {
-      prepared.pending = null;
-      prepared.pendingRefused = false;
+      clearPending(prepared);
       return successfulSeat(candidate);
     }
     // 明确拒绝才允许在核对记录和实时空位后换座；超时仍保持待确认。
     if (prepared.pendingRefused) {
-      if (active.some((row) => minute(row.startTime) < task.endMinute && minute(row.endTime) > task.startMinute)) {
-        prepared.pending = null;
-        prepared.pendingRefused = false;
+      if (active.some((row) => overlapsSlot(row, task))) {
+        clearPending(prepared);
         return { status: "failed", message: "所选时段已有有效预约，请查看我的预约，任务已停止重复提交。" };
       }
       if (await shouldStop()) {
-        prepared.pending = null;
-        prepared.pendingRefused = false;
+        clearPending(prepared);
         return { status: "stopped", message: "任务已停止，已取消后续尝试。" };
       }
       if (prepared.fixedSeat) {
@@ -395,26 +431,49 @@ async function confirmPendingReservation(prepared, task, client, shouldStop = ()
           startMinute: task.startMinute, endMinute: task.endMinute, amPm: 0, refresh: true });
         const seats = Array.isArray(result) ? result : result?.seats || [];
         const available = seats.some((seat) => seat.id === candidate.seatId && seat.isFree === true);
-        prepared.pending = null;
-        prepared.pendingRefused = false;
+        clearPending(prepared);
         return available
           ? { status: "retry", candidateRejected: true, message: "已核对预约记录，目标座位仍空闲，继续尝试该时段。" }
           : { status: "failed", seatUnavailable: true, message: "指定座位在该时段已被占用，保留其他时段结果。" };
       }
       stage = "availability";
-      const fresh = await prepareLibrarySeatAutoTaskSeats({ task, client });
+      const fresh = await prepareLibrarySeatAutoTaskSeats({ task, client, maxAreas: REFRESH_MAX_AREAS });
       prepared.blocked.add(candidate.seatId);
       prepared.candidates = fresh.candidates;
       prepared.topology = false;
-      prepared.pending = null;
-      prepared.pendingRefused = false;
+      clearPending(prepared);
       return { status: "retry", message: "学校返回预约失败，已核对我的预约并刷新目标时段空位，继续尝试。" };
     }
+    // 请求超时（结果未知）的收尾路径：确认学校确实没生成这笔预约后才重新提交。
+    const overlapping = active.find((row) => overlapsSlot(row, task));
+    if (overlapping) {
+      clearPending(prepared);
+      return { status: "failed", seatId: String(overlapping.seatId || ""),
+        message: "该时段已有有效预约，请查看我的预约，任务已停止重复提交。" };
+    }
+    prepared.pendingCleanChecks = (Number(prepared.pendingCleanChecks) || 0) + 1;
+    if (prepared.pendingCleanChecks >= CONFIRM_CLEAN_CHECKS
+      && nowMs - pendingSince >= LIBRARY_SEAT_AUTO_TASK_CONFIRM_GRACE_MS) {
+      clearPending(prepared);
+      return { status: "retry", retryAfterMs: LIBRARY_SEAT_AUTO_TASK_RETRY_INTERVAL_MS,
+        message: "学校系统已恢复响应，已确认上次提交没有生成预约，继续尝试。" };
+    }
+    return { status: "confirming", retryAfterMs: 1_000,
+      message: "预约提交结果待确认，正在核对我的预约，暂不重复提交。" };
   } catch (error) {
-    onFailure(error, candidate, stage);
     // 查询暂时失败或记录尚未同步时保留待确认状态，避免重复预约。
+    prepared.pendingCleanChecks = 0;
+    onFailure(error, candidate, stage);
   }
-  return { status: "confirming", message: "预约提交结果待确认，正在核对我的预约，暂不重复提交。" };
+  return { status: "confirming", retryAfterMs: 1_000, message: "预约提交结果待确认，正在核对我的预约，暂不重复提交。" };
+}
+
+/** 提交结果未知（超时/断连/5xx）时进入待确认，并记录起始时刻用于判断何时可以重新提交。 */
+function markPending(prepared, candidate, refused = false) {
+  prepared.pending = candidate;
+  prepared.pendingRefused = refused;
+  prepared.pendingSince = Date.now();
+  prepared.pendingCleanChecks = 0;
 }
 
 export async function scanLibrarySeatAutoTask({
@@ -434,7 +493,17 @@ export async function scanLibrarySeatAutoTask({
 
   task = normalizeLibrarySeatAutoTaskInput(task);
   if (await shouldStop()) return { status: "stopped", message: "任务已停止，已取消后续尝试。" };
-  prepared ||= await prepareLibrarySeatAutoTaskSeats({ task, client, maxAreas: maxAreasPerScan });
+  if (!prepared) {
+    try {
+      prepared = await prepareLibrarySeatAutoTaskSeats({ task, client, maxAreas: maxAreasPerScan });
+    } catch (error) {
+      // 放号高峰连空位都查不出来是常态，不能因此判定任务失败，交给上层下一轮重试。
+      onFailure(error, null, "availability");
+      if (error?.status && error.status < 500 && error.status !== 429) throw error;
+      return { status: "retry", retryAfterMs: 2_000,
+        message: error?.message || "学校座位预约系统暂时不可用，稍后继续尝试。" };
+    }
+  }
   prepared.blocked ||= new Set();
   if (prepared.pending) return confirmPendingReservation(prepared, task, client, shouldStop, onFailure);
   let attempts = 0;
@@ -444,6 +513,7 @@ export async function scanLibrarySeatAutoTask({
     if (attempts >= attemptLimit) break;
     if (await shouldStop()) return { status: "stopped", message: "任务已停止，已取消后续尝试。" };
     attempts++;
+    prepared.emptyStreak = 0;
     onAttempt(candidate);
     try {
       await client.submitReservation({
@@ -451,7 +521,7 @@ export async function scanLibrarySeatAutoTask({
         date: task.date,
         startMinute: task.startMinute,
         endMinute: task.endMinute
-      });
+      }, { timeoutMs: LIBRARY_SEAT_AUTO_TASK_SUBMIT_TIMEOUT_MS });
       return successfulSeat(candidate);
     } catch (error) {
       onFailure(error, candidate);
@@ -462,10 +532,14 @@ export async function scanLibrarySeatAutoTask({
         if (prepared.topology) return { status: "retry", message: "座位已被占用，刷新目标时段空位后继续尝试。" };
         continue;
       }
+      if (error?.status === 409 && /已有预约|已经预约|重复预约|已预约/u.test(String(error.message || ""))) {
+        markPending(prepared, candidate, true);
+        if (prepared.fixedSeat) return { status: "confirming", message: "提交结果待确认，正在核对该时段预约。" };
+        return confirmPendingReservation(prepared, task, client, shouldStop, onFailure);
+      }
       if (error?.status === 409 && ["LIBRARY_SEAT_UPSTREAM_REJECTED", "LIBRARY_SEAT_UPSTREAM_HTTP"].includes(error?.code)
         && /^(?:(?:座位)?预约失败(?:[,，]\s*请尽快选择其他时段或座位)?|操作失败|请求失败|座位预约系统拒绝了请求|座位预约系统返回 HTTP 409)[。！!]?$/u.test(error.message)) {
-        prepared.pending = candidate;
-        prepared.pendingRefused = true;
+        markPending(prepared, candidate, true);
         if (prepared.fixedSeat) return { status: "confirming", message: "提交结果待确认，正在核对该时段预约。" };
         return confirmPendingReservation(prepared, task, client, shouldStop, onFailure);
       }
@@ -475,8 +549,7 @@ export async function scanLibrarySeatAutoTask({
           retryAfterMs: Math.max(Number(error?.details?.retryAfterMs) || 0, error.status === 429 ? 2_000 : 750) };
       }
       if (error?.status >= 500 || !error?.status || /TIMEOUT|NETWORK/.test(error.code || "")) {
-        prepared.pending = candidate;
-        prepared.pendingRefused = false;
+        markPending(prepared, candidate, false);
         if (prepared.fixedSeat) return { status: "confirming", message: "提交结果待确认，正在核对该时段预约。" };
         return confirmPendingReservation(prepared, task, client, shouldStop, onFailure);
       }
@@ -484,7 +557,14 @@ export async function scanLibrarySeatAutoTask({
     }
   }
 
-  return { status: attempts >= attemptLimit ? "retry" : "empty", message: "本轮候选座位暂未预约成功，继续检测。" };
+  const emptyStreak = Number(prepared.emptyStreak) || 0;
+  if (!attempts) prepared.emptyStreak = emptyStreak + 1;
+  return { status: attempts >= attemptLimit ? "retry" : "empty", message: "本轮候选座位暂未预约成功，继续检测。",
+    // 整区无座时刷新空位很重（每个阅览区一次查询），别按 750ms 的频率压学校；
+    // 连续空轮次逐步拉长间隔，但首轮仍保留 2 秒级反应速度。
+    retryAfterMs: attempts >= attemptLimit
+      ? LIBRARY_SEAT_AUTO_TASK_RETRY_INTERVAL_MS
+      : Math.min(8_000, 2_000 + emptyStreak * 1_000) };
 }
 
 export function librarySeatAutoTaskTimes(startMinute, endMinute) {

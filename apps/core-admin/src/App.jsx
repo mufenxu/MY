@@ -8,6 +8,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import api from './utils/api';
 import { APP_BASE_PATH, IS_PLATFORM_SSO, redirectToPlatformLogin } from './utils/runtime';
 import { bindFeedbackApis, message } from './utils/feedback';
+import { storeUserSummary } from './utils/userSummary';
 
 const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -192,13 +193,13 @@ function App() {
         if (cancelled) return;
         const user = response.data.user || {};
         const authenticated = ['admin', 'super_admin'].includes(user.role);
-        if (authenticated) localStorage.setItem('user', JSON.stringify(user));
-        else localStorage.removeItem('user');
+        storeUserSummary(authenticated ? user : null);
         setSession({ ready: true, authenticated, error: null });
       })
       .catch((error) => {
         if (cancelled) return;
-        if (IS_PLATFORM_SSO && error.response?.status === 401) return redirectToPlatformLogin();
+        // 匿名访客打开公开查询页时 401 是正常情况，不跳统一登录。
+        if (IS_PLATFORM_SSO && error.response?.status === 401 && !/\/query\/?$/.test(window.location.pathname)) return redirectToPlatformLogin();
         if (!IS_PLATFORM_SSO && error.response?.status === 401) {
           setSession({ ready: true, authenticated: false, error: null });
           return;
@@ -222,7 +223,10 @@ function App() {
     };
   }, []);
 
-  if (session.error) {
+  // 公开查询页不需要管理员会话：会话探测失败（限流、5xx、超时）时不能把它换成「服务不可用」。
+  const isPublicQueryRoute = /\/query\/?$/.test(window.location.pathname);
+
+  if (session.error && !isPublicQueryRoute) {
     const status = session.error.response?.status;
     const isMappingError = IS_PLATFORM_SSO && status === 403;
     const isPermissionError = !IS_PLATFORM_SSO && status === 403;
