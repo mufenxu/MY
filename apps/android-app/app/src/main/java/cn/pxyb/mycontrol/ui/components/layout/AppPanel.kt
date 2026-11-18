@@ -17,13 +17,11 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
 import cn.pxyb.mycontrol.ui.theme.AppCardShape
-import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 /**
  * 卡片或弹窗内部的浅底分区：主题实色 `surfaceContainerLow`、12dp 圆角、无描边，不添加内容内边距。
@@ -48,19 +46,10 @@ fun AppInsetPanel(
 
 private const val AppPanelSelectedTint = 0.06f
 private val AppPanelSelectedBorderWidth = 1.5.dp
-private val AppPanelBorderWidth = 1.dp
 
 /**
- * 卡片投影高度：与网页登录「已批准」页那张卡（`Surface(shadowElevation = 8.dp)`）同一档位。
- * 平台 elevation 阴影自带透明度基线，不要在这里传带 alpha 的颜色——10% 的投影色落到屏幕上约等于 2%，肉眼看不见。
- */
-private val AppPanelShadowElevation = 8.dp
-
-/**
- * 统一卡片表面：主题实色、20dp 圆角、1dp 描边，浅色主题叠加 8dp 平台投影。
+ * 统一卡片表面：主题实色、20dp 圆角、0 阴影，默认无描边。
  *
- * 描边用满不透明的 `outlineVariant`：浅色下 0.5dp 半透明描边比页面底色还浅，等于没画。
- * 深色主题不投影（深色底上几乎不可见，还会让相邻卡片糊在一起），只用偏白描边分层。
  * [selected] 为真时使用全应用唯一的选中外观（主色细描边 + 极浅主色底）并暴露选中语义，
  * 业务页面不要再各自用描边粗细或底色表达选中。
  * [containerColor] / [border] 只用于开关开启、高优先这类业务状态色，普通卡片保持默认值。
@@ -75,7 +64,6 @@ fun AppPanel(
     border: BorderStroke? = null,
     content: @Composable () -> Unit,
 ) {
-    val dark = isAppInDarkTheme()
     val interactionSource = remember { MutableInteractionSource() }
     val primary = MaterialTheme.colorScheme.primary
     val resolvedContainer = if (selected) {
@@ -83,26 +71,11 @@ fun AppPanel(
     } else {
         containerColor
     }
-    val resolvedBorder = when {
-        selected -> BorderStroke(AppPanelSelectedBorderWidth, primary)
-        border != null -> border
-        dark -> BorderStroke(AppPanelBorderWidth, Color.White.copy(alpha = 0.10f))
-        else -> BorderStroke(AppPanelBorderWidth, MaterialTheme.colorScheme.outlineVariant)
-    }
+    val resolvedBorder = if (selected) BorderStroke(AppPanelSelectedBorderWidth, primary) else border
     Card(
-        modifier = modifier
-            .then(
-                if (dark) {
-                    Modifier
-                } else {
-                    Modifier.shadow(
-                        elevation = AppPanelShadowElevation,
-                        shape = AppCardShape,
-                        clip = false,
-                    )
-                },
-            )
+        modifier = Modifier
             .clip(AppCardShape)
+            .then(modifier)
             .then(if (selected) Modifier.semantics { this.selected = true } else Modifier)
             .then(
                 if (onClick != null) {

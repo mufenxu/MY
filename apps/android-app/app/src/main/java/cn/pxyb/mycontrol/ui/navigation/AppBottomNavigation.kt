@@ -36,12 +36,12 @@ import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 // 紧凑胶囊底栏：54dp 高（项 48dp 保住触控热区）+ 实色表面，选中用浅主色胶囊而非整格实心块。
-// 宽度按「每项定宽」算，不随屏幕吃满：关掉助手后胶囊仍是 246dp，位置居中不变形。
+// 宽度按「可用空间均分」算，助手位恒定预留：开关助手时胶囊宽度一个 dp 都不变，只改居中位置。
+// 手机不再设上界（360dp 屏 = 4×65 + 6 = 266dp），只有平板给项宽封顶 104dp（422dp）。
 private val NavBarShape = RoundedCornerShape(27.dp)
 private val NavItemShape = RoundedCornerShape(24.dp)
 private val NavBarInnerPadding = 3.dp
 private val NavItemMinHeight = 48.dp
-private val NavItemWidth = 60.dp
 private val NavItemWidthExpanded = 104.dp
 private val NavIconSize = 22.dp
 private val NavLabelSize = 11.sp
@@ -67,17 +67,16 @@ internal fun AppBottomNavigation(
             .fillMaxWidth()
             .padding(horizontal = NavDockHorizontalPadding, vertical = NavDockVerticalPadding),
     ) {
-        // 助手圆钮有固定占位：窄屏先压项宽，保证胶囊和圆钮都排得下、圆钮不被挤扁。
-        val assistantSlot = if (assistant == null) {
-            0.dp
-        } else {
-            (if (expanded) NavAssistantSizeExpanded else NavAssistantSize) + NavDockGap
-        }
+        // 助手位恒定预留（即使按钮当前隐藏），这样开关助手时胶囊宽度完全不变，只改居中位置。
+        // 项宽把剩余空间均分给 4 个标签，圆钮始终保持原尺寸、不会被挤扁。
+        val assistantSlot = (if (expanded) NavAssistantSizeExpanded else NavAssistantSize) + NavDockGap
         val widthForItems = (maxWidth - assistantSlot - NavBarInnerPadding * 2).coerceAtLeast(0.dp)
-        val itemWidth = minOf(
-            if (expanded) NavItemWidthExpanded else NavItemWidth,
-            widthForItems / appNavigationTabs.size,
-        )
+        val itemWidth = if (expanded) {
+            // 平板给项宽封顶，避免 4 个标签横跨整块屏；手机直接均分，能多宽就多宽。
+            minOf(NavItemWidthExpanded, widthForItems / appNavigationTabs.size)
+        } else {
+            widthForItems / appNavigationTabs.size
+        }
         Row(
             // 整组居中：助手开关只改变这一组的内容宽度，胶囊自身宽度恒为 itemWidth × 4 + 内边距。
             modifier = Modifier.align(Alignment.Center),

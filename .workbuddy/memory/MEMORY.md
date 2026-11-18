@@ -36,3 +36,7 @@ cd apps/android-app && ./gradlew :app:compileDebugKotlin
     - UI 上网页端这个页签仍叫「自动预约任务」，但内部标识符保留 `waitlist`（`data-resv-tab="waitlist"`、`#resvSeatWaitlist`），因为它是挂载点、不是接口。
   - 21:55 只是「座位自动预约任务」的默认运行时间，既不属于候补，也不属于研讨间。
 - `test/asset-budget.test.js` 是硬闸门：`app.js`/`styles.css` 只剩个位数余量，新增前端代码必须走独立文件并同步登记 `package.json` 的 `check`/`lint` 和预算表。
+
+## 安卓卡片外观（2026-11-18 用户否掉全局投影）
+
+`AppPanel` 保持「主题实色 + 20dp 圆角 + 0 阴影 + 默认无描边」，**不要再给卡片加投影或统一描边**——加过两版都被否。那张好看的「登录已批准」卡是 `QrLoginScreen` 自己手写的 `Surface`（默认黑 8dp 投影），属局部特例，不要推广到 `AppPanel`。`ColorTokens.CardShadowLight` 现在只有底栏在用。

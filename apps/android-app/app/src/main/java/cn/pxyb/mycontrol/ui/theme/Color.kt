@@ -69,7 +69,7 @@ object ColorTokens {
     val ContainerHighestDark = Color(0xFF303C4C)
     val AppOutlineLight = Color(0xFFE2E6EB)
     val AppOutlineDark = Color(0xFF35404D)
-    // 卡片投影只用冷调低透明度营造柔和浮起，深色背景不投影、仅靠发丝描边分层。
+    // 底部胶囊导航的柔和投影色（冷调低透明度）；深色背景不投影，仅靠发丝描边分层。
     val CardShadowLight = Color(0x1A1E2F4D)
 
     val LoginBackgroundLight = Color(0xFFF7F9FC)

@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -36,7 +38,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import cn.pxyb.mycontrol.ui.components.layout.AppPanel
+import cn.pxyb.mycontrol.ui.components.layout.glassCardColor
 import cn.pxyb.mycontrol.ui.components.layout.glassShimmer
 import cn.pxyb.mycontrol.ui.theme.BrandCyan
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
@@ -47,7 +49,7 @@ import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 // 设计约束（对齐 apps/android-app/AGENTS.md 第 7 节「加载与网络容错规范」）：
 // 1. 首屏与长列表异步加载一律使用骨架屏预占位，禁止使用突兀的居中大菊花；
 // 2. 微光扫过统一走 Modifier.glassShimmer(dark)，深浅色自适应，禁止生硬白光；
-// 3. 卡片式占位直接复用 AppPanel，圆角、描边与投影与真实卡片逐像素一致（含深色不投影）；
+// 3. 占位块跟随毛玻璃卡片语言：20.dp 圆角、发丝描边、0 阴影；
 // 4. 同一组骨架共享一条呼吸脉冲动画，避免逐块各起动画拖慢首帧。
 // ------------------------------------------------------------------------------------------------
 
@@ -118,8 +120,15 @@ fun AppSkeletonRow(
     lineWidths: List<Float> = listOf(0.68f, 0.42f),
 ) {
     val dark = isAppInDarkTheme()
-    // 与 AppListCard 共用同一张卡片表面，加载态与数据到达后的描边、投影完全对齐。
-    AppPanel(modifier = modifier.glassShimmer(dark)) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .glassShimmer(dark),
+        shape = RoundedCornerShape(20.dp),
+        color = glassCardColor(),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)),
+        shadowElevation = 0.dp,
+    ) {
         Row(
             modifier = Modifier.padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,

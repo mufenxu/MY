@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.outlined.Computer
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Fingerprint
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -68,8 +70,6 @@ import cn.pxyb.mycontrol.data.QrLoginTarget
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
-import cn.pxyb.mycontrol.ui.components.display.AppDivider
-import cn.pxyb.mycontrol.ui.components.display.AppGroupedCard
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppOrbitLoader
 import cn.pxyb.mycontrol.ui.components.layout.AppHeaderIconButton
@@ -359,21 +359,29 @@ private fun QrApprovedScreen(target: QrLoginTarget, onClose: () -> Unit) {
                 modifier = Modifier.padding(top = 8.dp),
             )
 
-            // 登录信息卡片：走全局统一的分组卡片表面（1dp 描边 + 浅色 8dp 投影）
-            AppGroupedCard(modifier = Modifier.fillMaxWidth().padding(top = 30.dp)) {
-                QrApprovedDetailRow(Icons.Outlined.Computer, "登录设备", target.browser.label)
-                AppDivider()
-                QrApprovedDetailRow(Icons.Outlined.Language, "网络地址", target.browser.ip)
-                AppDivider()
-                QrApprovedDetailRow(
-                    Icons.Outlined.Fingerprint,
-                    "确认方式",
-                    when (target.confirmationMethod) {
-                        "passkey" -> "Passkey 生物识别"
-                        "unavailable" -> "Android Passkey 尚未配置"
-                        else -> "设备生物识别"
-                    },
-                )
+            // 登录信息卡片
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(top = 30.dp),
+                shape = RoundedCornerShape(22.dp),
+                color = MaterialTheme.colorScheme.surface,
+                shadowElevation = 8.dp,
+                border = BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f)),
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp)) {
+                    QrApprovedDetailRow(Icons.Outlined.Computer, "登录设备", target.browser.label)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    QrApprovedDetailRow(Icons.Outlined.Language, "网络地址", target.browser.ip)
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    QrApprovedDetailRow(
+                        Icons.Outlined.Fingerprint,
+                        "确认方式",
+                        when (target.confirmationMethod) {
+                            "passkey" -> "Passkey 生物识别"
+                            "unavailable" -> "Android Passkey 尚未配置"
+                            else -> "设备生物识别"
+                        },
+                    )
+                }
             }
 
             Spacer(Modifier.height(34.dp))
@@ -392,7 +400,7 @@ private fun QrApprovedDetailRow(icon: ImageVector, label: String, value: String)
         label = label,
         value = value,
         icon = icon,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        modifier = Modifier.padding(vertical = 8.dp),
         maxLines = 1,
     )
 }
