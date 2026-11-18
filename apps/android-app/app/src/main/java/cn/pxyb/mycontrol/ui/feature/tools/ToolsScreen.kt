@@ -682,7 +682,7 @@ private fun ModernRelayCard(
         label = "relay-bg",
     )
 
-    // 关闭时回落到 AppPanel 的统一发丝描边；开启时描边淡入设备强调色。
+    // 关闭时回落到 AppPanel 的统一描边；开启时描边淡入设备强调色。
     val animatedBorder by animateColorAsState(
         targetValue = target.activeAccent.copy(alpha = if (isOn) 0.35f else 0f),
         animationSpec = MotionTokens.standardTween(),

@@ -359,7 +359,7 @@ private fun QrApprovedScreen(target: QrLoginTarget, onClose: () -> Unit) {
                 modifier = Modifier.padding(top = 8.dp),
             )
 
-            // 登录信息卡片：走全局统一的分组卡片表面（发丝描边 + 浅色柔和投影）
+            // 登录信息卡片：走全局统一的分组卡片表面（1dp 描边 + 浅色 8dp 投影）
             AppGroupedCard(modifier = Modifier.fillMaxWidth().padding(top = 30.dp)) {
                 QrApprovedDetailRow(Icons.Outlined.Computer, "登录设备", target.browser.label)
                 AppDivider()

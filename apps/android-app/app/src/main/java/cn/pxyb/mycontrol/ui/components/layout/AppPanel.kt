@@ -23,7 +23,6 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
 import cn.pxyb.mycontrol.ui.theme.AppCardShape
-import cn.pxyb.mycontrol.ui.theme.ColorTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 /**
@@ -49,15 +48,19 @@ fun AppInsetPanel(
 
 private const val AppPanelSelectedTint = 0.06f
 private val AppPanelSelectedBorderWidth = 1.5.dp
-private val AppPanelBorderWidth = 0.5.dp
-
-/** 卡片柔和投影高度：浅色主题托起白卡，深色主题不投影，避免在深色底上糊成黑影。 */
-private val AppPanelShadowElevation = 6.dp
+private val AppPanelBorderWidth = 1.dp
 
 /**
- * 统一卡片表面：主题实色、20dp 圆角、0.5dp 发丝描边，浅色主题叠加 6dp 冷调柔和投影。
+ * 卡片投影高度：与网页登录「已批准」页那张卡（`Surface(shadowElevation = 8.dp)`）同一档位。
+ * 平台 elevation 阴影自带透明度基线，不要在这里传带 alpha 的颜色——10% 的投影色落到屏幕上约等于 2%，肉眼看不见。
+ */
+private val AppPanelShadowElevation = 8.dp
+
+/**
+ * 统一卡片表面：主题实色、20dp 圆角、1dp 描边，浅色主题叠加 8dp 平台投影。
  *
- * 深色主题只用描边分层——深色背景上投影几乎不可见，还会让相邻卡片糊在一起。
+ * 描边用满不透明的 `outlineVariant`：浅色下 0.5dp 半透明描边比页面底色还浅，等于没画。
+ * 深色主题不投影（深色底上几乎不可见，还会让相邻卡片糊在一起），只用偏白描边分层。
  * [selected] 为真时使用全应用唯一的选中外观（主色细描边 + 极浅主色底）并暴露选中语义，
  * 业务页面不要再各自用描边粗细或底色表达选中。
  * [containerColor] / [border] 只用于开关开启、高优先这类业务状态色，普通卡片保持默认值。
@@ -83,8 +86,8 @@ fun AppPanel(
     val resolvedBorder = when {
         selected -> BorderStroke(AppPanelSelectedBorderWidth, primary)
         border != null -> border
-        dark -> BorderStroke(AppPanelBorderWidth, Color.White.copy(alpha = 0.09f))
-        else -> BorderStroke(AppPanelBorderWidth, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.75f))
+        dark -> BorderStroke(AppPanelBorderWidth, Color.White.copy(alpha = 0.10f))
+        else -> BorderStroke(AppPanelBorderWidth, MaterialTheme.colorScheme.outlineVariant)
     }
     Card(
         modifier = modifier
@@ -96,8 +99,6 @@ fun AppPanel(
                         elevation = AppPanelShadowElevation,
                         shape = AppCardShape,
                         clip = false,
-                        ambientColor = ColorTokens.CardShadowLight,
-                        spotColor = ColorTokens.CardShadowLight,
                     )
                 },
             )

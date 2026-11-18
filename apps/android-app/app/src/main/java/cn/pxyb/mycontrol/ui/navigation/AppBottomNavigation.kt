@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
@@ -35,15 +36,23 @@ import cn.pxyb.mycontrol.ui.theme.MotionTokens
 import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 // 紧凑胶囊底栏：54dp 高（项 48dp 保住触控热区）+ 实色表面，选中用浅主色胶囊而非整格实心块。
+// 宽度按「每项定宽」算，不随屏幕吃满：关掉助手后胶囊仍是 246dp，位置居中不变形。
 private val NavBarShape = RoundedCornerShape(27.dp)
 private val NavItemShape = RoundedCornerShape(24.dp)
 private val NavBarInnerPadding = 3.dp
 private val NavItemMinHeight = 48.dp
+private val NavItemWidth = 60.dp
+private val NavItemWidthExpanded = 104.dp
 private val NavIconSize = 22.dp
 private val NavLabelSize = 11.sp
 private val NavLabelLineHeight = 13.sp
 private val NavHairlineWidth = 0.5.dp
 private val NavShadowElevation = 6.dp
+private val NavDockGap = 8.dp
+private val NavDockHorizontalPadding = 16.dp
+private val NavDockVerticalPadding = 6.dp
+private val NavAssistantSize = 54.dp
+private val NavAssistantSizeExpanded = 96.dp
 
 @Composable
 internal fun AppBottomNavigation(
@@ -53,18 +62,36 @@ internal fun AppBottomNavigation(
     assistant: (@Composable () -> Unit)? = null,
 ) {
     val expanded = LocalAdaptiveWindow.current.isTabletOrExpanded
-    Row(
-        modifier = modifier.widthIn(max = if (expanded) 600.dp else 480.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = NavDockHorizontalPadding, vertical = NavDockVerticalPadding),
     ) {
-        NavigationBarSurface(
-            selected = selected,
-            expanded = expanded,
-            onSelect = onSelect,
-            modifier = Modifier.weight(1f),
+        // 助手圆钮有固定占位：窄屏先压项宽，保证胶囊和圆钮都排得下、圆钮不被挤扁。
+        val assistantSlot = if (assistant == null) {
+            0.dp
+        } else {
+            (if (expanded) NavAssistantSizeExpanded else NavAssistantSize) + NavDockGap
+        }
+        val widthForItems = (maxWidth - assistantSlot - NavBarInnerPadding * 2).coerceAtLeast(0.dp)
+        val itemWidth = minOf(
+            if (expanded) NavItemWidthExpanded else NavItemWidth,
+            widthForItems / appNavigationTabs.size,
         )
-        assistant?.invoke()
+        Row(
+            // 整组居中：助手开关只改变这一组的内容宽度，胶囊自身宽度恒为 itemWidth × 4 + 内边距。
+            modifier = Modifier.align(Alignment.Center),
+            horizontalArrangement = Arrangement.spacedBy(NavDockGap),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            NavigationBarSurface(
+                selected = selected,
+                expanded = expanded,
+                onSelect = onSelect,
+                itemWidth = itemWidth,
+            )
+            assistant?.invoke()
+        }
     }
 }
 
@@ -73,12 +100,14 @@ private fun NavigationBarSurface(
     selected: MainTab,
     expanded: Boolean,
     onSelect: (MainTab) -> Unit,
+    itemWidth: Dp,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
     val dark = isAppInDarkTheme()
     Box(
         modifier = modifier
+            .width(itemWidth * appNavigationTabs.size + NavBarInnerPadding * 2)
             // 与 AppPanel 同一套表面口径：浅色用冷调柔影托起，深色只靠发丝描边分层。
             .then(
                 if (dark) {
@@ -99,35 +128,39 @@ private fun NavigationBarSurface(
                 width = NavHairlineWidth,
                 color = if (dark) Color.White.copy(alpha = 0.09f) else colors.outlineVariant.copy(alpha = 0.75f),
                 shape = NavBarShape,
-            ),
-    ) {
-        BoxWithConstraints(Modifier.padding(NavBarInnerPadding)) {
-            val itemWidth = maxWidth / appNavigationTabs.size
-            val indicatorOffset by animateDpAsState(
-                targetValue = itemWidth * appNavigationTabs.indexOfFirst { it.tab == selected }.coerceAtLeast(0),
-                animationSpec = MotionTokens.navigationTween(), label = "nav-indicator-offset",
             )
-            Box(Modifier.matchParentSize()) {
-                Box(
-                    Modifier
-                        .offset(x = indicatorOffset)
-                        .width(itemWidth)
-                        .fillMaxHeight()
-                        .clip(NavItemShape)
-                        .background(colors.primaryContainer),
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                appNavigationTabs.forEach { item ->
-                    BottomNavigationItem(item, selected == item.tab, expanded) { onSelect(item.tab) }
-                }
+            .padding(NavBarInnerPadding),
+    ) {
+        val indicatorOffset by animateDpAsState(
+            targetValue = itemWidth * appNavigationTabs.indexOfFirst { it.tab == selected }.coerceAtLeast(0),
+            animationSpec = MotionTokens.navigationTween(), label = "nav-indicator-offset",
+        )
+        Box(Modifier.matchParentSize()) {
+            Box(
+                Modifier
+                    .offset(x = indicatorOffset)
+                    .width(itemWidth)
+                    .fillMaxHeight()
+                    .clip(NavItemShape)
+                    .background(colors.primaryContainer),
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            appNavigationTabs.forEach { item ->
+                BottomNavigationItem(item, selected == item.tab, expanded, itemWidth) { onSelect(item.tab) }
             }
         }
     }
 }
 
 @Composable
-private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, expanded: Boolean, onClick: () -> Unit) {
+private fun BottomNavigationItem(
+    item: TabItem,
+    selected: Boolean,
+    expanded: Boolean,
+    itemWidth: Dp,
+    onClick: () -> Unit,
+) {
     val haptics = LocalHapticFeedback.current
     val interaction = remember { MutableInteractionSource() }
     val colors = MaterialTheme.colorScheme
@@ -136,7 +169,7 @@ private fun RowScope.BottomNavigationItem(item: TabItem, selected: Boolean, expa
         if (selected) colors.primary else colors.onSurfaceVariant,
         tween(MotionTokens.DurationShort), label = "nav-foreground",
     )
-    val itemModifier = Modifier.weight(1f).heightIn(min = NavItemMinHeight)
+    val itemModifier = Modifier.width(itemWidth).heightIn(min = NavItemMinHeight)
             .pressFeedback(interaction)
             .clip(NavItemShape)
             .selectable(selected = selected, role = Role.Tab,

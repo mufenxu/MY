@@ -15,7 +15,7 @@ import cn.pxyb.mycontrol.ui.theme.isAppInDarkTheme
 
 /**
  * 标准骨架卡片 (GlassShimmerCard)
- * 表面直接复用 [AppPanel]，圆角、发丝描边与浅色柔和投影和数据卡片完全一致，
+ * 表面直接复用 [AppPanel]，圆角、描边与投影和数据卡片完全一致，
  * 只在卡内叠一层平滑扫过的微光。
  */
 @Composable
