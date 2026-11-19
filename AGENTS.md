@@ -80,5 +80,5 @@ MY/
 
 - 分页参数 `limit` / `pageSize` 在 `core-api` 与 `exam-api` 中优先级**相反**——这是面向不同客户端的有意设计，两侧均已加注释锁定。
 - 依赖大版本分裂（express 4/5、mongoose 8/9、eslint 8/9、Vite 5/7/8、dotenv 有/无）。
-- 大量跨服务重复实现（SSO 包装器 ×4、限流器 ×4、分页 ×3、前端 `sequentialPoller`/`readCookie`/体验上报/头像生成器各有多份）。
+- 后端有多组**同名但实现不同**的文件（SSO 薄封装 ×4、限流器 ×4、分页 ×3、`httpShutdown` ×2、通知客户端 ×2 等），逐对比对后确认不是可抽取的重复，不要为了去重而合并；前端的 `sequentialPoller`/`readCookie`/体验上报/头像生成器各有多份。
 - `services/core-api` 目前**没有** lint 覆盖；`services/iot-service` 的 `check` 不含 `test`。

@@ -5,7 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -74,11 +74,12 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import cn.pxyb.mycontrol.R
 import cn.pxyb.mycontrol.ui.components.interaction.pressFeedback
 import cn.pxyb.mycontrol.ui.isRefreshing
 import cn.pxyb.mycontrol.ui.theme.AppHaptics
@@ -185,10 +186,12 @@ fun AppSecondaryHeader(
                 icon = Icons.AutoMirrored.Outlined.ArrowBack,
                 contentDescription = "返回", onClick = onBack,
             ) else Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                Box(Modifier.size(26.dp).background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) {
-                    Text("M", color = MaterialTheme.colorScheme.onPrimary,
-                        style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                }
+                // 主页面无返回键时以应用品牌标占位；图形自带透明底，深浅色主题共用一张图。
+                Image(
+                    painter = painterResource(R.drawable.brand_mark),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                )
             }
             Text(title, modifier = Modifier.weight(1f).padding(horizontal = 4.dp).semantics { heading() },
                 style = MaterialTheme.typography.titleLarge.copy(fontSize = titleSize.sp),

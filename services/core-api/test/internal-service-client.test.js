@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const { verifyServiceRequest } = require('@my-platform/platform-auth');
 const { resolveInternalServiceUrl } = require('../utils/internalServiceUrl');
-const { sendNotification } = require('../services/notificationClient');
+const { sendAppNotification, sendNotification } = require('../services/notificationClient');
 
 test('production service URLs reject public hosts unless explicitly allowed', () => {
     assert.equal(resolveInternalServiceUrl({
@@ -56,6 +56,41 @@ test('notification client signs exact request bodies and retries transient failu
             pathname: '/notify',
             body: calls[1].body,
         }).caller, 'core-api');
+    } finally {
+        if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;
+        else process.env.NOTIFICATION_SERVICE_URL = previousUrl;
+        if (previousKey === undefined) delete process.env.NOTIFY_API_KEY;
+        else process.env.NOTIFY_API_KEY = previousKey;
+    }
+});
+
+test('app notifications are signed for the canonical path, not the legacy one', async () => {
+    const previousUrl = process.env.NOTIFICATION_SERVICE_URL;
+    const previousKey = process.env.NOTIFY_API_KEY;
+    process.env.NOTIFICATION_SERVICE_URL = 'http://notification-service:3000';
+    process.env.NOTIFY_API_KEY = 'notification-client-test-key';
+    const calls = [];
+    const axiosImpl = {
+        async post(url, body, config) {
+            calls.push({ url, body, config });
+            return { data: { ok: true } };
+        },
+    };
+    try {
+        await sendAppNotification({ audience: { users: ['u1'] } }, { axiosImpl, requestId: 'req-app-1' });
+        assert.equal(calls.length, 1);
+        assert.equal(calls[0].url, 'http://notification-service:3000/v1/notifications');
+        assert.equal(calls[0].config.headers['X-Request-Id'], 'req-app-1');
+        const verify = (pathname) => verifyServiceRequest({
+            headers: calls[0].config.headers,
+            secret: process.env.NOTIFY_API_KEY,
+            allowedCallers: ['core-api'],
+            method: 'POST',
+            pathname,
+            body: calls[0].body,
+        });
+        assert.equal(verify('/v1/notifications').caller, 'core-api');
+        assert.equal(verify('/notify'), null);
     } finally {
         if (previousUrl === undefined) delete process.env.NOTIFICATION_SERVICE_URL;
         else process.env.NOTIFICATION_SERVICE_URL = previousUrl;

@@ -271,7 +271,15 @@ CI（[ci.yml](../.github/workflows/ci.yml)）在 `main` 推送与 PR 上运行�
 
 1. **依赖大版本分裂**：express 5 与 4.22（notification-service 仍为 4）；mongoose 9 与 8；eslint 9 与 8；`express-rate-limit` 8 与 7；dotenv 17 与 16 与"不用 dotenv"。升大版本需逐个服务回归，**不要夹在其它改动里做**。
 2. **分页参数的优先级相反**：`core-api/utils/pagination.js` 优先 `limit`，`exam-api/src/utils/pagination.js` 优先 `pageSize`（两者其余逐字节相同）。这是面向不同客户端的有意分歧，**两侧都已加注释锁定意图，禁止"对齐"**。
-3. **重复实现**：SSO 验签包装器 ×4、`platformSsoAccountService.js` ×2、`httpShutdown.js` ×2、通知客户端 ×2、请求 ID 中间件 ×2、限流器 ×4、静态资源与密码哈希各 ×2、分页 ×3。抽取到 `packages/` 是候选工作，但会触及多服务信任边界，需独立评估。
+3. **同名但并非同一份实现**（2026-11-19 逐对比对）：下列文件名字相近，曾被登记为"重复实现"，实际只有前两项算得上重复，其余是各服务的不同实现，**不要为了去重而抽取**。
+   - SSO 验签包装器 ×4：验签逻辑早已在 `packages/platform-auth` 的 `verifyPlatformSsoRequest`，各服务只剩 7 行、绑定各自默认 `audience` 的薄封装（`notification-service` 直接调用，没有封装）。没有可再抽的逻辑。
+   - 请求 ID：同一条校验正则 `^[A-Za-z0-9._:-]{1,128}$` 在 6 处各写了一遍（core、exam、notification、iot、campus、admin-console）。但生成格式不同（core 为 `req-<时间>-<随机>`，其余为 UUID），挂载字段不同（`req.id` 与 admin-console 的 `req.requestId`），campus 不走 express。每处 3～4 行，抽取需要给 5 个 Dockerfile 加 `COPY`，得不偿失。
+   - `httpShutdown.js` ×2：core 多出超时钳制（1～60 秒）与 `withDeadline`，exam 多出空 server 守卫，默认超时也不同（15 秒与 10 秒）。
+   - `platformSsoAccountService.js` ×2：分别操作 `User`（按 `userId`，校验角色与状态）与 `Admin`（按 `username`），模型与判定规则都不同。
+   - 通知客户端 ×2：core 用 axios、带重试、打 `/notify` 与 `/v1/notifications`；campus 用 fetch、不重试、打 `/enqueue`，并含课程提醒的业务拼装。共同部分只有对 `issueServiceRequest` 的一次调用，它已在共享包里。
+   - 限流器 ×4：`express-rate-limit` 配置（core）、带 Mongo 存储的 `express-rate-limit`（exam）、自写内存中间件（iot）、自写固定窗口类（campus）。
+   - 静态资源 ×2、密码哈希 ×2：core 是 Vite 产物的缓存头工具，campus 是带压缩与 ETag 的完整静态服务器；两份 scrypt 的存储格式不同（`scrypt$salt$hash` 与 `scrypt$N$r$p$salt$hash`），合并会让已存的哈希失效。
+   - 分页 ×3：见第 2 条，core 与 exam 的差异是有意的；campus 是另一套只认 `pageSize` 的实现。
 4. **`services/core-api` 无 lint 覆盖**（无配置、无依赖、无脚本）。
 5. **`services/exam-api` 使用旧式 `.eslintrc.json` + eslint 8**。
 6. **`services/iot-service` 的 `check` 不含 `test`**，由根 `check:iot` 在外部补跑。
