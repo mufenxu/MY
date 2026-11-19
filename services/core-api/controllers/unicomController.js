@@ -44,7 +44,7 @@ async function withAccount(req, res, next, action) {
         account.busyUntil = 0;
         await account.save();
         locked = false;
-        return ok(res, result);
+        return ok(res, result, { page: result.page });
     } catch (error) {
         return next(error);
     } finally {
@@ -140,6 +140,8 @@ function queryAccount(req, res, next, query) {
 function getOverview(req, res, next) { return queryAccount(req, res, next, provider.overview); }
 function getDetails(req, res, next) { return queryAccount(req, res, next, provider.details); }
 function getXinjiangActivities(req, res, next) { return queryAccount(req, res, next, provider.xinjiangActivities); }
+function getCoupons(req, res, next) { return queryAccount(req, res, next, session => provider.coupons(session, req.query.page)); }
+function getCouponDetail(req, res, next) { return queryAccount(req, res, next, session => provider.couponDetail(session, req.params.id)); }
 
 function disconnect(req, res, next) {
     return withAccount(req, res, next, async account => {
@@ -152,4 +154,4 @@ function disconnect(req, res, next) {
     });
 }
 
-module.exports = { getSession, createLogin, captcha, verifyLogin, getOverview, getDetails, getXinjiangActivities, disconnect };
+module.exports = { getSession, createLogin, captcha, verifyLogin, getOverview, getDetails, getXinjiangActivities, getCoupons, getCouponDetail, disconnect };

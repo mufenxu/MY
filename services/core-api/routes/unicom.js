@@ -12,6 +12,12 @@ router.get('/session', controller.getSession);
 router.get('/overview', controller.getOverview);
 router.get('/details', validate({ query: noQuery, params: Joi.object({}) }), controller.getDetails);
 router.get('/xinjiang/activities', validate({ query: noQuery, params: Joi.object({}) }), controller.getXinjiangActivities);
+router.get('/coupons', validate({
+    query: Joi.object({ page: Joi.number().integer().min(1).max(10000).default(1) }), params: Joi.object({}),
+}), controller.getCoupons);
+router.get('/coupons/:id', validate({
+    query: noQuery, params: Joi.object({ id: Joi.string().hex().length(64).required() }),
+}), controller.getCouponDetail);
 router.post('/login-sessions', validate({
     body: Joi.object({ phone: Joi.string().pattern(/^1\d{10}$/).max(11).required().messages({ 'string.pattern.base': '请输入 11 位联通手机号。' }) }),
     query: noQuery, params: Joi.object({}),

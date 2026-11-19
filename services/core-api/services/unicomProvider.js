@@ -1,8 +1,11 @@
 const crypto = require('crypto');
 const AppError = require('../utils/AppError');
+const { buildPageMeta } = require('../utils/pagination');
 
 const VERSION = 'android@11.0800';
 const HOST = 'https://m.client.10010.com';
+const COUPON_HOST = 'https://epay.10010.com';
+const COUPON_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_2 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148 unicom{version:iphone_c@12.0701};ltst;OSVersion/16.2';
 const PUBLIC_KEY = `-----BEGIN PUBLIC KEY-----
 MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDc+CZK9bBA9IU+gZUOc6FUGu7y
 O9WpTNB0PzmgFBh96Mg1WrovD1oqZ+eIF4LjvxKXGOdI79JRdve9NPhQo07+uqGQ
@@ -42,7 +45,7 @@ async function request(state, url, body, json = false, options = {}) {
                 'Content-Type': json ? 'application/json' : 'application/x-www-form-urlencoded',
                 'User-Agent': `Mozilla/5.0 (Linux; Android 13; M2007J3SC) AppleWebKit/537.36 Chrome/107.0.0.0 Mobile Safari/537.36; unicom{version:${VERSION},desmobile:${state.phone}}`,
                 'X-Requested-With': 'com.sinovatech.unicom.ui',
-                ...(json ? { Origin: 'https://img.client.10010.com', Referer: 'https://img.client.10010.com/loginRisk/index.html', 'encrypt-key': '', 'scene-key': '' } : {}),
+                ...(json && new URL(url).origin === 'https://loginxhm.10010.com' ? { Origin: 'https://img.client.10010.com', Referer: 'https://img.client.10010.com/loginRisk/index.html', 'encrypt-key': '', 'scene-key': '' } : {}),
                 ...(sessionCookies && Object.keys(state.cookies).length ? { Cookie: Object.entries(state.cookies).map(([key, value]) => `${key}=${value}`).join('; ') } : {}),
                 ...options.headers,
             },
@@ -77,6 +80,163 @@ function text(value) {
 function resource(value) {
     const number = typeof value === 'number' ? String(value) : text(value);
     return number !== '' && Number.isFinite(Number(number)) ? number : null;
+}
+
+function couponBizInfo(url) {
+    const params = url.searchParams;
+    return {
+        bizChannelCode: params.get('bizChannelCode') || params.get('biz_channel_code') || '225',
+        disriBiz: 'couponh5web', unionSessionId: params.get('unionSessionId') || '',
+        stType: params.get('stType') || '', stDesmobile: params.get('stDesmobile') || '',
+        source: params.get('source') || '', rptId: params.get('rptid') || '', ticket: params.get('ticket') || '',
+        tongdunTokenId: '', xindunTokenId: '',
+    };
+}
+
+function couponTarget(location, base, origin, path) {
+    let target;
+    try { target = new URL(location, base); } catch { /* 无效跳转统一作为上游失败处理。 */ }
+    if (!location || target?.origin !== origin || target.pathname !== path || target.username || target.password) {
+        throw failure('UPSTREAM_FAILED', '联通电子券登录衔接暂不可用。', 502);
+    }
+    return target;
+}
+
+async function couponRequest(state, wallet, url, body, deadline, method = 'POST') {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw failure('UPSTREAM_TIMEOUT', '联通电子券请求超时，请稍后重试。', 504);
+    const response = await request(state, url.href || url, body, method === 'POST', {
+        method, raw: true, timeout: Math.min(15000, remaining), headers: {
+            Origin: COUPON_HOST, Referer: wallet.referer, 'User-Agent': COUPON_UA,
+            Cookie: Object.entries(wallet.cookies).map(([key, value]) => `${key}=${value}`).join('; '),
+            bizChannelInfo: JSON.stringify(wallet.bizInfo), authInfo: wallet.authInfo || '', tokenid: wallet.tokenId || '',
+        },
+    });
+    for (const line of response.headers.getSetCookie()) {
+        const pair = line.split(';')[0], equal = pair.indexOf('=');
+        if (equal > 0) wallet.cookies[pair.slice(0, equal)] = pair.slice(equal + 1);
+    }
+    for (const [header, key] of [['authinfo', 'authInfo'], ['tokenid', 'tokenId']]) {
+        if (response.headers.get(header)) wallet[key] = response.headers.get(header);
+    }
+    return response;
+}
+
+async function couponJson(response) {
+    if (!response.ok) {
+        await response.body?.cancel();
+        throw failure('UPSTREAM_FAILED', '联通电子券服务暂不可用。', 502);
+    }
+    try {
+        const data = await response.json();
+        if (data && typeof data === 'object') return data;
+    } catch { /* 不透传可能含账户数据的解析错误。 */ }
+    throw failure('UPSTREAM_FAILED', '联通电子券返回了无法识别的数据。', 502);
+}
+
+function checkCouponIdentity(state, wallet, auth) {
+    if (auth.code !== '0000' || auth.data?.authInfo?.mobile !== state.phone || !wallet.authInfo || !wallet.tokenId) {
+        throw failure('UPSTREAM_FAILED', '联通电子券账号验证未成功，请重新查询。', 502);
+    }
+}
+
+async function couponSession(state, deadline) {
+    const authUrl = `${COUPON_HOST}/ps-pafs-auth-front/v1/auth/check`;
+    if (state.wallet) {
+        const auth = await couponJson(await couponRequest(state, state.wallet, authUrl, {}, deadline));
+        if (auth.code === '0000') {
+            checkCouponIdentity(state, state.wallet, auth);
+            return state.wallet;
+        }
+        if (!['2101000100', '2101000105'].includes(auth.code)) {
+            throw failure('UPSTREAM_FAILED', '联通电子券认证暂不可用，请稍后重试。', 502);
+        }
+    }
+    const entry = new URL(`${COUPON_HOST}/cv-ecs-h5-web?biz_channel_code=225`);
+    const bridge = new URL(`${HOST}/mobileService/openPlatform/openPlatLineNew.htm`);
+    bridge.searchParams.set('to_url', entry.href);
+    const redirect = await request(state, bridge.href, {}, false, { method: 'GET', raw: true, timeout: Math.min(15000, Math.max(1, deadline - Date.now())), headers: { 'User-Agent': COUPON_UA } });
+    const location = redirect.headers.get('location');
+    await redirect.body?.cancel();
+    const target = couponTarget(location, bridge, COUPON_HOST, entry.pathname);
+    if (!target.searchParams.get('ticket')) throw failure('UPSTREAM_FAILED', '联通电子券登录票据暂不可用。', 502);
+    const wallet = { cookies: {}, bizInfo: couponBizInfo(target), referer: target.href, authInfo: '', tokenId: '' };
+    let auth = await couponJson(await couponRequest(state, wallet, authUrl, {}, deadline));
+    if (auth.code !== '0000') {
+        if (!['2101000100', '2101000105'].includes(auth.code)) {
+            throw failure('UPSTREAM_FAILED', '联通电子券认证暂不可用，请稍后重试。', 502);
+        }
+        const loginUrl = couponTarget(auth.data?.woauth_login_url, entry, COUPON_HOST, '/woauth2/login');
+        const loginPage = await couponRequest(state, wallet, loginUrl, {}, deadline, 'GET');
+        if (!loginPage.ok) throw failure('UPSTREAM_FAILED', '联通电子券登录页暂不可用。', 502);
+        const html = await loginPage.text();
+        const pageToken = html.match(/var\s+token\s*=\s*"([^"]+)"/)?.[1];
+        const submitBase = html.match(/location\.replace\('([^']+)'\s*\+/)?.[1];
+        if (!pageToken || !submitBase) throw failure('UPSTREAM_FAILED', '联通电子券登录流程已变化，请稍后重试。', 502);
+        const submitUrl = couponTarget(submitBase.replace(/&amp;/g, '&'), loginUrl, COUPON_HOST, '/woauth2/after-collected-device-digest');
+        // 官方登录页在设备摘要不可用时也提交空值，继续走联通票据认证。
+        submitUrl.searchParams.set('deviceDigestTraceId', '');
+        submitUrl.searchParams.set('deviceDigestTokenId', '');
+        submitUrl.searchParams.set('token', pageToken);
+        submitUrl.searchParams.set('source', 'app_sjyyt');
+        const digestResponse = await couponRequest(state, wallet, submitUrl, {}, deadline, 'GET');
+        const officialLocation = digestResponse.headers.get('location');
+        await digestResponse.body?.cancel();
+        const officialUrl = couponTarget(officialLocation, submitUrl, HOST, bridge.pathname);
+        const officialResponse = await request(state, officialUrl.href, {}, false, {
+            method: 'GET', raw: true, timeout: Math.min(15000, Math.max(1, deadline - Date.now())), headers: { 'User-Agent': COUPON_UA },
+        });
+        const callbackLocation = officialResponse.headers.get('location');
+        await officialResponse.body?.cancel();
+        const callbackUrl = couponTarget(callbackLocation, officialUrl, COUPON_HOST, '/woauth2/sjyyt-new/callback-for-ticket');
+        const callbackResponse = await couponRequest(state, wallet, callbackUrl, {}, deadline, 'GET');
+        const finalLocation = callbackResponse.headers.get('location');
+        await callbackResponse.body?.cancel();
+        const finalUrl = couponTarget(finalLocation, callbackUrl, COUPON_HOST, entry.pathname);
+        const finalPage = await couponRequest(state, wallet, finalUrl, {}, deadline, 'GET');
+        await finalPage.body?.cancel();
+        if (!finalPage.ok) throw failure('UPSTREAM_FAILED', '联通电子券页面暂不可用。', 502);
+        wallet.bizInfo = couponBizInfo(finalUrl);
+        wallet.referer = finalUrl.href;
+        auth = await couponJson(await couponRequest(state, wallet, authUrl, {}, deadline));
+    }
+    checkCouponIdentity(state, wallet, auth);
+    state.wallet = wallet;
+    return wallet;
+}
+
+async function coupons(state, page = 1) {
+    const deadline = Date.now() + 75000;
+    const wallet = await couponSession(state, deadline);
+    const result = await couponJson(await couponRequest(state, wallet, `${COUPON_HOST}/cv-ecs-h5-front/v1/myRightList`, {
+        pageNum: '10', pageNo: page, queryYear: '', cardUseSts: 'A',
+    }, deadline));
+    if (result.code !== '0000' || !Array.isArray(result.data?.txnRec) || resource(result.data.totalRecNum) === null) {
+        throw failure('UPSTREAM_FAILED', '联通已领用卡券暂不可用，请重新查询。', 502);
+    }
+    const orders = page === 1 ? {} : { ...state.couponOrders };
+    const items = result.data.txnRec.filter(row => typeof row.orderNo === 'string' && row.orderNo).map(row => {
+        const id = crypto.createHash('sha256').update(`${state.phone}:${row.orderNo}`).digest('hex');
+        orders[id] = row.orderNo;
+        return { id, name: text(row.cardName) || '联通卡券', description: text(row.cardDescName) || null, status: '已领用' };
+    });
+    state.couponOrders = orders;
+    return { queriedAt: Date.now(), items, page: buildPageMeta({ page, limit: 10, total: result.data.totalRecNum }) };
+}
+
+async function couponDetail(state, id) {
+    const orderNo = state.couponOrders?.[id];
+    if (!orderNo) throw failure('NOT_FOUND', '请先刷新卡券列表，再查看这张卡券。', 404);
+    const deadline = Date.now() + 75000;
+    const wallet = await couponSession(state, deadline);
+    const result = await couponJson(await couponRequest(state, wallet, `${COUPON_HOST}/cv-ecs-h5-front/v1/myRightInfo`, { orderNo }, deadline));
+    const data = result.data;
+    if (result.code !== '0000' || data?.orderNo !== orderNo) throw failure('UPSTREAM_FAILED', '联通卡券详情暂不可用，请稍后重试。', 502);
+    return {
+        id, name: text(data.cardName) || '联通卡券', status: text(data.cardUseStsDesc) || '已领用',
+        validUntil: text(data.cardValidTime) || null,
+        code: typeof data.pwdKey === 'string' && data.pwdKey !== 'chargesuccess' ? data.pwdKey.trim() || null : null,
+    };
 }
 
 async function details(state) {
@@ -240,4 +400,4 @@ async function overview(state) {
     };
 }
 
-module.exports = { createLogin, sendSms, validateCaptcha, login, overview, details, xinjiangActivities, failure };
+module.exports = { createLogin, sendSms, validateCaptcha, login, overview, details, xinjiangActivities, coupons, couponDetail, failure };

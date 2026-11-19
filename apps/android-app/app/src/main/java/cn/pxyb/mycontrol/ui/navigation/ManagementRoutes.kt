@@ -23,6 +23,8 @@ internal fun NavGraphBuilder.managementRoutes(shell: ShellRouteContext) = with(s
             onCaptchaVerified = viewModel.unicom::verifyCaptcha, onLogin = viewModel.unicom::login,
             onDisconnect = viewModel.unicom::disconnect,
             onLoadDetails = viewModel.unicom::loadDetails, onLoadXinjiangActivities = viewModel.unicom::loadXinjiangActivities,
+            onLoadCoupons = viewModel.unicom::loadCoupons, onLoadMoreCoupons = viewModel.unicom::loadMoreCoupons,
+            onViewCoupon = viewModel.unicom::viewCoupon, onCloseCoupon = viewModel.unicom::closeCoupon,
         )
     }
     composable(AppRoute.Projects) {

@@ -4,10 +4,13 @@ import cn.pxyb.mycontrol.data.ApiException
 import cn.pxyb.mycontrol.data.UnicomMetric
 import cn.pxyb.mycontrol.data.UnicomDetails
 import cn.pxyb.mycontrol.data.UnicomActivities
+import cn.pxyb.mycontrol.data.UnicomCoupons
+import cn.pxyb.mycontrol.data.UnicomCouponDetail
 import cn.pxyb.mycontrol.data.UnicomRepository
 import cn.pxyb.mycontrol.data.UnicomSession
 import cn.pxyb.mycontrol.ui.state.FeatureStateHolder
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.update
 
 data class UnicomUiState(
     val session: UnicomSession = UnicomSession(),
@@ -20,6 +23,9 @@ data class UnicomUiState(
     val error: Boolean = false,
     val details: UnicomDetails? = null,
     val activities: UnicomActivities? = null,
+    val coupons: UnicomCoupons? = null,
+    val selectedCouponId: String? = null,
+    val couponDetail: UnicomCouponDetail? = null,
 )
 
 class UnicomStateHolder(
@@ -28,7 +34,7 @@ class UnicomStateHolder(
     private val canRun: () -> Boolean,
     onSessionExpired: (String) -> Unit,
 ) : FeatureStateHolder<UnicomUiState>(parentScope, UnicomUiState(), onSessionExpired) {
-    override fun clearPendingState(current: UnicomUiState) = current.copy(busy = false, operation = "")
+    override fun clearPendingState(current: UnicomUiState) = current.copy(busy = false, operation = "", selectedCouponId = null, couponDetail = null)
 
     private fun <T> run(operation: String, action: suspend () -> T, success: UnicomUiState.(T) -> UnicomUiState, afterSuccess: () -> Unit = {}) {
         if (!canRun()) return
@@ -59,6 +65,26 @@ class UnicomStateHolder(
     fun loadDetails() = run("details", { api.details() }, { result -> copy(details = result) })
 
     fun loadXinjiangActivities() = run("activities", { api.xinjiangActivities() }, { result -> copy(activities = result) })
+
+    fun loadCoupons() = run("coupons", { api.coupons() }, { result -> copy(coupons = result, selectedCouponId = null, couponDetail = null) })
+
+    fun loadMoreCoupons() {
+        val previous = mutableState.value.coupons ?: return
+        if (!previous.hasMore) return
+        run("moreCoupons", { api.coupons(previous.page + 1) }, { result ->
+            copy(coupons = result.copy(items = (previous.items + result.items).distinctBy { it.id }))
+        })
+    }
+
+    fun viewCoupon(id: String) {
+        if (!canRun() || mutableState.value.busy || mutableState.value.coupons?.items?.none { it.id == id } != false) return
+        mutableState.update { it.copy(selectedCouponId = id, couponDetail = null) }
+        run("coupon", { api.couponDetail(id) }, { result ->
+            if (selectedCouponId == id) copy(couponDetail = result) else this
+        })
+    }
+
+    fun closeCoupon() = mutableState.update { it.copy(selectedCouponId = null, couponDetail = null) }
 
     fun startLogin(phone: String) = run("sms", { api.startLogin(phone) }, { session ->
         copy(session = session, message = if (session.stage == "sms_sent") "验证码已发送，请输入收到的短信验证码。" else null)

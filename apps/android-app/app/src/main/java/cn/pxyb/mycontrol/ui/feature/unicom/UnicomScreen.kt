@@ -9,6 +9,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -19,7 +20,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.components.button.AppButton
+import cn.pxyb.mycontrol.ui.components.button.AppDialogPrimaryButton
+import cn.pxyb.mycontrol.ui.components.button.AppDialogSecondaryButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
+import cn.pxyb.mycontrol.ui.components.clipboard.rememberAppClipboard
+import cn.pxyb.mycontrol.ui.components.dialog.AppDialog
 import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
 import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
@@ -39,6 +44,10 @@ fun UnicomScreen(
     onRefresh: () -> Unit,
     onLoadDetails: () -> Unit,
     onLoadXinjiangActivities: () -> Unit,
+    onLoadCoupons: () -> Unit,
+    onLoadMoreCoupons: () -> Unit,
+    onViewCoupon: (String) -> Unit,
+    onCloseCoupon: () -> Unit,
     onSendSms: (String) -> Unit,
     onCaptchaVerified: (String, String, String) -> Unit,
     onLogin: (String, String) -> Unit,
@@ -49,7 +58,9 @@ fun UnicomScreen(
     var captchaId by remember { mutableStateOf<String?>(null) }
     var switching by remember { mutableStateOf(false) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val clipboard = rememberAppClipboard()
     LaunchedEffect(Unit) { if (!state.loaded) onRefresh() }
+    DisposableEffect(Unit) { onDispose { onCloseCoupon() } }
     LaunchedEffect(state.session.loginId, state.session.connected) {
         code = ""
         if (state.session.connected && state.session.loginId == null) { phone = ""; switching = false }
@@ -62,7 +73,7 @@ fun UnicomScreen(
     val remaining = ((state.session.retryAt - now + 999) / 1000).coerceAtLeast(0)
     val session = state.session
     AppSubPage(
-        title = "联通账户", subtitle = "账户余量、套餐信息与新疆活动",
+        title = "联通账户", subtitle = "账户余量、套餐、卡券与新疆活动",
         onBack = onBack, contentPadding = contentPadding,
         refreshing = state.busy && state.operation == "refresh", onRefresh = onRefresh,
     ) {
@@ -74,6 +85,9 @@ fun UnicomScreen(
                 onRetry = if (state.error && !state.busy) when (state.operation) {
                     "details" -> onLoadDetails
                     "activities" -> onLoadXinjiangActivities
+                    "coupons" -> onLoadCoupons
+                    "moreCoupons" -> onLoadMoreCoupons
+                    "coupon" -> onLoadCoupons
                     else -> onRefresh
                 } else null, showCloseButton = false)
         } }
@@ -86,6 +100,7 @@ fun UnicomScreen(
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         AppButton("刷新账户余量", onRefresh, loading = state.busy && state.operation == "refresh", enabled = !state.busy, modifier = Modifier.fillMaxWidth())
                         AppSecondaryButton("查询套餐与余量明细", onLoadDetails, loading = state.busy && state.operation == "details", enabled = !state.busy, modifier = Modifier.fillMaxWidth())
+                        AppSecondaryButton("查询 N选1与电子券", onLoadCoupons, loading = state.busy && state.operation == "coupons", enabled = !state.busy, modifier = Modifier.fillMaxWidth())
                         AppSecondaryButton("查询新疆活动记录", onLoadXinjiangActivities, loading = state.busy && state.operation == "activities", enabled = !state.busy, modifier = Modifier.fillMaxWidth())
                         AppSecondaryButton("登录其他号码", { switching = true }, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
                         AppSecondaryButton("退出联通账号", onDisconnect, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
@@ -145,6 +160,27 @@ fun UnicomScreen(
                     }
                 } }
             }
+            state.coupons?.let { coupons ->
+                item { AppSectionHeader("已领用卡券", subtitle = "更新于 ${formatLocalDateTime(coupons.queriedAt)}") }
+                if (coupons.items.isEmpty()) item {
+                    AppPanel {
+                        Text("当前没有已领用的卡券。", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                coupons.items.forEach { coupon -> item(key = "unicom-coupon-${coupon.id}") {
+                    AppPanel {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(coupon.name, style = MaterialTheme.typography.titleMedium)
+                            coupon.description?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            AppDetailRow("状态", coupon.status)
+                            AppSecondaryButton("查看券码与有效期", { onViewCoupon(coupon.id) }, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                } }
+                if (coupons.hasMore) item {
+                    AppSecondaryButton("加载更多卡券", onLoadMoreCoupons, loading = state.busy && state.operation == "moreCoupons", enabled = !state.busy, modifier = Modifier.fillMaxWidth())
+                }
+            }
         }
         if (state.loaded && (!session.connected || switching || session.loginId != null)) item {
             AppPanel {
@@ -174,5 +210,37 @@ fun UnicomScreen(
             captchaId = null
             onCaptchaVerified(id, ticket, randStr)
         })
+    }
+    state.selectedCouponId?.takeIf { session.connected }?.let { id ->
+        val detail = state.couponDetail?.takeIf { it.id == id }
+        var copied by remember(id, detail?.code) { mutableStateOf(false) }
+        AppDialog(
+            onDismissRequest = onCloseCoupon,
+            title = detail?.name ?: "卡券详情",
+            footer = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    detail?.code?.let { couponCode ->
+                        AppDialogPrimaryButton(if (copied) "已复制券码" else "复制券码", {
+                            clipboard.copy(couponCode, label = "联通券码", sensitive = true)
+                            copied = true
+                        }, modifier = Modifier.fillMaxWidth())
+                    }
+                    AppDialogSecondaryButton("关闭", onCloseCoupon, modifier = Modifier.fillMaxWidth())
+                }
+            },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (state.busy && state.operation == "coupon") GlassShimmerList(itemCount = 3)
+                if (state.error && state.operation == "coupon") {
+                    AppFeedbackBanner(state.message ?: "卡券详情未获取成功。", type = AppFeedbackType.Error,
+                        onRetry = if (state.busy) null else ({ onViewCoupon(id) }), showCloseButton = false)
+                }
+                detail?.let {
+                    AppDetailRow("状态", it.status)
+                    AppDetailRow("有效期", it.validUntil ?: "暂不可用")
+                    AppDetailRow("券码", it.code ?: "券码暂未生成，请稍后重试")
+                }
+            }
+        }
     }
 }

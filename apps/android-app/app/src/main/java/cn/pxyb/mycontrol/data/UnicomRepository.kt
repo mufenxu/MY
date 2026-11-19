@@ -21,6 +21,12 @@ data class UnicomDetails(val nickname: String?, val packageName: String?, val gr
 data class UnicomPrize(val id: String, val prizeName: String, val drawnAt: Long?)
 data class UnicomActivities(val eligible: Boolean, val title: String, val records: List<UnicomPrize>, val queriedAt: Long)
 
+data class UnicomCoupon(val id: String, val name: String, val description: String?, val status: String)
+
+data class UnicomCoupons(val items: List<UnicomCoupon>, val page: Int, val hasMore: Boolean, val queriedAt: Long)
+
+data class UnicomCouponDetail(val id: String, val name: String, val status: String, val validUntil: String?, val code: String?)
+
 class UnicomRepository internal constructor(private val http: PlatformHttpClient) {
     suspend fun session(): UnicomSession = request("/session").toUnicomSession()
 
@@ -62,6 +68,21 @@ class UnicomRepository internal constructor(private val http: PlatformHttpClient
             val record = records.getJSONObject(index)
             UnicomPrize(record.getString("id"), record.getString("prizeName"), record.optLong("drawnAt").takeIf { it > 0 })
         }, data.getLong("queriedAt"))
+    }
+
+    suspend fun coupons(page: Int = 1): UnicomCoupons {
+        val data = request("/coupons?page=$page", timeoutSeconds = 85)
+        val items = data.getJSONArray("items")
+        val pagination = data.getJSONObject("page")
+        return UnicomCoupons(List(items.length()) { index ->
+            val item = items.getJSONObject(index)
+            UnicomCoupon(item.getString("id"), item.getString("name"), item.optionalText("description"), item.getString("status"))
+        }, pagination.getInt("page"), pagination.getBoolean("hasMore"), data.getLong("queriedAt"))
+    }
+
+    suspend fun couponDetail(id: String): UnicomCouponDetail {
+        val data = request("/coupons/$id", timeoutSeconds = 85)
+        return UnicomCouponDetail(data.getString("id"), data.getString("name"), data.getString("status"), data.optionalText("validUntil"), data.optionalText("code"))
     }
 
     private suspend fun request(path: String, method: String = "GET", body: JSONObject? = null, timeoutSeconds: Long = 55): JSONObject = withContext(Dispatchers.IO) {
