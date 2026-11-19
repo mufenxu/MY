@@ -10,6 +10,8 @@ const idParams = Joi.object({ id: Joi.string().uuid().required() });
 router.use(auth);
 router.get('/session', controller.getSession);
 router.get('/overview', controller.getOverview);
+router.get('/details', validate({ query: noQuery, params: Joi.object({}) }), controller.getDetails);
+router.get('/xinjiang/activities', validate({ query: noQuery, params: Joi.object({}) }), controller.getXinjiangActivities);
 router.post('/login-sessions', validate({
     body: Joi.object({ phone: Joi.string().pattern(/^1\d{10}$/).max(11).required().messages({ 'string.pattern.base': '请输入 11 位联通手机号。' }) }),
     query: noQuery, params: Joi.object({}),

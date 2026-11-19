@@ -20,6 +20,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import cn.pxyb.mycontrol.ui.components.button.AppButton
 import cn.pxyb.mycontrol.ui.components.button.AppSecondaryButton
+import cn.pxyb.mycontrol.ui.components.display.AppDetailRow
+import cn.pxyb.mycontrol.ui.components.display.AppSectionHeader
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackBanner
 import cn.pxyb.mycontrol.ui.components.feedback.AppFeedbackType
 import cn.pxyb.mycontrol.ui.components.feedback.GlassShimmerList
@@ -35,6 +37,8 @@ fun UnicomScreen(
     contentPadding: PaddingValues,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
+    onLoadDetails: () -> Unit,
+    onLoadXinjiangActivities: () -> Unit,
     onSendSms: (String) -> Unit,
     onCaptchaVerified: (String, String, String) -> Unit,
     onLogin: (String, String) -> Unit,
@@ -58,7 +62,7 @@ fun UnicomScreen(
     val remaining = ((state.session.retryAt - now + 999) / 1000).coerceAtLeast(0)
     val session = state.session
     AppSubPage(
-        title = "联通账户", subtitle = "登录后查看当前账户余量",
+        title = "联通账户", subtitle = "账户余量、套餐信息与新疆活动",
         onBack = onBack, contentPadding = contentPadding,
         refreshing = state.busy && state.operation == "refresh", onRefresh = onRefresh,
     ) {
@@ -67,7 +71,11 @@ fun UnicomScreen(
         }
         state.message?.let { message -> item {
             AppFeedbackBanner(message, type = if (state.error) AppFeedbackType.Error else AppFeedbackType.Success,
-                onRetry = if (state.error && !state.busy) onRefresh else null, showCloseButton = false)
+                onRetry = if (state.error && !state.busy) when (state.operation) {
+                    "details" -> onLoadDetails
+                    "activities" -> onLoadXinjiangActivities
+                    else -> onRefresh
+                } else null, showCloseButton = false)
         } }
         if (session.connected) {
             item {
@@ -77,6 +85,8 @@ fun UnicomScreen(
                         Text(if (state.queriedAt > 0) "更新于 ${formatLocalDateTime(state.queriedAt)}" else "已连接联通账号",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         AppButton("刷新账户余量", onRefresh, loading = state.busy && state.operation == "refresh", enabled = !state.busy, modifier = Modifier.fillMaxWidth())
+                        AppSecondaryButton("查询套餐与余量明细", onLoadDetails, loading = state.busy && state.operation == "details", enabled = !state.busy, modifier = Modifier.fillMaxWidth())
+                        AppSecondaryButton("查询新疆活动记录", onLoadXinjiangActivities, loading = state.busy && state.operation == "activities", enabled = !state.busy, modifier = Modifier.fillMaxWidth())
                         AppSecondaryButton("登录其他号码", { switching = true }, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
                         AppSecondaryButton("退出联通账号", onDisconnect, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
                     }
@@ -91,6 +101,50 @@ fun UnicomScreen(
                     }
                 }
             } }
+            state.details?.let { details ->
+                item { AppSectionHeader("套餐与余量明细", subtitle = "更新于 ${formatLocalDateTime(details.queriedAt)}") }
+                item {
+                    AppPanel {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            AppDetailRow("账户昵称", details.nickname ?: "暂不可用")
+                            AppDetailRow("当前套餐", details.packageName ?: "暂不可用")
+                        }
+                    }
+                }
+                details.groups.forEach { group -> item(key = "unicom-allowance-${group.id}") {
+                    AppPanel {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(group.title, style = MaterialTheme.typography.titleMedium)
+                            AppDetailRow("剩余", group.remaining?.let { "$it ${group.unit}" } ?: "暂不可用")
+                            AppDetailRow("已用", group.used?.let { "$it ${group.unit}" } ?: "暂不可用")
+                        }
+                    }
+                } }
+            }
+            state.activities?.let { activities ->
+                item { AppSectionHeader("新疆联通活动", subtitle = "更新于 ${formatLocalDateTime(activities.queriedAt)}") }
+                item {
+                    AppPanel {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(activities.title, style = MaterialTheme.typography.titleMedium)
+                            Text(when {
+                                !activities.eligible -> "官方认证显示，当前号码不属于新疆联通活动适用用户。"
+                                activities.records.isEmpty() -> "当前活动暂无个人获奖记录。"
+                                else -> "以下为当前活动的个人获奖记录。"
+                            }, style = MaterialTheme.typography.bodyMedium)
+                            if (activities.eligible) Text("领奖及券码请前往联通官方 App 查看。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                activities.records.forEach { prize -> item(key = "unicom-prize-${prize.id}") {
+                    AppPanel {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(prize.prizeName, style = MaterialTheme.typography.titleMedium)
+                            AppDetailRow("中奖时间", prize.drawnAt?.let(::formatLocalDateTime) ?: "暂不可用")
+                        }
+                    }
+                } }
+            }
         }
         if (state.loaded && (!session.connected || switching || session.loginId != null)) item {
             AppPanel {

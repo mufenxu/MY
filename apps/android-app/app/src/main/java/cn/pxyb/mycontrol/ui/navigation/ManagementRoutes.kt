@@ -22,6 +22,7 @@ internal fun NavGraphBuilder.managementRoutes(shell: ShellRouteContext) = with(s
             onRefresh = viewModel.unicom::refresh, onSendSms = viewModel.unicom::startLogin,
             onCaptchaVerified = viewModel.unicom::verifyCaptcha, onLogin = viewModel.unicom::login,
             onDisconnect = viewModel.unicom::disconnect,
+            onLoadDetails = viewModel.unicom::loadDetails, onLoadXinjiangActivities = viewModel.unicom::loadXinjiangActivities,
         )
     }
     composable(AppRoute.Projects) {

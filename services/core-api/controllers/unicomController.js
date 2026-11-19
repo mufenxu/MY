@@ -118,14 +118,14 @@ function verifyLogin(req, res, next) {
     });
 }
 
-function getOverview(req, res, next) {
+function queryAccount(req, res, next, query) {
     return withAccount(req, res, next, async account => {
         if (!account.connected || !account.session) throw provider.failure('UNICOM_LOGIN_REQUIRED', '请先登录你的联通号码。');
         const session = JSON.parse(decrypt(account.session));
         try {
-            const overview = await provider.overview(session);
+            const data = await query(session);
             account.session = encrypt(JSON.stringify(session));
-            return { ...snapshot(account), ...overview };
+            return { ...snapshot(account), ...data };
         } catch (error) {
             if (error.code === 'UNICOM_LOGIN_REQUIRED') {
                 account.connected = false;
@@ -136,6 +136,10 @@ function getOverview(req, res, next) {
         }
     });
 }
+
+function getOverview(req, res, next) { return queryAccount(req, res, next, provider.overview); }
+function getDetails(req, res, next) { return queryAccount(req, res, next, provider.details); }
+function getXinjiangActivities(req, res, next) { return queryAccount(req, res, next, provider.xinjiangActivities); }
 
 function disconnect(req, res, next) {
     return withAccount(req, res, next, async account => {
@@ -148,4 +152,4 @@ function disconnect(req, res, next) {
     });
 }
 
-module.exports = { getSession, createLogin, captcha, verifyLogin, getOverview, disconnect };
+module.exports = { getSession, createLogin, captcha, verifyLogin, getOverview, getDetails, getXinjiangActivities, disconnect };
