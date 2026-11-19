@@ -372,15 +372,19 @@ const MainLayout = () => {
 
                     <div className="topbar-right">
                         {IS_PLATFORM_SSO && (
-                            <Tooltip title="返回统一服务控制台">
+                            <Tooltip title="返回统一控制台">
                                 <button
                                     type="button"
-                                    className={isMobile ? 'icon-btn' : 'icon-btn is-label'}
+                                    className="pearl-console-switch"
                                     onClick={returnToPlatformConsole}
-                                    aria-label="返回统一服务控制台"
+                                    aria-label="返回统一控制台"
                                 >
-                                    <AppstoreOutlined />
-                                    {!isMobile && <span>统一控制台</span>}
+                                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                        <path d="M8 2.1 13.9 5 8 7.9 2.1 5Z" fill="currentColor" />
+                                        <path d="M2.5 8.2 8 10.85 13.5 8.2" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" opacity=".62" />
+                                        <path d="M2.5 11.3 8 13.95 13.5 11.3" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" opacity=".3" />
+                                    </svg>
+                                    <span>统一控制台</span>
                                 </button>
                             </Tooltip>
                         )}

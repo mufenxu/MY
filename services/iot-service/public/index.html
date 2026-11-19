@@ -6,6 +6,7 @@
     <title>MQTT 智能后台管理系统</title>
     <link rel="stylesheet" href="./styles.css?v=18" />
     <link rel="stylesheet" href="./automation.css?v=2" />
+    <link rel="stylesheet" href="./console-switch.css?v=20261119-console-switch" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <link rel="alternate icon" type="image/png" href="./favicon.png" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
@@ -227,8 +228,12 @@
           <p class="muted" id="current-pane-desc">实时监控多个设备传感器快照、在线状态与继电器控制。</p>
         </div>
         <div class="topbar-actions">
-          <a id="platform-console-link" class="button button-secondary hidden" href="/console" title="返回统一服务控制台" aria-label="返回统一服务控制台">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+          <a id="platform-console-link" class="button button-secondary pearl-console-switch hidden" href="/console" title="返回统一控制台" aria-label="返回统一控制台">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 2.1 13.9 5 8 7.9 2.1 5Z" fill="currentColor"></path>
+              <path d="M2.5 8.2 8 10.85 13.5 8.2" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" opacity=".62"></path>
+              <path d="M2.5 11.3 8 13.95 13.5 11.3" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" opacity=".3"></path>
+            </svg>
             <span>统一控制台</span>
           </a>
           <span id="service-badge" class="badge badge-muted">检查中</span>

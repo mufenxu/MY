@@ -132,6 +132,70 @@
   background: var(--red-soft);
 }
 
+/* ── 返回统一控制台：跨后台唯一入口 ─────────────────────────────
+   所有管理后台共用同一外形与落位（顶栏工具组最左，主题/全屏/通知之前）。
+   图标为 16×16 网格手绘路径「层叠」：上层实心菱形 + 两条渐隐折线，
+   改形时需同步 core-admin MainLayout.jsx 与 exam-admin DashboardView.vue。
+   ≤768px 收成 32px 纯图标，文案由 aria-label 承担。 */
+/* --- pearl-console-switch:start ---
+   这一段会被 generate.mjs 原样提取，生成给不引入整套组件样式的老页面
+   （campus-service / iot-service）。改这里就是改所有页面，不要各自复制一份。 */
+.pearl-console-switch {
+  display: inline-flex;
+  height: 32px;
+  flex: none;
+  align-items: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  color: var(--ink-soft);
+  background: var(--surface);
+  box-shadow: var(--edge), var(--e1);
+  font-size: var(--type-caption);
+  font-weight: 620;
+  letter-spacing: 0.005em;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.pearl-console-switch > svg {
+  flex: none;
+  color: var(--ink-faint);
+  transition: color 0.18s ease;
+}
+
+.pearl-console-switch:hover {
+  border-color: var(--glass-border-hover);
+  color: var(--ink);
+  background: var(--surface-solid);
+  box-shadow: var(--edge-strong), var(--e2);
+}
+
+.pearl-console-switch:hover > svg {
+  color: var(--blue);
+}
+
+.pearl-console-switch:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+@media (max-width: 768px) {
+  .pearl-console-switch {
+    width: 32px;
+    justify-content: center;
+    gap: 0;
+    padding: 0;
+  }
+
+  .pearl-console-switch > span {
+    display: none;
+  }
+}
+/* --- pearl-console-switch:end --- */
+
 .spin {
   animation: spin 0.8s linear infinite;
 }

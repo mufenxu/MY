@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="./styles.css?v=20261107-overview-grid-v3">
   <link rel="stylesheet" href="./academic-integrations.css?v=20260722-schedule-layout-v2">
   <link rel="stylesheet" href="./ui-refresh.css?v=20261107-sms-login-v2">
+  <link rel="stylesheet" href="./console-switch.css?v=20261119-console-switch">
 </head>
 <body data-app-locked="true">
   <div class="nebula-glow purple"></div>
@@ -52,8 +53,12 @@
         </a>
       </nav>
       <div class="actions">
-        <a id="platformConsoleLink" class="admin-action ghost" href="/console" title="返回统一服务控制台" hidden>
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <a id="platformConsoleLink" class="admin-action ghost pearl-console-switch" href="/console" title="返回统一控制台" aria-label="返回统一控制台" hidden>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 2.1 13.9 5 8 7.9 2.1 5Z" fill="currentColor"/>
+            <path d="M2.5 8.2 8 10.85 13.5 8.2" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" opacity=".62"/>
+            <path d="M2.5 11.3 8 13.95 13.5 11.3" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" opacity=".3"/>
+          </svg>
           <span>统一控制台</span>
         </a>
         <button id="themeToggleButton" type="button" class="ghost">主题</button>

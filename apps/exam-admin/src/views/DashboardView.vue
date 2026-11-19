@@ -21,10 +21,6 @@
                 @select="handleMenuSelect"
             />
             <div class="rail-foot">
-                <a v-if="IS_PLATFORM_SSO" class="rail-console-link" href="/console" aria-label="返回统一服务控制台">
-                    <el-icon><Grid /></el-icon>
-                    <span>统一控制台</span>
-                </a>
                 <button type="button" class="rail-user" @click="mobileMenuVisible = false; handleLogout()">
                     <img class="rail-user-avatar" :src="getUserCartoonAvatar(loggedInUser)" alt="">
                     <span class="rail-user-copy">
@@ -55,10 +51,6 @@
             />
 
             <div class="rail-foot">
-                <a v-if="IS_PLATFORM_SSO" class="rail-console-link" href="/console" aria-label="返回统一服务控制台">
-                    <el-icon><Grid /></el-icon>
-                    <span>统一控制台</span>
-                </a>
                 <el-popover
                     v-model:visible="userMenuVisible"
                     trigger="click"
@@ -134,6 +126,16 @@
                     <span v-else-if="uiPreviewMode" class="topbar-sub">预览数据</span>
                 </div>
                 <div class="topbar-actions">
+                    <el-tooltip v-if="IS_PLATFORM_SSO" content="返回统一控制台" placement="bottom">
+                        <a class="pearl-console-switch" href="/console" aria-label="返回统一控制台">
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                <path d="M8 2.1 13.9 5 8 7.9 2.1 5Z" fill="currentColor" />
+                                <path d="M2.5 8.2 8 10.85 13.5 8.2" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" opacity=".62" />
+                                <path d="M2.5 11.3 8 13.95 13.5 11.3" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" opacity=".3" />
+                            </svg>
+                            <span>统一控制台</span>
+                        </a>
+                    </el-tooltip>
                     <div ref="themeMenuRef" class="theme-menu"></div>
                 </div>
             </header>

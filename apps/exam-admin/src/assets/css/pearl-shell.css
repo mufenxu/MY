@@ -200,24 +200,6 @@
     border-top: 1px solid var(--line);
 }
 
-.rail-console-link {
-    display: flex;
-    height: 32px;
-    align-items: center;
-    gap: 8px;
-    padding: 0 9px;
-    border-radius: 9px;
-    color: var(--ink-soft);
-    font-size: 12px;
-    font-weight: 560;
-    transition: background 0.16s ease, color 0.16s ease;
-}
-
-.rail-console-link:hover {
-    color: var(--ink);
-    background: var(--hover-bg);
-}
-
 .rail-user {
     display: flex;
     width: 100%;
@@ -543,7 +525,6 @@
 
     .rail-brand-copy,
     .rail-item-label,
-    .rail-console-link span,
     .rail-user-copy,
     .rail-user-arrow {
         display: none;
@@ -573,7 +554,6 @@
         font-size: 9px;
     }
 
-    .rail-console-link,
     .rail-user {
         justify-content: center;
         padding-inline: 0;

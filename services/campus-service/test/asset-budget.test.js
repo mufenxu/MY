@@ -18,6 +18,8 @@ const budgets = {
   "public/library-seat-page.js": 64 * 1024,
   "public/library-seat-page.css": 10 * 1024,
   "public/ui-refresh.css": 14 * 1024,
+  // 由 packages/pearl-tokens 生成的「返回统一控制台」单组件样式，只含这一个按钮。
+  "public/console-switch.css": 4 * 1024,
   "public/browser-check.js": 4 * 1024,
   "public/styles.css": 243 * 1024,
   "public/index.html": 44 * 1024,

@@ -40,3 +40,16 @@ cd apps/android-app && ./gradlew :app:compileDebugKotlin
 ## 安卓卡片外观（2026-11-18 用户否掉全局投影）
 
 `AppPanel` 保持「主题实色 + 20dp 圆角 + 0 阴影 + 默认无描边」，**不要再给卡片加投影或统一描边**——加过两版都被否。那张好看的「登录已批准」卡是 `QrLoginScreen` 自己手写的 `Surface`（默认黑 8dp 投影），属局部特例，不要推广到 `AppPanel`。`ColorTokens.CardShadowLight` 现在只有底栏在用。
+
+## 后台「返回统一控制台」入口（2026-11-19 用户选型后定稿）
+
+- **唯一实现**：`packages/pearl-tokens/components.css` 的 `.pearl-console-switch`。不要在应用外壳里另写按钮样式——这次之所以三个地方三种长相，就是因为每个应用各写了一份。
+- **唯一落位**：顶栏工具组最左（主题 / 全屏 / 通知之前）。core-admin 的 `.topbar-right`、exam-admin 的 `.topbar-actions` 各一处。exam-admin 原来侧栏底部的入口已删，别加回去。
+- **唯一图标**：16×16 网格手绘「层叠」SVG（上层实心菱形 + 两条 .62/.3 折线），内联在 `core-admin/src/components/MainLayout.jsx`、`exam-admin/src/views/DashboardView.vue`、`exam-admin/src/views/ExamDetailView.vue`、`campus-service/public/index.html`、`iot-service/public/index.html` **共 5 处**。改形**必须全部同步**（`grep "M8 2.1 13.9 5"` 可找全）；不要再换回 antd `AppstoreOutlined` / Element `Grid`（缩小到 14px 就是四个点）。
+- 文案：可见「统一控制台」、aria-label / tooltip「返回统一控制台」、弹窗确认「返回统一控制台」。不要再出现「返回统一服务控制台」「返回控制台」。
+- 窄屏 ≤768px 由 CSS 收成 32px 纯图标（隐藏 `> span`），不要再用 JS 的 `isMobile` 分支控制这个按钮的显隐。
+- **campus-service / iot-service 是「单组件分发」，不是整包引入**（2026-11-19 试过后定的）：这两页没有 pearl 令牌，`generate.mjs` 从 `components.css` 的 `/* --- pearl-console-switch:start/end --- */` 标记之间原样提取，生成 `public/console-switch.css`（各自带本页色板的令牌映射，campus 用 `body.dark-theme`、iot 默认暗色 + `[data-theme="light"]`）。**改按钮只改 `components.css` 然后 `npm run generate`**，手改生成物会被 `check` 打回。
+  - 不要再尝试把 `tokens.css` / 整份 `components.css` 引进这两页：包不在服务镜像里（Dockerfile 只 COPY 自己的 public/src）、`components.css` 2195 行含 `.btn/.field` 等通用类、两页主题机制与 pearl 相反（iot 默认暗色），且 campus 的 `--surface/--text/--shadow` 与 pearl 同名不同义。
+  - 这两页**只统一材质不统一尺寸**：campus 桌面端顶栏是左侧栏、按钮是一列 46px 整宽，硬塞 32px 胶囊会矮一截。高度/内距/字号交给宿主 `.actions a` / `.button`，只换底色、描边、投影和 hover 强调色。
+  - campus 的 `styles.css` 只剩 ~160B 余量、`index.html` 剩 1.4KB，新样式必须走独立文件并在 `test/asset-budget.test.js` 登记预算。
+

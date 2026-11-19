@@ -74,7 +74,8 @@ test('retired scan management and global configuration surfaces stay removed', (
 test('platform console return is rendered only in the managed SSO shell', () => {
   const source = readSource('src', 'components', 'MainLayout.jsx');
 
-  assert.match(source, /\{IS_PLATFORM_SSO && \([\s\S]*?返回统一服务控制台/);
+  assert.match(source, /\{IS_PLATFORM_SSO && \([\s\S]*?pearl-console-switch/);
+  assert.match(source, /aria-label="返回统一控制台"/);
   assert.match(source, /window\.location\.assign\('\/console'\)/);
 });
 

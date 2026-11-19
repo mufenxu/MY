@@ -5,14 +5,19 @@
                 <div class="topbar-main">
                     <div class="topbar-title-group">
                         <el-button class="topbar-back" @click="goBack" icon="ArrowLeft" circle aria-label="返回"></el-button>
-                        <el-tooltip v-if="IS_PLATFORM_SSO" content="返回统一服务控制台" placement="bottom">
+                        <el-tooltip v-if="IS_PLATFORM_SSO" content="返回统一控制台" placement="bottom">
                             <el-button
                                 class="topbar-back topbar-platform-return"
-                                icon="Grid"
                                 circle
-                                aria-label="返回统一服务控制台"
+                                aria-label="返回统一控制台"
                                 @click="returnToPlatformConsole"
-                            ></el-button>
+                            >
+                                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                                    <path d="M8 2.1 13.9 5 8 7.9 2.1 5Z" fill="currentColor" />
+                                    <path d="M2.5 8.2 8 10.85 13.5 8.2" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" opacity=".62" />
+                                    <path d="M2.5 11.3 8 13.95 13.5 11.3" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" opacity=".3" />
+                                </svg>
+                            </el-button>
                         </el-tooltip>
                         <div class="paper-title-block">
                             <span class="paper-kicker">试卷编辑</span>
@@ -1555,8 +1560,8 @@ const goBack = () => {
 
 const returnToPlatformConsole = () => {
     if (isDirty.value && canEdit.value) {
-        ElMessageBox.confirm('当前试卷还有未保存的修改，确定返回统一服务控制台吗？', '未保存修改', {
-            confirmButtonText: '返回控制台',
+        ElMessageBox.confirm('当前试卷还有未保存的修改，确定返回统一控制台吗？', '未保存修改', {
+            confirmButtonText: '返回统一控制台',
             cancelButtonText: '继续编辑',
             type: 'warning',
         }).then(() => {
