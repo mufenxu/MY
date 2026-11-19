@@ -11,6 +11,7 @@ const {
     sendWecomText,
 } = require('./wecomNotification');
 const { getNotificationApiKey, sendAppNotification } = require('./notificationClient');
+const logger = require('../utils/logger');
 
 function formatDueTime(timestamp) {
     if (!Number.isFinite(timestamp)) return '';
@@ -153,7 +154,7 @@ async function checkAndNotifyTodos(options = {}) {
         now = Date.now,
     } = options;
     try {
-        console.log(`[${new Date().toISOString()}] 开始执行待办事项检查任务...`);
+        logger.info(`开始执行待办事项检查任务...`);
 
         const notifyConfig = await NotifyConfigModel.findById('default');
         const cfg = (notifyConfig && notifyConfig.toObject()) || {};
@@ -161,19 +162,19 @@ async function checkAndNotifyTodos(options = {}) {
         const appEnabled = Boolean(getNotificationApiKey(cfg.qywxApiKey));
         const wecomEnabled = isWecomEnabled(cfg);
         if (!appEnabled) {
-            console.log('通知服务未配置，跳过 todoReminder');
+            logger.info('通知服务未配置，跳过 todoReminder');
             return { skipped: true, reason: 'notification_not_configured' };
         }
 
         const ownerId = String(cfg.ownerId || '').trim();
         if (!ownerId) {
-            console.log('通知配置未绑定所有者，跳过 todoReminder');
+            logger.info('通知配置未绑定所有者，跳过 todoReminder');
             return { skipped: true, reason: 'owner_not_configured' };
         }
 
         const docs = await TodoListModel.find({ _id: ownerId });
         if (!docs || docs.length === 0) {
-            console.log('待办集合为空，无需发送提醒');
+            logger.info('待办集合为空，无需发送提醒');
             return { sent: false, pendingUsers: 0, pendingCount: 0 };
         }
 
@@ -203,7 +204,7 @@ async function checkAndNotifyTodos(options = {}) {
         }
 
         if (groups.length === 0) {
-            console.log('没有未完成的待办，跳过提醒');
+            logger.info('没有未完成的待办，跳过提醒');
             return { sent: false, pendingUsers: 0, pendingCount: 0 };
         }
 
@@ -245,7 +246,7 @@ async function checkAndNotifyTodos(options = {}) {
         }
 
         if (ok) {
-            console.log('待办事项提醒投递成功');
+            logger.info('待办事项提醒投递成功');
             for (const group of groups) {
                 if (!group.userId) continue;
                 try {
@@ -276,11 +277,11 @@ async function checkAndNotifyTodos(options = {}) {
                         { arrayFilters: [{ $or: matchingTasks }] }
                     );
                 } catch (err) {
-                    console.warn('更新 lastNotifiedAt 失败:', group.userId, err.message);
+                    logger.warn(`更新 lastNotifiedAt 失败: ${group.userId} ${err.message}`);
                 }
             }
         } else {
-            console.error('待办事项提醒发送失败:', data);
+            logger.error(`待办事项提醒发送失败: ${JSON.stringify(data)}`);
         }
 
         return {
@@ -292,7 +293,7 @@ async function checkAndNotifyTodos(options = {}) {
         };
 
     } catch (err) {
-        console.error('执行待办事项检查任务失败:', err);
+        logger.error('执行待办事项检查任务失败:', err);
         return { error: err.message };
     }
 }

@@ -8,6 +8,7 @@ const AppError = require('../utils/AppError');
 const { TASKS, startTask, stopTask } = require('./cronScheduler');
 const cron = require('node-cron');
 const { encrypt, decrypt, isEncrypted } = require('../utils/crypto');
+const logger = require('../utils/logger');
 const {
     isWecomEnabled,
     isWecomResponseOk,
@@ -236,7 +237,7 @@ exports.updateCronConfig = async (type, schedule, enabled) => {
 
     const status = require('./cronScheduler').getStatus(type);
     const savedConfig = await CronConfig.findById(type).lean();
-    console.log(`定时任务配置已保存: ${type}, enabled=${isEnabled}, schedule=${cronSchedule}, running=${status.running}`);
+    logger.info(`定时任务配置已保存: ${type}, enabled=${isEnabled}, schedule=${cronSchedule}, running=${status.running}`);
 
     return {
         type,

@@ -1,4 +1,5 @@
 const TodoList = require('../models/TodoList');
+const logger = require('../utils/logger');
 
 const MAX_TASKS = 500;
 const MAX_OPERATIONS = 100;
@@ -274,7 +275,7 @@ async function syncLegacyClient(req, res) {
 }
 
 function sendControllerError(res, error, label) {
-    console.error(label, error);
+    logger.error(label, error);
     const statusCode = Number(error?.statusCode) || 500;
     return res.status(statusCode).json({
         success: false,

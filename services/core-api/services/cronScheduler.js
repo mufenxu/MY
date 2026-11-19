@@ -7,6 +7,7 @@ const cron = require('node-cron');
 const CronConfig = require('../models/CronConfig');
 const { checkAndNotify } = require('./dueReminder');
 const { checkAndNotifyTodos } = require('./todoReminder');
+const logger = require('../utils/logger');
 
 // 存储活跃的任务实例
 // { [taskId]: { task: CronJob, schedule: string } }
@@ -75,14 +76,14 @@ function startTask(taskId, schedule) {
         return { success: false, error: `无效的 cron 表达式: ${schedule}` };
     }
 
-    console.log(`启动定时任务 [${taskDef.name}] (${taskId})，执行时间: ${schedule}`);
+    logger.info(`启动定时任务 [${taskDef.name}] (${taskId})，执行时间: ${schedule}`);
 
     const job = cron.schedule(schedule, async () => {
-        console.log(`[${new Date().toISOString()}] 任务触发: ${taskDef.name}`);
+        logger.info(`任务触发: ${taskDef.name}`);
         try {
             await taskDef.handler();
         } catch (err) {
-            console.error(`任务执行失败 [${taskId}]:`, err);
+            logger.error(`任务执行失败 [${taskId}]:`, err);
         }
     }, {
         scheduled: true,
@@ -105,7 +106,7 @@ function stopTask(taskId) {
     if (active && active.task) {
         active.task.stop();
         delete activeTasks[taskId];
-        console.log(`任务已停止: ${taskId}`);
+        logger.info(`任务已停止: ${taskId}`);
         return true;
     }
     return false;
@@ -119,7 +120,7 @@ async function runTaskNow(taskId) {
     if (!taskDef) {
         throw new Error(`未知任务: ${taskId}`);
     }
-    console.log(`手动触发任务: ${taskDef.name}`);
+    logger.info(`手动触发任务: ${taskDef.name}`);
     return await taskDef.handler(true);
 }
 
@@ -127,7 +128,7 @@ async function runTaskNow(taskId) {
  * 初始化所有任务
  */
 async function initCron() {
-    console.log('正在初始化定时任务...');
+    logger.info('正在初始化定时任务...');
 
     for (const taskId in TASKS) {
         try {
@@ -142,7 +143,7 @@ async function initCron() {
             if (!config && taskId === 'due_reminder') {
                 const oldConfig = await CronConfig.findById('default');
                 if (oldConfig) {
-                    console.log('迁移旧的 default 配置到 due_reminder');
+                    logger.info('迁移旧的 default 配置到 due_reminder');
                     config = await CronConfig.create({
                         _id: 'due_reminder',
                         schedule: oldConfig.schedule,
@@ -156,7 +157,7 @@ async function initCron() {
             if (taskId === 'due_reminder') {
                 const legacyDefault = await CronConfig.findById('default');
                 if (legacyDefault) {
-                    console.log('清理旧的 default 定时任务配置');
+                    logger.info('清理旧的 default 定时任务配置');
                     await CronConfig.findByIdAndDelete('default');
                 }
             }
@@ -167,10 +168,10 @@ async function initCron() {
             if (enabled) {
                 startTask(taskId, schedule);
             } else {
-                console.log(`任务已禁用: ${taskDef.name} (${taskId})`);
+                logger.info(`任务已禁用: ${taskDef.name} (${taskId})`);
             }
         } catch (err) {
-            console.error(`初始化任务失败 [${taskId}]:`, err);
+            logger.error(`初始化任务失败 [${taskId}]:`, err);
         }
     }
 }

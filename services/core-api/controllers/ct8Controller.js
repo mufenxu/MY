@@ -1,5 +1,6 @@
 const Ct8Run = require('../models/Ct8Run');
 const { parsePagination } = require('../utils/pagination');
+const logger = require('../utils/logger');
 
 /**
  * 获取 CT8 任务执行历史
@@ -33,7 +34,7 @@ exports.getRunHistory = async (req, res) => {
             runs
         });
     } catch (error) {
-        console.error('获取 CT8 运行历史失败:', error);
+        logger.error('获取 CT8 运行历史失败:', error);
         res.status(500).json({ success: false, error: '获取执行历史失败' });
     }
 };
@@ -52,7 +53,7 @@ exports.getRunDetails = async (req, res) => {
         
         res.json({ success: true, run });
     } catch (error) {
-        console.error('获取任务详情失败:', error);
+        logger.error('获取任务详情失败:', error);
         res.status(500).json({ success: false, error: '获取任务详情失败' });
     }
 };
@@ -86,7 +87,7 @@ exports.getCt8Stats = async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('获取 CT8 统计数据失败:', error);
+        logger.error('获取 CT8 统计数据失败:', error);
         res.status(500).json({ success: false, error: '获取统计数据失败' });
     }
 };

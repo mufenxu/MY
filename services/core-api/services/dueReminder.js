@@ -22,6 +22,7 @@ const ResourceConfig = require('../models/ResourceConfig');
 const NotifyConfig = require('../models/NotifyConfig');
 const User = require('../models/User');
 const { getNotificationApiKey, sendAppNotification } = require('./notificationClient');
+const logger = require('../utils/logger');
 
 function buildTransport(cfg) {
     return nodemailer.createTransport({
@@ -404,9 +405,7 @@ function htmlEmail(servers, domains) {
  */
 async function checkAndNotify(force = false) {
     try {
-        console.log('=================================================');
-        console.log(`[${new Date().toISOString()}] 资源到期检查任务被触发 (来源: ${force ? '手动' : '定时'})`);
-        console.log('=================================================');
+        logger.info(`资源到期检查任务被触发 (来源: ${force ? '手动' : '定时'})`);
 
         // App 通知不依赖旧版邮件/企微配置；旧配置仅作为附加投递渠道。
         const notifyConfig = await NotifyConfig.findById('default');
@@ -429,7 +428,7 @@ async function checkAndNotify(force = false) {
                     : '';
         const appEnabled = Boolean(getNotificationApiKey(cfg.qywxApiKey));
         if (!appEnabled && !emailEnabled && !wecomEnabled) {
-            console.log('通知渠道未配置，跳过检查');
+            logger.info('通知渠道未配置，跳过检查');
             return { skipped: true, reason: 'no_channel' };
         }
 
@@ -475,7 +474,7 @@ async function checkAndNotify(force = false) {
         });
 
         if (dueByOwner.size === 0) {
-            console.log('无需要提醒的资源');
+            logger.info('无需要提醒的资源');
             return { sent: false, servers: 0, domains: 0 };
         }
 
@@ -569,7 +568,7 @@ async function checkAndNotify(force = false) {
                     }
                 } catch (error) {
                     failed += 1;
-                    console.error(`发送资源 App 通知失败 (owner=${resourceOwnerId}):`, error.message || error);
+                    logger.error(`发送资源 App 通知失败 (owner=${resourceOwnerId}): ${error.message || error}`);
                     if (includeWecom) {
                         try {
                             const resp = await dispatchWecom(cfg, buildWecomText(group.servers, group.domains));
@@ -615,18 +614,18 @@ async function checkAndNotify(force = false) {
 
                 result.channels.email = { success: true };
                 result.sent = true;
-                console.log(`邮件通知已发送，收件人: ${to.join(', ')}`);
+                logger.info(`邮件通知已发送，收件人: ${to.join(', ')}`);
             } catch (error) {
-                console.error('发送提醒邮件失败:', error);
+                logger.error('发送提醒邮件失败:', error);
                 result.channels.email = { success: false, error: error.message || '发送失败' };
             }
         }
 
-        console.log(`[${new Date().toISOString()}] 到期检查任务完成:`, result);
+        logger.info(`到期检查任务完成: ${JSON.stringify(result)}`);
         return result;
 
     } catch (error) {
-        console.error('执行到期检查任务失败:', error);
+        logger.error('执行到期检查任务失败:', error);
         return { error: error.message };
     }
 }

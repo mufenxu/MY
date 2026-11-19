@@ -12,6 +12,7 @@ const {
 } = require('../utils/githubResultParser');
 
 const secretService = require('./secretService');
+const logger = require('../utils/logger');
 const CT8_SECRET_NAMES = new Set(['USERS_LIST']);
 
 function assertAllowedCt8SecretName(name) {
@@ -310,7 +311,7 @@ exports.triggerAction = async (ip, inputs = {}) => {
     } catch (error) {
         if (error.response && error.response.data) {
             const detail = typeof error.response.data === 'string' ? error.response.data : JSON.stringify(error.response.data);
-            console.error(`[GitHub API Error] Status: ${error.response.status}, Detail: ${detail}`);
+            logger.error(`[GitHub API Error] Status: ${error.response.status}, Detail: ${detail}`);
             
             // 提取关键错误信息
             let msg = error.response.data.message || error.message;
@@ -408,7 +409,7 @@ exports.saveCallback = async (run_id, workflow, results, started_at, summary = {
             { value: { status: 'idle', start_time: 0 } },
             { upsert: true }
         ).catch((error) => {
-            console.error('[CT8_ACTIVE_TASK] reset failed:', error.message);
+            logger.error(`[CT8_ACTIVE_TASK] reset failed: ${error.message}`);
         });
     }
 
@@ -468,7 +469,7 @@ exports.tryHydrateRunFromArtifacts = async (runOrId) => {
         const artifactPayload = await fetchWorkflowRunArtifactResults(runId, { GH_TOKEN, GH_OWNER, GH_REPO });
         if (!artifactPayload) return formatRunForClient(run);
 
-        console.log(`[CT8 Artifact] GitHub run ${runId} loaded ${artifactPayload.results.length} result(s) from ${artifactPayload.artifact_name}/${artifactPayload.file_name}`);
+        logger.info(`[CT8 Artifact] GitHub run ${runId} loaded ${artifactPayload.results.length} result(s) from ${artifactPayload.artifact_name}/${artifactPayload.file_name}`);
         await exports.saveCallback(
             runId,
             run.workflow || exports.getDefaultWorkflowName(),
@@ -482,7 +483,7 @@ exports.tryHydrateRunFromArtifacts = async (runOrId) => {
 
         return await exports.getRunById(runId);
     } catch (err) {
-        console.error(`[CT8 Artifact] hydrate failed for run ${runId}:`, err.message);
+        logger.error(`[CT8 Artifact] hydrate failed for run ${runId}: ${err.message}`);
         await Ct8Run.findOneAndUpdate(
             { run_id: runId },
             { $set: { callback_error: `Artifact hydrate failed: ${err.message}` } }
@@ -551,7 +552,7 @@ exports.checkAndResolveActiveTask = async (activeTask, staleThresholdMs = 2 * 60
             });
 
         if (matchedRun && matchedRun.status !== 'completed') {
-            console.log(`[CT8 Auto-Resolve] GitHub run ${matchedRun.id} 仍在 ${matchedRun.status}，保持 activeTask running`);
+            logger.info(`[CT8 Auto-Resolve] GitHub run ${matchedRun.id} 仍在 ${matchedRun.status}，保持 activeTask running`);
             const runningState = {
                 ...activeTask,
                 status: 'running',
@@ -572,9 +573,9 @@ exports.checkAndResolveActiveTask = async (activeTask, staleThresholdMs = 2 * 60
             const runId = String(matchedRun.id);
             const conclusion = matchedRun.conclusion; // 'success', 'failure', etc.
 
-            console.log(`[CT8 Auto-Resolve] GitHub run ${runId} 已完成 (${conclusion})，主动重置 activeTask`);
+            logger.info(`[CT8 Auto-Resolve] GitHub run ${runId} 已完成 (${conclusion})，主动重置 activeTask`);
             const artifactPayload = await fetchWorkflowRunArtifactResults(runId, { GH_TOKEN, GH_OWNER, GH_REPO }).catch(err => {
-                console.warn(`[CT8 Auto-Resolve] artifact fetch failed for run ${runId}: ${err.message}`);
+                logger.warn(`[CT8 Auto-Resolve] artifact fetch failed for run ${runId}: ${err.message}`);
                 return null;
             });
 
@@ -630,7 +631,7 @@ exports.checkAndResolveActiveTask = async (activeTask, staleThresholdMs = 2 * 60
 
         return activeTask;
     } catch (err) {
-        console.error('[CT8 Auto-Resolve] 查询 GitHub API 失败:', err.message);
+        logger.error(`[CT8 Auto-Resolve] 查询 GitHub API 失败: ${err.message}`);
         // 查询失败不影响正常流程，返回原始状态，不能因为网络/API 波动把仍在跑的任务标成结束。
         return activeTask;
     }

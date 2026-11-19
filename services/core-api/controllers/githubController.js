@@ -5,6 +5,7 @@ const {
     pickFirst
 } = require('../utils/githubResultParser');
 const { parseBodyObject } = require('../utils/parseBodyObject');
+const logger = require('../utils/logger');
 
 const RATE_LIMIT_IP_WINDOW_MS = 60_000;
 const RATE_LIMIT_GLOBAL_WINDOW_MS = 30_000;
@@ -136,7 +137,7 @@ exports.handleCallback = async (req, res, next) => {
             return res.status(400).json({ error: 'Missing run_id' });
         }
 
-        console.info(`[CT8 Callback] received run_id=${run_id}, results=${results.length}, keys=${Object.keys(mergedBody).join(',')}`);
+        logger.info(`[CT8 Callback] received run_id=${run_id}, results=${results.length}, keys=${Object.keys(mergedBody).join(',')}`);
 
         const result = await githubService.saveCallback(run_id, workflow, results, started_at, summary);
         res.json({
