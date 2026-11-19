@@ -288,6 +288,11 @@ class AppViewModel(
         onSessionExpired = ::forceReauthentication,
     )
     val mediaDownloadState = mediaDownload.state
+    val unicom = cn.pxyb.mycontrol.ui.feature.unicom.UnicomStateHolder(
+        viewModelScope, api.unicom,
+        canRun = { mutableState.value.canRunRequest() },
+        onSessionExpired = ::forceReauthentication,
+    )
     val notificationCenterState = deriveState(AppUiState::toNotificationCenterUiState)
     private val scenes = ScenesController(viewModelScope, api.iot, actions, mutableState, { refreshIot(force = true) }, ::publishWidget)
     val scenesState = scenes.state
@@ -915,6 +920,7 @@ class AppViewModel(
             librarySeats.reset()
             waterValves.reset()
             chaoxing.reset()
+            unicom.reset()
             mediaDownload.reset()
             githubProjects.reset()
             featureAccountUsername = username
@@ -970,6 +976,7 @@ class AppViewModel(
         githubProjects.cancelPending()
         waterValves.cancelPending()
         chaoxing.cancelPending()
+        unicom.cancelPending()
         mediaDownload.cancelPending()
         operationalEffectsJob?.cancel()
         operationalEffectsJob = null

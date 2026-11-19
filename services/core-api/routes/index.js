@@ -12,6 +12,7 @@ router.use('/auth', require('./authScanRoutes'));
 router.use('/users', require('./users'));
 router.use('/todos', require('./todos'));
 router.use('/google-accounts', require('./googleAccounts'));
+router.use('/v1/unicom', require('./unicom'));
 router.use('/settings', require('./settings'));
 router.use('/resources', require('./resources'));
 router.use('/notifications', require('./notifications'));

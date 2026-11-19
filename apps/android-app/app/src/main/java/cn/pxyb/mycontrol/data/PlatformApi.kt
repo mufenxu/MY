@@ -23,6 +23,7 @@ class PlatformApi(
     val campus = CampusRepository(http)
     val iot = IotRepository(http)
     val operations = OperationsRepository(http)
+    val unicom = UnicomRepository(http)
 
     suspend fun isOffline(): Boolean = http.isOffline()
     suspend fun cachedAtMillis(): Long? = http.cachedAtMillis()

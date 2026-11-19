@@ -664,6 +664,7 @@ internal fun AuthenticatedShell(
                         onClearCache = viewModel::clearLocalCache,
                         onOpenAccountManagement = viewModel::openAccountManagement,
                         onOpenGoogleAccountDesk = { navigateToSubScreen(AppRoute.GoogleAccounts) },
+                        onOpenUnicom = { navigateToSubScreen(AppRoute.Unicom) },
                         onOpenAuthenticator = { navigateToSubScreen(AppRoute.Authenticator) },
                         onOpenNotificationSettings = { navigateToSubScreen(AppRoute.NotificationSettings) },
                         onCheckUpdates = viewModel::checkAppUpdates,

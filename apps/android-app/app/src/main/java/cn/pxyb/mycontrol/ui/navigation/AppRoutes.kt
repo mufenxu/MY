@@ -17,6 +17,7 @@ internal object AppRoute {
     const val Operations = "operations"
     const val Account = "account"
     const val GoogleAccounts = "google-accounts"
+    const val Unicom = "unicom"
     const val GitHubProjects = "github-projects"
     const val AndroidReleases = "android-releases"
     const val RegistryImages = "registry-images"
@@ -48,7 +49,7 @@ internal object AppRoute {
 
 internal fun contentMaxWidthForRoute(route: String): Dp = when (route) {
     AppRoute.DailyNews, AppRoute.EnvReference -> AppReadingContentMaxWidth
-    AppRoute.NotificationSettings, AppRoute.LoginSessions, AppRoute.CampusWaterValve -> AppFormContentMaxWidth
+    AppRoute.NotificationSettings, AppRoute.LoginSessions, AppRoute.CampusWaterValve, AppRoute.Unicom -> AppFormContentMaxWidth
     AppRoute.Agenda, AppRoute.Study, AppRoute.Energy, AppRoute.Grades, AppRoute.Screenshot -> AppWorkspaceContentMaxWidth
     AppRoute.Overview, AppRoute.Operations, AppRoute.Tools, AppRoute.Today,
     AppRoute.Timetable, AppRoute.Campus, AppRoute.Todos, AppRoute.FreeClassrooms,
@@ -99,7 +100,7 @@ internal fun primaryTabForRoute(route: String?): MainTab? = when (route) {
     AppRoute.Operations, AppRoute.Projects, AppRoute.GitHubProjects,
     AppRoute.AndroidReleases, AppRoute.RegistryImages, AppRoute.EnvReference -> MainTab.Operations
     AppRoute.Tools, AppRoute.Scenes -> MainTab.Tools
-    AppRoute.Profile, AppRoute.Account, AppRoute.GoogleAccounts,
+    AppRoute.Profile, AppRoute.Account, AppRoute.GoogleAccounts, AppRoute.Unicom,
     AppRoute.Authenticator, AppRoute.LoginSessions, AppRoute.NotificationSettings -> MainTab.Profile
     else -> null
 }
@@ -107,7 +108,7 @@ internal fun primaryTabForRoute(route: String?): MainTab? = when (route) {
 internal fun parentTabForSubScreen(route: String?, previousRoute: String?): MainTab? = when (route) {
     AppRoute.GoogleAccounts -> primaryTabForRoute(previousRoute) ?: MainTab.Profile
     AppRoute.Account, AppRoute.Authenticator, AppRoute.LoginSessions,
-    AppRoute.NotificationSettings -> MainTab.Profile
+    AppRoute.NotificationSettings, AppRoute.Unicom -> MainTab.Profile
     AppRoute.Projects, AppRoute.GitHubProjects, AppRoute.AndroidReleases,
     AppRoute.RegistryImages, AppRoute.EnvReference -> MainTab.Operations
     AppRoute.Scenes -> MainTab.Tools

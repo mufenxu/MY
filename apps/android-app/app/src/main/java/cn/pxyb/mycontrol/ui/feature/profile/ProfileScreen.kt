@@ -39,6 +39,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.LockClock
 import androidx.compose.material.icons.outlined.NotificationsActive
 import androidx.compose.material.icons.outlined.PrivacyTip
+import androidx.compose.material.icons.outlined.Phone
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SystemUpdate
@@ -107,6 +108,7 @@ fun ProfileScreen(
     onClearCache: () -> Unit,
     onOpenAccountManagement: () -> Unit,
     onOpenGoogleAccountDesk: () -> Unit,
+    onOpenUnicom: () -> Unit,
     onOpenAuthenticator: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
     onCheckUpdates: () -> Unit,
@@ -155,6 +157,8 @@ fun ProfileScreen(
             ProfileSectionTitle("账号工具", "第三方账号与离线验证码")
             AppGroupedCard {
                 AppActionRow("Google 邮箱台账", subtitle = "主邮箱、别名与 OpenAI 使用状态", icon = Icons.Outlined.Email, onClick = onOpenGoogleAccountDesk)
+                AppDivider()
+                AppActionRow("联通账户", subtitle = "话费、通用流量、语音与积分", icon = Icons.Outlined.Phone, onClick = onOpenUnicom)
                 AppDivider()
                 AppActionRow("本地验证器", subtitle = "离线生成第三方网站的 TOTP 动态码", icon = Icons.Outlined.LockClock, onClick = onOpenAuthenticator)
             }

@@ -15,6 +15,15 @@ import cn.pxyb.mycontrol.ui.feature.releases.AndroidReleaseScreen
 
 /** 项目与资产管理路由：项目总览、Google 账号台、GitHub 项目、Android 发布、镜像仓库、环境变量对照表。 */
 internal fun NavGraphBuilder.managementRoutes(shell: ShellRouteContext) = with(shell) {
+    composable(AppRoute.Unicom) {
+        val unicomState by viewModel.unicom.state.collectAsStateWithLifecycle()
+        cn.pxyb.mycontrol.ui.feature.unicom.UnicomScreen(
+            state = unicomState, contentPadding = contentPadding, onBack = navigateBackFromSubScreen,
+            onRefresh = viewModel.unicom::refresh, onSendSms = viewModel.unicom::startLogin,
+            onCaptchaVerified = viewModel.unicom::verifyCaptcha, onLogin = viewModel.unicom::login,
+            onDisconnect = viewModel.unicom::disconnect,
+        )
+    }
     composable(AppRoute.Projects) {
         val projectsState by viewModel.projectsState.collectAsStateWithLifecycle()
         ProjectsScreen(

@@ -36,6 +36,12 @@
 
   "INTERNAL_ERROR": { "http": 500, "zh": "服务器内部错误，请稍后重试。" },
   "PLATFORM_INTERNAL_ERROR": { "http": 500, "zh": "平台内部错误，请稍后重试。" },
+  "UNICOM_LOGIN_REQUIRED": { "http": 400, "zh": "联通登录已失效，请重新登录。" },
+  "UNICOM_LOGIN_FAILED": { "http": 400, "zh": "联通登录未成功，请检查短信验证码或重新获取。" },
+  "UNICOM_SMS_FAILED": { "http": 400, "zh": "联通未确认验证码发送成功，请稍后重试。" },
+  "UNICOM_SECURITY_REQUIRED": { "http": 400, "zh": "请完成联通安全验证后继续。" },
+  "UNICOM_LOGIN_FLOW_EXPIRED": { "http": 409, "zh": "本次联通登录流程已失效，请重新发送验证码。" },
+  "UNICOM_BUSY": { "http": 409, "zh": "上次联通请求尚未结束，请稍候。" },
   "UPSTREAM_FAILED": { "http": 502, "zh": "上游服务暂时不可用，请稍后重试。" },
   "UPSTREAM_UNAVAILABLE": { "http": 502, "zh": "上游服务暂时不可用，请稍后重试。" },
   "UPSTREAM_TIMEOUT": { "http": 504, "zh": "上游服务响应超时，请稍后重试。" },
